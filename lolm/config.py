@@ -49,6 +49,7 @@ class MemoryConfig:
     n_slots: int = 32
     n_banks: int = 3
     slot_dim: int = 256
+    n_chunks: int = 1  # >1 splits sequence into chunks, chaining write→read for gradients
 
 
 @dataclass
@@ -106,6 +107,8 @@ class LossConfig:
     # Load-balancing loss for regime (MoE-style, prevents collapse)
     lambda_balance: float = 0.1
     use_load_balance: bool = False
+    # Sticky transition penalty: penalize regime switches between adjacent tokens
+    lambda_sticky: float = 0.0
 
 
 @dataclass

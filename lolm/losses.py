@@ -28,7 +28,7 @@ class LOLMLoss(nn.Module):
     def __init__(self, lambda_future: float = 0.1, lambda_regime: float = 0.05,
                  lambda_mem: float = 0.05, lambda_manifest: float = 0.01,
                  future_window: int = 8, lambda_balance: float = 0.1,
-                 use_load_balance: bool = False):
+                 use_load_balance: bool = False, lambda_sticky: float = 0.0):
         super().__init__()
         self.lambda_future = lambda_future
         self.lambda_regime = lambda_regime
@@ -37,6 +37,7 @@ class LOLMLoss(nn.Module):
         self.future_window = future_window
         self.lambda_balance = lambda_balance
         self.use_load_balance = use_load_balance
+        self.lambda_sticky = lambda_sticky
 
         # Learned future summary projection (z -> predicted future embedding)
         self.future_proj = None  # Initialized lazily based on d_model
@@ -126,10 +127,13 @@ class LOLMLoss(nn.Module):
             return entropy + 0.1 * switches
 
     def _load_balance_loss(self, probs: torch.Tensor) -> torch.Tensor:
-        """MoE-style load-balancing loss + entropy maximization.
+        """MoE-style load-balancing loss + entropy maximization + sticky transitions.
 
-        Encourages all regime codes to be used roughly equally across
-        the batch, while also encouraging per-token entropy (exploration).
+        Three components:
+        1. Load balancing — penalize unequal code usage across batch
+        2. Entropy maximization — encourage per-token exploration
+        3. Sticky transitions — penalize regime switches between adjacent tokens
+           (encourages coherent regime segments, not per-token noise)
 
         Based on Switch Transformer / GShard load-balancing approach.
 
@@ -139,22 +143,25 @@ class LOLMLoss(nn.Module):
         n_codes = probs.size(-1)
 
         # 1. Load-balancing: penalize when codes have unequal usage
-        # Average probability assigned to each code across batch & time
-        # Shape: (n_codes,) — how much probability mass each code gets
         code_freq = probs.mean(dim=(0, 1))  # (n_codes,)
-        # Fraction of tokens routed to each code (hard assignment)
         hard_assign = F.one_hot(probs.argmax(dim=-1), n_codes).float()
         route_freq = hard_assign.mean(dim=(0, 1))  # (n_codes,)
-        # Load-balance loss: dot product of soft and hard frequencies
-        # Minimized when both are uniform (= 1/n_codes each)
         balance_loss = n_codes * (code_freq * route_freq).sum()
 
         # 2. Entropy maximization: encourage per-token exploration
-        # Negative entropy (we MAXIMIZE entropy by minimizing -H)
         per_token_entropy = -(probs * (probs + 1e-8).log()).sum(dim=-1).mean()
         neg_entropy = -per_token_entropy  # Minimize this = maximize entropy
 
-        return self.lambda_balance * balance_loss + neg_entropy
+        # 3. Sticky transitions: encourage adjacent tokens to use same regime
+        # Uses differentiable cosine similarity between adjacent prob vectors
+        sticky_loss = torch.tensor(0.0, device=probs.device)
+        if self.lambda_sticky > 0.0 and probs.size(1) > 1:
+            sim = F.cosine_similarity(probs[:, 1:], probs[:, :-1], dim=-1)
+            sticky_loss = -sim.mean()  # Minimize = maximize similarity
+
+        return (self.lambda_balance * balance_loss
+                + neg_entropy
+                + self.lambda_sticky * sticky_loss)
 
     def memory_loss(self, mem_read: torch.Tensor) -> torch.Tensor:
         """Encourage focused memory reads (low attention entropy).

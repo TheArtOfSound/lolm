@@ -144,13 +144,16 @@ class LOLM(nn.Module):
         if self.ssm is not None:
             z = self.ssm(h)  # (B, T, d)
 
-        # 3. Memory
+        # 3. Memory (chunked: write at chunk i feeds read at chunk i+1)
         mem_read = None
         new_memory_state = None
         if self.memory is not None:
             if memory_state is None:
                 memory_state = self.memory.get_initial_memory(B, device)
-            mem_read, new_memory_state = self.memory(h, memory_state)
+            n_chunks = self.cfg.memory.n_chunks
+            mem_read, new_memory_state = self.memory(
+                h, memory_state, n_chunks=n_chunks
+            )
 
         # 4. Regime layer
         regime_probs = None

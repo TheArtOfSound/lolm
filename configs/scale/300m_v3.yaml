@@ -1,0 +1,84 @@
+# LOLM 300M v3 — H200 140GB (Memory Write Fix + Anti-Collapse)
+# ~300M parameters with three critical fixes:
+#   1. Chunked memory (4 chunks): write path now gets gradients
+#      Previously all 15 write tensors had grad=NONE since step 0
+#   2. Stronger load-balancing (λ=0.5) + sticky transitions (λ=0.2)
+#      Previous λ_balance=0.1 failed — regime collapsed to 1 by step 450
+#   3. Higher temp floor (0.5) + longer anneal (150K steps)
+#
+# Architecture identical to 300m_h200.yaml except memory.n_chunks=4
+# Training: batch_size=32, accum=2, effective=64 (proven on H200)
+# Estimated: ~200K steps, 0.7 steps/s → ~79 hours
+
+model:
+  d_model: 1024
+  n_heads: 16
+  n_layers: 16
+  d_ff: 4096
+  vocab_size: 50257
+  max_seq_len: 2048
+  dropout: 0.1
+
+  ssm:
+    enabled: true
+    n_layers: 4
+    d_state: 32
+    expand: 2
+    use_cuda_kernels: true
+
+  regime:
+    enabled: true
+    n_codes: 32
+    d_regime: 128
+    temp_start: 1.0
+    temp_end: 0.5              # MPST: keep stochasticity
+    temp_anneal_steps: 150000  # Slower anneal — give diversity time to establish
+    neighbor_interaction: true
+    neighbor_kernel_size: 7
+
+  memory:
+    enabled: true
+    n_slots: 128
+    n_banks: 3
+    slot_dim: 1024
+    n_chunks: 4  # v3: split 2048 tokens into 4x512 chunks, chain write→read
+
+  gate:
+    enabled: true
+    init_bias: -0.5
+    normalize_branches: true
+
+training:
+  batch_size: 32             # Proven: 106 GB / 143.8 GB on H200
+  seq_len: 2048
+  max_steps: 200000
+  lr: 3.0e-4
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  warmup_steps: 2000
+  grad_clip: 1.0
+  device: cuda
+  dtype: bfloat16
+  log_interval: 50
+  eval_interval: 2000
+  save_interval: 5000
+  cache_clear_interval: 500
+  grad_accumulation_steps: 2  # effective batch = 32 * 2 = 64
+  compile: false              # Safe: avoid torch.compile issues with chunked loop
+
+loss:
+  lambda_future: 0.1
+  lambda_regime: 0.3          # Stronger regime supervision (was 0.1)
+  lambda_mem: 0.05
+  lambda_manifest: 0.01
+  future_window: 16
+  lambda_balance: 0.5         # Much stronger load-balancing (was 0.1)
+  use_load_balance: true
+  lambda_sticky: 0.2          # v3: penalize regime switches between adjacent tokens
+
+data:
+  dataset: HuggingFaceFW/fineweb-edu
+  tokenizer: gpt2
+  cache_dir: ./data
+  streaming: true

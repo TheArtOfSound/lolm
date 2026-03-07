@@ -15,8 +15,12 @@
 """Persistent memory with 3 banks: episodic, semantic, self.
 
 Provides read (attention-based retrieval) and gated write operations.
-Memory state persists across forward calls within a batch but is
-reset between sequences during training.
+
+v3: Chunked intra-sequence processing — splits the sequence into chunks
+and chains write→read across chunks, so the write path gets gradients.
+Previously the write output was returned but never consumed by any
+loss-connected computation, leaving all write parameters (write_proj,
+forget_gate, write_gate) with grad=NONE since step 0.
 """
 
 from __future__ import annotations
@@ -107,23 +111,55 @@ class PersistentMemory(nn.Module):
             for bank in self.banks
         ]
 
+    def _read_write_step(self, h_chunk: torch.Tensor,
+                         memory_state: list[torch.Tensor]
+                         ) -> tuple[torch.Tensor, list[torch.Tensor]]:
+        """Single read+write step for one chunk of the sequence."""
+        reads = []
+        new_states = []
+        for bank, m in zip(self.banks, memory_state):
+            reads.append(bank.read(h_chunk, m))
+            new_states.append(bank.write(h_chunk, m))
+        combined = torch.cat(reads, dim=-1)
+        mem_read = self.combine(combined)
+        return mem_read, new_states
+
     def forward(self, h: torch.Tensor,
-                memory_state: list[torch.Tensor]) -> tuple[torch.Tensor, list[torch.Tensor]]:
+                memory_state: list[torch.Tensor],
+                n_chunks: int = 1) -> tuple[torch.Tensor, list[torch.Tensor]]:
         """
         Args:
             h: (B, T, d_model) hidden state
             memory_state: list of (B, n_slots, slot_dim) per bank
+            n_chunks: if >1, split sequence into chunks and chain
+                      write→read across chunks so write path gets gradients.
+                      Gradient path: loss → read(chunk_j) → memory_j-1
+                      → write(chunk_j-1) → write_proj/forget_gate/write_gate
         Returns:
             mem_read: (B, T, d_model) combined memory readout
             new_memory_state: updated memory state
         """
-        reads = []
-        new_states = []
-        for bank, m in zip(self.banks, memory_state):
-            reads.append(bank.read(h, m))
-            new_states.append(bank.write(h, m))
+        if n_chunks <= 1:
+            return self._read_write_step(h, memory_state)
 
-        # Concatenate reads and project
-        combined = torch.cat(reads, dim=-1)  # (B, T, slot_dim * n_banks)
-        mem_read = self.combine(combined)  # (B, T, d_model)
-        return mem_read, new_states
+        # Chunked processing: write at chunk i feeds read at chunk i+1
+        T = h.size(1)
+        chunk_size = T // n_chunks
+        all_mem_reads = []
+        current_memory = memory_state
+
+        for i in range(n_chunks):
+            start = i * chunk_size
+            end = T if i == n_chunks - 1 else (i + 1) * chunk_size
+            h_chunk = h[:, start:end]
+
+            mem_read_chunk, new_memory = self._read_write_step(
+                h_chunk, current_memory
+            )
+            all_mem_reads.append(mem_read_chunk)
+
+            # Updated memory flows to next chunk's read — gradient bridge
+            current_memory = new_memory
+
+        mem_read = torch.cat(all_mem_reads, dim=1)  # (B, T, d_model)
+        return mem_read, current_memory

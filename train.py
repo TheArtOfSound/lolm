@@ -113,6 +113,7 @@ def train(config_path: str, resume_from: str = None):
         future_window=cfg.loss.future_window,
         lambda_balance=cfg.loss.lambda_balance,
         use_load_balance=cfg.loss.use_load_balance,
+        lambda_sticky=cfg.loss.lambda_sticky,
     ).to(device)
 
     # Optimizer
@@ -272,6 +273,16 @@ def train(config_path: str, resume_from: str = None):
                 log_entry["regime_unique"] = out.regime_indices.unique().numel()
             with open(out_dir / "log.jsonl", "a") as f:
                 f.write(json.dumps(log_entry) + "\n")
+
+        # Gradient diagnostic (lightweight, every 2000 steps)
+        if (step + 1) % 2000 == 0 and hasattr(model, 'memory') and model.memory is not None:
+            diag = []
+            for bi, bank in enumerate(model.memory.banks):
+                for pn, p in bank.named_parameters():
+                    if any(k in pn for k in ["write_proj", "forget_gate", "write_gate"]):
+                        g = "NONE" if p.grad is None else f"{p.grad.norm().item():.6f}"
+                        diag.append(f"mem[{bi}].{pn}={g}")
+            print(f"  [grad check step {step+1}] " + " | ".join(diag[:6]))
 
         # Save checkpoint
         if (step + 1) % tc.save_interval == 0:
