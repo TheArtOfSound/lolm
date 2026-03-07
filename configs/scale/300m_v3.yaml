@@ -1,12 +1,19 @@
-# LOLM 300M v3 — H200 140GB (Memory Write Fix + Anti-Collapse)
-# ~300M parameters with three critical fixes:
+# LOLM 300M v3 — H200 140GB (Full Formal Latent-Order Training)
+# ~300M parameters with complete v3 loss formulation:
+#
+# Engineering fixes:
 #   1. Chunked memory (4 chunks): write path now gets gradients
-#      Previously all 15 write tensors had grad=NONE since step 0
 #   2. Stronger load-balancing (λ=0.5) + sticky transitions (λ=0.2)
-#      Previous λ_balance=0.1 failed — regime collapsed to 1 by step 450
 #   3. Higher temp floor (0.5) + longer anneal (150K steps)
 #
-# Architecture identical to 300m_h200.yaml except memory.n_chunks=4
+# Formal v3 losses (from ChatGPT consultation):
+#   L = L_tok + λ_L·L_L + λ_E·L_E + λ_r·L_r + λ_g·L_g + λ_m·L_m
+#   L_L: CPC contrastive — z_t must encode future structure (InfoNCE)
+#   L_E: Changepoint alignment — regimes track representation shifts
+#   L_r: Regime diversity — load-balance + entropy + sticky transitions
+#   L_g: Competitive gate — gate tracks which branch predicts better
+#   L_m: Memory focus — encourage selective memory reads
+#
 # Training: batch_size=32, accum=2, effective=64 (proven on H200)
 # Estimated: ~200K steps, 0.7 steps/s → ~79 hours
 
@@ -68,14 +75,20 @@ training:
   compile: false              # Safe: avoid torch.compile issues with chunked loop
 
 loss:
-  lambda_future: 0.1
-  lambda_regime: 0.3          # Stronger regime supervision (was 0.1)
-  lambda_mem: 0.05
-  lambda_manifest: 0.01
+  lambda_future: 0.1           # L_L: CPC contrastive weight
+  lambda_regime: 0.3           # L_r: regime diversity weight
+  lambda_mem: 0.05             # L_m: memory focus weight
+  lambda_manifest: 0.01        # Legacy gate regularizer
   future_window: 16
-  lambda_balance: 0.5         # Much stronger load-balancing (was 0.1)
+  lambda_balance: 0.5          # Load-balancing inside L_r
   use_load_balance: true
-  lambda_sticky: 0.2          # v3: penalize regime switches between adjacent tokens
+  lambda_sticky: 0.2           # Sticky transitions inside L_r
+  # v3 formal losses
+  use_cpc: true                # L_L: InfoNCE instead of cosine similarity
+  cpc_temperature: 0.1         # InfoNCE temperature (lower = sharper)
+  cpc_max_positions: 256       # Subsample positions for memory efficiency
+  lambda_changepoint: 0.1      # L_E: regime transitions track representation shifts
+  lambda_competitive: 0.1      # L_g: gate tracks which branch predicts better
 
 data:
   dataset: HuggingFaceFW/fineweb-edu

@@ -114,6 +114,11 @@ def train(config_path: str, resume_from: str = None):
         lambda_balance=cfg.loss.lambda_balance,
         use_load_balance=cfg.loss.use_load_balance,
         lambda_sticky=cfg.loss.lambda_sticky,
+        use_cpc=cfg.loss.use_cpc,
+        cpc_temperature=cfg.loss.cpc_temperature,
+        cpc_max_positions=cfg.loss.cpc_max_positions,
+        lambda_changepoint=cfg.loss.lambda_changepoint,
+        lambda_competitive=cfg.loss.lambda_competitive,
     ).to(device)
 
     # Optimizer

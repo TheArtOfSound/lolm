@@ -109,6 +109,14 @@ class LossConfig:
     use_load_balance: bool = False
     # Sticky transition penalty: penalize regime switches between adjacent tokens
     lambda_sticky: float = 0.0
+    # v3: CPC contrastive loss (replaces cosine future loss when enabled)
+    use_cpc: bool = False
+    cpc_temperature: float = 0.1
+    cpc_max_positions: int = 256
+    # v3: Changepoint alignment — regime transitions track representation shifts
+    lambda_changepoint: float = 0.0
+    # v3: Competitive gate — gate tracks which branch predicts better
+    lambda_competitive: float = 0.0
 
 
 @dataclass
