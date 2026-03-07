@@ -218,8 +218,8 @@ def train(config_path: str, resume_from: str = None):
 
         grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), tc.grad_clip)
 
-        # Skip if gradients exploded
-        if torch.isnan(grad_norm) or grad_norm > 100 * tc.grad_clip:
+        # Skip only if gradients are truly catastrophic (NaN or extreme)
+        if torch.isnan(grad_norm) or torch.isinf(grad_norm):
             print(f"step {step+1}: grad norm {grad_norm:.1f}, skipping")
             optimizer.zero_grad()
             continue
