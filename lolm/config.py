@@ -85,6 +85,8 @@ class TrainingConfig:
     eval_interval: int = 1000
     save_interval: int = 5000
     cache_clear_interval: int = 100
+    grad_accumulation_steps: int = 1
+    compile: bool = False
 
 
 @dataclass
@@ -101,6 +103,7 @@ class DataConfig:
     dataset: str = "roneneldan/TinyStories"
     tokenizer: str = "gpt2"
     cache_dir: str = "./data"
+    streaming: bool = False
 
 
 @dataclass

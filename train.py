@@ -12,7 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Training loop for LOLM."""
+"""Training loop for LOLM.
+
+Supports:
+  - Gradient accumulation for large effective batch sizes
+  - AMP (automatic mixed precision) with bfloat16 on CUDA
+  - torch.compile for kernel fusion on CUDA
+  - Streaming data from HuggingFace for large datasets
+"""
 
 import argparse
 import json
@@ -57,12 +64,45 @@ def train(config_path: str, resume_from: str = None):
     print(f"Device: {device}")
     print(f"Config: {config_path}")
 
+    # Determine dtype
+    dtype_map = {
+        "float32": torch.float32,
+        "float16": torch.float16,
+        "bfloat16": torch.bfloat16,
+    }
+    train_dtype = dtype_map.get(tc.dtype, torch.float32)
+
+    # AMP setup — only for CUDA with float16/bfloat16
+    use_amp = (device.type == "cuda" and train_dtype != torch.float32)
+    if use_amp:
+        # For bfloat16, we don't need a GradScaler (no underflow risk)
+        use_scaler = (train_dtype == torch.float16)
+        amp_ctx = torch.amp.autocast(device_type="cuda", dtype=train_dtype)
+        scaler = torch.amp.GradScaler("cuda", enabled=use_scaler)
+        print(f"AMP enabled: {tc.dtype}" + (" + GradScaler" if use_scaler else ""))
+    else:
+        from contextlib import nullcontext
+        amp_ctx = nullcontext()
+        scaler = None
+        print(f"AMP disabled (dtype={tc.dtype}, device={device.type})")
+
+    # Gradient accumulation
+    accum_steps = tc.grad_accumulation_steps
+    effective_batch = tc.batch_size * accum_steps
+    print(f"Batch size: {tc.batch_size} x {accum_steps} accum = {effective_batch} effective")
+
     # Model
     model = LOLM(cfg.model).to(device)
     params = model.count_parameters()
     print("Parameters:")
     for k, v in params.items():
         print(f"  {k}: {v:,}")
+
+    # torch.compile (CUDA only, PyTorch 2.0+)
+    if tc.compile and device.type == "cuda":
+        print("Compiling model with torch.compile...")
+        model = torch.compile(model)
+        print("Model compiled.")
 
     # Loss
     loss_fn = LOLMLoss(
@@ -83,9 +123,17 @@ def train(config_path: str, resume_from: str = None):
 
     # Data
     print("Loading data...")
-    train_loader = get_dataloader(
-        cfg.data.dataset, cfg.data.cache_dir, tc.seq_len, tc.batch_size
-    )
+    if cfg.data.streaming:
+        from lolm.data_streaming import get_streaming_dataloader
+        train_loader = get_streaming_dataloader(
+            cfg.data.dataset, tc.seq_len, tc.batch_size,
+            tokenizer_name=cfg.data.tokenizer,
+        )
+        print(f"Streaming from: {cfg.data.dataset}")
+    else:
+        train_loader = get_dataloader(
+            cfg.data.dataset, cfg.data.cache_dir, tc.seq_len, tc.batch_size
+        )
 
     # Output directory
     config_name = Path(config_path).stem
@@ -101,6 +149,8 @@ def train(config_path: str, resume_from: str = None):
         start_step = ckpt["step"]
         if "loss_fn" in ckpt:
             loss_fn.load_state_dict(ckpt["loss_fn"])
+        if scaler is not None and "scaler" in ckpt:
+            scaler.load_state_dict(ckpt["scaler"])
         print(f"Resumed from step {start_step}")
 
     # Training loop
@@ -110,15 +160,6 @@ def train(config_path: str, resume_from: str = None):
     t0 = time.time()
 
     for step in range(start_step, tc.max_steps):
-        # Get batch
-        try:
-            x, y = next(data_iter)
-        except StopIteration:
-            data_iter = iter(train_loader)
-            x, y = next(data_iter)
-
-        x, y = x.to(device), y.to(device)
-
         # Learning rate schedule
         lr = get_lr(step, tc.warmup_steps, tc.max_steps, tc.lr)
         for pg in optimizer.param_groups:
@@ -127,28 +168,54 @@ def train(config_path: str, resume_from: str = None):
         # Regime temperature
         temp = get_regime_temperature(step, cfg)
 
-        # Forward
-        out = model(x, regime_temperature=temp)
-
-        # Loss
-        total_loss, components = loss_fn(
-            logits=out.logits, targets=y,
-            z=out.z, h=out.h,
-            regime_probs=out.regime_probs,
-            regime_indices=out.regime_indices,
-            mem_read=out.mem_read,
-            gate_values=out.gate_values,
-        )
-
-        # NaN check — skip bad batches
-        if torch.isnan(total_loss) or torch.isinf(total_loss):
-            print(f"step {step+1}: NaN/Inf loss detected, skipping batch")
-            optimizer.zero_grad()
-            continue
-
-        # Backward
+        # --- Gradient accumulation loop ---
         optimizer.zero_grad()
-        total_loss.backward()
+        accum_loss_total = 0.0
+        accum_components = {}
+
+        for micro_step in range(accum_steps):
+            # Get batch
+            try:
+                x, y = next(data_iter)
+            except StopIteration:
+                data_iter = iter(train_loader)
+                x, y = next(data_iter)
+
+            x, y = x.to(device), y.to(device)
+
+            # Forward with AMP
+            with amp_ctx:
+                out = model(x, regime_temperature=temp)
+                total_loss, components = loss_fn(
+                    logits=out.logits, targets=y,
+                    z=out.z, h=out.h,
+                    regime_probs=out.regime_probs,
+                    regime_indices=out.regime_indices,
+                    mem_read=out.mem_read,
+                    gate_values=out.gate_values,
+                )
+                # Scale loss by accumulation steps
+                scaled_loss = total_loss / accum_steps
+
+            # NaN check — skip bad batches
+            if torch.isnan(total_loss) or torch.isinf(total_loss):
+                print(f"step {step+1}: NaN/Inf loss detected, skipping micro-batch")
+                continue
+
+            # Backward (with scaler if using fp16)
+            if scaler is not None:
+                scaler.scale(scaled_loss).backward()
+            else:
+                scaled_loss.backward()
+
+            accum_loss_total += total_loss.item()
+            for k, v in components.items():
+                accum_components[k] = accum_components.get(k, 0.0) + v / accum_steps
+
+        # Gradient clipping
+        if scaler is not None:
+            scaler.unscale_(optimizer)
+
         grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), tc.grad_clip)
 
         # Skip if gradients exploded
@@ -157,10 +224,15 @@ def train(config_path: str, resume_from: str = None):
             optimizer.zero_grad()
             continue
 
-        optimizer.step()
+        # Optimizer step
+        if scaler is not None:
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            optimizer.step()
 
-        # Accumulate logs
-        for k, v in components.items():
+        # Accumulate logs (using averaged components from accumulation)
+        for k, v in accum_components.items():
             log_losses[k] = log_losses.get(k, 0.0) + v
 
         # MPS cache clear
@@ -171,7 +243,7 @@ def train(config_path: str, resume_from: str = None):
         if (step + 1) % tc.log_interval == 0:
             dt = time.time() - t0
             avg = {k: v / tc.log_interval for k, v in log_losses.items()}
-            ppl = math.exp(min(avg["loss_tok"], 20))
+            ppl = math.exp(min(avg.get("loss_tok", 20), 20))
             gate_msg = ""
             if out.gate_values is not None:
                 gate_msg = f" | gate={out.gate_values.mean().item():.3f}"
@@ -181,9 +253,9 @@ def train(config_path: str, resume_from: str = None):
                 regime_msg = f" | regimes={n_unique}"
 
             print(
-                f"step {step+1:>6d} | loss {avg['loss_total']:.4f} | "
-                f"tok {avg['loss_tok']:.4f} | ppl {ppl:.1f} | "
-                f"fut {avg['loss_future']:.4f} | lr {lr:.2e} | "
+                f"step {step+1:>6d} | loss {avg.get('loss_total', 0):.4f} | "
+                f"tok {avg.get('loss_tok', 0):.4f} | ppl {ppl:.1f} | "
+                f"fut {avg.get('loss_future', 0):.4f} | lr {lr:.2e} | "
                 f"{tc.log_interval/dt:.1f} steps/s"
                 f"{gate_msg}{regime_msg}"
             )
@@ -197,23 +269,29 @@ def train(config_path: str, resume_from: str = None):
         # Save checkpoint
         if (step + 1) % tc.save_interval == 0:
             ckpt_path = out_dir / f"ckpt_{step+1}.pt"
-            torch.save({
+            ckpt_data = {
                 "step": step + 1,
                 "model": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "loss_fn": loss_fn.state_dict(),
                 "config": config_path,
-            }, ckpt_path)
+            }
+            if scaler is not None:
+                ckpt_data["scaler"] = scaler.state_dict()
+            torch.save(ckpt_data, ckpt_path)
             print(f"Saved checkpoint: {ckpt_path}")
 
     # Final save
-    torch.save({
+    final_data = {
         "step": tc.max_steps,
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "loss_fn": loss_fn.state_dict(),
         "config": config_path,
-    }, out_dir / "final.pt")
+    }
+    if scaler is not None:
+        final_data["scaler"] = scaler.state_dict()
+    torch.save(final_data, out_dir / "final.pt")
     print(f"Training complete. Final model saved to {out_dir}/final.pt")
 
 

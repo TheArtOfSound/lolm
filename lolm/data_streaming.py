@@ -1,0 +1,98 @@
+# Copyright 2026 Bryan Leonard
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Streaming data pipeline for large-scale LOLM training.
+
+Streams from HuggingFace datasets (e.g., FineWeb-Edu) without
+downloading the full dataset to disk. Tokenizes on-the-fly
+with tiktoken GPT-2 tokenizer.
+"""
+
+from __future__ import annotations
+
+import tiktoken
+import torch
+from torch.utils.data import IterableDataset, DataLoader
+
+
+class StreamingTokenDataset(IterableDataset):
+    """Streaming tokenized dataset from HuggingFace.
+
+    Streams text from a HuggingFace dataset, tokenizes on-the-fly,
+    and yields fixed-length token chunks for language modeling.
+
+    Each item returns (x, y) where x = chunk[:-1], y = chunk[1:].
+    """
+
+    def __init__(self, dataset_name: str, seq_len: int,
+                 tokenizer_name: str = "gpt2", split: str = "train"):
+        self.dataset_name = dataset_name
+        self.seq_len = seq_len
+        self.tokenizer_name = tokenizer_name
+        self.split = split
+
+    def __iter__(self):
+        from datasets import load_dataset
+
+        enc = tiktoken.get_encoding(self.tokenizer_name)
+        ds = load_dataset(self.dataset_name, split=self.split,
+                          streaming=True, trust_remote_code=True)
+
+        # Buffer to accumulate tokens across documents
+        buffer = []
+        chunk_size = self.seq_len + 1  # +1 for target offset
+
+        for example in ds:
+            text = example.get("text", "")
+            if not text:
+                continue
+
+            tokens = enc.encode_ordinary(text)
+            buffer.extend(tokens)
+
+            # Yield as many full chunks as possible
+            while len(buffer) >= chunk_size:
+                chunk = buffer[:chunk_size]
+                buffer = buffer[chunk_size:]
+                chunk_t = torch.tensor(chunk, dtype=torch.long)
+                yield chunk_t[:-1], chunk_t[1:]
+
+
+def get_streaming_dataloader(dataset_name: str, seq_len: int,
+                             batch_size: int, tokenizer_name: str = "gpt2",
+                             num_workers: int = 2) -> DataLoader:
+    """Get a streaming DataLoader for large datasets.
+
+    Args:
+        dataset_name: HuggingFace dataset identifier (e.g., "HuggingFaceFW/fineweb-edu")
+        seq_len: Sequence length for training
+        batch_size: Batch size
+        tokenizer_name: Tokenizer to use (default: gpt2)
+        num_workers: Number of data loading workers
+
+    Returns:
+        DataLoader that streams tokenized chunks
+    """
+    dataset = StreamingTokenDataset(
+        dataset_name=dataset_name,
+        seq_len=seq_len,
+        tokenizer_name=tokenizer_name,
+    )
+    return DataLoader(
+        dataset,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        pin_memory=True,
+        drop_last=True,
+    )
