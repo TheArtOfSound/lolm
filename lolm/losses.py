@@ -27,13 +27,16 @@ class LOLMLoss(nn.Module):
 
     def __init__(self, lambda_future: float = 0.1, lambda_regime: float = 0.05,
                  lambda_mem: float = 0.05, lambda_manifest: float = 0.01,
-                 future_window: int = 8):
+                 future_window: int = 8, lambda_balance: float = 0.1,
+                 use_load_balance: bool = False):
         super().__init__()
         self.lambda_future = lambda_future
         self.lambda_regime = lambda_regime
         self.lambda_mem = lambda_mem
         self.lambda_manifest = lambda_manifest
         self.future_window = future_window
+        self.lambda_balance = lambda_balance
+        self.use_load_balance = use_load_balance
 
         # Learned future summary projection (z -> predicted future embedding)
         self.future_proj = None  # Initialized lazily based on d_model
@@ -98,7 +101,11 @@ class LOLMLoss(nn.Module):
         return -cos_sim.mean()
 
     def regime_loss(self, probs: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
-        """Entropy regularization + switch penalty for regime stability.
+        """Regime diversity loss — prevents collapse to a single code.
+
+        Two modes:
+        - load_balance=True (new): MoE-style load-balancing + entropy maximization
+        - load_balance=False (legacy): entropy minimization (causes collapse!)
 
         Args:
             probs: (B, T, n_codes) regime probabilities
@@ -107,16 +114,47 @@ class LOLMLoss(nn.Module):
         if probs is None:
             return torch.tensor(0.0, device=indices.device if indices is not None else "cpu")
 
-        # Encourage low entropy (confident regime selection)
-        entropy = -(probs * (probs + 1e-8).log()).sum(dim=-1).mean()
-
-        # Switch penalty: penalize regime changes between timesteps
-        if indices.size(1) > 1:
-            switches = (indices[:, 1:] != indices[:, :-1]).float().mean()
+        if self.use_load_balance:
+            return self._load_balance_loss(probs)
         else:
-            switches = torch.tensor(0.0, device=probs.device)
+            # Legacy behavior (KNOWN TO CAUSE COLLAPSE)
+            entropy = -(probs * (probs + 1e-8).log()).sum(dim=-1).mean()
+            if indices.size(1) > 1:
+                switches = (indices[:, 1:] != indices[:, :-1]).float().mean()
+            else:
+                switches = torch.tensor(0.0, device=probs.device)
+            return entropy + 0.1 * switches
 
-        return entropy + 0.1 * switches
+    def _load_balance_loss(self, probs: torch.Tensor) -> torch.Tensor:
+        """MoE-style load-balancing loss + entropy maximization.
+
+        Encourages all regime codes to be used roughly equally across
+        the batch, while also encouraging per-token entropy (exploration).
+
+        Based on Switch Transformer / GShard load-balancing approach.
+
+        Args:
+            probs: (B, T, n_codes) regime probabilities
+        """
+        n_codes = probs.size(-1)
+
+        # 1. Load-balancing: penalize when codes have unequal usage
+        # Average probability assigned to each code across batch & time
+        # Shape: (n_codes,) — how much probability mass each code gets
+        code_freq = probs.mean(dim=(0, 1))  # (n_codes,)
+        # Fraction of tokens routed to each code (hard assignment)
+        hard_assign = F.one_hot(probs.argmax(dim=-1), n_codes).float()
+        route_freq = hard_assign.mean(dim=(0, 1))  # (n_codes,)
+        # Load-balance loss: dot product of soft and hard frequencies
+        # Minimized when both are uniform (= 1/n_codes each)
+        balance_loss = n_codes * (code_freq * route_freq).sum()
+
+        # 2. Entropy maximization: encourage per-token exploration
+        # Negative entropy (we MAXIMIZE entropy by minimizing -H)
+        per_token_entropy = -(probs * (probs + 1e-8).log()).sum(dim=-1).mean()
+        neg_entropy = -per_token_entropy  # Minimize this = maximize entropy
+
+        return self.lambda_balance * balance_loss + neg_entropy
 
     def memory_loss(self, mem_read: torch.Tensor) -> torch.Tensor:
         """Encourage focused memory reads (low attention entropy).

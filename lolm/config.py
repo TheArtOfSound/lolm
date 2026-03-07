@@ -38,6 +38,9 @@ class RegimeConfig:
     temp_start: float = 1.0
     temp_end: float = 0.1
     temp_anneal_steps: int = 50000
+    # MPST neighbor interaction (conv1d over regime logits)
+    neighbor_interaction: bool = False
+    neighbor_kernel_size: int = 5
 
 
 @dataclass
@@ -51,6 +54,10 @@ class MemoryConfig:
 @dataclass
 class GateConfig:
     enabled: bool = True
+    # Initialization bias: negative = latent-preferring, positive = surface-preferring
+    init_bias: float = 0.0
+    # Normalize branches before gating (LayerNorm on h and z)
+    normalize_branches: bool = False
 
 
 @dataclass
@@ -96,6 +103,9 @@ class LossConfig:
     lambda_mem: float = 0.05
     lambda_manifest: float = 0.01
     future_window: int = 8
+    # Load-balancing loss for regime (MoE-style, prevents collapse)
+    lambda_balance: float = 0.1
+    use_load_balance: bool = False
 
 
 @dataclass

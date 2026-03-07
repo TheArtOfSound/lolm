@@ -111,6 +111,8 @@ def train(config_path: str, resume_from: str = None):
         lambda_mem=cfg.loss.lambda_mem,
         lambda_manifest=cfg.loss.lambda_manifest,
         future_window=cfg.loss.future_window,
+        lambda_balance=cfg.loss.lambda_balance,
+        use_load_balance=cfg.loss.use_load_balance,
     ).to(device)
 
     # Optimizer
@@ -262,9 +264,14 @@ def train(config_path: str, resume_from: str = None):
             log_losses = {}
             t0 = time.time()
 
-            # Save log
+            # Save log with extra diagnostics
+            log_entry = {"step": step + 1, **avg, "lr": lr, "temp": temp}
+            if out.gate_values is not None:
+                log_entry["gate_mean"] = out.gate_values.mean().item()
+            if out.regime_indices is not None:
+                log_entry["regime_unique"] = out.regime_indices.unique().numel()
             with open(out_dir / "log.jsonl", "a") as f:
-                f.write(json.dumps({"step": step + 1, **avg, "lr": lr, "temp": temp}) + "\n")
+                f.write(json.dumps(log_entry) + "\n")
 
         # Save checkpoint
         if (step + 1) % tc.save_interval == 0:

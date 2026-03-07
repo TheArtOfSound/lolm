@@ -1,0 +1,87 @@
+# LOLM 300M — H200 140GB (All Architecture Fixes)
+# ~300M parameters with MPST regime + improved gate
+# Training: ~200K steps in ~15 hours on 1x H200
+# Cost: ~$30 on Vast.ai @ $2/hr
+#
+# Key changes from 100M run:
+#   1. MPST neighbor interaction on regime (prevents collapse)
+#   2. Load-balancing loss (MoE-style, replaces entropy minimization)
+#   3. Temperature floor at 0.5 (MPST: keep stochasticity)
+#   4. Gate init bias -0.5 (start latent-preferring, ~0.38)
+#   5. Branch normalization (LayerNorm on h and z before gating)
+#   6. mamba-ssm CUDA kernels (2x SSM speedup)
+#   7. Massive batch size (H200 has 140GB VRAM)
+#
+# Effective batch: 16 * 4 accum = 64 sequences * 2048 tokens = 131,072 tokens/step
+# Total tokens at 200K steps: ~26.2B tokens
+
+model:
+  d_model: 1024
+  n_heads: 16
+  n_layers: 16
+  d_ff: 4096
+  vocab_size: 50257
+  max_seq_len: 2048
+  dropout: 0.1
+
+  ssm:
+    enabled: true
+    n_layers: 4
+    d_state: 32
+    expand: 2
+    use_cuda_kernels: true  # mamba-ssm CUDA kernels (install on GPU)
+
+  regime:
+    enabled: true
+    n_codes: 32
+    d_regime: 128
+    temp_start: 1.0
+    temp_end: 0.5            # MPST: keep stochasticity, don't anneal below 0.5
+    temp_anneal_steps: 100000
+    neighbor_interaction: true  # MPST: causal conv1d over regime logits
+    neighbor_kernel_size: 7     # Look at ~7 neighboring tokens
+
+  memory:
+    enabled: true
+    n_slots: 128
+    n_banks: 3
+    slot_dim: 1024
+
+  gate:
+    enabled: true
+    init_bias: -0.5           # Start latent-preferring (~0.38 via sigmoid)
+    normalize_branches: true   # LayerNorm on h and z before gating
+
+training:
+  batch_size: 16
+  seq_len: 2048
+  max_steps: 200000
+  lr: 3.0e-4
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  warmup_steps: 2000
+  grad_clip: 1.0
+  device: cuda
+  dtype: bfloat16
+  log_interval: 100
+  eval_interval: 2000
+  save_interval: 10000
+  cache_clear_interval: 500
+  grad_accumulation_steps: 4   # effective batch = 16 * 4 = 64
+  compile: true
+
+loss:
+  lambda_future: 0.1
+  lambda_regime: 0.1          # Stronger regime supervision
+  lambda_mem: 0.05
+  lambda_manifest: 0.01
+  future_window: 16
+  lambda_balance: 0.1         # MoE-style load-balancing
+  use_load_balance: true      # Use load-balancing instead of entropy minimization
+
+data:
+  dataset: HuggingFaceFW/fineweb-edu
+  tokenizer: gpt2
+  cache_dir: ./data
+  streaming: true

@@ -16,6 +16,10 @@
 
 Represents the model's current organizational mode:
 exploration, synthesis, repair, planning, narrative, etc.
+
+v2: MPST-inspired neighbor interaction — tokens influence nearby tokens'
+regime choices through a causal conv1d, creating coherent regime segments
+instead of independent per-token decisions.
 """
 
 import torch
@@ -28,14 +32,31 @@ class RegimeLayer(nn.Module):
 
     Takes concatenated [z; h; m] and produces a soft regime embedding.
     Temperature is annealed externally during training.
+
+    With neighbor_interaction=True, regime logits are influenced by
+    neighboring tokens' logits via a causal conv1d (MPST-style).
+    This creates spatially coherent regime segments.
     """
 
     def __init__(self, d_input: int, n_codes: int = 16,
-                 d_regime: int = 64):
+                 d_regime: int = 64, neighbor_interaction: bool = False,
+                 neighbor_kernel_size: int = 5):
         super().__init__()
         self.n_codes = n_codes
         self.logit_proj = nn.Linear(d_input, n_codes, bias=False)
         self.codebook = nn.Embedding(n_codes, d_regime)
+
+        # MPST neighbor interaction: causal conv1d over regime logits
+        self.neighbor_interaction = neighbor_interaction
+        if neighbor_interaction:
+            # Causal conv: kernel only looks at current + past tokens
+            self.neighbor_conv = nn.Conv1d(
+                n_codes, n_codes, kernel_size=neighbor_kernel_size,
+                padding=0, groups=1, bias=True,
+            )
+            self.neighbor_kernel_size = neighbor_kernel_size
+            # Scale factor so neighbor influence doesn't overwhelm direct logits
+            self.neighbor_scale = nn.Parameter(torch.tensor(0.1))
 
     def forward(self, z: torch.Tensor, h: torch.Tensor,
                 m: torch.Tensor, temperature: float = 1.0
@@ -53,6 +74,16 @@ class RegimeLayer(nn.Module):
         """
         combined = torch.cat([z, h, m], dim=-1)
         logits = self.logit_proj(combined)  # (B, T, n_codes)
+
+        # MPST: neighbor interaction via causal conv1d
+        if self.neighbor_interaction:
+            # Reshape for conv1d: (B, n_codes, T)
+            logits_conv = logits.transpose(1, 2)
+            # Causal padding: pad only on the left
+            logits_padded = F.pad(logits_conv, (self.neighbor_kernel_size - 1, 0))
+            neighbor_influence = self.neighbor_conv(logits_padded)  # (B, n_codes, T)
+            neighbor_influence = neighbor_influence.transpose(1, 2)  # (B, T, n_codes)
+            logits = logits + self.neighbor_scale * neighbor_influence
 
         if self.training:
             probs = F.gumbel_softmax(logits, tau=temperature, hard=False, dim=-1)

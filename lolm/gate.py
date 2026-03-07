@@ -17,6 +17,8 @@
 Controls when latent structure should become externalized in language.
 g ~ 1: surface decoder drives output (standard LM behavior)
 g ~ 0: latent state drives output (novel latent-order behavior)
+
+v2: Biased initialization to start off-center (not 0.5 coin-flip).
 """
 
 import torch
@@ -28,18 +30,27 @@ class ManifestationGate(nn.Module):
 
     Decides how much of the output comes from the surface decoder (h)
     vs the latent order field (z), conditioned on regime and memory.
+
+    Args:
+        d_model: Model dimension
+        d_regime: Regime embedding dimension
+        init_bias: Bias for gate initialization. Negative = start latent-preferring
+                   (gate < 0.5), positive = start surface-preferring (gate > 0.5).
+                   Default 0.0 = start at 0.5. Recommended: -0.5 to start at ~0.38.
     """
 
-    def __init__(self, d_model: int, d_regime: int):
+    def __init__(self, d_model: int, d_regime: int, init_bias: float = 0.0):
         super().__init__()
         d_input = d_model * 3 + d_regime  # z + h + m + r_embed
         d_hidden = d_model * 2
-        self.net = nn.Sequential(
-            nn.Linear(d_input, d_hidden, bias=False),
-            nn.GELU(),
-            nn.Linear(d_hidden, d_model, bias=True),
-            nn.Sigmoid(),
-        )
+        self.fc1 = nn.Linear(d_input, d_hidden, bias=False)
+        self.act = nn.GELU()
+        self.fc2 = nn.Linear(d_hidden, d_model, bias=True)
+        self.sigmoid = nn.Sigmoid()
+
+        # Bias initialization: shift the gate output away from 0.5
+        if init_bias != 0.0:
+            nn.init.constant_(self.fc2.bias, init_bias)
 
     def forward(self, z: torch.Tensor, h: torch.Tensor,
                 m: torch.Tensor, r_embed: torch.Tensor) -> torch.Tensor:
@@ -53,4 +64,4 @@ class ManifestationGate(nn.Module):
             g: (B, T, d_model) gate values in [0, 1]
         """
         combined = torch.cat([z, h, m, r_embed], dim=-1)
-        return self.net(combined)
+        return self.sigmoid(self.fc2(self.act(self.fc1(combined))))

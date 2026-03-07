@@ -94,12 +94,23 @@ class LOLM(nn.Module):
                 d_input=d_regime_in,
                 n_codes=cfg.regime.n_codes,
                 d_regime=cfg.regime.d_regime,
+                neighbor_interaction=cfg.regime.neighbor_interaction,
+                neighbor_kernel_size=cfg.regime.neighbor_kernel_size,
             )
 
         # Manifestation gate
         self.gate = None
         if cfg.gate.enabled and cfg.ssm.enabled:
-            self.gate = ManifestationGate(d_model=d, d_regime=cfg.regime.d_regime)
+            self.gate = ManifestationGate(
+                d_model=d, d_regime=cfg.regime.d_regime,
+                init_bias=cfg.gate.init_bias,
+            )
+
+        # Branch normalization for gated fusion (prevents magnitude mismatch)
+        self.normalize_branches = cfg.gate.normalize_branches
+        if self.normalize_branches and cfg.ssm.enabled:
+            self.ln_h_gate = nn.LayerNorm(d)
+            self.ln_z_gate = nn.LayerNorm(d)
 
         # Fusion projections for combining streams
         self.proj_z = nn.Linear(d, d, bias=False) if cfg.ssm.enabled else None
@@ -162,8 +173,17 @@ class LOLM(nn.Module):
             )
             gate_values = self.gate(z, h, g_m, g_r)  # (B, T, d)
 
+            # Project branches
+            h_proj = self.proj_h(h)
+            z_proj = self.proj_z(z)
+
+            # Optional branch normalization (prevents magnitude mismatch)
+            if self.normalize_branches:
+                h_proj = self.ln_h_gate(h_proj)
+                z_proj = self.ln_z_gate(z_proj)
+
             # Gated fusion: g*h + (1-g)*z
-            fused = gate_values * self.proj_h(h) + (1 - gate_values) * self.proj_z(z)
+            fused = gate_values * h_proj + (1 - gate_values) * z_proj
         else:
             # No gate: just use h (plain decoder mode)
             fused = self.proj_h(h)
