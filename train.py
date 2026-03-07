@@ -260,12 +260,22 @@ def train(config_path: str, resume_from: str = None):
                 n_unique = out.regime_indices.unique().numel()
                 regime_msg = f" | regimes={n_unique}"
 
+            # Build extra loss components string (only non-zero ones)
+            extra_losses = ""
+            for lname, lkey in [
+                ("chg", "loss_changepoint"), ("comp", "loss_competitive"),
+                ("reg", "loss_regime"), ("mem", "loss_mem"), ("man", "loss_manifest"),
+            ]:
+                val = avg.get(lkey, 0.0)
+                if abs(val) > 1e-8:
+                    extra_losses += f" | {lname}={val:.4f}"
+
             print(
                 f"step {step+1:>6d} | loss {avg.get('loss_total', 0):.4f} | "
                 f"tok {avg.get('loss_tok', 0):.4f} | ppl {ppl:.1f} | "
                 f"fut {avg.get('loss_future', 0):.4f} | lr {lr:.2e} | "
                 f"{tc.log_interval/dt:.1f} steps/s"
-                f"{gate_msg}{regime_msg}"
+                f"{gate_msg}{regime_msg}{extra_losses}"
             )
             log_losses = {}
             t0 = time.time()

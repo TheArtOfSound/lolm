@@ -1,7 +1,14 @@
-# LOLM 300M v3 — H200 140GB (Full Formal Latent-Order Training)
+# LOLM 300M v3.1 — H200 140GB (Full Formal Latent-Order Training)
 # ~300M parameters with complete v3 loss formulation:
 #
-# Engineering fixes:
+# v3.1 fixes (regime STILL collapsed 32→1 by step 450 in v3.0):
+#   1. Regime gradient isolation: detach r_embed from token loss path
+#      (VQ-VAE style — regime trained only by its own losses)
+#   2. Logit clamping [-5,5]: prevent extreme logits overriding Gumbel noise
+#   3. Stronger CPC signal: λ_future 0.1→0.5, future_window 16→8
+#   4. Full loss component logging for diagnostics
+#
+# Engineering fixes (from v3.0):
 #   1. Chunked memory (4 chunks): write path now gets gradients
 #   2. Stronger load-balancing (λ=0.5) + sticky transitions (λ=0.2)
 #   3. Higher temp floor (0.5) + longer anneal (150K steps)
@@ -42,6 +49,7 @@ model:
     temp_anneal_steps: 150000  # Slower anneal — give diversity time to establish
     neighbor_interaction: true
     neighbor_kernel_size: 7
+    gradient_isolation: true   # v3.1: detach regime from token loss (prevents collapse)
 
   memory:
     enabled: true
@@ -75,11 +83,11 @@ training:
   compile: false              # Safe: avoid torch.compile issues with chunked loop
 
 loss:
-  lambda_future: 0.1           # L_L: CPC contrastive weight
+  lambda_future: 0.5           # L_L: CPC contrastive weight (v3.1: 0.1→0.5 — was at random chance)
   lambda_regime: 0.3           # L_r: regime diversity weight
   lambda_mem: 0.05             # L_m: memory focus weight
   lambda_manifest: 0.01        # Legacy gate regularizer
-  future_window: 16
+  future_window: 8             # v3.1: 16→8 — easier prediction task to bootstrap CPC learning
   lambda_balance: 0.5          # Load-balancing inside L_r
   use_load_balance: true
   lambda_sticky: 0.2           # Sticky transitions inside L_r

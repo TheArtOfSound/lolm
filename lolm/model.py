@@ -197,7 +197,11 @@ class LOLM(nn.Module):
         if mem_read is not None and self.proj_m is not None:
             fused = fused + self.proj_m(mem_read)
         if r_embed is not None and self.proj_r is not None:
-            fused = fused + self.proj_r(r_embed)
+            # v3 gradient isolation: detach regime from token loss path.
+            # Regime is trained ONLY by its own losses (changepoint, load-balance),
+            # not corrupted by token loss pushing all codes to collapse.
+            r_for_fusion = r_embed.detach() if self.cfg.regime.gradient_isolation else r_embed
+            fused = fused + self.proj_r(r_for_fusion)
 
         # 6. LM head
         logits = self.lm_head(fused)  # (B, T, vocab_size)

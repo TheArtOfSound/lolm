@@ -85,6 +85,11 @@ class RegimeLayer(nn.Module):
             neighbor_influence = neighbor_influence.transpose(1, 2)  # (B, T, n_codes)
             logits = logits + self.neighbor_scale * neighbor_influence
 
+        # Clamp logits to prevent extreme values that override Gumbel noise.
+        # Without this, logit_proj can learn [100, 0, 0, ...] which collapses
+        # to one code regardless of temperature or load-balancing losses.
+        logits = logits.clamp(-5.0, 5.0)
+
         if self.training:
             probs = F.gumbel_softmax(logits, tau=temperature, hard=False, dim=-1)
         else:

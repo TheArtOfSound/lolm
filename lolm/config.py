@@ -41,6 +41,10 @@ class RegimeConfig:
     # MPST neighbor interaction (conv1d over regime logits)
     neighbor_interaction: bool = False
     neighbor_kernel_size: int = 5
+    # v3: Isolate regime from token loss gradients (VQ-VAE style).
+    # When True, r_embed is detached before fusion, so regime is trained
+    # ONLY by its own losses (changepoint, load-balance, entropy).
+    gradient_isolation: bool = False
 
 
 @dataclass
