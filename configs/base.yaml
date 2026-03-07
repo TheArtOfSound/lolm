@@ -1,0 +1,63 @@
+# LOLM Base Configuration
+# Full model with all components enabled
+
+model:
+  d_model: 256
+  n_heads: 8
+  n_layers: 6
+  d_ff: 1024
+  vocab_size: 50257
+  max_seq_len: 512
+  dropout: 0.1
+
+  ssm:
+    enabled: true
+    n_layers: 2
+    d_state: 16
+    expand: 2  # d_inner = d_model * expand = 512
+
+  regime:
+    enabled: true
+    n_codes: 16
+    d_regime: 64
+    temp_start: 1.0
+    temp_end: 0.1
+    temp_anneal_steps: 50000
+
+  memory:
+    enabled: true
+    n_slots: 32
+    n_banks: 3  # episodic, semantic, self
+    slot_dim: 256
+
+  gate:
+    enabled: true
+
+training:
+  batch_size: 4
+  seq_len: 128
+  max_steps: 100000
+  lr: 1.0e-4
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  warmup_steps: 2000
+  grad_clip: 0.5
+  device: mps
+  dtype: float32
+  log_interval: 50
+  eval_interval: 1000
+  save_interval: 5000
+  cache_clear_interval: 100
+
+loss:
+  lambda_future: 0.1
+  lambda_regime: 0.05
+  lambda_mem: 0.05
+  lambda_manifest: 0.01
+  future_window: 8
+
+data:
+  dataset: roneneldan/TinyStories
+  tokenizer: gpt2
+  cache_dir: ./data

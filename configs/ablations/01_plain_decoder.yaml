@@ -1,0 +1,12 @@
+# Ablation 1: Plain decoder baseline
+_base_: ../base.yaml
+
+model:
+  ssm:
+    enabled: false
+  regime:
+    enabled: false
+  memory:
+    enabled: false
+  gate:
+    enabled: false

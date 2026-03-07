@@ -1,0 +1,70 @@
+# LOLM 1B — Multi-GPU or single H100
+# ~1B parameters, publication-grade
+# Training: ~1-2 weeks on 1x A100, ~3-4 days on 4x A100
+# Cost: ~$200-600 on Vast.ai
+
+model:
+  d_model: 2048
+  n_heads: 16
+  n_layers: 24
+  d_ff: 8192
+  vocab_size: 50257
+  max_seq_len: 4096
+  dropout: 0.05
+
+  ssm:
+    enabled: true
+    n_layers: 6
+    d_state: 64
+    expand: 2
+    use_cuda_kernels: true
+
+  regime:
+    enabled: true
+    n_codes: 64
+    d_regime: 256
+    temp_start: 1.0
+    temp_end: 0.05
+    temp_anneal_steps: 200000
+
+  memory:
+    enabled: true
+    n_slots: 256
+    n_banks: 3
+    slot_dim: 2048
+
+  gate:
+    enabled: true
+
+training:
+  batch_size: 4
+  seq_len: 4096
+  max_steps: 500000
+  lr: 2.0e-4
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  warmup_steps: 4000
+  grad_clip: 1.0
+  device: cuda
+  dtype: bfloat16
+  log_interval: 100
+  eval_interval: 5000
+  save_interval: 20000
+  cache_clear_interval: 1000
+  compile: true
+  grad_accumulation: 8   # effective batch = 4 * 8 = 32
+  use_mamba_cuda: true
+  use_deepspeed: true     # ZeRO Stage 2
+
+loss:
+  lambda_future: 0.1
+  lambda_regime: 0.05
+  lambda_mem: 0.05
+  lambda_manifest: 0.01
+  future_window: 32
+
+data:
+  dataset: HuggingFaceFW/fineweb-edu
+  tokenizer: gpt2
+  cache_dir: ./data

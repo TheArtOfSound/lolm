@@ -1,0 +1,12 @@
+# Ablation 6: Full LOLM model
+_base_: ../base.yaml
+
+model:
+  ssm:
+    enabled: true
+  regime:
+    enabled: true
+  memory:
+    enabled: true
+  gate:
+    enabled: true

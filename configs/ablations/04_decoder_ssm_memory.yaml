@@ -1,0 +1,12 @@
+# Ablation 4: Decoder + SSM + Memory
+_base_: ../base.yaml
+
+model:
+  ssm:
+    enabled: true
+  regime:
+    enabled: false
+  memory:
+    enabled: true
+  gate:
+    enabled: false
