@@ -14,9 +14,15 @@
 
 """Selective State-Space Model (Mamba-style) latent core.
 
-Pure PyTorch sequential scan for MPS, with optional mamba-ssm CUDA kernels.
+Three scan backends:
+  1. mamba-ssm CUDA kernels (fastest, requires mamba-ssm package)
+  2. Parallel associative scan in pure PyTorch (fast on GPU, no extra deps)
+  3. Sequential scan (fallback for MPS / CPU)
+
 This is the latent order field z_t that evolves underneath the surface decoder.
 """
+
+from __future__ import annotations
 
 import torch
 import torch.nn as nn
@@ -29,6 +35,48 @@ try:
     _MAMBA_CUDA_AVAILABLE = True
 except ImportError:
     pass
+
+
+def _parallel_scan_simple(A_bar: torch.Tensor, Bx: torch.Tensor) -> torch.Tensor:
+    """Simple parallel prefix scan using doubling (Hillis-Steele style).
+
+    Simpler than Blelloch, uses O(T log T) work but O(log T) depth.
+    On GPU, the extra work is cheap since all operations are parallel.
+
+    Args:
+        A_bar: (B, T, D, N) - discretized state transition
+        Bx:    (B, T, D, N) - discretized input
+
+    Returns:
+        H: (B, T, D, N) - hidden states for all timesteps
+    """
+    # Start: h_t = Bx_t (will accumulate via scan)
+    h = Bx.clone()
+    a = A_bar.clone()
+
+    T = A_bar.shape[1]
+    stride = 1
+
+    while stride < T:
+        # For positions >= stride, combine with position (pos - stride)
+        h_shifted = F.pad(h[:, :-stride], (0, 0, 0, 0, stride, 0))
+        a_shifted = F.pad(a[:, :-stride], (0, 0, 0, 0, stride, 0), value=1.0)
+
+        # New h[t] = a[t] * h[t-stride] + h[t]  (for t >= stride)
+        # New a[t] = a[t] * a[t-stride]
+        h_new = a * h_shifted + h
+        a_new = a * a_shifted
+
+        # Only update positions >= stride
+        mask = torch.zeros(T, device=h.device, dtype=torch.bool)
+        mask[stride:] = True
+
+        h = torch.where(mask[None, :, None, None], h_new, h)
+        a = torch.where(mask[None, :, None, None], a_new, a)
+
+        stride *= 2
+
+    return h
 
 
 class CudaSSMLayer(nn.Module):
@@ -99,15 +147,23 @@ class SelectiveSSMLayer(nn.Module):
         A_bar = torch.exp(dt_expanded * A)  # (B, T, d_inner, d_state)
         B_bar = dt_expanded * B_t.unsqueeze(2)  # (B, T, d_inner, d_state)
 
-        # Sequential scan
-        h = torch.zeros(B, self.d_inner, self.d_state, device=x.device, dtype=x.dtype)
-        ys = []
-        for t in range(T):
-            h = A_bar[:, t] * h + B_bar[:, t] * x_main[:, t].unsqueeze(-1)
-            y_t = (h * C_t[:, t].unsqueeze(1)).sum(dim=-1)  # (B, d_inner)
-            ys.append(y_t)
+        # Scan: compute h[t] = A_bar[t] * h[t-1] + B_bar[t] * x[t] for all t
+        Bx = B_bar * x_main.unsqueeze(-1)  # (B, T, d_inner, d_state)
 
-        y = torch.stack(ys, dim=1)  # (B, T, d_inner)
+        if x.device.type == 'cuda':
+            # Parallel scan: O(log T) depth, massive GPU speedup
+            H = _parallel_scan_simple(A_bar, Bx)  # (B, T, d_inner, d_state)
+        else:
+            # Sequential scan for MPS/CPU (parallel scan has overhead on non-GPU)
+            h = torch.zeros(B, self.d_inner, self.d_state, device=x.device, dtype=x.dtype)
+            hs = []
+            for t in range(T):
+                h = A_bar[:, t] * h + Bx[:, t]
+                hs.append(h)
+            H = torch.stack(hs, dim=1)  # (B, T, d_inner, d_state)
+
+        # Output: y[t] = C[t] . h[t]
+        y = (H * C_t.unsqueeze(2)).sum(dim=-1)  # (B, T, d_inner)
 
         # Gate and skip
         y = y * F.silu(z_gate)
@@ -137,7 +193,7 @@ class LatentSSMCore(nn.Module):
         if use_cuda:
             print("SSM: using mamba-ssm CUDA kernels")
         else:
-            print("SSM: using pure PyTorch sequential scan")
+            print("SSM: using pure PyTorch parallel scan (GPU) / sequential scan (CPU/MPS)")
 
         self.layers = nn.ModuleList([
             LayerClass(d_model, d_state, expand)
