@@ -380,8 +380,26 @@ class LOLMLoss(nn.Module):
     # L_m: Memory focus
     # ----------------------------------------------------------------
 
-    def memory_loss(self, mem_read: torch.Tensor) -> torch.Tensor:
-        """Encourage focused memory reads (higher variance = more selective)."""
+    def memory_loss(self, mem_read: torch.Tensor,
+                    mem_attn: torch.Tensor = None) -> torch.Tensor:
+        """Encourage focused memory reads via attention entropy.
+
+        Low entropy = focused reads (good) — model attends to specific slots.
+        High entropy = uniform reads (bad) — model spreads attention evenly.
+
+        Normalized to [0, 1] so lambda_mem is scale-independent.
+
+        Falls back to variance loss if attention weights not provided.
+        """
+        if mem_attn is not None:
+            # Attention entropy: penalize uniform attention over memory slots
+            # mem_attn: (B, T, n_slots) — softmax attention weights
+            import math
+            entropy = -(mem_attn * (mem_attn + 1e-8).log()).sum(dim=-1).mean()
+            max_entropy = math.log(mem_attn.size(-1))
+            return entropy / max_entropy  # normalized [0, 1], minimize = focus
+
+        # Legacy fallback: variance loss
         if mem_read is None:
             return torch.tensor(0.0)
         var = mem_read.var(dim=-1).mean()
@@ -410,6 +428,7 @@ class LOLMLoss(nn.Module):
         regime_probs: torch.Tensor = None,
         regime_indices: torch.Tensor = None,
         mem_read: torch.Tensor = None,
+        mem_attn: torch.Tensor = None,
         gate_values: torch.Tensor = None,
     ) -> tuple[torch.Tensor, dict]:
         """Compute total loss and component breakdown.
@@ -441,8 +460,8 @@ class LOLMLoss(nn.Module):
         if self.lambda_competitive > 0.0:
             l_competitive = self.competitive_gate_loss(z, h, gate_values)
 
-        # L_m: memory focus
-        l_mem = self.memory_loss(mem_read)
+        # L_m: memory focus (attention entropy if available, else variance)
+        l_mem = self.memory_loss(mem_read, mem_attn)
 
         # Legacy manifest regularizer
         l_manifest = self.manifest_loss(gate_values)

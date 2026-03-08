@@ -274,6 +274,8 @@ def train(config_path: str, resume_from: str = None):
     data_iter = iter(train_loader)
     log_losses = {}
     t0 = time.time()
+    consecutive_nan = 0  # Track consecutive NaN steps for recovery
+    nan_lr_reductions = 0  # How many times we've halved LR due to NaN
 
     for step in range(start_step, tc.max_steps):
         # Learning rate schedule
@@ -314,6 +316,7 @@ def train(config_path: str, resume_from: str = None):
                         regime_probs=out.regime_probs,
                         regime_indices=out.regime_indices,
                         mem_read=out.mem_read,
+                        mem_attn=out.mem_attn,
                         gate_values=out.gate_values,
                     )
                     # Scale loss by accumulation steps
@@ -339,7 +342,35 @@ def train(config_path: str, resume_from: str = None):
         # If NaN detected, zero all gradients and skip this step entirely
         if step_had_nan:
             optimizer.zero_grad()
+            consecutive_nan += 1
+            # NaN recovery: after 100 consecutive NaN steps, halve LR
+            if consecutive_nan >= 100 and nan_lr_reductions < 3:
+                nan_lr_reductions += 1
+                tc.lr = tc.lr * 0.5
+                if is_main:
+                    print(f"  [NaN recovery] 100+ consecutive NaN steps. "
+                          f"Halving LR to {tc.lr:.2e} (reduction {nan_lr_reductions}/3)")
+                # Reset optimizer momentum to escape corrupted state
+                for group in optimizer.param_groups:
+                    for p in group['params']:
+                        state = optimizer.state.get(p)
+                        if state and 'exp_avg' in state:
+                            state['exp_avg'].zero_()
+                            state['exp_avg_sq'].zero_()
+                consecutive_nan = 0  # Reset counter after intervention
+            elif consecutive_nan >= 100:
+                if is_main:
+                    print(f"  [NaN FATAL] 3 LR reductions exhausted. Saving emergency checkpoint.")
+                    raw = _raw_model(model)
+                    torch.save({
+                        "step": step + 1, "model": raw.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "loss_fn": loss_fn.state_dict(),
+                        "config": config_path,
+                    }, out_dir / f"ckpt_emergency_{step+1}.pt")
+                break
             continue
+        consecutive_nan = 0  # Reset on successful step
 
         # Gradient clipping on ALL parameters (model + loss_fn projections)
         all_params = list(model.parameters()) + list(loss_fn.parameters())

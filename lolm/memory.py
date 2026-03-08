@@ -49,20 +49,22 @@ class MemoryBank(nn.Module):
         self.forget_gate = nn.Linear(d_model, n_slots, bias=True)
         self.write_gate = nn.Linear(d_model, n_slots, bias=True)
 
-    def read(self, query: torch.Tensor, memory: torch.Tensor) -> torch.Tensor:
+    def read(self, query: torch.Tensor, memory: torch.Tensor
+             ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Args:
             query: (B, T, d_model)
             memory: (B, n_slots, slot_dim)
         Returns:
             retrieved: (B, T, slot_dim)
+            attn: (B, T, n_slots) — attention weights for entropy loss
         """
         q = self.query_proj(query)  # (B, T, slot_dim)
         # Attention over memory slots
         attn = torch.matmul(q, memory.transpose(-1, -2))  # (B, T, n_slots)
         attn = attn / (self.slot_dim ** 0.5)
         attn = F.softmax(attn, dim=-1)
-        return torch.matmul(attn, memory)  # (B, T, slot_dim)
+        return torch.matmul(attn, memory), attn  # (B, T, slot_dim), (B, T, n_slots)
 
     def write(self, h: torch.Tensor, memory: torch.Tensor) -> torch.Tensor:
         """Gated write: aggregate over sequence, then update slots.
@@ -113,20 +115,25 @@ class PersistentMemory(nn.Module):
 
     def _read_write_step(self, h_chunk: torch.Tensor,
                          memory_state: list[torch.Tensor]
-                         ) -> tuple[torch.Tensor, list[torch.Tensor]]:
+                         ) -> tuple[torch.Tensor, list[torch.Tensor], torch.Tensor]:
         """Single read+write step for one chunk of the sequence."""
         reads = []
+        attns = []
         new_states = []
         for bank, m in zip(self.banks, memory_state):
-            reads.append(bank.read(h_chunk, m))
+            read_out, attn = bank.read(h_chunk, m)
+            reads.append(read_out)
+            attns.append(attn)
             new_states.append(bank.write(h_chunk, m))
         combined = torch.cat(reads, dim=-1)
         mem_read = self.combine(combined)
-        return mem_read, new_states
+        # Average attention across banks: (B, T, n_slots)
+        mem_attn = torch.stack(attns, dim=0).mean(dim=0)
+        return mem_read, new_states, mem_attn
 
     def forward(self, h: torch.Tensor,
                 memory_state: list[torch.Tensor],
-                n_chunks: int = 1) -> tuple[torch.Tensor, list[torch.Tensor]]:
+                n_chunks: int = 1) -> tuple[torch.Tensor, list[torch.Tensor], torch.Tensor]:
         """
         Args:
             h: (B, T, d_model) hidden state
@@ -138,6 +145,7 @@ class PersistentMemory(nn.Module):
         Returns:
             mem_read: (B, T, d_model) combined memory readout
             new_memory_state: updated memory state
+            mem_attn: (B, T, n_slots) attention weights (avg over banks)
         """
         if n_chunks <= 1:
             return self._read_write_step(h, memory_state)
@@ -146,6 +154,7 @@ class PersistentMemory(nn.Module):
         T = h.size(1)
         chunk_size = T // n_chunks
         all_mem_reads = []
+        all_mem_attns = []
         current_memory = memory_state
 
         for i in range(n_chunks):
@@ -153,13 +162,15 @@ class PersistentMemory(nn.Module):
             end = T if i == n_chunks - 1 else (i + 1) * chunk_size
             h_chunk = h[:, start:end]
 
-            mem_read_chunk, new_memory = self._read_write_step(
+            mem_read_chunk, new_memory, mem_attn_chunk = self._read_write_step(
                 h_chunk, current_memory
             )
             all_mem_reads.append(mem_read_chunk)
+            all_mem_attns.append(mem_attn_chunk)
 
             # Updated memory flows to next chunk's read — gradient bridge
             current_memory = new_memory
 
         mem_read = torch.cat(all_mem_reads, dim=1)  # (B, T, d_model)
-        return mem_read, current_memory
+        mem_attn = torch.cat(all_mem_attns, dim=1)  # (B, T, n_slots)
+        return mem_read, current_memory, mem_attn

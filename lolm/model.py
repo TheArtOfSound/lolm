@@ -38,7 +38,7 @@ from .gate import ManifestationGate
 
 class LOLMOutput:
     """Container for model outputs."""
-    __slots__ = ("logits", "h", "z", "mem_read", "regime_probs",
+    __slots__ = ("logits", "h", "z", "mem_read", "mem_attn", "regime_probs",
                  "regime_indices", "gate_values", "memory_state")
 
     def __init__(self, **kwargs):
@@ -146,12 +146,13 @@ class LOLM(nn.Module):
 
         # 3. Memory (chunked: write at chunk i feeds read at chunk i+1)
         mem_read = None
+        mem_attn = None
         new_memory_state = None
         if self.memory is not None:
             if memory_state is None:
                 memory_state = self.memory.get_initial_memory(B, device)
             n_chunks = self.cfg.memory.n_chunks
-            mem_read, new_memory_state = self.memory(
+            mem_read, new_memory_state, mem_attn = self.memory(
                 h, memory_state, n_chunks=n_chunks
             )
 
@@ -211,6 +212,7 @@ class LOLM(nn.Module):
             h=h,
             z=z,
             mem_read=mem_read,
+            mem_attn=mem_attn,
             regime_probs=regime_probs,
             regime_indices=regime_indices,
             gate_values=gate_values,
