@@ -103,12 +103,6 @@ def train(config_path: str, resume_from: str = None):
         model.decoder.use_gradient_checkpoint = True
         print("Gradient checkpointing enabled on decoder layers")
 
-    # torch.compile (CUDA only, PyTorch 2.0+)
-    if tc.compile and device.type == "cuda":
-        print("Compiling model with torch.compile...")
-        model = torch.compile(model)
-        print("Model compiled.")
-
     # Loss
     loss_fn = LOLMLoss(
         lambda_future=cfg.loss.lambda_future,
@@ -131,6 +125,27 @@ def train(config_path: str, resume_from: str = None):
         loss_fn._init_cpc_proj(cfg.model.d_model, device)
         print(f"CPC projection: d_model={cfg.model.d_model} → d_proj={cfg.loss.cpc_proj_dim}, temp={cfg.loss.cpc_temperature}")
 
+    # Resume BEFORE torch.compile (compiled model wraps keys with _orig_mod. prefix)
+    start_step = 0
+    ckpt_optimizer_state = None
+    if resume_from:
+        ckpt = torch.load(resume_from, map_location=device, weights_only=False)
+        model.load_state_dict(ckpt["model"])
+        start_step = ckpt["step"]
+        ckpt_optimizer_state = ckpt.get("optimizer")
+        if "loss_fn" in ckpt:
+            loss_fn.load_state_dict(ckpt["loss_fn"])
+        if scaler is not None and "scaler" in ckpt:
+            scaler.load_state_dict(ckpt["scaler"])
+        print(f"Resumed from step {start_step}")
+        del ckpt  # free checkpoint memory
+
+    # torch.compile AFTER resume (CUDA only, PyTorch 2.0+)
+    if tc.compile and device.type == "cuda":
+        print("Compiling model with torch.compile...")
+        model = torch.compile(model)
+        print("Model compiled.")
+
     # Optimizer (fused=True on CUDA for kernel fusion speedup)
     adam_kwargs = dict(
         lr=tc.lr,
@@ -144,6 +159,9 @@ def train(config_path: str, resume_from: str = None):
         list(model.parameters()) + list(loss_fn.parameters()),
         **adam_kwargs,
     )
+    if ckpt_optimizer_state is not None:
+        optimizer.load_state_dict(ckpt_optimizer_state)
+        del ckpt_optimizer_state
 
     # Data
     print("Loading data...")
@@ -163,19 +181,6 @@ def train(config_path: str, resume_from: str = None):
     config_name = Path(config_path).stem
     out_dir = Path("runs") / config_name
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    # Resume
-    start_step = 0
-    if resume_from:
-        ckpt = torch.load(resume_from, map_location=device, weights_only=False)
-        model.load_state_dict(ckpt["model"])
-        optimizer.load_state_dict(ckpt["optimizer"])
-        start_step = ckpt["step"]
-        if "loss_fn" in ckpt:
-            loss_fn.load_state_dict(ckpt["loss_fn"])
-        if scaler is not None and "scaler" in ckpt:
-            scaler.load_state_dict(ckpt["scaler"])
-        print(f"Resumed from step {start_step}")
 
     # Training loop
     model.train()
@@ -341,12 +346,13 @@ def train(config_path: str, resume_from: str = None):
                 max_entropy = torch.tensor(float(cfg.model.regime.n_codes)).log().item()
                 print(f"  [regime hist step {step+1}] top5: {hist_str} | usage_entropy={entropy:.3f}/{max_entropy:.3f}")
 
-        # Save checkpoint
+        # Save checkpoint (use raw model to avoid _orig_mod. prefix from torch.compile)
         if (step + 1) % tc.save_interval == 0:
             ckpt_path = out_dir / f"ckpt_{step+1}.pt"
+            raw_model = model._orig_mod if hasattr(model, "_orig_mod") else model
             ckpt_data = {
                 "step": step + 1,
-                "model": model.state_dict(),
+                "model": raw_model.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "loss_fn": loss_fn.state_dict(),
                 "config": config_path,
@@ -356,10 +362,11 @@ def train(config_path: str, resume_from: str = None):
             torch.save(ckpt_data, ckpt_path)
             print(f"Saved checkpoint: {ckpt_path}")
 
-    # Final save
+    # Final save (use raw model to avoid _orig_mod. prefix from torch.compile)
+    raw_model = model._orig_mod if hasattr(model, "_orig_mod") else model
     final_data = {
         "step": tc.max_steps,
-        "model": model.state_dict(),
+        "model": raw_model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "loss_fn": loss_fn.state_dict(),
         "config": config_path,
