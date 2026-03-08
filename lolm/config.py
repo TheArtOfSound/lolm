@@ -117,6 +117,10 @@ class LossConfig:
     use_cpc: bool = False
     cpc_temperature: float = 0.1
     cpc_max_positions: int = 256
+    # v3.2: CPC projection dimension (SimCLR/CLIP style).
+    # 0 = use d_model directly (BROKEN: cos_sim_std ~ 1/sqrt(d_model) too small).
+    # 128 = project to R^128 where cos_sim_std ~ 0.088, making InfoNCE learnable.
+    cpc_proj_dim: int = 0
     # v3: Changepoint alignment — regime transitions track representation shifts
     lambda_changepoint: float = 0.0
     # v3: Competitive gate — gate tracks which branch predicts better

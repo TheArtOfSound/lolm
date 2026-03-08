@@ -119,7 +119,12 @@ def train(config_path: str, resume_from: str = None):
         cpc_max_positions=cfg.loss.cpc_max_positions,
         lambda_changepoint=cfg.loss.lambda_changepoint,
         lambda_competitive=cfg.loss.lambda_competitive,
+        cpc_proj_dim=cfg.loss.cpc_proj_dim,
     ).to(device)
+    if cfg.loss.cpc_proj_dim > 0:
+        # Eagerly init CPC projections so optimizer sees their params
+        loss_fn._init_cpc_proj(cfg.model.d_model, device)
+        print(f"CPC projection: d_model={cfg.model.d_model} → d_proj={cfg.loss.cpc_proj_dim}, temp={cfg.loss.cpc_temperature}")
 
     # Optimizer
     optimizer = torch.optim.AdamW(
@@ -290,14 +295,38 @@ def train(config_path: str, resume_from: str = None):
                 f.write(json.dumps(log_entry) + "\n")
 
         # Gradient diagnostic (lightweight, every 2000 steps)
-        if (step + 1) % 2000 == 0 and hasattr(model, 'memory') and model.memory is not None:
+        if (step + 1) % 2000 == 0:
             diag = []
-            for bi, bank in enumerate(model.memory.banks):
-                for pn, p in bank.named_parameters():
-                    if any(k in pn for k in ["write_proj", "forget_gate", "write_gate"]):
-                        g = "NONE" if p.grad is None else f"{p.grad.norm().item():.6f}"
-                        diag.append(f"mem[{bi}].{pn}={g}")
-            print(f"  [grad check step {step+1}] " + " | ".join(diag[:6]))
+            # Memory grad check
+            if hasattr(model, 'memory') and model.memory is not None:
+                for bi, bank in enumerate(model.memory.banks):
+                    for pn, p in bank.named_parameters():
+                        if any(k in pn for k in ["write_proj", "forget_gate", "write_gate"]):
+                            g = "NONE" if p.grad is None else f"{p.grad.norm().item():.6f}"
+                            diag.append(f"mem[{bi}].{pn}={g}")
+            # CPC projection grad check
+            if loss_fn.cpc_z_proj is not None:
+                for name, proj in [("cpc_z", loss_fn.cpc_z_proj), ("cpc_h", loss_fn.cpc_h_proj)]:
+                    for pn, p in proj.named_parameters():
+                        if p.grad is not None:
+                            diag.append(f"{name}.{pn}={p.grad.norm().item():.6f}")
+                        else:
+                            diag.append(f"{name}.{pn}=NONE")
+            elif loss_fn.future_proj is not None:
+                p = loss_fn.future_proj.weight
+                g = "NONE" if p.grad is None else f"{p.grad.norm().item():.6f}"
+                diag.append(f"future_proj={g}")
+            print(f"  [grad check step {step+1}] " + " | ".join(diag[:8]))
+
+            # Regime histogram: tokens per code (is diversity real or forced?)
+            if out.regime_indices is not None:
+                hist = torch.bincount(out.regime_indices.view(-1), minlength=cfg.model.regime.n_codes)
+                total = hist.sum().item()
+                top5 = hist.topk(min(5, len(hist)))
+                hist_str = " ".join(f"c{top5.indices[i]}:{top5.values[i].item()}/{total}" for i in range(len(top5.indices)))
+                entropy = -(hist.float() / total * (hist.float() / total + 1e-10).log()).sum().item()
+                max_entropy = torch.tensor(float(cfg.model.regime.n_codes)).log().item()
+                print(f"  [regime hist step {step+1}] top5: {hist_str} | usage_entropy={entropy:.3f}/{max_entropy:.3f}")
 
         # Save checkpoint
         if (step + 1) % tc.save_interval == 0:

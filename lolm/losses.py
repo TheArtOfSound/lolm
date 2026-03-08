@@ -52,6 +52,8 @@ class LOLMLoss(nn.Module):
         cpc_max_positions: int = 256,
         lambda_changepoint: float = 0.0,
         lambda_competitive: float = 0.0,
+        # v3.2: CPC projection dimension (SimCLR/CLIP style)
+        cpc_proj_dim: int = 0,
     ):
         super().__init__()
         self.lambda_future = lambda_future
@@ -69,13 +71,41 @@ class LOLMLoss(nn.Module):
         self.cpc_max_positions = cpc_max_positions
         self.lambda_changepoint = lambda_changepoint
         self.lambda_competitive = lambda_competitive
+        self.cpc_proj_dim = cpc_proj_dim
 
         # Learned future summary projection (z -> predicted future embedding)
         self.future_proj = None  # Initialized lazily based on d_model
+        # v3.2: CPC projection heads (SimCLR/CLIP style, lower dim)
+        self.cpc_z_proj = None  # z → R^cpc_proj_dim
+        self.cpc_h_proj = None  # h → R^cpc_proj_dim
 
     def _init_future_proj(self, d_model: int, device: torch.device):
         if self.future_proj is None:
             self.future_proj = nn.Linear(d_model, d_model, bias=False).to(device)
+
+    def _init_cpc_proj(self, d_model: int, device: torch.device):
+        """Initialize CPC projection heads (SimCLR/CLIP style).
+
+        Projects both z and h into a lower-dimensional space where cosine
+        similarity has enough variance for InfoNCE to learn.
+
+        Math: In R^d, random unit vectors have cos_sim std ≈ 1/sqrt(d).
+        At d=1024, std ≈ 0.031 → at temp=0.1, logit_std = 0.31 → uniform softmax.
+        At d=128, std ≈ 0.088 → at temp=0.07, logit_std = 1.26 → learnable.
+        """
+        d_proj = self.cpc_proj_dim
+        if self.cpc_z_proj is None:
+            self.cpc_z_proj = nn.Sequential(
+                nn.Linear(d_model, d_proj),
+                nn.ReLU(),
+                nn.Linear(d_proj, d_proj),
+            ).to(device)
+        if self.cpc_h_proj is None:
+            self.cpc_h_proj = nn.Sequential(
+                nn.Linear(d_model, d_proj),
+                nn.ReLU(),
+                nn.Linear(d_proj, d_proj),
+            ).to(device)
 
     def token_loss(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         """Standard next-token cross-entropy."""
@@ -104,29 +134,37 @@ class LOLMLoss(nn.Module):
         Positive: the actual h_{t+k} at position t.
         Negatives: h_{t'+k} from other time positions in the same sequence.
 
-        This forces z to capture genuine future-structure information,
-        not just local surface features.
+        v3.2: When cpc_proj_dim > 0, both z and h are projected into a
+        lower-dimensional space (SimCLR/CLIP style) where cosine similarity
+        has enough variance for InfoNCE to bootstrap learning.
         """
         B, T, D = h.shape
         k = self.future_window
         if T <= k:
             return torch.tensor(0.0, device=h.device)
 
-        self._init_future_proj(D, z.device)
-
         valid = T - k
-        z_pred = self.future_proj(z[:, :valid])       # (B, valid, D)
-        h_future = h[:, k:k + valid].detach()          # (B, valid, D)
+
+        if self.cpc_proj_dim > 0:
+            # v3.2: Project both z and h to lower dim for learnable InfoNCE
+            self._init_cpc_proj(D, z.device)
+            z_proj = self.cpc_z_proj(z[:, :valid])              # (B, valid, d_proj)
+            h_proj = self.cpc_h_proj(h[:, k:k + valid].detach())  # (B, valid, d_proj)
+        else:
+            # v3.0/v3.1: Single linear in full d_model (KNOWN TO NOT LEARN)
+            self._init_future_proj(D, z.device)
+            z_proj = self.future_proj(z[:, :valid])       # (B, valid, D)
+            h_proj = h[:, k:k + valid].detach()           # (B, valid, D)
 
         # Normalize for cosine-based InfoNCE
-        z_pred = F.normalize(z_pred, dim=-1)
-        h_future = F.normalize(h_future, dim=-1)
+        z_proj = F.normalize(z_proj, dim=-1)
+        h_proj = F.normalize(h_proj, dim=-1)
 
         # Subsample positions to keep memory manageable
         # (B, valid, valid) similarity matrix — cap valid at cpc_max_positions
         stride = max(1, valid // self.cpc_max_positions)
-        z_sub = z_pred[:, ::stride]                     # (B, n_pos, D)
-        h_sub = h_future[:, ::stride]                   # (B, n_pos, D)
+        z_sub = z_proj[:, ::stride]                     # (B, n_pos, d)
+        h_sub = h_proj[:, ::stride]                     # (B, n_pos, d)
         n_pos = z_sub.size(1)
 
         # Similarity matrix: each z_t against all h positions

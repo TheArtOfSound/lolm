@@ -1,5 +1,13 @@
-# LOLM 300M v3.1 — H200 140GB (Full Formal Latent-Order Training)
+# LOLM 300M v3.2 — H200 140GB (Full Formal Latent-Order Training)
 # ~300M parameters with complete v3 loss formulation:
+#
+# v3.2 fixes (CPC stuck at random chance ln(256)≈5.55 in v3.1):
+#   1. CPC projection head: 2-layer MLP (1024→128→128) SimCLR/CLIP style
+#      At d=1024, cos_sim_std≈0.031 → logit_std=0.31 at temp=0.1 → uniform softmax
+#      At d=128, cos_sim_std≈0.088 → logit_std=1.26 at temp=0.07 → learnable!
+#   2. CPC temperature 0.1→0.07 (calibrated for d_proj=128)
+#   3. Separate z and h projection heads (both branches learn jointly)
+#   4. Regime histogram + CPC grad diagnostics every 2000 steps
 #
 # v3.1 fixes (regime STILL collapsed 32→1 by step 450 in v3.0):
 #   1. Regime gradient isolation: detach r_embed from token loss path
@@ -93,8 +101,9 @@ loss:
   lambda_sticky: 0.2           # Sticky transitions inside L_r
   # v3 formal losses
   use_cpc: true                # L_L: InfoNCE instead of cosine similarity
-  cpc_temperature: 0.1         # InfoNCE temperature (lower = sharper)
+  cpc_temperature: 0.07        # v3.2: calibrated for d_proj=128 (logit_std≈1.26)
   cpc_max_positions: 256       # Subsample positions for memory efficiency
+  cpc_proj_dim: 128            # v3.2: SimCLR/CLIP projection (d=128 → learnable cosine sim)
   lambda_changepoint: 0.1      # L_E: regime transitions track representation shifts
   lambda_competitive: 0.1      # L_g: gate tracks which branch predicts better
 
