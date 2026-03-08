@@ -14,8 +14,13 @@
 
 """Compare LOLM vs Pythia-410M on WikiText-103.
 
-Evaluates both models on the same held-out text using the same tokenizer
-(GPT-2 BPE) for a fair perplexity comparison.
+Each model uses its OWN tokenizer to encode the eval text:
+  - LOLM: tiktoken GPT-2 BPE (50257 vocab)
+  - Pythia: GPT-NeoX tokenizer (50304 vocab, different BPE merges)
+
+PPL is computed per-token for each model on the same raw text.
+Since tokenizers produce different numbers of tokens, we also report
+bits-per-character (BPC) for a tokenizer-agnostic comparison.
 
 Pythia-410M checkpoints at various token counts:
   step512  = ~1.07B tokens
@@ -39,23 +44,24 @@ import torch
 import torch.nn.functional as F
 from datasets import load_dataset
 
-# ── Tokenize WikiText-103 ────────────────────────────────────────────
+# ── Load raw text ────────────────────────────────────────────────────
 
-def get_wikitext_tokens(seq_len: int = 2048, max_seqs: int = 200):
-    """Load WikiText-103 test split, tokenize with GPT-2 BPE, return chunks."""
+def get_wikitext_raw(max_chars: int = 2_000_000):
+    """Load WikiText-103 test split as raw text."""
     print("Loading WikiText-103 test split...")
     ds = load_dataset("wikitext", "wikitext-103-raw-v1", split="test")
 
-    enc = tiktoken.get_encoding("gpt2")
-    all_tokens = []
-    for row in ds:
-        text = row["text"]
-        if text.strip():
-            all_tokens.extend(enc.encode(text))
+    raw_text = "\n".join(row["text"] for row in ds if row["text"].strip())
+    if len(raw_text) > max_chars:
+        raw_text = raw_text[:max_chars]
+    print(f"  Raw characters: {len(raw_text):,}")
+    return raw_text
 
-    print(f"  Total tokens: {len(all_tokens):,}")
 
-    # Chunk into (seq_len + 1) blocks for (input, target) pairs
+def tokenize_and_chunk(raw_text: str, tokenizer_fn, seq_len: int = 2048,
+                       max_seqs: int = 200):
+    """Tokenize raw text and chunk into sequences."""
+    all_tokens = tokenizer_fn(raw_text)
     chunks = []
     for i in range(0, len(all_tokens) - seq_len, seq_len):
         chunk = all_tokens[i : i + seq_len + 1]
@@ -63,16 +69,15 @@ def get_wikitext_tokens(seq_len: int = 2048, max_seqs: int = 200):
             chunks.append(torch.tensor(chunk, dtype=torch.long))
         if len(chunks) >= max_seqs:
             break
-
-    print(f"  Sequences: {len(chunks)} x {seq_len}")
-    return chunks
+    return chunks, len(all_tokens)
 
 
 # ── Evaluate LOLM ────────────────────────────────────────────────────
 
 @torch.no_grad()
-def eval_lolm(checkpoint_path: str, chunks: list, device: str = "cuda"):
-    """Evaluate LOLM checkpoint on pre-tokenized chunks."""
+def eval_lolm(checkpoint_path: str, raw_text: str, seq_len: int,
+              max_seqs: int, device: str = "cuda"):
+    """Evaluate LOLM checkpoint using tiktoken GPT-2 tokenizer."""
     from lolm.config import load_config
     from lolm.model import LOLM
 
@@ -87,11 +92,19 @@ def eval_lolm(checkpoint_path: str, chunks: list, device: str = "cuda"):
     # Estimate tokens seen
     batch_size = cfg.training.batch_size
     accum = getattr(cfg.training, "grad_accumulation_steps", 1)
-    seq_len = cfg.training.seq_len
-    tokens_seen = step * batch_size * accum * seq_len
+    train_seq_len = cfg.training.seq_len
+    tokens_seen = step * batch_size * accum * train_seq_len
     print(f"  Step: {step:,}")
     print(f"  Tokens seen: ~{tokens_seen/1e9:.2f}B")
     print(f"  Params: {sum(p.numel() for p in LOLM(cfg.model).parameters())/1e6:.1f}M")
+
+    # Tokenize with tiktoken GPT-2
+    enc = tiktoken.get_encoding("gpt2")
+    chunks, n_tokens = tokenize_and_chunk(
+        raw_text, enc.encode, seq_len, max_seqs
+    )
+    print(f"  Tokenizer: tiktoken gpt2 ({n_tokens:,} tokens)")
+    print(f"  Eval sequences: {len(chunks)} x {seq_len}")
 
     model = LOLM(cfg.model).to(device)
     model.load_state_dict(ckpt["model"])
@@ -114,17 +127,25 @@ def eval_lolm(checkpoint_path: str, chunks: list, device: str = "cuda"):
 
     avg_loss = total_loss / total_tokens
     ppl = math.exp(min(avg_loss, 20))
+    # BPC: bits per character (tokenizer-agnostic)
+    n_chars = len(chunks) * seq_len * 4  # rough avg chars per token
+    bpc = (total_loss / math.log(2)) / (len(raw_text))
     print(f"  WikiText-103 loss: {avg_loss:.4f}")
     print(f"  WikiText-103 PPL:  {ppl:.2f}")
-    return avg_loss, ppl
+    print(f"  WikiText-103 BPC:  {bpc:.4f}")
+
+    del model
+    torch.cuda.empty_cache()
+    return avg_loss, ppl, bpc
 
 
 # ── Evaluate Pythia-410M ─────────────────────────────────────────────
 
 @torch.no_grad()
-def eval_pythia(pythia_step: int, chunks: list, device: str = "cuda"):
-    """Evaluate Pythia-410M at a specific training step."""
-    from transformers import GPTNeoXForCausalLM
+def eval_pythia(pythia_step: int, raw_text: str, seq_len: int,
+                max_seqs: int, device: str = "cuda"):
+    """Evaluate Pythia-410M at a specific training step using its OWN tokenizer."""
+    from transformers import GPTNeoXForCausalLM, AutoTokenizer
 
     revision = f"step{pythia_step}"
     tokens_seen = pythia_step * 2_097_152  # 2M tokens per step
@@ -132,6 +153,19 @@ def eval_pythia(pythia_step: int, chunks: list, device: str = "cuda"):
     print(f"\n{'='*60}")
     print(f"Pythia-410M  —  {revision}  (~{tokens_seen/1e9:.2f}B tokens)")
     print(f"{'='*60}")
+
+    # Use Pythia's own tokenizer
+    print(f"  Loading tokenizer and model...")
+    tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-410m")
+
+    def pythia_tokenize(text):
+        return tokenizer.encode(text)
+
+    chunks, n_tokens = tokenize_and_chunk(
+        raw_text, pythia_tokenize, seq_len, max_seqs
+    )
+    print(f"  Tokenizer: GPT-NeoX ({n_tokens:,} tokens)")
+    print(f"  Eval sequences: {len(chunks)} x {seq_len}")
 
     print(f"  Downloading EleutherAI/pythia-410m @ {revision}...")
     model = GPTNeoXForCausalLM.from_pretrained(
@@ -161,13 +195,15 @@ def eval_pythia(pythia_step: int, chunks: list, device: str = "cuda"):
 
     avg_loss = total_loss / total_tokens
     ppl = math.exp(min(avg_loss, 20))
+    bpc = (total_loss / math.log(2)) / (len(raw_text))
     print(f"  WikiText-103 loss: {avg_loss:.4f}")
     print(f"  WikiText-103 PPL:  {ppl:.2f}")
+    print(f"  WikiText-103 BPC:  {bpc:.4f}")
 
     # Clean up to free VRAM
     del model
     torch.cuda.empty_cache()
-    return avg_loss, ppl
+    return avg_loss, ppl, bpc
 
 
 # ── Main ─────────────────────────────────────────────────────────────
@@ -186,8 +222,8 @@ def main():
     parser.add_argument("--skip-pythia", action="store_true")
     args = parser.parse_args()
 
-    # Tokenize eval data once (shared by both models)
-    chunks = get_wikitext_tokens(args.seq_len, args.max_seqs)
+    # Load raw text once (shared by both models, each tokenizes separately)
+    raw_text = get_wikitext_raw()
 
     results = {}
 
@@ -196,32 +232,44 @@ def main():
         if args.checkpoint is None:
             print("ERROR: --checkpoint required for LOLM eval")
         else:
-            loss, ppl = eval_lolm(args.checkpoint, chunks, args.device)
-            results["LOLM"] = (loss, ppl)
+            loss, ppl, bpc = eval_lolm(
+                args.checkpoint, raw_text, args.seq_len, args.max_seqs,
+                args.device,
+            )
+            results["LOLM"] = (loss, ppl, bpc)
 
     # Evaluate Pythia-410M
     if not args.skip_pythia:
-        loss, ppl = eval_pythia(args.pythia_step, chunks, args.device)
-        results["Pythia-410M"] = (loss, ppl)
+        loss, ppl, bpc = eval_pythia(
+            args.pythia_step, raw_text, args.seq_len, args.max_seqs,
+            args.device,
+        )
+        results["Pythia-410M"] = (loss, ppl, bpc)
 
     # Summary
     if len(results) >= 2:
         print(f"\n{'='*60}")
         print(f"COMPARISON SUMMARY  —  WikiText-103")
         print(f"{'='*60}")
-        for name, (loss, ppl) in results.items():
-            print(f"  {name:20s}  loss={loss:.4f}  PPL={ppl:.2f}")
+        print(f"  {'Model':20s}  {'loss':>8s}  {'PPL':>10s}  {'BPC':>8s}")
+        print(f"  {'-'*20}  {'-'*8}  {'-'*10}  {'-'*8}")
+        for name, (loss, ppl, bpc) in results.items():
+            print(f"  {name:20s}  {loss:8.4f}  {ppl:10.2f}  {bpc:8.4f}")
 
-        lolm_ppl = results["LOLM"][1]
-        pythia_ppl = results["Pythia-410M"][1]
-        diff = ((pythia_ppl - lolm_ppl) / pythia_ppl) * 100
-        if lolm_ppl < pythia_ppl:
-            print(f"\n  >>> LOLM wins by {abs(diff):.1f}% lower PPL")
-        elif lolm_ppl > pythia_ppl:
-            print(f"\n  >>> Pythia wins by {abs(diff):.1f}% lower PPL")
+        lolm_bpc = results["LOLM"][2]
+        pythia_bpc = results["Pythia-410M"][2]
+        diff_bpc = ((pythia_bpc - lolm_bpc) / pythia_bpc) * 100
+        if lolm_bpc < pythia_bpc:
+            print(f"\n  >>> LOLM wins by {abs(diff_bpc):.1f}% lower BPC")
+        elif lolm_bpc > pythia_bpc:
+            print(f"\n  >>> Pythia wins by {abs(diff_bpc):.1f}% lower BPC")
         else:
             print(f"\n  >>> Tied!")
-        print(f"  (Note: Pythia-410M has 410M params vs LOLM ~304M)")
+        print(f"  (BPC = bits per character, tokenizer-agnostic)")
+        print(f"  (Pythia-410M: 410M params vs LOLM: ~304M)")
+    elif len(results) == 1:
+        name, (loss, ppl, bpc) = list(results.items())[0]
+        print(f"\n  {name}: loss={loss:.4f}  PPL={ppl:.2f}  BPC={bpc:.4f}")
 
 
 if __name__ == "__main__":
