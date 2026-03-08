@@ -27,6 +27,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint as grad_checkpoint
 
 # Try to import mamba-ssm CUDA kernels (available on GPU)
 _MAMBA_CUDA_AVAILABLE = False
@@ -209,5 +210,8 @@ class LatentSSMCore(nn.Module):
         """
         z = self.proj_in(h)
         for layer in self.layers:
-            z = layer(z)
+            if getattr(self, "use_gradient_checkpoint", False) and self.training:
+                z = grad_checkpoint(layer, z, use_reentrant=False)
+            else:
+                z = layer(z)
         return z

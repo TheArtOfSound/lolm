@@ -169,8 +169,10 @@ def train(config_path: str, resume_from: str = None):
     # Gradient checkpointing (trade ~30% compute for ~50% memory savings)
     if getattr(tc, "gradient_checkpointing", False):
         model.decoder.use_gradient_checkpoint = True
+        if hasattr(model, "ssm") and model.ssm is not None:
+            model.ssm.use_gradient_checkpoint = True
         if is_main:
-            print("Gradient checkpointing enabled on decoder layers")
+            print("Gradient checkpointing enabled on decoder + SSM layers")
 
     # Loss
     loss_fn = LOLMLoss(
