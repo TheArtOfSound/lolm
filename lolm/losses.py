@@ -193,6 +193,11 @@ class LOLMLoss(nn.Module):
         logits = torch.bmm(z_sub, h_sub.transpose(1, 2))  # (B, n_pos, n_pos)
         logits = logits / self.cpc_temperature
 
+        # Clamp to prevent extreme softmax inputs that cause NaN in bfloat16.
+        # At temp=0.07, max cosine sim of 1.0 → logit=14.3. Clamping at 30
+        # is generous but prevents runaway values from destabilizing training.
+        logits = logits.clamp(-30.0, 30.0)
+
         # Target: diagonal (z_t should match h_{t+k} at same t)
         labels = torch.arange(n_pos, device=h.device).unsqueeze(0).expand(B, -1)
 
@@ -262,9 +267,13 @@ class LOLMLoss(nn.Module):
         cp = changepoint - changepoint.mean(dim=-1, keepdim=True)
         rt = regime_transition - regime_transition.mean(dim=-1, keepdim=True)
 
-        correlation = (cp * rt).sum(dim=-1) / (
-            cp.norm(dim=-1) * rt.norm(dim=-1) + 1e-8
-        )
+        denom = cp.norm(dim=-1) * rt.norm(dim=-1)
+        # Guard: if either signal has zero variance, correlation is undefined
+        valid = denom > 1e-6
+        if not valid.any():
+            return torch.tensor(0.0, device=h.device)
+        correlation = (cp * rt).sum(dim=-1) / (denom + 1e-8)
+        correlation = correlation[valid]
 
         return -correlation.mean()  # minimize = maximize correlation
 

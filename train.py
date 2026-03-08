@@ -202,6 +202,7 @@ def train(config_path: str, resume_from: str = None):
         accum_loss_total = 0.0
         accum_components = {}
 
+        step_had_nan = False
         for micro_step in range(accum_steps):
             # Get batch
             try:
@@ -226,10 +227,11 @@ def train(config_path: str, resume_from: str = None):
                 # Scale loss by accumulation steps
                 scaled_loss = total_loss / accum_steps
 
-            # NaN check — skip bad batches
+            # NaN check — if ANY micro-batch NaNs, skip the ENTIRE step
             if torch.isnan(total_loss) or torch.isinf(total_loss):
-                print(f"step {step+1}: NaN/Inf loss detected, skipping micro-batch")
-                continue
+                print(f"step {step+1}: NaN/Inf loss detected, skipping entire step")
+                step_had_nan = True
+                break
 
             # Backward (with scaler if using fp16)
             if scaler is not None:
@@ -241,11 +243,20 @@ def train(config_path: str, resume_from: str = None):
             for k, v in components.items():
                 accum_components[k] = accum_components.get(k, 0.0) + v / accum_steps
 
-        # Gradient clipping
+        # If NaN detected, zero all gradients and skip this step entirely
+        if step_had_nan:
+            optimizer.zero_grad()
+            continue
+
+        # Gradient clipping on ALL parameters (model + loss_fn projections)
+        # Critical: CPC projection heads live in loss_fn, not model.
+        # Without clipping loss_fn params, CPC gradients can spike and
+        # destabilize the projection heads, causing fut to diverge → NaN.
+        all_params = list(model.parameters()) + list(loss_fn.parameters())
         if scaler is not None:
             scaler.unscale_(optimizer)
 
-        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), tc.grad_clip)
+        grad_norm = torch.nn.utils.clip_grad_norm_(all_params, tc.grad_clip)
 
         # Skip only if gradients are truly catastrophic (NaN or extreme)
         if torch.isnan(grad_norm) or torch.isinf(grad_norm):
