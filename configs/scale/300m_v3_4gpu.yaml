@@ -1,0 +1,94 @@
+# LOLM 300M v3.3 — 4x GPU (A100/H100 80GB) with DDP
+#
+# Usage:
+#   torchrun --nproc_per_node=4 train.py --config configs/scale/300m_v3_4gpu.yaml
+#   torchrun --nproc_per_node=4 train.py --config configs/scale/300m_v3_4gpu.yaml --resume runs/300m_v3_4gpu/ckpt_5000.pt
+#
+# Each GPU gets batch_size=16, with 2 accum steps, 4 GPUs:
+#   effective_batch = 16 * 2 * 4 = 128 (2x the single-GPU config)
+#
+# Gradient checkpointing ON to fit on 80GB GPUs (96GB without).
+# torch.compile OFF for DDP compatibility.
+#
+# Expected speed: ~2-3 steps/s on 4x A100, ~3-4 steps/s on 4x H100
+
+model:
+  d_model: 1024
+  n_heads: 16
+  n_layers: 16
+  d_ff: 4096
+  vocab_size: 50257
+  max_seq_len: 2048
+  dropout: 0.1
+
+  ssm:
+    enabled: true
+    n_layers: 4
+    d_state: 32
+    expand: 2
+    use_cuda_kernels: true
+
+  regime:
+    enabled: true
+    n_codes: 32
+    d_regime: 128
+    temp_start: 1.0
+    temp_end: 0.5
+    temp_anneal_steps: 150000
+    neighbor_interaction: true
+    neighbor_kernel_size: 7
+    gradient_isolation: true
+
+  memory:
+    enabled: true
+    n_slots: 128
+    n_banks: 3
+    slot_dim: 1024
+    n_chunks: 4
+
+  gate:
+    enabled: true
+    init_bias: -0.5
+    normalize_branches: true
+
+training:
+  batch_size: 16             # Per GPU (total = 16 * 2 * 4 = 128)
+  seq_len: 2048
+  max_steps: 200000
+  lr: 3.0e-4
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  warmup_steps: 2000
+  grad_clip: 1.0
+  device: cuda
+  dtype: bfloat16
+  log_interval: 50
+  eval_interval: 2000
+  save_interval: 5000
+  cache_clear_interval: 500
+  grad_accumulation_steps: 2  # Per GPU
+  compile: false              # Off for DDP compatibility
+  gradient_checkpointing: true  # Required to fit on 80GB GPUs
+
+loss:
+  lambda_future: 0.5
+  lambda_regime: 0.3
+  lambda_mem: 0.05
+  lambda_manifest: 0.01
+  future_window: 8
+  lambda_balance: 0.5
+  use_load_balance: true
+  lambda_sticky: 0.2
+  use_cpc: true
+  cpc_temperature: 0.07
+  cpc_max_positions: 256
+  cpc_proj_dim: 128
+  lambda_changepoint: 0.1
+  lambda_competitive: 0.1
+
+data:
+  dataset: HuggingFaceFW/fineweb-edu
+  tokenizer: gpt2
+  cache_dir: ./data
+  streaming: true

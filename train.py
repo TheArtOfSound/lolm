@@ -19,6 +19,13 @@ Supports:
   - AMP (automatic mixed precision) with bfloat16 on CUDA
   - torch.compile for kernel fusion on CUDA
   - Streaming data from HuggingFace for large datasets
+  - DDP (Distributed Data Parallel) for multi-GPU training
+
+Single-GPU:
+  python train.py --config configs/scale/300m_v3.yaml
+
+Multi-GPU (auto-detected via torchrun):
+  torchrun --nproc_per_node=4 train.py --config configs/scale/300m_v3_4gpu.yaml
 """
 
 import argparse
@@ -36,6 +43,37 @@ from lolm.data import get_dataloader
 from lolm.losses import LOLMLoss
 from lolm.model import LOLM
 
+
+# ---------------------------------------------------------------------------
+# Distributed helpers
+# ---------------------------------------------------------------------------
+
+def is_distributed():
+    """Check if running under torchrun / torch.distributed.launch."""
+    return "RANK" in os.environ and "WORLD_SIZE" in os.environ
+
+
+def setup_distributed():
+    """Initialize DDP process group. Returns (rank, local_rank, world_size)."""
+    import torch.distributed as dist
+    dist.init_process_group(backend="nccl")
+    rank = dist.get_rank()
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    world_size = dist.get_world_size()
+    torch.cuda.set_device(local_rank)
+    return rank, local_rank, world_size
+
+
+def cleanup_distributed():
+    """Clean up DDP process group."""
+    import torch.distributed as dist
+    if dist.is_initialized():
+        dist.destroy_process_group()
+
+
+# ---------------------------------------------------------------------------
+# LR + temperature schedules
+# ---------------------------------------------------------------------------
 
 def get_lr(step: int, warmup: int, max_steps: int, max_lr: float) -> float:
     """Cosine schedule with linear warmup."""
@@ -56,13 +94,40 @@ def get_regime_temperature(step: int, cfg) -> float:
     )
 
 
+def _raw_model(model):
+    """Unwrap DDP / torch.compile to get the raw LOLM model."""
+    m = model
+    if hasattr(m, "module"):        # DDP wrapper
+        m = m.module
+    if hasattr(m, "_orig_mod"):     # torch.compile wrapper
+        m = m._orig_mod
+    return m
+
+
+# ---------------------------------------------------------------------------
+# Main training function
+# ---------------------------------------------------------------------------
+
 def train(config_path: str, resume_from: str = None):
     cfg = load_config(config_path)
     tc = cfg.training
 
-    device = torch.device(tc.device)
-    print(f"Device: {device}")
-    print(f"Config: {config_path}")
+    # --- Distributed setup (auto-detected) ---
+    distributed = is_distributed()
+    if distributed:
+        rank, local_rank, world_size = setup_distributed()
+        device = torch.device(f"cuda:{local_rank}")
+    else:
+        rank, local_rank, world_size = 0, 0, 1
+        device = torch.device(tc.device)
+
+    is_main = (rank == 0)  # Only rank 0 logs and saves
+
+    if is_main:
+        print(f"Device: {device}")
+        print(f"Config: {config_path}")
+        if distributed:
+            print(f"DDP: {world_size} GPUs, rank {rank}")
 
     # Determine dtype
     dtype_map = {
@@ -75,33 +140,37 @@ def train(config_path: str, resume_from: str = None):
     # AMP setup — only for CUDA with float16/bfloat16
     use_amp = (device.type == "cuda" and train_dtype != torch.float32)
     if use_amp:
-        # For bfloat16, we don't need a GradScaler (no underflow risk)
         use_scaler = (train_dtype == torch.float16)
         amp_ctx = torch.amp.autocast(device_type="cuda", dtype=train_dtype)
         scaler = torch.amp.GradScaler("cuda", enabled=use_scaler)
-        print(f"AMP enabled: {tc.dtype}" + (" + GradScaler" if use_scaler else ""))
+        if is_main:
+            print(f"AMP enabled: {tc.dtype}" + (" + GradScaler" if use_scaler else ""))
     else:
         from contextlib import nullcontext
         amp_ctx = nullcontext()
         scaler = None
-        print(f"AMP disabled (dtype={tc.dtype}, device={device.type})")
+        if is_main:
+            print(f"AMP disabled (dtype={tc.dtype}, device={device.type})")
 
     # Gradient accumulation
     accum_steps = tc.grad_accumulation_steps
-    effective_batch = tc.batch_size * accum_steps
-    print(f"Batch size: {tc.batch_size} x {accum_steps} accum = {effective_batch} effective")
+    effective_batch = tc.batch_size * accum_steps * world_size
+    if is_main:
+        print(f"Batch size: {tc.batch_size} x {accum_steps} accum x {world_size} GPUs = {effective_batch} effective")
 
     # Model
     model = LOLM(cfg.model).to(device)
-    params = model.count_parameters()
-    print("Parameters:")
-    for k, v in params.items():
-        print(f"  {k}: {v:,}")
+    if is_main:
+        params = model.count_parameters()
+        print("Parameters:")
+        for k, v in params.items():
+            print(f"  {k}: {v:,}")
 
     # Gradient checkpointing (trade ~30% compute for ~50% memory savings)
     if getattr(tc, "gradient_checkpointing", False):
         model.decoder.use_gradient_checkpoint = True
-        print("Gradient checkpointing enabled on decoder layers")
+        if is_main:
+            print("Gradient checkpointing enabled on decoder layers")
 
     # Loss
     loss_fn = LOLMLoss(
@@ -121,11 +190,11 @@ def train(config_path: str, resume_from: str = None):
         cpc_proj_dim=cfg.loss.cpc_proj_dim,
     ).to(device)
     if cfg.loss.cpc_proj_dim > 0:
-        # Eagerly init CPC projections so optimizer sees their params
         loss_fn._init_cpc_proj(cfg.model.d_model, device)
-        print(f"CPC projection: d_model={cfg.model.d_model} → d_proj={cfg.loss.cpc_proj_dim}, temp={cfg.loss.cpc_temperature}")
+        if is_main:
+            print(f"CPC projection: d_model={cfg.model.d_model} → d_proj={cfg.loss.cpc_proj_dim}, temp={cfg.loss.cpc_temperature}")
 
-    # Resume BEFORE torch.compile (compiled model wraps keys with _orig_mod. prefix)
+    # Resume BEFORE torch.compile and DDP wrapping
     start_step = 0
     ckpt_optimizer_state = None
     if resume_from:
@@ -137,14 +206,24 @@ def train(config_path: str, resume_from: str = None):
             loss_fn.load_state_dict(ckpt["loss_fn"])
         if scaler is not None and "scaler" in ckpt:
             scaler.load_state_dict(ckpt["scaler"])
-        print(f"Resumed from step {start_step}")
-        del ckpt  # free checkpoint memory
+        if is_main:
+            print(f"Resumed from step {start_step}")
+        del ckpt
 
-    # torch.compile AFTER resume (CUDA only, PyTorch 2.0+)
+    # torch.compile AFTER resume, BEFORE DDP
     if tc.compile and device.type == "cuda":
-        print("Compiling model with torch.compile...")
+        if is_main:
+            print("Compiling model with torch.compile...")
         model = torch.compile(model)
-        print("Model compiled.")
+        if is_main:
+            print("Model compiled.")
+
+    # DDP wrapping AFTER compile
+    if distributed:
+        from torch.nn.parallel import DistributedDataParallel as DDP
+        model = DDP(model, device_ids=[local_rank])
+        if is_main:
+            print(f"Model wrapped in DDP (device_ids=[{local_rank}])")
 
     # Optimizer (fused=True on CUDA for kernel fusion speedup)
     adam_kwargs = dict(
@@ -154,7 +233,8 @@ def train(config_path: str, resume_from: str = None):
     )
     if device.type == "cuda":
         adam_kwargs["fused"] = True
-        print("AdamW: using fused CUDA implementation")
+        if is_main:
+            print("AdamW: using fused CUDA implementation")
     optimizer = torch.optim.AdamW(
         list(model.parameters()) + list(loss_fn.parameters()),
         **adam_kwargs,
@@ -163,15 +243,18 @@ def train(config_path: str, resume_from: str = None):
         optimizer.load_state_dict(ckpt_optimizer_state)
         del ckpt_optimizer_state
 
-    # Data
-    print("Loading data...")
+    # Data — each DDP rank gets a different shard of the stream
+    if is_main:
+        print("Loading data...")
     if cfg.data.streaming:
         from lolm.data_streaming import get_streaming_dataloader
         train_loader = get_streaming_dataloader(
             cfg.data.dataset, tc.seq_len, tc.batch_size,
             tokenizer_name=cfg.data.tokenizer,
+            rank=rank, world_size=world_size,
         )
-        print(f"Streaming from: {cfg.data.dataset}")
+        if is_main:
+            print(f"Streaming from: {cfg.data.dataset}")
     else:
         train_loader = get_dataloader(
             cfg.data.dataset, cfg.data.cache_dir, tc.seq_len, tc.batch_size
@@ -180,7 +263,8 @@ def train(config_path: str, resume_from: str = None):
     # Output directory
     config_name = Path(config_path).stem
     out_dir = Path("runs") / config_name
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if is_main:
+        out_dir.mkdir(parents=True, exist_ok=True)
 
     # Training loop
     model.train()
@@ -229,7 +313,8 @@ def train(config_path: str, resume_from: str = None):
 
             # NaN check — if ANY micro-batch NaNs, skip the ENTIRE step
             if torch.isnan(total_loss) or torch.isinf(total_loss):
-                print(f"step {step+1}: NaN/Inf loss detected, skipping entire step")
+                if is_main:
+                    print(f"step {step+1}: NaN/Inf loss detected, skipping entire step")
                 step_had_nan = True
                 break
 
@@ -249,9 +334,6 @@ def train(config_path: str, resume_from: str = None):
             continue
 
         # Gradient clipping on ALL parameters (model + loss_fn projections)
-        # Critical: CPC projection heads live in loss_fn, not model.
-        # Without clipping loss_fn params, CPC gradients can spike and
-        # destabilize the projection heads, causing fut to diverge → NaN.
         all_params = list(model.parameters()) + list(loss_fn.parameters())
         if scaler is not None:
             scaler.unscale_(optimizer)
@@ -260,7 +342,8 @@ def train(config_path: str, resume_from: str = None):
 
         # Skip only if gradients are truly catastrophic (NaN or extreme)
         if torch.isnan(grad_norm) or torch.isinf(grad_norm):
-            print(f"step {step+1}: grad norm {grad_norm:.1f}, skipping")
+            if is_main:
+                print(f"step {step+1}: grad norm {grad_norm:.1f}, skipping")
             optimizer.zero_grad()
             continue
 
@@ -281,8 +364,8 @@ def train(config_path: str, resume_from: str = None):
         if device.type == "cuda" and (step + 1) % tc.cache_clear_interval == 0:
             torch.cuda.empty_cache()
 
-        # Log
-        if (step + 1) % tc.log_interval == 0:
+        # Log (rank 0 only)
+        if is_main and (step + 1) % tc.log_interval == 0:
             dt = time.time() - t0
             avg = {k: v / tc.log_interval for k, v in log_losses.items()}
             ppl = math.exp(min(avg.get("loss_tok", 20), 20))
@@ -304,12 +387,13 @@ def train(config_path: str, resume_from: str = None):
                 if abs(val) > 1e-8:
                     extra_losses += f" | {lname}={val:.4f}"
 
+            gpu_info = f" | {world_size}gpu" if distributed else ""
             print(
                 f"step {step+1:>6d} | loss {avg.get('loss_total', 0):.4f} | "
                 f"tok {avg.get('loss_tok', 0):.4f} | ppl {ppl:.1f} | "
                 f"fut {avg.get('loss_future', 0):.4f} | lr {lr:.2e} | "
                 f"{tc.log_interval/dt:.1f} steps/s"
-                f"{gate_msg}{regime_msg}{extra_losses}"
+                f"{gate_msg}{regime_msg}{extra_losses}{gpu_info}"
             )
             log_losses = {}
             t0 = time.time()
@@ -320,15 +404,18 @@ def train(config_path: str, resume_from: str = None):
                 log_entry["gate_mean"] = out.gate_values.mean().item()
             if out.regime_indices is not None:
                 log_entry["regime_unique"] = out.regime_indices.unique().numel()
+            if distributed:
+                log_entry["world_size"] = world_size
             with open(out_dir / "log.jsonl", "a") as f:
                 f.write(json.dumps(log_entry) + "\n")
 
-        # Gradient diagnostic (lightweight, every 2000 steps)
-        if (step + 1) % 2000 == 0:
+        # Gradient diagnostic (lightweight, every 2000 steps, rank 0 only)
+        if is_main and (step + 1) % 2000 == 0:
+            raw = _raw_model(model)
             diag = []
             # Memory grad check
-            if hasattr(model, 'memory') and model.memory is not None:
-                for bi, bank in enumerate(model.memory.banks):
+            if hasattr(raw, 'memory') and raw.memory is not None:
+                for bi, bank in enumerate(raw.memory.banks):
                     for pn, p in bank.named_parameters():
                         if any(k in pn for k in ["write_proj", "forget_gate", "write_gate"]):
                             g = "NONE" if p.grad is None else f"{p.grad.norm().item():.6f}"
@@ -347,7 +434,7 @@ def train(config_path: str, resume_from: str = None):
                 diag.append(f"future_proj={g}")
             print(f"  [grad check step {step+1}] " + " | ".join(diag[:8]))
 
-            # Regime histogram: tokens per code (is diversity real or forced?)
+            # Regime histogram
             if out.regime_indices is not None:
                 hist = torch.bincount(out.regime_indices.view(-1), minlength=cfg.model.regime.n_codes)
                 total = hist.sum().item()
@@ -357,13 +444,13 @@ def train(config_path: str, resume_from: str = None):
                 max_entropy = torch.tensor(float(cfg.model.regime.n_codes)).log().item()
                 print(f"  [regime hist step {step+1}] top5: {hist_str} | usage_entropy={entropy:.3f}/{max_entropy:.3f}")
 
-        # Save checkpoint (use raw model to avoid _orig_mod. prefix from torch.compile)
-        if (step + 1) % tc.save_interval == 0:
+        # Save checkpoint (rank 0 only, use raw model to strip DDP/compile wrappers)
+        if is_main and (step + 1) % tc.save_interval == 0:
             ckpt_path = out_dir / f"ckpt_{step+1}.pt"
-            raw_model = model._orig_mod if hasattr(model, "_orig_mod") else model
+            raw = _raw_model(model)
             ckpt_data = {
                 "step": step + 1,
-                "model": raw_model.state_dict(),
+                "model": raw.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "loss_fn": loss_fn.state_dict(),
                 "config": config_path,
@@ -373,19 +460,29 @@ def train(config_path: str, resume_from: str = None):
             torch.save(ckpt_data, ckpt_path)
             print(f"Saved checkpoint: {ckpt_path}")
 
-    # Final save (use raw model to avoid _orig_mod. prefix from torch.compile)
-    raw_model = model._orig_mod if hasattr(model, "_orig_mod") else model
-    final_data = {
-        "step": tc.max_steps,
-        "model": raw_model.state_dict(),
-        "optimizer": optimizer.state_dict(),
-        "loss_fn": loss_fn.state_dict(),
-        "config": config_path,
-    }
-    if scaler is not None:
-        final_data["scaler"] = scaler.state_dict()
-    torch.save(final_data, out_dir / "final.pt")
-    print(f"Training complete. Final model saved to {out_dir}/final.pt")
+        # DDP barrier after checkpoint so all ranks wait
+        if distributed and (step + 1) % tc.save_interval == 0:
+            import torch.distributed as dist
+            dist.barrier()
+
+    # Final save (rank 0 only)
+    if is_main:
+        raw = _raw_model(model)
+        final_data = {
+            "step": tc.max_steps,
+            "model": raw.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "loss_fn": loss_fn.state_dict(),
+            "config": config_path,
+        }
+        if scaler is not None:
+            final_data["scaler"] = scaler.state_dict()
+        torch.save(final_data, out_dir / "final.pt")
+        print(f"Training complete. Final model saved to {out_dir}/final.pt")
+
+    # Clean up distributed
+    if distributed:
+        cleanup_distributed()
 
 
 if __name__ == "__main__":

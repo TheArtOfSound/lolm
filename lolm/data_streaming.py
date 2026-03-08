@@ -33,14 +33,20 @@ class StreamingTokenDataset(IterableDataset):
     and yields fixed-length token chunks for language modeling.
 
     Each item returns (x, y) where x = chunk[:-1], y = chunk[1:].
+
+    For DDP: pass rank/world_size to shard the stream so each GPU
+    processes different documents with zero overlap.
     """
 
     def __init__(self, dataset_name: str, seq_len: int,
-                 tokenizer_name: str = "gpt2", split: str = "train"):
+                 tokenizer_name: str = "gpt2", split: str = "train",
+                 rank: int = 0, world_size: int = 1):
         self.dataset_name = dataset_name
         self.seq_len = seq_len
         self.tokenizer_name = tokenizer_name
         self.split = split
+        self.rank = rank
+        self.world_size = world_size
 
     def __iter__(self):
         from datasets import load_dataset
@@ -49,12 +55,18 @@ class StreamingTokenDataset(IterableDataset):
         ds = load_dataset(self.dataset_name, split=self.split,
                           streaming=True, trust_remote_code=True)
 
+        # DDP: each rank processes a different shard of the stream
+        if self.world_size > 1:
+            ds = ds.shuffle(seed=42, buffer_size=10000)
+            # Manually shard: rank k takes every world_size-th document
+            ds = (ex for i, ex in enumerate(ds) if i % self.world_size == self.rank)
+
         # Buffer to accumulate tokens across documents
         buffer = []
         chunk_size = self.seq_len + 1  # +1 for target offset
 
         for example in ds:
-            text = example.get("text", "")
+            text = example.get("text", "") if isinstance(example, dict) else ""
             if not text:
                 continue
 
@@ -71,15 +83,18 @@ class StreamingTokenDataset(IterableDataset):
 
 def get_streaming_dataloader(dataset_name: str, seq_len: int,
                              batch_size: int, tokenizer_name: str = "gpt2",
-                             num_workers: int = 2) -> DataLoader:
+                             num_workers: int = 2,
+                             rank: int = 0, world_size: int = 1) -> DataLoader:
     """Get a streaming DataLoader for large datasets.
 
     Args:
         dataset_name: HuggingFace dataset identifier (e.g., "HuggingFaceFW/fineweb-edu")
         seq_len: Sequence length for training
-        batch_size: Batch size
+        batch_size: Batch size per GPU
         tokenizer_name: Tokenizer to use (default: gpt2)
         num_workers: Number of data loading workers
+        rank: DDP rank (0 for single-GPU)
+        world_size: DDP world size (1 for single-GPU)
 
     Returns:
         DataLoader that streams tokenized chunks
@@ -88,6 +103,8 @@ def get_streaming_dataloader(dataset_name: str, seq_len: int,
         dataset_name=dataset_name,
         seq_len=seq_len,
         tokenizer_name=tokenizer_name,
+        rank=rank,
+        world_size=world_size,
     )
     return DataLoader(
         dataset,
