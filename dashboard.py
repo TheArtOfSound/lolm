@@ -1,4 +1,4 @@
-# Copyright 2026 Bryan Leonard
+# Copyright 2026 Bryan Leonard & Brandyn Leonard
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -234,7 +234,7 @@ HTML = """<!DOCTYPE html>
 </div>
 
 <div class="footer">
-  LOLM &mdash; Latent Order Language Model &mdash; Copyright 2026 Bryan Leonard
+  LOLM &mdash; Latent Order Language Model &mdash; Copyright 2026 Bryan Leonard &amp; Brandyn Leonard
 </div>
 
 <script>

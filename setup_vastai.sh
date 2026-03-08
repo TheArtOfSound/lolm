@@ -1,6 +1,6 @@
 #!/bin/bash
 # LOLM — Vast.ai GPU Setup Script
-# Copyright 2026 Bryan Leonard
+# Copyright 2026 Bryan Leonard & Brandyn Leonard
 #
 # Usage:
 #   1. Rent a GPU on Vast.ai (A100 80GB recommended)
