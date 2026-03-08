@@ -251,6 +251,8 @@ def train(config_path: str, resume_from: str = None):
         # MPS cache clear
         if device.type == "mps" and (step + 1) % tc.cache_clear_interval == 0:
             torch.mps.empty_cache()
+        if device.type == "cuda" and (step + 1) % tc.cache_clear_interval == 0:
+            torch.cuda.empty_cache()
 
         # Log
         if (step + 1) % tc.log_interval == 0:
