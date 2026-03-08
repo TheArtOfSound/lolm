@@ -14,10 +14,11 @@
 
 """Selective State-Space Model (Mamba-style) latent core.
 
-Three scan backends:
+Four scan backends:
   1. mamba-ssm CUDA kernels (fastest, requires mamba-ssm package)
-  2. Parallel associative scan in pure PyTorch (fast on GPU, no extra deps)
-  3. Sequential scan (fallback for MPS / CPU)
+  2. Memory-efficient scan with custom backward (recommended for 80GB GPUs)
+  3. Parallel associative scan in pure PyTorch (fast but O(T·logT) memory)
+  4. Sequential scan (fallback for MPS / CPU)
 
 This is the latent order field z_t that evolves underneath the surface decoder.
 """
@@ -78,6 +79,63 @@ def _parallel_scan_simple(A_bar: torch.Tensor, Bx: torch.Tensor) -> torch.Tensor
         stride *= 2
 
     return h
+
+
+class _EfficientScanFn(torch.autograd.Function):
+    """Memory-efficient linear recurrence scan with custom backward.
+
+    Unlike the parallel scan (O(T·logT) autograd intermediates) or naive
+    sequential scan (O(T) autograd ops recorded), this uses a custom backward
+    that runs a reverse scan — total memory is O(B·T·D·N), same as the output.
+
+    Forward:  h[t] = A[t] * h[t-1] + Bx[t],  h[-1] = 0
+    Backward: reverse scan propagating dL/dh through the recurrence.
+    """
+
+    @staticmethod
+    def forward(ctx, A_bar: torch.Tensor, Bx: torch.Tensor) -> torch.Tensor:
+        B, T, D, N = A_bar.shape
+        H = torch.empty(B, T, D, N, device=A_bar.device, dtype=A_bar.dtype)
+        h = torch.zeros(B, D, N, device=A_bar.device, dtype=A_bar.dtype)
+        for t in range(T):
+            h = A_bar[:, t] * h + Bx[:, t]
+            H[:, t] = h
+        ctx.save_for_backward(A_bar, H)
+        return H
+
+    @staticmethod
+    def backward(ctx, grad_H: torch.Tensor):
+        A_bar, H = ctx.saved_tensors
+        B, T, D, N = A_bar.shape
+
+        grad_A_bar = torch.empty_like(A_bar)
+        grad_Bx = torch.empty_like(grad_H)
+
+        # Reverse scan: propagate gradient backward through recurrence
+        dh = torch.zeros(B, D, N, device=A_bar.device, dtype=A_bar.dtype)
+        for t in range(T - 1, -1, -1):
+            dh = dh + grad_H[:, t]
+            grad_Bx[:, t] = dh
+            if t > 0:
+                grad_A_bar[:, t] = dh * H[:, t - 1]
+            else:
+                grad_A_bar[:, t] = 0  # h[-1] = zeros
+            dh = A_bar[:, t] * dh
+
+        return grad_A_bar, grad_Bx
+
+
+def _efficient_scan(A_bar: torch.Tensor, Bx: torch.Tensor) -> torch.Tensor:
+    """Memory-efficient scan using custom autograd Function.
+
+    Same sequential O(T) compute as naive scan, but autograd doesn't record
+    individual ops — we handle backward ourselves via reverse scan.
+    Memory: O(B·T·D·N) total (just A_bar + H saved for backward).
+
+    At B=2, T=2048, D=2048, N=32: ~1GB saved tensors per layer vs
+    ~41GB for parallel scan autograd or ~infinite for naive sequential.
+    """
+    return _EfficientScanFn.apply(A_bar, Bx)
 
 
 class CudaSSMLayer(nn.Module):
@@ -151,12 +209,12 @@ class SelectiveSSMLayer(nn.Module):
         # Scan: compute h[t] = A_bar[t] * h[t-1] + B_bar[t] * x[t] for all t
         Bx = B_bar * x_main.unsqueeze(-1)  # (B, T, d_inner, d_state)
 
-        use_sequential = (x.device.type != 'cuda') or getattr(self, '_memory_efficient', False)
-        if not use_sequential:
-            # Parallel scan: O(log T) depth, fast but O(T·logT) memory
-            H = _parallel_scan_simple(A_bar, Bx)  # (B, T, d_inner, d_state)
+        if x.device.type == 'cuda':
+            # Memory-efficient scan: custom autograd backward via reverse scan
+            # O(B·T·D·N) memory — fits on 80GB GPUs even at d_inner=2048
+            H = _efficient_scan(A_bar, Bx)  # (B, T, d_inner, d_state)
         else:
-            # Sequential scan: O(T) depth but O(T) memory — needed for 80GB GPUs
+            # Sequential scan for CPU/MPS (no custom CUDA optimization needed)
             h = torch.zeros(B, self.d_inner, self.d_state, device=x.device, dtype=x.dtype)
             hs = []
             for t in range(T):
@@ -195,7 +253,7 @@ class LatentSSMCore(nn.Module):
         if use_cuda:
             print("SSM: using mamba-ssm CUDA kernels")
         else:
-            print("SSM: using pure PyTorch parallel scan (GPU) / sequential scan (CPU/MPS)")
+            print("SSM: using memory-efficient scan with custom backward (GPU) / sequential scan (CPU/MPS)")
 
         self.layers = nn.ModuleList([
             LayerClass(d_model, d_state, expand)

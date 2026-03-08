@@ -171,12 +171,8 @@ def train(config_path: str, resume_from: str = None):
         model.decoder.use_gradient_checkpoint = True
         if hasattr(model, "ssm") and model.ssm is not None:
             model.ssm.use_gradient_checkpoint = True
-            # Switch SSM to sequential scan — parallel scan uses O(T·logT) memory
-            # which explodes to ~60GB. Sequential uses O(T), fits on 80GB GPUs.
-            for layer in model.ssm.layers:
-                layer._memory_efficient = True
         if is_main:
-            print("Gradient checkpointing enabled on decoder + SSM layers (sequential scan)")
+            print("Gradient checkpointing enabled (decoder + SSM layers)")
 
     # Loss
     loss_fn = LOLMLoss(
