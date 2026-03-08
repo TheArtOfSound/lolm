@@ -29,6 +29,7 @@ Multi-GPU (auto-detected via torchrun):
 """
 
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -290,41 +291,46 @@ def train(config_path: str, resume_from: str = None):
 
         step_had_nan = False
         for micro_step in range(accum_steps):
-            # Get batch
-            try:
-                x, y = next(data_iter)
-            except StopIteration:
-                data_iter = iter(train_loader)
-                x, y = next(data_iter)
+            # DDP: skip gradient sync on non-final micro-steps (saves communication)
+            is_last_micro = (micro_step == accum_steps - 1)
+            sync_ctx = contextlib.nullcontext() if (is_last_micro or not distributed) else model.no_sync()
 
-            x, y = x.to(device), y.to(device)
+            with sync_ctx:
+                # Get batch
+                try:
+                    x, y = next(data_iter)
+                except StopIteration:
+                    data_iter = iter(train_loader)
+                    x, y = next(data_iter)
 
-            # Forward with AMP
-            with amp_ctx:
-                out = model(x, regime_temperature=temp)
-                total_loss, components = loss_fn(
-                    logits=out.logits, targets=y,
-                    z=out.z, h=out.h,
-                    regime_probs=out.regime_probs,
-                    regime_indices=out.regime_indices,
-                    mem_read=out.mem_read,
-                    gate_values=out.gate_values,
-                )
-                # Scale loss by accumulation steps
-                scaled_loss = total_loss / accum_steps
+                x, y = x.to(device), y.to(device)
 
-            # NaN check — if ANY micro-batch NaNs, skip the ENTIRE step
-            if torch.isnan(total_loss) or torch.isinf(total_loss):
-                if is_main:
-                    print(f"step {step+1}: NaN/Inf loss detected, skipping entire step")
-                step_had_nan = True
-                break
+                # Forward with AMP
+                with amp_ctx:
+                    out = model(x, regime_temperature=temp)
+                    total_loss, components = loss_fn(
+                        logits=out.logits, targets=y,
+                        z=out.z, h=out.h,
+                        regime_probs=out.regime_probs,
+                        regime_indices=out.regime_indices,
+                        mem_read=out.mem_read,
+                        gate_values=out.gate_values,
+                    )
+                    # Scale loss by accumulation steps
+                    scaled_loss = total_loss / accum_steps
 
-            # Backward (with scaler if using fp16)
-            if scaler is not None:
-                scaler.scale(scaled_loss).backward()
-            else:
-                scaled_loss.backward()
+                # NaN check — if ANY micro-batch NaNs, skip the ENTIRE step
+                if torch.isnan(total_loss) or torch.isinf(total_loss):
+                    if is_main:
+                        print(f"step {step+1}: NaN/Inf loss detected, skipping entire step")
+                    step_had_nan = True
+                    break
+
+                # Backward (with scaler if using fp16)
+                if scaler is not None:
+                    scaler.scale(scaled_loss).backward()
+                else:
+                    scaled_loss.backward()
 
             accum_loss_total += total_loss.item()
             for k, v in components.items():
