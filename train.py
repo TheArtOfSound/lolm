@@ -322,10 +322,11 @@ def train(config_path: str, resume_from: str = None):
                     # Scale loss by accumulation steps
                     scaled_loss = total_loss / accum_steps
 
-                # NaN check — if ANY micro-batch NaNs, skip the ENTIRE step
-                if torch.isnan(total_loss) or torch.isinf(total_loss):
+                # NaN/Inf/runaway check — skip BEFORE backward to prevent OOM
+                if (torch.isnan(total_loss) or torch.isinf(total_loss)
+                        or total_loss.item() > 100.0):
                     if is_main:
-                        print(f"step {step+1}: NaN/Inf loss detected, skipping entire step")
+                        print(f"step {step+1}: bad loss ({total_loss.item():.1f}), skipping entire step")
                     step_had_nan = True
                     break
 

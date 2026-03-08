@@ -1,7 +1,13 @@
-# LOLM 1B — Multi-GPU or single H100
-# ~1B parameters, publication-grade
-# Training: ~1-2 weeks on 1x A100, ~3-4 days on 4x A100
-# Cost: ~$200-600 on Vast.ai
+# LOLM 1B v3.2 — H100 80GB (Full Formal Latent-Order Training)
+# ~1.3B parameters with complete v3.2 loss formulation + NaN safety
+#
+# Architecture: d=2048, 24 layers, 8192 FFN
+# All v3 features: CPC projection heads, gradient-isolated regime,
+# MPST neighbor interaction, chunked memory, competitive gate
+#
+# Fits on 1x H100 80GB with gradient checkpointing + bf16
+# Training: batch_size=2, accum=16, effective=32, seq_len=2048
+# Estimated: ~500K steps at 0.3-0.5 steps/s
 
 model:
   d_model: 2048
@@ -9,7 +15,7 @@ model:
   n_layers: 24
   d_ff: 8192
   vocab_size: 50257
-  max_seq_len: 4096
+  max_seq_len: 2048
   dropout: 0.05
 
   ssm:
@@ -24,47 +30,63 @@ model:
     n_codes: 64
     d_regime: 256
     temp_start: 1.0
-    temp_end: 0.05
-    temp_anneal_steps: 200000
+    temp_end: 0.5              # MPST: keep stochasticity for phase exploration
+    temp_anneal_steps: 200000  # Slow anneal — longer warmup for 1B
+    neighbor_interaction: true
+    neighbor_kernel_size: 7
+    gradient_isolation: true   # v3.1: detach regime from token loss (prevents collapse)
 
   memory:
     enabled: true
     n_slots: 256
     n_banks: 3
     slot_dim: 2048
+    n_chunks: 4  # v3: split into 4 chunks, chain write→read
 
   gate:
     enabled: true
+    init_bias: -0.5
+    normalize_branches: true
 
 training:
-  batch_size: 4
-  seq_len: 4096
+  batch_size: 2              # Small batch — 80GB is tight for 1.3B params
+  seq_len: 2048
   max_steps: 500000
-  lr: 2.0e-4
+  lr: 1.5e-4                 # Lower LR for 1B (standard scaling law)
   weight_decay: 0.1
   beta1: 0.9
   beta2: 0.95
   warmup_steps: 4000
-  grad_clip: 1.0
+  grad_clip: 0.5             # Tighter clipping for stability at scale
   device: cuda
   dtype: bfloat16
-  log_interval: 100
+  log_interval: 50
   eval_interval: 5000
-  save_interval: 20000
-  cache_clear_interval: 1000
+  save_interval: 5000
+  cache_clear_interval: 200  # More frequent cache clear for tight VRAM
+  grad_accumulation_steps: 16  # effective batch = 2 * 16 = 32
   compile: true
-  grad_accumulation: 8   # effective batch = 4 * 8 = 32
-  use_mamba_cuda: true
-  use_deepspeed: true     # ZeRO Stage 2
+  gradient_checkpointing: true  # Essential: saves ~50% activation memory
 
 loss:
-  lambda_future: 0.1
-  lambda_regime: 0.05
-  lambda_mem: 0.05
-  lambda_manifest: 0.01
-  future_window: 32
+  lambda_future: 0.5           # L_L: CPC contrastive (proven at 300M)
+  lambda_regime: 0.3           # L_r: regime diversity (proven)
+  lambda_mem: 0.05             # L_m: memory focus
+  lambda_manifest: 0.01        # Legacy gate regularizer
+  future_window: 8             # v3.1: shorter window to bootstrap CPC
+  lambda_balance: 0.5          # Load-balancing inside L_r
+  use_load_balance: true
+  lambda_sticky: 0.2           # Sticky transitions inside L_r
+  # v3 formal losses
+  use_cpc: true                # L_L: InfoNCE (proven to learn at 300M)
+  cpc_temperature: 0.07        # v3.2: calibrated for d_proj=128
+  cpc_max_positions: 256
+  cpc_proj_dim: 128            # v3.2: SimCLR/CLIP projection
+  lambda_changepoint: 0.1      # L_E: regime tracks representation shifts
+  lambda_competitive: 0.1      # L_g: gate tracks branch utility
 
 data:
   dataset: HuggingFaceFW/fineweb-edu
   tokenizer: gpt2
   cache_dir: ./data
+  streaming: true

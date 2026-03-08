@@ -33,6 +33,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def _safe_normalize(x: torch.Tensor, dim: int = -1, eps: float = 1e-6) -> torch.Tensor:
+    """F.normalize that won't NaN on zero-norm vectors."""
+    norm = x.norm(dim=dim, keepdim=True).clamp(min=eps)
+    return x / norm
+
+
+def _safe_loss(loss: torch.Tensor, max_val: float = 50.0) -> torch.Tensor:
+    """Clamp loss and replace NaN/Inf with zero. Prevents backward OOM."""
+    if torch.isnan(loss) or torch.isinf(loss):
+        return torch.tensor(0.0, device=loss.device, requires_grad=True)
+    return loss.clamp(-max_val, max_val)
+
+
 class LOLMLoss(nn.Module):
     """Multi-objective loss with formal latent-order training."""
 
@@ -178,9 +191,9 @@ class LOLMLoss(nn.Module):
             z_proj = self.future_proj(z[:, :valid])       # (B, valid, D)
             h_proj = h[:, k:k + valid].detach()           # (B, valid, D)
 
-        # Normalize for cosine-based InfoNCE
-        z_proj = F.normalize(z_proj, dim=-1)
-        h_proj = F.normalize(h_proj, dim=-1)
+        # Normalize for cosine-based InfoNCE (safe against zero-norm)
+        z_proj = _safe_normalize(z_proj, dim=-1)
+        h_proj = _safe_normalize(h_proj, dim=-1)
 
         # Subsample positions to keep memory manageable
         # (B, valid, valid) similarity matrix — cap valid at cpc_max_positions
@@ -201,7 +214,7 @@ class LOLMLoss(nn.Module):
         # Target: diagonal (z_t should match h_{t+k} at same t)
         labels = torch.arange(n_pos, device=h.device).unsqueeze(0).expand(B, -1)
 
-        return F.cross_entropy(logits.reshape(-1, n_pos), labels.reshape(-1))
+        return _safe_loss(F.cross_entropy(logits.reshape(-1, n_pos), labels.reshape(-1)))
 
     def _cosine_future_loss(self, z: torch.Tensor, h: torch.Tensor) -> torch.Tensor:
         """Legacy cosine future loss (fallback when use_cpc=False)."""
@@ -252,7 +265,7 @@ class LOLMLoss(nn.Module):
 
         # Changepoint signal: 1 - cos_sim(h_t, h_{t-1})
         # High = big representation shift = natural boundary
-        h_norm = F.normalize(h.detach(), dim=-1)
+        h_norm = _safe_normalize(h.detach(), dim=-1)
         h_cos = (h_norm[:, 1:] * h_norm[:, :-1]).sum(dim=-1)  # (B, T-1)
         changepoint = 1.0 - h_cos
 
@@ -275,7 +288,7 @@ class LOLMLoss(nn.Module):
         correlation = (cp * rt).sum(dim=-1) / (denom + 1e-8)
         correlation = correlation[valid]
 
-        return -correlation.mean()  # minimize = maximize correlation
+        return _safe_loss(-correlation.mean())  # minimize = maximize correlation
 
     # ----------------------------------------------------------------
     # L_g: Competitive gate — gate should track branch utility
@@ -308,26 +321,26 @@ class LOLMLoss(nn.Module):
             return torch.tensor(0.0, device=h.device)
 
         valid = T - k
-        h_future = F.normalize(h[:, k:k + valid].detach(), dim=-1)
+        h_future = _safe_normalize(h[:, k:k + valid].detach(), dim=-1)
 
         # Surface branch utility: how well does h_t predict h_{t+k}?
         h_util = (
-            F.normalize(h[:, :valid].detach(), dim=-1) * h_future
+            _safe_normalize(h[:, :valid].detach(), dim=-1) * h_future
         ).sum(dim=-1)  # (B, valid)
 
         # Latent branch utility: how well does z_t predict h_{t+k}?
         z_util = (
-            F.normalize(z[:, :valid].detach(), dim=-1) * h_future
+            _safe_normalize(z[:, :valid].detach(), dim=-1) * h_future
         ).sum(dim=-1)  # (B, valid)
 
         # Target gate: high when h is better, low when z is better
-        # Sigmoid of scaled advantage, detached (this is just a target)
-        advantage = torch.sigmoid((h_util - z_util) * 5.0)  # (B, valid)
+        # Clamp advantage diff to prevent sigmoid saturation gradients
+        advantage = torch.sigmoid((h_util - z_util).clamp(-5.0, 5.0) * 5.0)
 
         # Compare with actual gate (averaged over d_model channels)
         gate_mean = gate_values[:, :valid].mean(dim=-1)  # (B, valid)
 
-        return F.mse_loss(gate_mean, advantage)
+        return _safe_loss(F.mse_loss(gate_mean, advantage))
 
     # ----------------------------------------------------------------
     # L_r: Regime diversity (load-balancing + entropy + sticky)
@@ -346,7 +359,7 @@ class LOLMLoss(nn.Module):
             return self._load_balance_loss(probs)
         else:
             # Legacy (KNOWN TO CAUSE COLLAPSE)
-            entropy = -(probs * (probs + 1e-8).log()).sum(dim=-1).mean()
+            entropy = -(probs * probs.clamp(min=1e-7).log()).sum(dim=-1).mean()
             if indices.size(1) > 1:
                 switches = (indices[:, 1:] != indices[:, :-1]).float().mean()
             else:
@@ -362,7 +375,7 @@ class LOLMLoss(nn.Module):
         route_freq = hard_assign.mean(dim=(0, 1))
         balance_loss = n_codes * (code_freq * route_freq).sum()
 
-        per_token_entropy = -(probs * (probs + 1e-8).log()).sum(dim=-1).mean()
+        per_token_entropy = -(probs * probs.clamp(min=1e-7).log()).sum(dim=-1).mean()
         neg_entropy = -per_token_entropy
 
         sticky_loss = torch.tensor(0.0, device=probs.device)
@@ -395,7 +408,7 @@ class LOLMLoss(nn.Module):
             # Attention entropy: penalize uniform attention over memory slots
             # mem_attn: (B, T, n_slots) — softmax attention weights
             import math
-            entropy = -(mem_attn * (mem_attn + 1e-8).log()).sum(dim=-1).mean()
+            entropy = -(mem_attn * mem_attn.clamp(min=1e-7).log()).sum(dim=-1).mean()
             max_entropy = math.log(mem_attn.size(-1))
             return entropy / max_entropy  # normalized [0, 1], minimize = focus
 
@@ -465,6 +478,13 @@ class LOLMLoss(nn.Module):
 
         # Legacy manifest regularizer
         l_manifest = self.manifest_loss(gate_values)
+
+        # Clamp every auxiliary loss to prevent backward OOM from runaway values
+        l_future = _safe_loss(l_future)
+        l_changepoint = _safe_loss(l_changepoint)
+        l_regime = _safe_loss(l_regime)
+        l_competitive = _safe_loss(l_competitive)
+        l_mem = _safe_loss(l_mem)
 
         total = (
             l_tok
