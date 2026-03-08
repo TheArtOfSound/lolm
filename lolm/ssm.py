@@ -151,11 +151,12 @@ class SelectiveSSMLayer(nn.Module):
         # Scan: compute h[t] = A_bar[t] * h[t-1] + B_bar[t] * x[t] for all t
         Bx = B_bar * x_main.unsqueeze(-1)  # (B, T, d_inner, d_state)
 
-        if x.device.type == 'cuda':
-            # Parallel scan: O(log T) depth, massive GPU speedup
+        use_sequential = (x.device.type != 'cuda') or getattr(self, '_memory_efficient', False)
+        if not use_sequential:
+            # Parallel scan: O(log T) depth, fast but O(T·logT) memory
             H = _parallel_scan_simple(A_bar, Bx)  # (B, T, d_inner, d_state)
         else:
-            # Sequential scan for MPS/CPU (parallel scan has overhead on non-GPU)
+            # Sequential scan: O(T) depth but O(T) memory — needed for 80GB GPUs
             h = torch.zeros(B, self.d_inner, self.d_state, device=x.device, dtype=x.dtype)
             hs = []
             for t in range(T):
