@@ -52,7 +52,7 @@ model:
     normalize_branches: true
 
 training:
-  batch_size: 8              # Per GPU (total = 8 * 4 * 4 = 128)
+  batch_size: 4              # Per GPU (total = 4 * 8 * 4 = 128)
   seq_len: 2048
   max_steps: 200000
   lr: 3.0e-4
@@ -67,7 +67,7 @@ training:
   eval_interval: 2000
   save_interval: 5000
   cache_clear_interval: 500
-  grad_accumulation_steps: 4  # Per GPU (8 * 4 * 4 GPUs = 128 effective)
+  grad_accumulation_steps: 8  # Per GPU (4 * 8 * 4 GPUs = 128 effective)
   compile: false              # Off for DDP compatibility
   gradient_checkpointing: true  # Required to fit on 80GB GPUs
 
