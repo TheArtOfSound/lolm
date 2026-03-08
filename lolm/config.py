@@ -99,6 +99,7 @@ class TrainingConfig:
     cache_clear_interval: int = 100
     grad_accumulation_steps: int = 1
     compile: bool = False
+    gradient_checkpointing: bool = False  # Trade ~30% compute for ~50% memory savings
 
 
 @dataclass

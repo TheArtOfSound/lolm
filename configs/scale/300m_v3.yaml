@@ -88,7 +88,7 @@ training:
   save_interval: 5000
   cache_clear_interval: 500
   grad_accumulation_steps: 2  # effective batch = 32 * 2 = 64
-  compile: false              # Safe: avoid torch.compile issues with chunked loop
+  compile: true               # Fuse CUDA kernels for Transformer layers
 
 loss:
   lambda_future: 0.5           # L_L: CPC contrastive weight (v3.1: 0.1→0.5 — was at random chance)

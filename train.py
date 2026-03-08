@@ -98,6 +98,11 @@ def train(config_path: str, resume_from: str = None):
     for k, v in params.items():
         print(f"  {k}: {v:,}")
 
+    # Gradient checkpointing (trade ~30% compute for ~50% memory savings)
+    if getattr(tc, "gradient_checkpointing", False):
+        model.decoder.use_gradient_checkpoint = True
+        print("Gradient checkpointing enabled on decoder layers")
+
     # torch.compile (CUDA only, PyTorch 2.0+)
     if tc.compile and device.type == "cuda":
         print("Compiling model with torch.compile...")
@@ -126,12 +131,18 @@ def train(config_path: str, resume_from: str = None):
         loss_fn._init_cpc_proj(cfg.model.d_model, device)
         print(f"CPC projection: d_model={cfg.model.d_model} → d_proj={cfg.loss.cpc_proj_dim}, temp={cfg.loss.cpc_temperature}")
 
-    # Optimizer
-    optimizer = torch.optim.AdamW(
-        list(model.parameters()) + list(loss_fn.parameters()),
+    # Optimizer (fused=True on CUDA for kernel fusion speedup)
+    adam_kwargs = dict(
         lr=tc.lr,
         weight_decay=tc.weight_decay,
         betas=(tc.beta1, tc.beta2),
+    )
+    if device.type == "cuda":
+        adam_kwargs["fused"] = True
+        print("AdamW: using fused CUDA implementation")
+    optimizer = torch.optim.AdamW(
+        list(model.parameters()) + list(loss_fn.parameters()),
+        **adam_kwargs,
     )
 
     # Data

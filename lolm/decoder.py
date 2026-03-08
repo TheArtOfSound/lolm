@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Surface decoder: 6-layer pre-norm Transformer with RoPE."""
+"""Surface decoder: pre-norm Transformer with RoPE."""
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint as grad_checkpoint
 
 from .rope import precompute_freqs, apply_rope
 
@@ -107,5 +108,8 @@ class SurfaceDecoder(nn.Module):
         """
         x = self.drop(self.tok_emb(token_ids))
         for layer in self.layers:
-            x = layer(x, self.freqs)
+            if getattr(self, "use_gradient_checkpoint", False) and self.training:
+                x = grad_checkpoint(layer, x, self.freqs, use_reentrant=False)
+            else:
+                x = layer(x, self.freqs)
         return self.ln_f(x)

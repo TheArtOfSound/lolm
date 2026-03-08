@@ -108,12 +108,34 @@ class LOLMLoss(nn.Module):
             ).to(device)
 
     def token_loss(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        """Standard next-token cross-entropy."""
-        return F.cross_entropy(
-            logits.view(-1, logits.size(-1)),
-            targets.view(-1),
-            ignore_index=-1,
-        )
+        """Standard next-token cross-entropy, chunked to avoid OOM.
+
+        F.cross_entropy upcasts to float32 internally, trying to materialize
+        (B*T, vocab_size) = (65536, 50257) * 4 bytes = 12.3 GB on H200.
+        Chunking to 4096 positions at a time caps this at ~780 MB.
+        """
+        V = logits.size(-1)
+        logits_flat = logits.view(-1, V)
+        targets_flat = targets.view(-1)
+        n = logits_flat.size(0)
+
+        chunk_size = 4096
+
+        if n <= chunk_size:
+            return F.cross_entropy(logits_flat, targets_flat, ignore_index=-1)
+
+        loss_sum = 0.0  # becomes tensor after first chunk_loss addition
+        num_valid = 0
+        for i in range(0, n, chunk_size):
+            j = min(i + chunk_size, n)
+            chunk_loss = F.cross_entropy(
+                logits_flat[i:j], targets_flat[i:j],
+                ignore_index=-1, reduction="sum",
+            )
+            loss_sum = loss_sum + chunk_loss
+            num_valid += (targets_flat[i:j] != -1).sum().item()
+
+        return loss_sum / max(num_valid, 1)
 
     # ----------------------------------------------------------------
     # L_L: Latent order loss — CPC or cosine future prediction
