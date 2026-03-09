@@ -206,16 +206,19 @@ def train(config_path: str, resume_from: str = None):
         start_step = ckpt["step"]
         ckpt_optimizer_state = ckpt.get("optimizer")
         if "loss_fn" in ckpt:
-            # strict=False: tolerate CPC projection shape changes (v3.3 wider heads)
-            loss_fn.load_state_dict(ckpt["loss_fn"], strict=False)
-            if is_main:
-                # Report any keys that didn't load (e.g. resized CPC projections)
-                saved_keys = set(ckpt["loss_fn"].keys())
-                current_keys = set(loss_fn.state_dict().keys())
-                missing = current_keys - saved_keys
-                unexpected = saved_keys - current_keys
-                if missing or unexpected:
-                    print(f"  loss_fn: reinitialized {len(missing)+len(unexpected)} params (CPC projection resized)")
+            # v3.3: Filter out CPC projection params that changed shape
+            saved_state = ckpt["loss_fn"]
+            current_state = loss_fn.state_dict()
+            compatible_state = {}
+            resized = []
+            for k, v in saved_state.items():
+                if k in current_state and v.shape == current_state[k].shape:
+                    compatible_state[k] = v
+                else:
+                    resized.append(k)
+            loss_fn.load_state_dict(compatible_state, strict=False)
+            if is_main and resized:
+                print(f"  loss_fn: reinitialized {len(resized)} params (CPC projection resized): {resized}")
         if scaler is not None and "scaler" in ckpt:
             scaler.load_state_dict(ckpt["scaler"])
         if is_main:
@@ -253,6 +256,17 @@ def train(config_path: str, resume_from: str = None):
     )
     if ckpt_optimizer_state is not None:
         optimizer.load_state_dict(ckpt_optimizer_state)
+        # v3.3: Fix optimizer state for params that changed shape (CPC resize)
+        cleared = 0
+        for group in optimizer.param_groups:
+            for p in group['params']:
+                if p in optimizer.state:
+                    s = optimizer.state[p]
+                    if 'exp_avg' in s and s['exp_avg'].shape != p.shape:
+                        optimizer.state[p] = {}
+                        cleared += 1
+        if is_main and cleared:
+            print(f"  optimizer: cleared stale state for {cleared} resized params (will reinit)")
         del ckpt_optimizer_state
 
     # Data — each DDP rank gets a different shard of the stream

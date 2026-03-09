@@ -67,7 +67,7 @@ training:
   cache_clear_interval: 2000 # H200 has plenty of VRAM (was 500, less frequent = less overhead)
   grad_accumulation_steps: 1   # v3.3: no accum needed (batch=32 fits in 140GB)
   compile: true
-  gradient_checkpointing: false  # H200 140GB: no need, saves ~30% compute
+  gradient_checkpointing: true   # H200 140GB: needed at batch=32 without accum
 
 loss:
   lambda_future: 0.5           # L_L: CPC contrastive (proven at 300M)
