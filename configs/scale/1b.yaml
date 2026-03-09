@@ -1,13 +1,14 @@
-# LOLM 1B v3.2 — H200 140GB (Full Formal Latent-Order Training)
-# ~1.57B parameters with complete v3.2 loss formulation + NaN safety
+# LOLM 1B v3.3 — H200 140GB (Full Formal Latent-Order Training)
+# ~1.57B parameters with complete v3.3 loss formulation + NaN safety
 #
 # Architecture: d=2048, 24 layers, 8192 FFN
-# All v3 features: CPC projection heads, gradient-isolated regime,
+# All v3 features: CPC projection heads (v3.3 wider), gradient-isolated regime,
 # MPST neighbor interaction, chunked memory, competitive gate
 #
-# H200 140GB: no gradient checkpointing needed, larger batch for speed
-# Training: batch_size=8, accum=4, effective=32, seq_len=2048
-# Estimated: ~500K steps at 0.5-0.6 steps/s
+# H200 140GB: no gradient checkpointing needed, max batch for speed
+# Training: batch_size=32, accum=1, effective=32, seq_len=2048
+# v3.3: batch 8→32 (same effective, 4x fewer fwd passes, ~3x faster)
+# Estimated: ~500K steps at 0.8-1.0 steps/s
 
 model:
   d_model: 2048
@@ -49,7 +50,7 @@ model:
     normalize_branches: true
 
 training:
-  batch_size: 8              # H200 140GB has room for larger batch
+  batch_size: 32             # v3.3: max batch in single pass (was 8x4 accum)
   seq_len: 2048
   max_steps: 500000
   lr: 1.5e-4                 # Lower LR for 1B (standard scaling law)
@@ -63,8 +64,8 @@ training:
   log_interval: 50
   eval_interval: 5000
   save_interval: 5000
-  cache_clear_interval: 500  # H200 has plenty of VRAM
-  grad_accumulation_steps: 4   # effective batch = 8 * 4 = 32
+  cache_clear_interval: 2000 # H200 has plenty of VRAM (was 500, less frequent = less overhead)
+  grad_accumulation_steps: 1   # v3.3: no accum needed (batch=32 fits in 140GB)
   compile: true
   gradient_checkpointing: false  # H200 140GB: no need, saves ~30% compute
 

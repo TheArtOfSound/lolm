@@ -206,7 +206,16 @@ def train(config_path: str, resume_from: str = None):
         start_step = ckpt["step"]
         ckpt_optimizer_state = ckpt.get("optimizer")
         if "loss_fn" in ckpt:
-            loss_fn.load_state_dict(ckpt["loss_fn"])
+            # strict=False: tolerate CPC projection shape changes (v3.3 wider heads)
+            loss_fn.load_state_dict(ckpt["loss_fn"], strict=False)
+            if is_main:
+                # Report any keys that didn't load (e.g. resized CPC projections)
+                saved_keys = set(ckpt["loss_fn"].keys())
+                current_keys = set(loss_fn.state_dict().keys())
+                missing = current_keys - saved_keys
+                unexpected = saved_keys - current_keys
+                if missing or unexpected:
+                    print(f"  loss_fn: reinitialized {len(missing)+len(unexpected)} params (CPC projection resized)")
         if scaler is not None and "scaler" in ckpt:
             scaler.load_state_dict(ckpt["scaler"])
         if is_main:

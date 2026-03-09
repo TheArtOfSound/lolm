@@ -105,19 +105,24 @@ class LOLMLoss(nn.Module):
         Math: In R^d, random unit vectors have cos_sim std ≈ 1/sqrt(d).
         At d=1024, std ≈ 0.031 → at temp=0.1, logit_std = 0.31 → uniform softmax.
         At d=128, std ≈ 0.088 → at temp=0.07, logit_std = 1.26 → learnable.
+
+        v3.3: Use wider hidden layer (512) to avoid information crush when
+        d_model >> d_proj (e.g. 2048→128 = 16x compression killed CPC at 1.57B).
+        GELU replaces ReLU to prevent dead neurons in the projection.
         """
         d_proj = self.cpc_proj_dim
+        d_hidden = max(d_proj * 4, 512)  # wide bottleneck: 2048→512→128
         if self.cpc_z_proj is None:
             self.cpc_z_proj = nn.Sequential(
-                nn.Linear(d_model, d_proj),
-                nn.ReLU(),
-                nn.Linear(d_proj, d_proj),
+                nn.Linear(d_model, d_hidden),
+                nn.GELU(),
+                nn.Linear(d_hidden, d_proj),
             ).to(device)
         if self.cpc_h_proj is None:
             self.cpc_h_proj = nn.Sequential(
-                nn.Linear(d_model, d_proj),
-                nn.ReLU(),
-                nn.Linear(d_proj, d_proj),
+                nn.Linear(d_model, d_hidden),
+                nn.GELU(),
+                nn.Linear(d_hidden, d_proj),
             ).to(device)
 
     def token_loss(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
