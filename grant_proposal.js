@@ -95,7 +95,7 @@ const doc = new Document({
       new Paragraph({
         alignment: AlignmentType.CENTER, spacing: { after: 400 },
         children: [
-          new TextRun({ text: "Bryan Leonard & Brandyn Leonard  |  Independent Researchers  |  March 2026", size: 20, font: "Arial", color: "888888" }),
+          new TextRun({ text: "Bryan Leonard & Brandyn Leonard  |  Qira LLC  |  March 2026", size: 20, font: "Arial", color: "888888" }),
         ]
       }),
 
@@ -137,7 +137,7 @@ const doc = new Document({
           ]}),
           new TableRow({ children: [
             dataCell("Regime Layer", 2200, { bold: true }),
-            dataCell("32-code discrete phase detector using Gumbel-Softmax with neighbor interaction (1D conv kernel=7). Identifies emergent linguistic regimes through local token interactions, inspired by Multi-Scale Phase Selection Theory.", 7160)
+            dataCell("32-code discrete phase detector using Gumbel-Softmax with neighbor interaction (1D conv kernel=7). Identifies emergent linguistic regimes through local token interactions, inspired by Multi Phase Selection Tool.", 7160)
           ]}),
           new TableRow({ children: [
             dataCell("Persistent Memory", 2200, { bold: true }),
@@ -374,7 +374,7 @@ const doc = new Document({
       new Paragraph({
         spacing: { after: 200 },
         children: [new TextRun({
-          text: "Bryan Leonard and Brandyn Leonard are independent AI researchers focused on novel language model architectures. LOLM was conceived, designed, implemented, and trained as a collaborative research effort, demonstrating the viability of architectural innovation outside large institutional settings. The project draws on theoretical insights from statistical physics (Multi-Scale Phase Selection Theory) and representation learning (VQ-VAE, SimCLR) to propose a fundamentally different approach to language modeling. All development has been self-funded through commercial GPU rental services.",
+          text: "Bryan Leonard and Brandyn Leonard are independent AI researchers focused on novel language model architectures. LOLM was conceived, designed, implemented, and trained as a collaborative research effort, demonstrating the viability of architectural innovation outside large institutional settings. The project draws on theoretical insights from statistical physics (Multi Phase Selection Tool) and representation learning (VQ-VAE, SimCLR) to propose a fundamentally different approach to language modeling. All development has been self-funded through commercial GPU rental services.",
           size: 22
         })]
       }),

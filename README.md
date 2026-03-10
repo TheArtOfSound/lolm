@@ -150,4 +150,4 @@ Contact: bryanleonard237@gmail.com
 
 ---
 
-Copyright 2026 Bryan Leonard & Brandyn Leonard
+Copyright 2026 Bryan Leonard & Brandyn Leonard — Qira LLC
