@@ -1,0 +1,75 @@
+# Matched decoder-only baseline for LOLM 1.57B
+# ~1.57B parameters — 29 Transformer layers (vs LOLM's 24 + latent subsystems)
+#
+# Purpose: The definitive controlled experiment. Same parameter budget, same data,
+# same optimizer, same everything — just no SSM, regime, memory, or gate.
+# If LOLM beats this, the latent architecture earns its place.
+#
+# Parameter math:
+#   LOLM 1.57B: 24 layers (decoder) + SSM + regime + memory + gate = ~1.57B
+#   Baseline:   29 layers (decoder only) = ~1.57B
+#   Each layer = ~50.3M params. 5 extra layers = ~252M ≈ latent subsystem params.
+#
+# Training: matched to LOLM 1b_v3.4 actual running conditions.
+# batch=8 x accum=2 = effective 16 (matches LOLM's actual batch=16 on H200).
+# gradient_checkpointing=true to fit alongside running LOLM training.
+
+model:
+  d_model: 2048
+  n_heads: 16
+  n_layers: 29             # 24 + 5 to match ~1.57B total params
+  d_ff: 8192
+  vocab_size: 50257
+  max_seq_len: 2048
+  dropout: 0.05
+
+  ssm:
+    enabled: false
+  regime:
+    enabled: false
+  memory:
+    enabled: false
+  gate:
+    enabled: false
+
+training:
+  batch_size: 8              # Half batch to fit alongside LOLM training
+  seq_len: 2048
+  max_steps: 200000          # Match LOLM's cosine schedule (200K), kill at step 20K
+  lr: 1.5e-4
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  warmup_steps: 4000
+  grad_clip: 0.5
+  device: cuda
+  dtype: bfloat16
+  log_interval: 50
+  eval_interval: 5000
+  save_interval: 20000        # Only save at 20K (disk space limited)
+  cache_clear_interval: 5000
+  grad_accumulation_steps: 2  # effective batch = 8 * 2 = 16 (matches LOLM actual)
+  compile: true
+  gradient_checkpointing: true  # Saves memory to coexist with LOLM training
+
+loss:
+  lambda_future: 0.0
+  lambda_regime: 0.0
+  lambda_mem: 0.0
+  lambda_manifest: 0.0
+  future_window: 8
+  lambda_balance: 0.0
+  use_load_balance: false
+  lambda_sticky: 0.0
+  use_cpc: false
+  cpc_temperature: 0.07
+  cpc_max_positions: 256
+  cpc_proj_dim: 128
+  lambda_changepoint: 0.0
+  lambda_competitive: 0.0
+
+data:
+  dataset: HuggingFaceFW/fineweb-edu
+  tokenizer: gpt2
+  cache_dir: ./data
+  streaming: true

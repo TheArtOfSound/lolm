@@ -16,12 +16,24 @@ build/
 .DS_Store
 Thumbs.db
 
-# IDE
+# IDE / tools
 .vscode/
 .idea/
 *.swp
 *.swo
+.claude/
 
 # Env
 .env
 *.log
+
+# Large files / archives
+Proof pack*
+
+# Generated / private
+results/
+*.docx
+*.pdf
+generate_*.py
+paper/
+plan.md

@@ -1,14 +1,18 @@
-# LOLM 1B v3.3 — H200 140GB (Full Formal Latent-Order Training)
-# ~1.57B parameters with complete v3.3 loss formulation + NaN safety
+# LOLM 1.57B v3.4 — H200 140GB (Speed-Optimized + CPC Fix)
+# ~1.57B parameters, all v3 features + v3.4 CPC scaling fix
 #
-# Architecture: d=2048, 24 layers, 8192 FFN
-# All v3 features: CPC projection heads (v3.3 wider), gradient-isolated regime,
-# Neighbor interaction, chunked memory, competitive gate
+# Speed optimizations over v3.3:
+#   1. gradient_checkpointing: false — Flash Attn means ~55GB activations, fits in 140GB
+#   2. torch.compile mode=max-autotune — CUDA graphs + aggressive kernel fusion
+#   3. TF32 matmul precision — faster fp32 accumulations
+#   4. cudnn.benchmark — auto-tune conv kernels (regime neighbor conv1d)
+#   5. Less frequent saves/cache clears — reduce I/O overhead
 #
-# H200 140GB: no gradient checkpointing needed, max batch for speed
-# Training: batch_size=32, accum=1, effective=32, seq_len=2048
-# v3.3: batch 8→32 (same effective, 4x fewer fwd passes, ~3x faster)
-# Estimated: ~500K steps at 0.8-1.0 steps/s
+# v3.4 fixes:
+#   - CPC projection hidden layer scales with d_model (1024 not 512)
+#   - Separate gradient clipping for model vs CPC params
+#
+# Target: >=1.5 steps/sec on H200 140GB
 
 model:
   d_model: 2048
@@ -42,7 +46,7 @@ model:
     n_slots: 256
     n_banks: 3
     slot_dim: 2048
-    n_chunks: 4  # v3: split into 4 chunks, chain write→read
+    n_chunks: 4  # v3: split into 4 chunks, chain write->read
 
   gate:
     enabled: true
@@ -50,10 +54,10 @@ model:
     normalize_branches: true
 
 training:
-  batch_size: 32             # v3.3: max batch in single pass (was 8x4 accum)
+  batch_size: 32             # Max single-pass batch for H200
   seq_len: 2048
-  max_steps: 500000
-  lr: 1.5e-4                 # Lower LR for 1B (standard scaling law)
+  max_steps: 200000          # Realistic target at 1.5 steps/s = ~37 hours
+  lr: 1.5e-4                 # Standard scaling law for 1.57B
   weight_decay: 0.1
   beta1: 0.9
   beta2: 0.95
@@ -63,11 +67,11 @@ training:
   dtype: bfloat16
   log_interval: 50
   eval_interval: 5000
-  save_interval: 5000
-  cache_clear_interval: 2000 # H200 has plenty of VRAM (was 500, less frequent = less overhead)
-  grad_accumulation_steps: 1   # v3.3: no accum needed (batch=32 fits in 140GB)
+  save_interval: 10000       # v3.4: less frequent saves (was 5000), saves ~6GB write each
+  cache_clear_interval: 5000 # v3.4: less frequent cache clears (was 2000)
+  grad_accumulation_steps: 1 # No accum needed (batch=32 fits)
   compile: true
-  gradient_checkpointing: true   # H200 140GB: needed at batch=32 without accum
+  gradient_checkpointing: false  # v3.4: Flash Attn means activations fit in 140GB HBM
 
 loss:
   lambda_future: 0.5           # L_L: CPC contrastive (proven at 300M)

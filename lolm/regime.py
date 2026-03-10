@@ -1,25 +1,23 @@
 # Copyright 2026 Bryan Leonard & Brandyn Leonard
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
+# Licensed under the LOLM Community License Agreement, Version 1.0
+# (the "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License in the
+# LICENSE file at the root of this repository.
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for specific terms and conditions.
 
 """Discrete regime / phase layer with Gumbel-Softmax.
 
 Represents the model's current organizational mode:
 exploration, synthesis, repair, planning, narrative, etc.
 
-v2: MPST-inspired neighbor interaction — tokens influence nearby tokens'
-regime choices through a causal conv1d, creating coherent regime segments
-instead of independent per-token decisions.
+v2: Neighbor interaction — tokens influence nearby tokens' regime choices
+through a causal conv1d, creating coherent regime segments instead of
+independent per-token decisions.
 """
 
 import torch
@@ -34,7 +32,7 @@ class RegimeLayer(nn.Module):
     Temperature is annealed externally during training.
 
     With neighbor_interaction=True, regime logits are influenced by
-    neighboring tokens' logits via a causal conv1d (MPST-style).
+    neighboring tokens' logits via a causal conv1d.
     This creates spatially coherent regime segments.
     """
 
@@ -46,7 +44,7 @@ class RegimeLayer(nn.Module):
         self.logit_proj = nn.Linear(d_input, n_codes, bias=False)
         self.codebook = nn.Embedding(n_codes, d_regime)
 
-        # MPST neighbor interaction: causal conv1d over regime logits
+        # Neighbor interaction: causal conv1d over regime logits
         self.neighbor_interaction = neighbor_interaction
         if neighbor_interaction:
             # Causal conv: kernel only looks at current + past tokens
@@ -75,7 +73,7 @@ class RegimeLayer(nn.Module):
         combined = torch.cat([z, h, m], dim=-1)
         logits = self.logit_proj(combined)  # (B, T, n_codes)
 
-        # MPST: neighbor interaction via causal conv1d
+        # Neighbor interaction via causal conv1d
         if self.neighbor_interaction:
             # Reshape for conv1d: (B, n_codes, T)
             logits_conv = logits.transpose(1, 2)

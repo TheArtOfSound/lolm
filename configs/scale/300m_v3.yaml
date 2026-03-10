@@ -53,7 +53,7 @@ model:
     n_codes: 32
     d_regime: 128
     temp_start: 1.0
-    temp_end: 0.5              # MPST: keep stochasticity
+    temp_end: 0.5              # Keep stochasticity
     temp_anneal_steps: 150000  # Slower anneal — give diversity time to establish
     neighbor_interaction: true
     neighbor_kernel_size: 7

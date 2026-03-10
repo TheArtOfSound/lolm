@@ -1,18 +1,16 @@
 # Copyright 2026 Bryan Leonard & Brandyn Leonard
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
+# Licensed under the LOLM Community License Agreement, Version 1.0
+# (the "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License in the
+# LICENSE file at the root of this repository.
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for specific terms and conditions.
 
-"""LOLM v3 loss: formal latent-order training objectives.
+"""LOLM v3 loss: multi-objective training losses.
 
 Full v3 loss:
   L = L_tok + lambda_L * L_L + lambda_E * L_E + lambda_r * L_r + lambda_g * L_g + lambda_m * L_m
@@ -47,7 +45,7 @@ def _safe_loss(loss: torch.Tensor, max_val: float = 50.0) -> torch.Tensor:
 
 
 class LOLMLoss(nn.Module):
-    """Multi-objective loss with formal latent-order training."""
+    """Multi-objective loss for LOLM training."""
 
     def __init__(
         self,
@@ -109,9 +107,14 @@ class LOLMLoss(nn.Module):
         v3.3: Use wider hidden layer (512) to avoid information crush when
         d_model >> d_proj (e.g. 2048→128 = 16x compression killed CPC at 1.57B).
         GELU replaces ReLU to prevent dead neurons in the projection.
+
+        v3.4: Scale hidden layer with d_model to keep compression ratio ≤2x
+        per layer. At 300M (d=1024): 1024→512→128 (2x, 4x). At 1.57B (d=2048):
+        2048→1024→128 (2x, 8x). Previous fixed 512 bottleneck caused 4x first-
+        layer compression at 1.57B, starving the projection of capacity.
         """
         d_proj = self.cpc_proj_dim
-        d_hidden = max(d_proj * 4, 512)  # wide bottleneck: 2048→512→128
+        d_hidden = max(d_proj * 4, d_model // 2)  # v3.4: scale with d_model
         if self.cpc_z_proj is None:
             self.cpc_z_proj = nn.Sequential(
                 nn.Linear(d_model, d_hidden),
@@ -137,7 +140,7 @@ class LOLMLoss(nn.Module):
         targets_flat = targets.view(-1)
         n = logits_flat.size(0)
 
-        chunk_size = 4096
+        chunk_size = 16384  # v3.4: larger chunks = fewer iterations (H200 has headroom)
 
         if n <= chunk_size:
             return F.cross_entropy(logits_flat, targets_flat, ignore_index=-1)

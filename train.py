@@ -1,16 +1,14 @@
 # Copyright 2026 Bryan Leonard & Brandyn Leonard
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
+# Licensed under the LOLM Community License Agreement, Version 1.0
+# (the "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License in the
+# LICENSE file at the root of this repository.
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for specific terms and conditions.
 
 """Training loop for LOLM.
 
@@ -113,6 +111,12 @@ def train(config_path: str, resume_from: str = None):
     cfg = load_config(config_path)
     tc = cfg.training
 
+    # --- Speed optimizations (v3.4) ---
+    # TF32: 8x faster than FP32 for internal accumulations (loss CE upcast, etc.)
+    torch.set_float32_matmul_precision("high")
+    # cuDNN auto-tune: finds fastest conv algorithm for regime neighbor conv1d
+    torch.backends.cudnn.benchmark = True
+
     # --- Distributed setup (auto-detected) ---
     distributed = is_distributed()
     if distributed:
@@ -174,6 +178,9 @@ def train(config_path: str, resume_from: str = None):
             model.ssm.use_gradient_checkpoint = True
         if is_main:
             print("Gradient checkpointing enabled (decoder + SSM layers)")
+    elif is_main and device.type == "cuda":
+        vram_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
+        print(f"Gradient checkpointing OFF — {vram_gb:.0f}GB VRAM (Flash Attn handles memory)")
 
     # Loss
     loss_fn = LOLMLoss(
@@ -196,6 +203,13 @@ def train(config_path: str, resume_from: str = None):
         loss_fn._init_cpc_proj(cfg.model.d_model, device)
         if is_main:
             print(f"CPC projection: d_model={cfg.model.d_model} → d_proj={cfg.loss.cpc_proj_dim}, temp={cfg.loss.cpc_temperature}")
+
+    # VRAM report after model + loss init
+    if is_main and device.type == "cuda":
+        alloc_gb = torch.cuda.memory_allocated() / 1e9
+        total_gb = torch.cuda.get_device_properties(0).total_memory / 1e9
+        print(f"VRAM: {alloc_gb:.1f}GB allocated / {total_gb:.0f}GB total "
+              f"({alloc_gb/total_gb*100:.0f}% used, {total_gb-alloc_gb:.0f}GB free)")
 
     # Resume BEFORE torch.compile and DDP wrapping
     start_step = 0
@@ -227,9 +241,10 @@ def train(config_path: str, resume_from: str = None):
 
     # torch.compile AFTER resume, BEFORE DDP
     if tc.compile and device.type == "cuda":
+        compile_mode = "max-autotune"  # v3.4: CUDA graphs + aggressive kernel fusion
         if is_main:
-            print("Compiling model with torch.compile...")
-        model = torch.compile(model)
+            print(f"Compiling model with torch.compile(mode='{compile_mode}')...")
+        model = torch.compile(model, mode=compile_mode)
         if is_main:
             print("Model compiled.")
 
@@ -277,6 +292,7 @@ def train(config_path: str, resume_from: str = None):
         train_loader = get_streaming_dataloader(
             cfg.data.dataset, tc.seq_len, tc.batch_size,
             tokenizer_name=cfg.data.tokenizer,
+            num_workers=4,  # v3.4: more CPU parallelism for tokenization
             rank=rank, world_size=world_size,
         )
         if is_main:
@@ -396,12 +412,18 @@ def train(config_path: str, resume_from: str = None):
             continue
         consecutive_nan = 0  # Reset on successful step
 
-        # Gradient clipping on ALL parameters (model + loss_fn projections)
-        all_params = list(model.parameters()) + list(loss_fn.parameters())
+        # Gradient clipping — separate pools for model and CPC projections.
+        # v3.4: At 1.57B, the model's gradient norm dominates and starves CPC
+        # projection heads (0.14% of params get ~0.05x the effective gradient).
+        # Clipping them separately lets CPC bootstrap without being drowned out.
+        model_params = list(model.parameters())
+        cpc_params = list(loss_fn.parameters())
         if scaler is not None:
             scaler.unscale_(optimizer)
 
-        grad_norm = torch.nn.utils.clip_grad_norm_(all_params, tc.grad_clip)
+        grad_norm = torch.nn.utils.clip_grad_norm_(model_params, tc.grad_clip)
+        if cpc_params:
+            torch.nn.utils.clip_grad_norm_(cpc_params, tc.grad_clip)
 
         # Skip only if gradients are truly catastrophic (NaN or extreme)
         if torch.isnan(grad_norm) or torch.isinf(grad_norm):

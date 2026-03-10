@@ -3,9 +3,9 @@ Copyright 2026 Bryan Leonard & Brandyn Leonard (bryanleonard237@gmail.com)
 
 This product includes software developed by Bryan Leonard & Brandyn Leonard.
 
-Licensed under the Apache License, Version 2.0.
+Licensed under the LOLM Community License Agreement, Version 1.0.
+See the LICENSE file for the full license text.
 
-This project implements a novel language model architecture where token
-generation is conditioned on a persistent latent order field, discrete
-regime/phase states, long-term memory, and a manifestation gate controlling
-when internal structure is externalized into text.
+This project implements a novel hybrid Transformer-SSM language model
+architecture with discrete regime detection, persistent memory, and
+learned gating between surface and latent representations.

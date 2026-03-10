@@ -1,16 +1,14 @@
 # Copyright 2026 Bryan Leonard & Brandyn Leonard
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
+# Licensed under the LOLM Community License Agreement, Version 1.0
+# (the "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License in the
+# LICENSE file at the root of this repository.
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for specific terms and conditions.
 
 """Selective State-Space Model (Mamba-style) latent core.
 
@@ -20,7 +18,7 @@ Four scan backends:
   3. Parallel associative scan in pure PyTorch (fast but O(T·logT) memory)
   4. Sequential scan (fallback for MPS / CPU)
 
-This is the latent order field z_t that evolves underneath the surface decoder.
+Produces the latent state z_t that evolves underneath the surface decoder.
 """
 
 from __future__ import annotations
@@ -235,7 +233,7 @@ class SelectiveSSMLayer(nn.Module):
 
 
 class LatentSSMCore(nn.Module):
-    """Multi-layer selective SSM forming the latent order field.
+    """Multi-layer selective SSM forming the latent state sequence.
 
     Takes projected decoder hidden states and evolves a continuous
     latent representation z_t that tracks slow semantic drift,
@@ -265,7 +263,7 @@ class LatentSSMCore(nn.Module):
         Args:
             h: (B, T, d_model) hidden state from surface decoder
         Returns:
-            z: (B, T, d_model) latent order field
+            z: (B, T, d_model) latent state
         """
         z = self.proj_in(h)
         for layer in self.layers:

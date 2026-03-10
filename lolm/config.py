@@ -1,16 +1,14 @@
 # Copyright 2026 Bryan Leonard & Brandyn Leonard
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
+# Licensed under the LOLM Community License Agreement, Version 1.0
+# (the "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License in the
+# LICENSE file at the root of this repository.
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied. See the License for specific terms and conditions.
 
 """Configuration dataclasses and YAML loader for LOLM."""
 
@@ -38,7 +36,7 @@ class RegimeConfig:
     temp_start: float = 1.0
     temp_end: float = 0.1
     temp_anneal_steps: int = 50000
-    # MPST neighbor interaction (conv1d over regime logits)
+    # Neighbor interaction (conv1d over regime logits)
     neighbor_interaction: bool = False
     neighbor_kernel_size: int = 5
     # v3: Isolate regime from token loss gradients (VQ-VAE style).

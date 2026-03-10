@@ -1,12 +1,12 @@
 # LOLM 300M — H200 140GB (All Architecture Fixes)
-# ~300M parameters with MPST regime + improved gate
+# ~300M parameters with improved regime + gate
 # Training: ~200K steps in ~15 hours on 1x H200
 # Cost: ~$30 on Vast.ai @ $2/hr
 #
 # Key changes from 100M run:
-#   1. MPST neighbor interaction on regime (prevents collapse)
+#   1. Neighbor interaction on regime (prevents collapse)
 #   2. Load-balancing loss (MoE-style, replaces entropy minimization)
-#   3. Temperature floor at 0.5 (MPST: keep stochasticity)
+#   3. Temperature floor at 0.5 (keep stochasticity)
 #   4. Gate init bias -0.5 (start latent-preferring, ~0.38)
 #   5. Branch normalization (LayerNorm on h and z before gating)
 #   6. mamba-ssm CUDA kernels (2x SSM speedup)
@@ -36,9 +36,9 @@ model:
     n_codes: 32
     d_regime: 128
     temp_start: 1.0
-    temp_end: 0.5            # MPST: keep stochasticity, don't anneal below 0.5
+    temp_end: 0.5            # Keep stochasticity, don't anneal below 0.5
     temp_anneal_steps: 100000
-    neighbor_interaction: true  # MPST: causal conv1d over regime logits
+    neighbor_interaction: true  # Causal conv1d over regime logits
     neighbor_kernel_size: 7     # Look at ~7 neighboring tokens
 
   memory:
