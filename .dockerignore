@@ -1,0 +1,33 @@
+# Proof pack (large checkpoints)
+Proof pack*/
+
+# Generated documents
+*.pdf
+*.docx
+generate_*.py
+
+# Paper / private docs
+paper/
+plan.md
+
+# Data and run artifacts
+data/
+runs/
+results/
+*.log
+*.pt
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Environment
+.env
+.claude/

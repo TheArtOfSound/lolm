@@ -359,7 +359,7 @@ const doc = new Document({
       // ── COMMITMENT ──
       new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun("6. Open Science Commitment")] }),
       new Paragraph({ numbering: { reference: "bullets", level: 0 }, spacing: { after: 80 },
-        children: [new TextRun({ text: "All code is open source under Apache 2.0: ", size: 22 }), new TextRun({ text: "github.com/TheArtOfSound/lolm", size: 22, bold: true })] }),
+        children: [new TextRun({ text: "All code is released under the LOLM Community License: ", size: 22 }), new TextRun({ text: "github.com/TheArtOfSound/lolm", size: 22, bold: true })] }),
       new Paragraph({ numbering: { reference: "bullets", level: 0 }, spacing: { after: 80 },
         children: [new TextRun({ text: "Model weights, training logs, and evaluation scripts will be publicly released", size: 22 })] }),
       new Paragraph({ numbering: { reference: "bullets", level: 0 }, spacing: { after: 80 },
@@ -388,7 +388,7 @@ const doc = new Document({
       new Paragraph({ numbering: { reference: "bullets", level: 0 }, spacing: { after: 80 },
         children: [new TextRun({ text: "Training data: FineWeb-Edu (HuggingFace), evaluated on WikiText-103", size: 22 })] }),
       new Paragraph({ numbering: { reference: "bullets", level: 0 }, spacing: { after: 80 },
-        children: [new TextRun({ text: "License: Apache 2.0 (open source + commercial compatible)", size: 22 })] }),
+        children: [new TextRun({ text: "License: LOLM Community License, Version 1.0 (free for research + small entities)", size: 22 })] }),
       new Paragraph({ numbering: { reference: "bullets", level: 0 }, spacing: { after: 80 },
         children: [new TextRun({ text: "Baseline comparison: Pythia-410M (EleutherAI)", size: 22 })] }),
     ]

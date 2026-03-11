@@ -22,4 +22,4 @@ COPY . .
 # RUN python prepare_data.py
 
 # Default: train full model
-CMD ["python", "-u", "train.py", "--config", "configs/scale/300m.yaml"]
+CMD ["python", "-u", "train.py", "--config", "configs/scale/300m_v3.yaml"]
