@@ -47,3 +47,8 @@ docs/linkedin_post.md
 LOLM_Architecture_Breakdown.pdf
 *.zip
 train_tpu.py
+dashboard.py
+fix_checkpoint.py
+grant_proposal.js
+count_params.py
+SESSION_SUMMARY*.md
