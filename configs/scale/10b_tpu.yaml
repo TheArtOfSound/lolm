@@ -1,0 +1,96 @@
+# LOLM 10B — TPU v4-32 / v5litepod-16 / v6e-16
+# ~10B parameters with full LOLM architecture
+#
+# Architecture: d=4096, 32 layers, 16384 FFN, 32 heads
+# All v3 features: CPC, gradient-isolated regime, memory, gate
+#
+# Memory estimate (bfloat16 + FSDP across 16 chips):
+#   Params: 10B × 2B = 20GB → 1.25GB/chip
+#   Adam:   10B × 8B = 80GB → 5GB/chip
+#   Grads:  10B × 2B = 20GB → 1.25GB/chip
+#   Per chip: ~7.5GB + activations (gradient checkpointing ON)
+#   32GB/chip available → fits with room to spare
+#
+# FSDP sharding across all chips in the pod slice
+# Gradient checkpointing required to fit activations
+
+model:
+  d_model: 4096
+  n_heads: 32
+  n_layers: 32
+  d_ff: 16384
+  vocab_size: 50257
+  max_seq_len: 2048
+  dropout: 0.05
+
+  ssm:
+    enabled: true
+    n_layers: 8
+    d_state: 64
+    expand: 2
+    use_cuda_kernels: false  # TPU — pure PyTorch scan
+
+  regime:
+    enabled: true
+    n_codes: 64
+    d_regime: 512
+    temp_start: 1.0
+    temp_end: 0.5
+    temp_anneal_steps: 200000
+    neighbor_interaction: true
+    neighbor_kernel_size: 7
+    gradient_isolation: true
+
+  memory:
+    enabled: true
+    n_slots: 256
+    n_banks: 3
+    slot_dim: 4096
+    n_chunks: 4
+
+  gate:
+    enabled: true
+    init_bias: -0.5
+    normalize_branches: true
+
+training:
+  batch_size: 2              # Per-device, small for memory
+  seq_len: 2048
+  max_steps: 50000
+  lr: 1.0e-4                 # Lower LR for 10B scale
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  warmup_steps: 2000
+  grad_clip: 0.5
+  device: xla
+  dtype: bfloat16
+  log_interval: 50
+  eval_interval: 5000
+  save_interval: 5000
+  cache_clear_interval: 5000
+  grad_accumulation_steps: 4  # Effective batch = 2 × 4 × num_devices
+  compile: false              # XLA handles compilation
+  gradient_checkpointing: true  # Required at 10B
+
+loss:
+  lambda_future: 0.5
+  lambda_regime: 0.3
+  lambda_mem: 0.05
+  lambda_manifest: 0.01
+  future_window: 8
+  lambda_balance: 0.5
+  use_load_balance: true
+  lambda_sticky: 0.2
+  use_cpc: true
+  cpc_temperature: 0.07
+  cpc_max_positions: 256
+  cpc_proj_dim: 128
+  lambda_changepoint: 0.1
+  lambda_competitive: 0.1
+
+data:
+  dataset: HuggingFaceFW/fineweb-edu
+  tokenizer: gpt2
+  cache_dir: ./data
+  streaming: true

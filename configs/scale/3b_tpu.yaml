@@ -1,0 +1,41 @@
+_base_: 300m_v3.yaml
+
+model:
+  d_model: 3072
+  n_heads: 24
+  n_layers: 28
+  ssm:
+    enabled: true
+    use_cuda_kernels: false
+    d_state: 32
+    d_conv: 4
+  regime:
+    enabled: true
+    gradient_isolation: true
+    n_codes: 64
+  memory:
+    enabled: true
+    n_slots: 128
+    d_memory: 3072
+  gate:
+    enabled: true
+
+data:
+  dataset: HuggingFaceFW/fineweb-edu
+  streaming: true
+  tokenizer: gpt2
+
+training:
+  device: xla
+  batch_size: 1
+  grad_accumulation_steps: 2
+  compile: false
+  gradient_checkpointing: true
+  cache_clear_interval: 5000
+  seq_len: 512
+  log_interval: 50
+  dtype: bfloat16
+  grad_clip: 1.0
+  lr: 1.5e-4
+  save_interval: 5000
+  max_steps: 50000
