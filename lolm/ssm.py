@@ -12,11 +12,12 @@
 
 """Selective State-Space Model (Mamba-style) latent core.
 
-Four scan backends:
+Five scan backends:
   1. mamba-ssm CUDA kernels (fastest, requires mamba-ssm package)
   2. Memory-efficient scan with custom backward (recommended for 80GB GPUs)
   3. Parallel associative scan in pure PyTorch (fast but O(T·logT) memory)
   4. Sequential scan (fallback for MPS / CPU)
+  5. XLA-safe sequential scan (for TPU via torch_xla — no in-place ops)
 
 Produces the latent state z_t that evolves underneath the surface decoder.
 """
@@ -136,6 +137,42 @@ def _efficient_scan(A_bar: torch.Tensor, Bx: torch.Tensor) -> torch.Tensor:
     return _EfficientScanFn.apply(A_bar, Bx)
 
 
+def _xla_safe_scan(A_bar: torch.Tensor, Bx: torch.Tensor) -> torch.Tensor:
+    """XLA-safe scan for TPU using torch_xla.experimental.scan.
+
+    Compiles as a SINGLE loop in XLA (not unrolled), so compilation is fast
+    regardless of sequence length. Mathematically identical:
+      h[t] = A_bar[t] * h[t-1] + Bx[t],  h[-1] = 0
+    """
+    B, T, D, N = A_bar.shape
+
+    try:
+        # Use torch_xla scan primitive — compiles as single XLA while_loop
+        from torch_xla.experimental.scan import scan
+
+        def step_fn(carry, x_t):
+            # carry: h (B, D, N)
+            # x_t: (A_bar_t, Bx_t) each (B, D, N)
+            A_bar_t, Bx_t = x_t
+            h_new = A_bar_t * carry + Bx_t
+            return h_new, h_new  # (new_carry, output)
+
+        init_carry = torch.zeros(B, D, N, device=A_bar.device, dtype=A_bar.dtype)
+        # scan expects xs with time dim first: (T, B, D, N)
+        xs = (A_bar.transpose(0, 1), Bx.transpose(0, 1))
+        _, H = scan(step_fn, init_carry, xs)
+        return H.transpose(0, 1)  # (B, T, D, N)
+
+    except (ImportError, Exception):
+        # Fallback: Python loop (slow compilation but correct)
+        h = torch.zeros(B, D, N, device=A_bar.device, dtype=A_bar.dtype)
+        hs = []
+        for t in range(T):
+            h = A_bar[:, t] * h + Bx[:, t]
+            hs.append(h)
+        return torch.stack(hs, dim=1)  # (B, T, D, N)
+
+
 class CudaSSMLayer(nn.Module):
     """Mamba layer using official CUDA kernels. Much faster than pure PyTorch."""
 
@@ -207,7 +244,13 @@ class SelectiveSSMLayer(nn.Module):
         # Scan: compute h[t] = A_bar[t] * h[t-1] + B_bar[t] * x[t] for all t
         Bx = B_bar * x_main.unsqueeze(-1)  # (B, T, d_inner, d_state)
 
-        if x.device.type == 'cuda':
+        if x.device.type == 'xla':
+            # XLA-safe scan for TPU: cast to float32 to prevent bfloat16 NaN in scan
+            # backward pass. The sequential multiply-accumulate loses precision in bf16.
+            A_bar_f32 = A_bar.float()
+            Bx_f32 = Bx.float()
+            H = _xla_safe_scan(A_bar_f32, Bx_f32).to(x.dtype)  # (B, T, d_inner, d_state)
+        elif x.device.type == 'cuda':
             # Memory-efficient scan: custom autograd backward via reverse scan
             # O(B·T·D·N) memory — fits on 80GB GPUs even at d_inner=2048
             H = _efficient_scan(A_bar, Bx)  # (B, T, d_inner, d_state)
@@ -251,7 +294,7 @@ class LatentSSMCore(nn.Module):
         if use_cuda:
             print("SSM: using mamba-ssm CUDA kernels")
         else:
-            print("SSM: using memory-efficient scan with custom backward (GPU) / sequential scan (CPU/MPS)")
+            print("SSM: using memory-efficient scan (GPU) / XLA scan (TPU) / sequential scan (CPU/MPS)")
 
         self.layers = nn.ModuleList([
             LayerClass(d_model, d_state, expand)

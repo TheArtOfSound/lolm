@@ -1,0 +1,34 @@
+_base_: 300m_v3.yaml
+
+model:
+  ssm:
+    enabled: true
+    use_cuda_kernels: false
+    # NO detach_gradients — full SSM training with float32 scan
+  regime:
+    enabled: true
+    gradient_isolation: true
+  memory:
+    enabled: true
+  gate:
+    enabled: true
+
+data:
+  dataset: HuggingFaceFW/fineweb-edu
+  streaming: true
+  tokenizer: gpt2
+
+training:
+  device: xla
+  batch_size: 4
+  grad_accumulation_steps: 1
+  compile: false
+  gradient_checkpointing: false
+  cache_clear_interval: 10000
+  seq_len: 512
+  log_interval: 50
+  dtype: bfloat16
+  grad_clip: 1.0
+  lr: 3.0e-4
+  save_interval: 5000
+  max_steps: 50000

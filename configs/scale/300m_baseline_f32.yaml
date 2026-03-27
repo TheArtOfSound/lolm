@@ -1,0 +1,28 @@
+_base_: 300m_v3.yaml
+
+model:
+  ssm:
+    enabled: false
+    use_cuda_kernels: false
+  regime:
+    enabled: false
+  memory:
+    enabled: false
+  gate:
+    enabled: false
+
+training:
+  device: xla
+  batch_size: 2
+  grad_accumulation_steps: 1
+  compile: false
+  gradient_checkpointing: false
+  cache_clear_interval: 10000
+  seq_len: 512
+  log_interval: 1
+  dtype: float32
+  grad_clip: 0.5
+  lr: 1.0e-4
+  warmup_steps: 2000
+  save_interval: 5000
+  max_steps: 50000

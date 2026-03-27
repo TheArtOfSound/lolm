@@ -1,0 +1,39 @@
+# LOLM 300M — TPU v4-8 controlled experiment
+# Decoder + SSM (detached gradients) + Gate
+# Memory and Regime disabled for clean comparison
+#
+# SSM detach_gradients=true: SSM provides features via forward pass,
+# trained by CPC contrastive loss via projection heads.
+# Token CE gradients do NOT flow through the scan (prevents XLA NaN).
+
+_base_: 300m_v3.yaml
+
+model:
+  ssm:
+    enabled: true
+    use_cuda_kernels: false
+    detach_gradients: true   # Prevent scan BPTT NaN on XLA
+
+  regime:
+    enabled: false           # Disable for clean LOLM vs baseline comparison
+
+  memory:
+    enabled: false           # Disable for clean comparison
+
+  gate:
+    enabled: true            # Core LOLM mechanism — must be tested
+
+training:
+  device: xla
+  batch_size: 2              # Start conservative; increase if bfloat16 works
+  grad_accumulation_steps: 4 # Effective batch = 8
+  compile: false             # XLA compiles automatically
+  gradient_checkpointing: false
+  cache_clear_interval: 10000
+  seq_len: 512
+  log_interval: 50
+  dtype: float32             # Phase 1 will test bfloat16
+  grad_clip: 1.0
+  lr: 3.0e-4
+  save_interval: 5000
+  max_steps: 50000

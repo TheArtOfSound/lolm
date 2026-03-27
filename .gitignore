@@ -1,6 +1,7 @@
 # Data and checkpoints
 data/
 runs/
+eval_outputs/
 *.pt
 *.bin
 
@@ -28,12 +29,21 @@ Thumbs.db
 *.log
 
 # Large files / archives
-Proof pack*
+Proof pack*/
 
-# Generated / private
-results/
+# Private / generated (not part of core repo)
 *.docx
-*.pdf
 generate_*.py
-paper/
+grant_proposal.js
+patent_spec.js
 plan.md
+node_modules/
+package*.json
+dashboard.py
+fix_checkpoint.py
+qira_hq.py
+tpu_results/
+docs/linkedin_post.md
+LOLM_Architecture_Breakdown.pdf
+*.zip
+train_tpu.py

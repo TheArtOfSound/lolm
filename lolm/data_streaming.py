@@ -38,11 +38,13 @@ class StreamingTokenDataset(IterableDataset):
 
     def __init__(self, dataset_name: str, seq_len: int,
                  tokenizer_name: str = "gpt2", split: str = "train",
+                 dataset_config: str = None,
                  rank: int = 0, world_size: int = 1):
         self.dataset_name = dataset_name
         self.seq_len = seq_len
         self.tokenizer_name = tokenizer_name
         self.split = split
+        self.dataset_config = dataset_config
         self.rank = rank
         self.world_size = world_size
 
@@ -50,8 +52,12 @@ class StreamingTokenDataset(IterableDataset):
         from datasets import load_dataset
 
         enc = tiktoken.get_encoding(self.tokenizer_name)
-        ds = load_dataset(self.dataset_name, split=self.split,
-                          streaming=True, trust_remote_code=True)
+        # Support dataset_config for datasets like C4 that need it (e.g., "en")
+        ds_args = [self.dataset_name]
+        if hasattr(self, 'dataset_config') and self.dataset_config:
+            ds_args.append(self.dataset_config)
+        ds = load_dataset(*ds_args, split=self.split,
+                          streaming=True)
 
         # DDP: each rank processes a different shard of the stream
         if self.world_size > 1:
@@ -81,7 +87,7 @@ class StreamingTokenDataset(IterableDataset):
 
 def get_streaming_dataloader(dataset_name: str, seq_len: int,
                              batch_size: int, tokenizer_name: str = "gpt2",
-                             num_workers: int = 2,
+                             num_workers: int = 2, dataset_config: str = None,
                              rank: int = 0, world_size: int = 1) -> DataLoader:
     """Get a streaming DataLoader for large datasets.
 
@@ -101,6 +107,7 @@ def get_streaming_dataloader(dataset_name: str, seq_len: int,
         dataset_name=dataset_name,
         seq_len=seq_len,
         tokenizer_name=tokenizer_name,
+        dataset_config=dataset_config,
         rank=rank,
         world_size=world_size,
     )

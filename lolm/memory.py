@@ -61,7 +61,8 @@ class MemoryBank(nn.Module):
         # Attention over memory slots
         attn = torch.matmul(q, memory.transpose(-1, -2))  # (B, T, n_slots)
         attn = attn / (self.slot_dim ** 0.5)
-        attn = F.softmax(attn, dim=-1)
+        # Upcast to float32 for softmax to prevent bfloat16 NaN
+        attn = F.softmax(attn.float(), dim=-1).to(q.dtype)
         return torch.matmul(attn, memory), attn  # (B, T, slot_dim), (B, T, n_slots)
 
     def write(self, h: torch.Tensor, memory: torch.Tensor) -> torch.Tensor:

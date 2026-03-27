@@ -133,14 +133,23 @@ class LOLM(nn.Module):
         """
         B = token_ids.size(0)
         device = token_ids.device
+        _is_xla = (device.type == 'xla')
 
         # 1. Surface decoder
         h = self.decoder(token_ids)  # (B, T, d)
+
+        # NOTE: No mark_step inside forward — breaks multi-host TPU
 
         # 2. Latent SSM
         z = None
         if self.ssm is not None:
             z = self.ssm(h)  # (B, T, d)
+            # TPU: detach SSM output to prevent scan BPTT NaN on XLA
+            # SSM still provides features; CPC loss trains it via projection heads
+            if self.cfg.ssm.detach_gradients:
+                z = z.detach()
+            # NOTE: Do NOT call xm.mark_step() inside forward pass —
+            # it breaks XLA graph tracing on multi-host TPU pods
 
         # 3. Memory (chunked: write at chunk i feeds read at chunk i+1)
         mem_read = None
@@ -201,6 +210,8 @@ class LOLM(nn.Module):
             # not corrupted by token loss pushing all codes to collapse.
             r_for_fusion = r_embed.detach() if self.cfg.regime.gradient_isolation else r_embed
             fused = fused + self.proj_r(r_for_fusion)
+
+        # NOTE: No mark_step inside forward — breaks multi-host TPU
 
         # 6. LM head
         logits = self.lm_head(fused)  # (B, T, vocab_size)

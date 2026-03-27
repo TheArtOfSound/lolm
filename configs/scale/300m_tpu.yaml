@@ -1,0 +1,21 @@
+# LOLM 304M — TPU v3-8 (smoke test / validation config)
+# Smaller model for validating TPU training before scaling to 1.57B
+#
+# Usage:
+#   python train_tpu.py --config configs/scale/300m_tpu.yaml
+
+_base_: 300m_v3.yaml
+
+model:
+  ssm:
+    use_cuda_kernels: false  # No mamba-ssm on TPU; uses XLA-safe sequential scan
+
+training:
+  device: xla
+  batch_size: 1                # Absolute minimum for fast XLA compile
+  grad_accumulation_steps: 1   # No accumulation — smallest possible graph
+  compile: false               # XLA compiles automatically
+  gradient_checkpointing: false
+  cache_clear_interval: 10000
+  seq_len: 128                 # Short seqlen for fast compile smoke test
+  log_interval: 1              # Log every step so we see progress immediately

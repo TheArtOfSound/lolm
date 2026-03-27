@@ -16,6 +16,7 @@ Supports:
   - Gradient accumulation for large effective batch sizes
   - AMP (automatic mixed precision) with bfloat16 on CUDA
   - torch.compile for kernel fusion on CUDA
+  - TPU training via torch_xla (native bfloat16, XLA compilation)
   - Streaming data from HuggingFace for large datasets
   - DDP (Distributed Data Parallel) for multi-GPU training
 
@@ -24,6 +25,9 @@ Single-GPU:
 
 Multi-GPU (auto-detected via torchrun):
   torchrun --nproc_per_node=4 train.py --config configs/scale/300m_v3_4gpu.yaml
+
+TPU (v3-8):
+  python train.py --config configs/scale/1b_tpu.yaml
 """
 
 import argparse
@@ -52,14 +56,19 @@ def is_distributed():
     return "RANK" in os.environ and "WORLD_SIZE" in os.environ
 
 
-def setup_distributed():
+def setup_distributed(device_type="cuda"):
     """Initialize DDP process group. Returns (rank, local_rank, world_size)."""
     import torch.distributed as dist
-    dist.init_process_group(backend="nccl")
+    if device_type == "xla":
+        # TPU uses xla backend via torch_xla
+        import torch_xla.core.xla_model as xm
+        dist.init_process_group(backend="xla")
+    else:
+        dist.init_process_group(backend="nccl")
+        torch.cuda.set_device(int(os.environ.get("LOCAL_RANK", 0)))
     rank = dist.get_rank()
     local_rank = int(os.environ.get("LOCAL_RANK", 0))
     world_size = dist.get_world_size()
-    torch.cuda.set_device(local_rank)
     return rank, local_rank, world_size
 
 
@@ -111,20 +120,35 @@ def train(config_path: str, resume_from: str = None):
     cfg = load_config(config_path)
     tc = cfg.training
 
-    # --- Speed optimizations (v3.4) ---
-    # TF32: 8x faster than FP32 for internal accumulations (loss CE upcast, etc.)
-    torch.set_float32_matmul_precision("high")
-    # cuDNN auto-tune: finds fastest conv algorithm for regime neighbor conv1d
-    torch.backends.cudnn.benchmark = True
+    # --- Detect TPU ---
+    is_tpu = (tc.device == "xla")
+    if is_tpu:
+        import torch_xla.core.xla_model as xm
+        import torch_xla.distributed.parallel_loader as pl
+
+    # --- Speed optimizations (v3.4, CUDA only) ---
+    if not is_tpu:
+        # TF32: 8x faster than FP32 for internal accumulations
+        torch.set_float32_matmul_precision("high")
+        # cuDNN auto-tune: finds fastest conv algorithm for regime neighbor conv1d
+        torch.backends.cudnn.benchmark = True
 
     # --- Distributed setup (auto-detected) ---
     distributed = is_distributed()
     if distributed:
-        rank, local_rank, world_size = setup_distributed()
-        device = torch.device(f"cuda:{local_rank}")
+        rank, local_rank, world_size = setup_distributed(
+            device_type="xla" if is_tpu else "cuda"
+        )
+        if is_tpu:
+            device = xm.xla_device()
+        else:
+            device = torch.device(f"cuda:{local_rank}")
     else:
         rank, local_rank, world_size = 0, 0, 1
-        device = torch.device(tc.device)
+        if is_tpu:
+            device = xm.xla_device()
+        else:
+            device = torch.device(tc.device)
 
     is_main = (rank == 0)  # Only rank 0 logs and saves
 
@@ -142,7 +166,7 @@ def train(config_path: str, resume_from: str = None):
     }
     train_dtype = dtype_map.get(tc.dtype, torch.float32)
 
-    # AMP setup — only for CUDA with float16/bfloat16
+    # AMP setup — CUDA uses torch.amp; TPU uses native bfloat16 (no scaler)
     use_amp = (device.type == "cuda" and train_dtype != torch.float32)
     if use_amp:
         use_scaler = (train_dtype == torch.float16)
@@ -150,6 +174,12 @@ def train(config_path: str, resume_from: str = None):
         scaler = torch.amp.GradScaler("cuda", enabled=use_scaler)
         if is_main:
             print(f"AMP enabled: {tc.dtype}" + (" + GradScaler" if use_scaler else ""))
+    elif is_tpu and train_dtype == torch.bfloat16:
+        # TPU natively supports bfloat16 — use autocast for op-level casting
+        amp_ctx = torch.amp.autocast(device_type="xla", dtype=torch.bfloat16)
+        scaler = None
+        if is_main:
+            print(f"TPU bfloat16 autocast enabled")
     else:
         from contextlib import nullcontext
         amp_ctx = nullcontext()
@@ -293,6 +323,7 @@ def train(config_path: str, resume_from: str = None):
             cfg.data.dataset, tc.seq_len, tc.batch_size,
             tokenizer_name=cfg.data.tokenizer,
             num_workers=4,  # v3.4: more CPU parallelism for tokenization
+            dataset_config=getattr(cfg.data, 'dataset_config', None) or None,
             rank=rank, world_size=world_size,
         )
         if is_main:
@@ -379,6 +410,10 @@ def train(config_path: str, resume_from: str = None):
             for k, v in components.items():
                 accum_components[k] = accum_components.get(k, 0.0) + v / accum_steps
 
+            # TPU: mark step to flush XLA graph after each micro-step
+            if is_tpu and not is_last_micro:
+                xm.mark_step()
+
         # If NaN detected, zero all gradients and skip this step entirely
         if step_had_nan:
             optimizer.zero_grad()
@@ -436,6 +471,8 @@ def train(config_path: str, resume_from: str = None):
         if scaler is not None:
             scaler.step(optimizer)
             scaler.update()
+        elif is_tpu:
+            xm.optimizer_step(optimizer)  # Handles XLA graph barrier
         else:
             optimizer.step()
 
@@ -542,7 +579,10 @@ def train(config_path: str, resume_from: str = None):
             }
             if scaler is not None:
                 ckpt_data["scaler"] = scaler.state_dict()
-            torch.save(ckpt_data, ckpt_path)
+            if is_tpu:
+                xm.save(ckpt_data, str(ckpt_path))  # TPU-safe serialization
+            else:
+                torch.save(ckpt_data, ckpt_path)
             print(f"Saved checkpoint: {ckpt_path}")
 
         # DDP barrier after checkpoint so all ranks wait
@@ -562,7 +602,10 @@ def train(config_path: str, resume_from: str = None):
         }
         if scaler is not None:
             final_data["scaler"] = scaler.state_dict()
-        torch.save(final_data, out_dir / "final.pt")
+        if is_tpu:
+            xm.save(final_data, str(out_dir / "final.pt"))
+        else:
+            torch.save(final_data, out_dir / "final.pt")
         print(f"Training complete. Final model saved to {out_dir}/final.pt")
 
     # Clean up distributed

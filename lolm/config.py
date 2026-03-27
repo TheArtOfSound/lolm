@@ -26,6 +26,7 @@ class SSMConfig:
     d_state: int = 16
     expand: int = 2
     use_cuda_kernels: bool = False
+    detach_gradients: bool = False  # TPU: detach SSM output to prevent scan BPTT NaN
 
 
 @dataclass
@@ -129,6 +130,7 @@ class LossConfig:
 @dataclass
 class DataConfig:
     dataset: str = "roneneldan/TinyStories"
+    dataset_config: str = ""  # e.g., "en" for allenai/c4
     tokenizer: str = "gpt2"
     cache_dir: str = "./data"
     streaming: bool = False

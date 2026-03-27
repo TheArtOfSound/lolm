@@ -1,0 +1,7 @@
+torch>=2.4.0
+torch_xla[tpu]
+tiktoken>=0.5.0
+pyyaml>=6.0
+tqdm>=4.65.0
+numpy>=1.24.0
+datasets>=2.14.0

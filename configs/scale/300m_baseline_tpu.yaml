@@ -1,0 +1,49 @@
+# 300M Decoder-Only Baseline — TPU v4-8 controlled experiment
+# Matched parameter count to 300M LOLM (~370M total)
+# All LOLM subsystems disabled: no SSM, no regime, no memory, no gate
+#
+# n_layers increased from 16 to 21 to compensate for removed SSM/regime/memory/gate params:
+#   LOLM 300M: decoder=252M + ssm=44M + memory=11M + regime=0.1M + gate=9M + fusion=3M = 370M
+#   Baseline:  decoder with 21 layers ≈ 21 * 17.8M = 374M (close match)
+
+_base_: 300m_v3.yaml
+
+model:
+  n_layers: 21               # Extra layers to match ~370M total params
+
+  ssm:
+    enabled: false
+
+  regime:
+    enabled: false
+
+  memory:
+    enabled: false
+
+  gate:
+    enabled: false
+
+training:
+  device: xla
+  batch_size: 2
+  grad_accumulation_steps: 4 # Effective batch = 8 (same as LOLM run)
+  compile: false
+  gradient_checkpointing: false
+  cache_clear_interval: 10000
+  seq_len: 512
+  log_interval: 50
+  dtype: float32
+  grad_clip: 1.0
+  lr: 3.0e-4
+  save_interval: 5000
+  max_steps: 50000
+
+loss:
+  # Disable all LOLM-specific losses
+  use_cpc: false
+  lambda_future: 0.0
+  lambda_changepoint: 0.0
+  lambda_competitive: 0.0
+  lambda_regime: 0.0
+  lambda_mem: 0.0
+  lambda_manifest: 0.0

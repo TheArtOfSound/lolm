@@ -1,0 +1,27 @@
+# LOLM 1.57B — TPU v3-8 via torch_xla
+# Same architecture and mathematics as 1b_v3.4.yaml, adapted for TPU
+#
+# Key differences from CUDA version:
+#   - device: xla (torch_xla TPU device)
+#   - No CUDA kernels (mamba-ssm not available on TPU)
+#   - No torch.compile (XLA compiles automatically)
+#   - batch_size: 16 (TPU v3-8 has 128GB HBM total)
+#   - grad_accumulation_steps: 4 (effective batch = 64)
+#   - Native bfloat16 on TPU (no GradScaler needed)
+#
+# Usage:
+#   python train_tpu.py --config configs/scale/1b_tpu.yaml
+
+_base_: 1b_v3.4.yaml
+
+model:
+  ssm:
+    use_cuda_kernels: false  # No mamba-ssm on TPU; uses XLA-safe sequential scan
+
+training:
+  device: xla
+  batch_size: 16               # TPU v3-8: 128GB total, 16GB/core
+  grad_accumulation_steps: 4   # Effective batch = 64
+  compile: false               # XLA compiles automatically
+  gradient_checkpointing: true # TPU v3 has less HBM than H200; enable to be safe
+  cache_clear_interval: 10000  # No GPU cache on TPU, just for logging cadence

@@ -88,10 +88,14 @@ class RegimeLayer(nn.Module):
         # to one code regardless of temperature or load-balancing losses.
         logits = logits.clamp(-5.0, 5.0)
 
+        # Upcast to float32 for Gumbel-Softmax/Softmax to prevent bfloat16 NaN
+        orig_dtype = logits.dtype
+        logits = logits.float()
         if self.training:
             probs = F.gumbel_softmax(logits, tau=temperature, hard=False, dim=-1)
         else:
             probs = F.softmax(logits / max(temperature, 0.01), dim=-1)
+        probs = probs.to(orig_dtype)
 
         indices = probs.argmax(dim=-1)  # (B, T)
 
