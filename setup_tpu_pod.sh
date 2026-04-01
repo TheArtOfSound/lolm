@@ -31,12 +31,9 @@ echo "[3/7] Installing PyTorch + torch_xla..."
 # v6e/v5e VMs: install from libtpu-releases.
 TXLA_VER=$(python3 -c "import torch_xla; print(torch_xla.__version__)" 2>/dev/null || echo "")
 if [ -n "$TXLA_VER" ]; then
-    echo "  torch_xla pre-installed: $TXLA_VER — pinning torch to match"
-    # Pin torch to exact version matching pre-installed torch_xla (avoids symbol mismatch)
-    TORCH_VER=$(echo "$TXLA_VER" | grep -oP '^\d+\.\d+\.\d+')
-    pip install "torch==${TORCH_VER}" \
-      -f https://storage.googleapis.com/libtpu-releases/index.html \
-      -q 2>/dev/null || pip install "torch==${TORCH_VER}" -q 2>/dev/null || true
+    echo "  torch_xla pre-installed: $TXLA_VER — using system torch, no pip install"
+    # Remove any user-installed torch that may conflict with the system TPU torch
+    pip uninstall torch -y 2>/dev/null || true
 else
     pip install torch torch_xla[tpu] \
       -f https://storage.googleapis.com/libtpu-releases/index.html \
