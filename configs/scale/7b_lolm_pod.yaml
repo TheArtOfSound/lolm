@@ -52,8 +52,8 @@ model:
 
 training:
   device: xla
-  batch_size: 4               # Per-chip
-  grad_accumulation_steps: 2  # Effective per-chip = 8
+  batch_size: 2               # v4 32GB: SSM replicated ~4GB + decoder 3.3GB + lm_head 2GB = ~9GB fixed; batch=2 keeps peak ~21GB
+  grad_accumulation_steps: 2  # global batch = 2×2×16 = 64
   seq_len: 2048
   max_steps: 50000
   lr: 1.5e-4

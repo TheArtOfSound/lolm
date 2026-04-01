@@ -27,8 +27,8 @@ model:
 
 training:
   device: xla
-  batch_size: 4
-  grad_accumulation_steps: 2
+  batch_size: 1   # v4 32GB: 36 decoder layers, no SSM; batch=1 keeps peak ~16GB
+  grad_accumulation_steps: 2  # global batch = 1×2×16 = 32
   seq_len: 2048
   max_steps: 50000
   lr: 1.5e-4

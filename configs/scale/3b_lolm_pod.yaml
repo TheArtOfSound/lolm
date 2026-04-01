@@ -54,8 +54,8 @@ model:
 
 training:
   device: xla
-  batch_size: 4
-  grad_accumulation_steps: 2
+  batch_size: 1   # v5litepod-16: SSM replicated 4GB + decoder shard 1.9GB = 5.9GB fixed; batch=1 keeps activations under 10GB
+  grad_accumulation_steps: 1  # Single accum = 1 set of activations; global batch = 1×1×16 = 16
   seq_len: 2048
   max_steps: 50000
   lr: 1.5e-4

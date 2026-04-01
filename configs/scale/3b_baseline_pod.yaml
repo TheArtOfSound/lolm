@@ -26,8 +26,8 @@ model:
 
 training:
   device: xla
-  batch_size: 4
-  grad_accumulation_steps: 2
+  batch_size: 1   # v5litepod-16: 16GB HBM; no SSM but 36 decoder layers; batch=1 safe
+  grad_accumulation_steps: 1  # global batch = 1×1×16 = 16
   seq_len: 2048
   max_steps: 50000
   lr: 1.5e-4
