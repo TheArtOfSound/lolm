@@ -135,6 +135,16 @@ def wrap_with_fsdp(model: nn.Module) -> nn.Module:
         flatten_parameters=False,
         pin_layout_in_collective_ops=True,
     )
+    # Also shard the LM head — it's 0.4-1.5GB replicated on each chip otherwise.
+    # After untying above, lm_head has no dependency on decoder.tok_emb, so
+    # wrapping it as a sibling FSDP module is safe.
+    model.lm_head = FSDP(
+        model.lm_head,
+        compute_dtype=torch.bfloat16,
+        buffer_dtype=torch.bfloat16,
+        flatten_parameters=False,
+        pin_layout_in_collective_ops=True,
+    )
     return model
 
 
@@ -148,7 +158,9 @@ def sync_replicated_grads(model: nn.Module, loss_fn: nn.Module,
     """
     grads = []
     for name, param in model.named_parameters():
-        if not name.startswith('decoder.') and param.grad is not None:
+        # decoder and lm_head are both FSDP-wrapped; their grads are handled
+        # by FSDP reduce-scatter. Only sync the remaining replicated modules.
+        if not name.startswith('decoder.') and not name.startswith('lm_head.') and param.grad is not None:
             grads.append(param.grad)
     for param in loss_fn.parameters():
         if param.grad is not None:
