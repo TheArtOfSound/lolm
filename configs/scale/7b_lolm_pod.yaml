@@ -43,7 +43,11 @@ model:
     gradient_isolation: true
 
   memory:
-    enabled: false            # Not proven at scale yet
+    enabled: true             # Required: d_regime_in = h+z+m = 3×d_model; disabling causes shape mismatch
+    n_slots: 128
+    n_banks: 3
+    slot_dim: 4096
+    n_chunks: 4
 
   gate:
     enabled: true
@@ -81,7 +85,7 @@ loss:
   lambda_regime: 0.3
   lambda_balance: 0.1
   lambda_sticky: 0.01
-  lambda_mem: 0.0
+  lambda_mem: 0.05
   future_window: 8
   use_load_balance: true
   cpc_max_positions: 256
