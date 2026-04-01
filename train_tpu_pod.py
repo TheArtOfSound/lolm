@@ -123,6 +123,7 @@ def wrap_with_fsdp(model: nn.Module) -> FSDP:
         auto_wrap_policy=auto_wrap_policy,
         compute_dtype=torch.bfloat16,
         buffer_dtype=torch.bfloat16,
+        flatten_parameters=False,
         pin_layout_in_collective_ops=True,
     )
     return wrapped
