@@ -124,7 +124,6 @@ def wrap_with_fsdp(model: nn.Module) -> FSDP:
         auto_wrap_policy=auto_wrap_policy,
         compute_dtype=torch.bfloat16,
         buffer_dtype=torch.bfloat16,
-        shard_param_on_dim_0=True,
         pin_layout_in_collective_ops=True,
     )
     return wrapped
@@ -173,12 +172,7 @@ def train_fn(index, config_path: str, resume_from: str = None):
     total_params = sum(p.numel() for p in model.parameters())
     use_fsdp = total_params > 2_000_000_000  # FSDP for >2B params
 
-    # XlaFSDP cannot shard 0-dim scalar parameters — reshape them to (1,)
-    for name, param in model.named_parameters():
-        if param.dim() == 0:
-            param.data = param.data.unsqueeze(0)
-
-    # XLA device: disable torch.utils.checkpoint (not XLA-compatible in 2.4)
+    # XLA device: disable torch.utils.checkpoint (not XLA-compatible in 2.x)
     # The decoder/SSM check _xla_device to skip torch.utils.checkpoint
     model.decoder._xla_device = True
     if hasattr(model, "ssm") and model.ssm is not None:
@@ -507,15 +501,15 @@ if __name__ == "__main__":
                         help="Use xmp.spawn (for single-host). Pod workers don't need this.")
     args = parser.parse_args()
 
+    # Always use xmp.spawn: spawns one process per local chip.
+    # In pod mode (--worker=all), PJRT auto-discovers all workers and
+    # coordinates across hosts. nprocs=None = auto-detect local chip count.
+    nprocs = None  # PJRT fills in local_device_count() automatically
     if args.use_spawn:
-        # Single-host multi-chip: spawn one process per local chip
-        nprocs = xr.local_device_count() if xr is not None else xm.xrt_world_size()
-        xmp.spawn(
-            _mp_fn,
-            args=(args.config, args.resume),
-            nprocs=nprocs,
-        )
-    else:
-        # Pod mode: each worker IS a process, launched by --worker=all.
-        # PJRT handles multi-host coordination automatically.
-        train_fn(0, args.config, args.resume)
+        # Explicit spawn requested (backward compat)
+        nprocs = xr.local_device_count() if xr is not None else None
+    xmp.spawn(
+        _mp_fn,
+        args=(args.config, args.resume),
+        nprocs=nprocs,
+    )
