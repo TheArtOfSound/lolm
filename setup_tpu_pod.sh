@@ -35,7 +35,8 @@ if [ -n "$TXLA_VER" ]; then
     # Remove any user-installed torch that may conflict with the system TPU torch
     pip uninstall torch -y 2>/dev/null || true
 else
-    pip install torch torch_xla[tpu] \
+    # Fresh install: pin to known-good matched versions for v5litepod/v6e (Python 3.10)
+    pip install torch==2.3.0 "torch_xla[tpu]==2.3.0" \
       -f https://storage.googleapis.com/libtpu-releases/index.html \
       -q
 fi
