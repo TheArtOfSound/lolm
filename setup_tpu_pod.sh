@@ -29,8 +29,14 @@ pip install --upgrade pip -q
 echo "[3/7] Installing PyTorch + torch_xla..."
 # v4 VMs (tpu-vm-pt-2.0) come with pre-installed torch+torch_xla 2.0 — keep those.
 # v6e/v5e VMs: install from libtpu-releases.
-if python3 -c "import torch_xla; print(torch_xla.__version__)" 2>/dev/null | grep -q "2\."; then
-    echo "  torch_xla already installed: $(python3 -c 'import torch_xla; print(torch_xla.__version__)')"
+TXLA_VER=$(python3 -c "import torch_xla; print(torch_xla.__version__)" 2>/dev/null || echo "")
+if [ -n "$TXLA_VER" ]; then
+    echo "  torch_xla pre-installed: $TXLA_VER — pinning torch to match"
+    # Pin torch to exact version matching pre-installed torch_xla (avoids symbol mismatch)
+    TORCH_VER=$(echo "$TXLA_VER" | grep -oP '^\d+\.\d+\.\d+')
+    pip install "torch==${TORCH_VER}" \
+      -f https://storage.googleapis.com/libtpu-releases/index.html \
+      -q 2>/dev/null || pip install "torch==${TORCH_VER}" -q 2>/dev/null || true
 else
     pip install torch torch_xla[tpu] \
       -f https://storage.googleapis.com/libtpu-releases/index.html \
