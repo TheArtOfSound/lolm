@@ -213,6 +213,13 @@ def train_fn(index, config_path: str, resume_from: str = None):
         model = wrap_with_fsdp(model)
         model = model.to(device)
         log("FSDP wrapping complete")
+        # DEBUG: verify critical parameter shapes after FSDP + .to(device)
+        if is_master:
+            if hasattr(model, 'regime') and model.regime is not None:
+                log(f"DEBUG regime.logit_proj.weight: {model.regime.logit_proj.weight.shape}")
+            if hasattr(model, 'ssm') and model.ssm is not None:
+                l = model.ssm.layers[0]
+                log(f"DEBUG ssm.layers[0].in_proj.weight: {l.in_proj.weight.shape}, A_log: {l.A_log.shape}")
     else:
         log(f"Model has {total_params/1e6:.0f}M params — single-device mode")
         model = model.to(device)

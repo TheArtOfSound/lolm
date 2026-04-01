@@ -27,8 +27,8 @@ model:
 
 training:
   device: xla
-  batch_size: 1   # v4 32GB: 36 decoder layers, no SSM; batch=1 keeps peak ~16GB
-  grad_accumulation_steps: 2  # global batch = 1×2×16 = 32
+  batch_size: 1   # 16GB HBM per chip: 36 decoder layers, no SSM; batch=1 single accum
+  grad_accumulation_steps: 1  # global batch = 1×1×16 = 16
   seq_len: 2048
   max_steps: 50000
   lr: 1.5e-4
