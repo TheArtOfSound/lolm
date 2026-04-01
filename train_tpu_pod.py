@@ -407,10 +407,22 @@ def train_fn(index, config_path: str, resume_from: str = None):
         if use_fsdp and world_size > 1:
             sync_replicated_grads(model, loss_fn, world_size)
 
-        # Gradient clipping (FSDP handles gathering grads automatically)
-        torch.nn.utils.clip_grad_norm_(
-            list(model.parameters()), tc.grad_clip
-        )
+        # Gradient clipping: must be done separately for FSDP vs replicated params.
+        # clip_grad_norm_ on mixed sharded+full grads produces wrong norm estimates:
+        # FSDP shards are 1/world_size of full grad, so the decoder norm is
+        # underestimated by sqrt(world_size), causing over-clipping of replicated params.
+        if use_fsdp:
+            # FSDP decoder: use XlaFSDP's built-in clip which gathers norms across chips
+            model.decoder.clip_grad_norm_(tc.grad_clip)
+            # Replicated params: standard clip (full grads, correct norm)
+            replicated_params = [
+                p for name, p in model.named_parameters()
+                if not name.startswith('decoder.') and p.grad is not None
+            ]
+            if replicated_params:
+                torch.nn.utils.clip_grad_norm_(replicated_params, tc.grad_clip)
+        else:
+            torch.nn.utils.clip_grad_norm_(list(model.parameters()), tc.grad_clip)
         cpc_params = list(loss_fn.parameters())
         if cpc_params:
             torch.nn.utils.clip_grad_norm_(cpc_params, tc.grad_clip)
