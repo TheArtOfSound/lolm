@@ -101,32 +101,60 @@ def get_regime_temperature(step: int, cfg) -> float:
 # FSDP wrapping — wraps the model WITHOUT modifying it
 # ---------------------------------------------------------------------------
 
-def wrap_with_fsdp(model: nn.Module) -> FSDP:
-    """Wrap LOLM model with XLA FSDP for multi-chip training.
+def wrap_with_fsdp(model: nn.Module) -> nn.Module:
+    """Wrap only the SurfaceDecoder with XLA FSDP for multi-chip training.
 
-    Wrapping policy: each DecoderBlock and SelectiveSSMLayer gets its own
-    FSDP unit. This means params within each block are sharded across all
-    chips, and all-gathered during forward, then reduce-scattered on backward.
+    ONLY model.decoder is FSDP-sharded (5B+ params, dominant memory cost).
+    The SSM, memory, regime, gate, and fusion projections are replicated on
+    each chip — they're smaller (~1B total) and the SSM scan is incompatible
+    with XlaFSDP all-gather: sharding SSM projection weights produces tensors
+    whose shapes (batch×seq, d_state) don't contract correctly in XLA's mm.
 
-    The SSM sequential scan (h[t] = A*h[t-1] + Bx[t]) operates on the
-    FULL batch and time dimension within each chip — only parameter weights
-    are sharded. This respects the constraint that time cannot be split.
+    The LM head weight is untied from tok_emb before wrapping to avoid
+    cross-boundary parameter aliasing under FSDP.
+
+    Memory per chip on v4-32 (32GB):
+      Decoder FSDP shard:  5.2B × 2B / 32 chips ≈  325MB params
+      SSM replicated:      694M × 2B              ≈  1.4GB params + 5.6GB Adam
+      Activations:                                 ≈  4GB
+      Total per chip:                              ≈ 12GB — fits in 32GB
     """
+    # Untie LM head weight from tok_emb — XlaFSDP can't handle parameter
+    # aliasing across FSDP boundary (decoder inside, lm_head outside).
+    model.lm_head.weight = nn.Parameter(model.decoder.tok_emb.weight.data.clone())
+
     auto_wrap_policy = functools.partial(
         transformer_auto_wrap_policy,
-        transformer_layer_cls={
-            DecoderBlock,  # One FSDP unit per decoder block (includes SSM sub-layers)
-        },
+        transformer_layer_cls={DecoderBlock},
     )
-    wrapped = FSDP(
-        model,
+    model.decoder = FSDP(
+        model.decoder,
         auto_wrap_policy=auto_wrap_policy,
         compute_dtype=torch.bfloat16,
         buffer_dtype=torch.bfloat16,
         flatten_parameters=False,
         pin_layout_in_collective_ops=True,
     )
-    return wrapped
+    return model
+
+
+def sync_replicated_grads(model: nn.Module, loss_fn: nn.Module,
+                          world_size: int) -> None:
+    """Allreduce gradients for params NOT covered by FSDP (non-decoder modules).
+
+    The decoder is FSDP-wrapped so its grads are handled by reduce-scatter.
+    All other params (SSM, memory, regime, gate, fusion projections, lm_head,
+    CPC projections) are replicated and need explicit gradient sync.
+    """
+    grads = []
+    for name, param in model.named_parameters():
+        if not name.startswith('decoder.') and param.grad is not None:
+            grads.append(param.grad)
+    for param in loss_fn.parameters():
+        if param.grad is not None:
+            grads.append(param.grad)
+    if grads:
+        xm.all_reduce(xm.REDUCE_SUM, grads, scale=1.0 / world_size)
 
 
 # ---------------------------------------------------------------------------
@@ -179,24 +207,12 @@ def train_fn(index, config_path: str, resume_from: str = None):
         model.ssm._xla_device = True
 
     if use_fsdp:
-        log(f"Model has {total_params/1e9:.1f}B params — using FSDP")
-        # Wrap with FSDP *before* moving to device — FSDP shards the model
-        # across chips; moving the full model to device first causes OOM.
-        try:
-            model = wrap_with_fsdp(model)
-            model = model.to(device)
-            log("FSDP wrapping complete")
-        except RuntimeError as e:
-            if "RESOURCE_EXHAUSTED" in str(e):
-                log(f"FSDP OOM — falling back to single-device mode")
-                del model
-                import gc; gc.collect()
-                model = LOLM(cfg.model).to(device)
-                model.decoder._xla_device = True
-                if hasattr(model, "ssm") and model.ssm is not None:
-                    model.ssm._xla_device = True
-            else:
-                raise
+        log(f"Model has {total_params/1e9:.1f}B params — using FSDP (decoder only)")
+        # Wrap only model.decoder with FSDP, then move full model to device.
+        # SSM/memory/regime/gate stay replicated (small enough to fit).
+        model = wrap_with_fsdp(model)
+        model = model.to(device)
+        log("FSDP wrapping complete")
     else:
         log(f"Model has {total_params/1e6:.0f}M params — single-device mode")
         model = model.to(device)
@@ -377,6 +393,12 @@ def train_fn(index, config_path: str, resume_from: str = None):
                 break
             continue
         consecutive_nan = 0
+
+        # Sync gradients for replicated params (SSM, memory, regime, gate,
+        # fusion projections, lm_head, CPC). Decoder grads are handled by
+        # FSDP reduce-scatter; everything else needs explicit allreduce.
+        if use_fsdp and world_size > 1:
+            sync_replicated_grads(model, loss_fn, world_size)
 
         # Gradient clipping (FSDP handles gathering grads automatically)
         torch.nn.utils.clip_grad_norm_(
