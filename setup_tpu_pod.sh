@@ -27,13 +27,15 @@ pip install --upgrade pip -q
 
 # ── 3. PyTorch + torch_xla ──────────────────────────────────────────
 echo "[3/7] Installing PyTorch + torch_xla..."
-# Install torch 2.1 + torch_xla 2.1 (needed for torch_xla.runtime on v4)
-pip install torch==2.1.0 \
-  -f https://storage.googleapis.com/libtpu-releases/index.html \
-  -q
-pip install torch_xla[tpu]==2.1.0 \
-  -f https://storage.googleapis.com/libtpu-releases/index.html \
-  -q
+# v4 VMs (tpu-vm-pt-2.0) come with pre-installed torch+torch_xla 2.0 — keep those.
+# v6e/v5e VMs: install from libtpu-releases.
+if python3 -c "import torch_xla; print(torch_xla.__version__)" 2>/dev/null | grep -q "2\."; then
+    echo "  torch_xla already installed: $(python3 -c 'import torch_xla; print(torch_xla.__version__)')"
+else
+    pip install torch torch_xla[tpu] \
+      -f https://storage.googleapis.com/libtpu-releases/index.html \
+      -q
+fi
 
 # ── 4. LOLM dependencies ────────────────────────────────────────────
 echo "[4/7] Installing LOLM dependencies..."
@@ -67,15 +69,20 @@ python3 -c "
 import torch
 import torch_xla
 import torch_xla.core.xla_model as xm
-import torch_xla.runtime as xr
+try:
+    import torch_xla.runtime as xr
+    n_devices = len(xr.local_devices())
+except ImportError:
+    xr = None
+    n_devices = 'N/A (torch_xla<2.1)'
 
 device = xm.xla_device()
 print(f'  PyTorch: {torch.__version__}')
 print(f'  torch_xla: {torch_xla.__version__}')
 print(f'  XLA device: {device}')
-print(f'  Local devices: {len(xr.local_devices())}')
+print(f'  Local devices: {n_devices}')
 
-# Quick test
+# Quick matmul test
 x = torch.randn(2, 3, device=device)
 y = x @ x.T
 xm.mark_step()
@@ -89,7 +96,7 @@ loss.backward()
 xm.optimizer_step(opt)
 xm.mark_step()
 print(f'  Optimizer step: OK')
-print(f'  === Worker {\"$WORKER_ID\"} READY ===')
+print(f'  === Worker READY ===')
 "
 
 echo ""
