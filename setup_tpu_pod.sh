@@ -27,7 +27,11 @@ pip install --upgrade pip -q
 
 # ── 3. PyTorch + torch_xla ──────────────────────────────────────────
 echo "[3/7] Installing PyTorch + torch_xla..."
-pip install torch torch_xla[tpu] \
+# Install torch 2.1 + torch_xla 2.1 (needed for torch_xla.runtime on v4)
+pip install torch==2.1.0 \
+  -f https://storage.googleapis.com/libtpu-releases/index.html \
+  -q
+pip install torch_xla[tpu]==2.1.0 \
   -f https://storage.googleapis.com/libtpu-releases/index.html \
   -q
 

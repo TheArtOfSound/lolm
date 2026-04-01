@@ -58,7 +58,10 @@ import torch_xla.core.xla_model as xm
 import torch_xla.debug.metrics as met
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_multiprocessing as xmp
-import torch_xla.runtime as xr
+try:
+    import torch_xla.runtime as xr
+except ImportError:
+    xr = None  # torch_xla < 2.1 — xr only needed for --use-spawn local mode
 
 # FSDP imports
 from torch_xla.distributed.fsdp import XlaFullyShardedDataParallel as FSDP
@@ -503,7 +506,7 @@ if __name__ == "__main__":
 
     if args.use_spawn:
         # Single-host multi-chip: spawn one process per local chip
-        nprocs = xr.local_device_count()
+        nprocs = xr.local_device_count() if xr is not None else xm.xrt_world_size()
         xmp.spawn(
             _mp_fn,
             args=(args.config, args.resume),
