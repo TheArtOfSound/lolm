@@ -23,7 +23,7 @@ echo "  Resume: ${RESUME:-none}"
 echo ""
 
 # Build the training command
-TRAIN_CMD="cd ~/Latent && PJRT_DEVICE=TPU"
+TRAIN_CMD="cd ~/Latent && PJRT_DEVICE=TPU XLA_FLAGS='--xla_tpu_impure_oom_fast_exit_threshold=-1'"
 
 # Add HF token if set locally
 if [ -n "${HF_TOKEN:-}" ]; then

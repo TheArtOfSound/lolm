@@ -115,8 +115,7 @@ def wrap_with_fsdp(model: nn.Module) -> FSDP:
     auto_wrap_policy = functools.partial(
         transformer_auto_wrap_policy,
         transformer_layer_cls={
-            DecoderBlock,       # Each Transformer layer
-            SelectiveSSMLayer,  # Each SSM layer
+            DecoderBlock,  # One FSDP unit per decoder block (includes SSM sub-layers)
         },
     )
     wrapped = FSDP(
