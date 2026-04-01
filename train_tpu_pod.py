@@ -503,8 +503,6 @@ def train_fn(index, config_path: str, resume_from: str = None):
                     "world_size": world_size,
                 }, str(ckpt_path))
                 log(f"Saved checkpoint: {ckpt_path}")
-            # Barrier: all chips wait for master to finish saving
-            xm.rendezvous("checkpoint")
 
     # Final save
     if is_master:
