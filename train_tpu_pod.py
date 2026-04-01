@@ -182,15 +182,15 @@ def train_fn(index, config_path: str, resume_from: str = None):
 
     if use_fsdp:
         log(f"Model has {total_params/1e9:.1f}B params — using FSDP")
-        # Move to device and wrap with FSDP
-        model = model.to(device)
+        # Wrap with FSDP *before* moving to device — FSDP shards the model
+        # across chips; moving the full model to device first causes OOM.
         try:
             model = wrap_with_fsdp(model)
+            model = model.to(device)
             log("FSDP wrapping complete")
         except RuntimeError as e:
             if "RESOURCE_EXHAUSTED" in str(e):
                 log(f"FSDP OOM — falling back to single-device mode")
-                # Recreate model on device without FSDP
                 del model
                 import gc; gc.collect()
                 model = LOLM(cfg.model).to(device)
