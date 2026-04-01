@@ -13,7 +13,7 @@ model:
   n_layers: 36              # Extra layers to match ~7B params
   d_ff: 11008
   vocab_size: 50257
-  max_seq_len: 2048
+  max_seq_len: 1024
   dropout: 0.05
 
   ssm:
@@ -29,7 +29,7 @@ training:
   device: xla
   batch_size: 1   # 16GB HBM per chip: 36 decoder layers, no SSM; batch=1 single accum
   grad_accumulation_steps: 1  # global batch = 1×1×16 = 16
-  seq_len: 2048
+  seq_len: 1024
   max_steps: 50000
   lr: 1.5e-4
   weight_decay: 0.1
