@@ -407,14 +407,12 @@ def train_fn(index, config_path: str, resume_from: str = None):
         if use_fsdp and world_size > 1:
             sync_replicated_grads(model, loss_fn, world_size)
 
-        # Gradient clipping: must be done separately for FSDP vs replicated params.
-        # clip_grad_norm_ on mixed sharded+full grads produces wrong norm estimates:
-        # FSDP shards are 1/world_size of full grad, so the decoder norm is
-        # underestimated by sqrt(world_size), causing over-clipping of replicated params.
+        # Gradient clipping: clip non-decoder (replicated) params only.
+        # XlaFSDP.clip_grad_norm_ is unreliable across chip generations and
+        # mixing FSDP sharded grads with full grads produces wrong norm estimates.
+        # Decoder grads are implicitly bounded by FSDP reduce-scatter + Adam;
+        # replicated params need explicit clipping to prevent NaN.
         if use_fsdp:
-            # FSDP decoder: use XlaFSDP's built-in clip which gathers norms across chips
-            model.decoder.clip_grad_norm_(tc.grad_clip)
-            # Replicated params: standard clip (full grads, correct norm)
             replicated_params = [
                 p for name, p in model.named_parameters()
                 if not name.startswith('decoder.') and p.grad is not None
