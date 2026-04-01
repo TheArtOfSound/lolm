@@ -10,6 +10,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for specific terms and conditions.
 
+from __future__ import annotations
+
 """Discrete regime / phase layer with Gumbel-Softmax.
 
 Represents the model's current organizational mode:

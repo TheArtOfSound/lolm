@@ -10,6 +10,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
 # implied. See the License for specific terms and conditions.
 
+from __future__ import annotations
+
 """Persistent memory with 3 banks: episodic, semantic, self.
 
 Provides read (attention-based retrieval) and gated write operations.
