@@ -12,7 +12,7 @@ model:
   n_layers: 36              # Extra layers to match ~3B params
   d_ff: 10240
   vocab_size: 50257
-  max_seq_len: 1024
+  max_seq_len: 512
   dropout: 0.05
 
   ssm:
@@ -28,7 +28,7 @@ training:
   device: xla
   batch_size: 1   # v5litepod-16: 16GB HBM; no SSM but 36 decoder layers; batch=1 safe
   grad_accumulation_steps: 1  # global batch = 1×1×16 = 16
-  seq_len: 1024
+  seq_len: 512
   max_steps: 50000
   lr: 1.5e-4
   weight_decay: 0.1
