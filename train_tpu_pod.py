@@ -162,13 +162,6 @@ def train_fn(index, config_path: str, resume_from: str = None):
     # --- Model (Bryan's LOLM, untouched) ---
     model = LOLM(cfg.model)
 
-    # Gradient checkpointing (set BEFORE moving to device)
-    if getattr(tc, "gradient_checkpointing", False):
-        model.decoder.use_gradient_checkpoint = True
-        if hasattr(model, "ssm") and model.ssm is not None:
-            model.ssm.use_gradient_checkpoint = True
-        log("Gradient checkpointing enabled (decoder + SSM)")
-
     if is_master:
         params = model.count_parameters()
         log("Parameters:")
@@ -179,6 +172,17 @@ def train_fn(index, config_path: str, resume_from: str = None):
     # If OOM, fall back to single-device mode without FSDP.
     total_params = sum(p.numel() for p in model.parameters())
     use_fsdp = total_params > 2_000_000_000  # FSDP for >2B params
+
+    # XlaFSDP cannot shard 0-dim scalar parameters — reshape them to (1,)
+    for name, param in model.named_parameters():
+        if param.dim() == 0:
+            param.data = param.data.unsqueeze(0)
+
+    # XLA device: disable torch.utils.checkpoint (not XLA-compatible in 2.4)
+    # The decoder/SSM check _xla_device to skip torch.utils.checkpoint
+    model.decoder._xla_device = True
+    if hasattr(model, "ssm") and model.ssm is not None:
+        model.ssm._xla_device = True
 
     if use_fsdp:
         log(f"Model has {total_params/1e9:.1f}B params — using FSDP")
@@ -194,10 +198,9 @@ def train_fn(index, config_path: str, resume_from: str = None):
                 del model
                 import gc; gc.collect()
                 model = LOLM(cfg.model).to(device)
-                if getattr(tc, "gradient_checkpointing", False):
-                    model.decoder.use_gradient_checkpoint = True
-                    if hasattr(model, "ssm") and model.ssm is not None:
-                        model.ssm.use_gradient_checkpoint = True
+                model.decoder._xla_device = True
+                if hasattr(model, "ssm") and model.ssm is not None:
+                    model.ssm._xla_device = True
             else:
                 raise
     else:
