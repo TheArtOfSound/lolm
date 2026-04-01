@@ -23,8 +23,6 @@ loss-connected computation, leaving all write parameters (write_proj,
 forget_gate, write_gate) with grad=NONE since step 0.
 """
 
-from __future__ import annotations
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
