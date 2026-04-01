@@ -203,12 +203,12 @@ class LOLMLoss(nn.Module):
         z_proj = _safe_normalize(z_proj, dim=-1)
         h_proj = _safe_normalize(h_proj, dim=-1)
 
-        # Subsample positions to keep memory manageable
-        # (B, valid, valid) similarity matrix — cap valid at cpc_max_positions
-        stride = max(1, valid // self.cpc_max_positions)
-        z_sub = z_proj[:, ::stride]                     # (B, n_pos, d)
-        h_sub = h_proj[:, ::stride]                     # (B, n_pos, d)
-        n_pos = z_sub.size(1)
+        # Subsample positions — use a STATIC slice so XLA traces fixed shapes.
+        # Dynamic stride (valid // max_positions) causes XLA to allocate the full
+        # (B, T, T) similarity matrix at compile time, OOMing on v6e-4 (32GB HBM).
+        n_pos = min(valid, self.cpc_max_positions)
+        z_sub = z_proj[:, :n_pos]                       # (B, n_pos, d) — static shape
+        h_sub = h_proj[:, :n_pos]                       # (B, n_pos, d) — static shape
 
         # Similarity matrix: each z_t against all h positions
         logits = torch.bmm(z_sub, h_sub.transpose(1, 2))  # (B, n_pos, n_pos)

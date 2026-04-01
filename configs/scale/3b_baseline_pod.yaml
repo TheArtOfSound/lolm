@@ -1,0 +1,64 @@
+# LOLM 3B Baseline — TPU v5e-64 Pod (64 chips)
+# Decoder-only, matched params to 3B LOLM
+#
+# LOLM 3B: d=2560, 32 layers, d_ff=10240, + SSM/regime/memory/gate ≈ 3B
+# Baseline: d=2560, 36 layers, d_ff=10240, decoder-only ≈ 3B
+#
+# Effective batch: 4 × 2 accum × 64 chips = 512
+
+model:
+  d_model: 2560
+  n_heads: 20
+  n_layers: 36              # Extra layers to match ~3B params
+  d_ff: 10240
+  vocab_size: 50257
+  max_seq_len: 2048
+  dropout: 0.05
+
+  ssm:
+    enabled: false
+  regime:
+    enabled: false
+  memory:
+    enabled: false
+  gate:
+    enabled: false
+
+training:
+  device: xla
+  batch_size: 4
+  grad_accumulation_steps: 2
+  seq_len: 2048
+  max_steps: 50000
+  lr: 1.5e-4
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  warmup_steps: 2000
+  grad_clip: 1.0
+  dtype: bfloat16
+  log_interval: 10
+  eval_interval: 2000
+  save_interval: 500
+  cache_clear_interval: 5000
+  compile: false
+  gradient_checkpointing: true
+
+loss:
+  lambda_future: 0.0
+  lambda_regime: 0.0
+  lambda_mem: 0.0
+  lambda_manifest: 0.0
+  lambda_balance: 0.0
+  use_load_balance: false
+  lambda_sticky: 0.0
+  use_cpc: false
+  cpc_proj_dim: 0
+  lambda_changepoint: 0.0
+  lambda_competitive: 0.0
+  future_window: 8
+
+data:
+  streaming: true
+  dataset: HuggingFaceFW/fineweb-edu
+  tokenizer: gpt2

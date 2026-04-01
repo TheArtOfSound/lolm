@@ -15,7 +15,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.checkpoint import checkpoint as grad_checkpoint
+try:
+    from torch.utils.checkpoint import checkpoint as grad_checkpoint
+except ImportError:
+    grad_checkpoint = None
 
 from .rope import precompute_freqs, apply_rope
 
@@ -106,7 +109,13 @@ class SurfaceDecoder(nn.Module):
         """
         x = self.drop(self.tok_emb(token_ids))
         for layer in self.layers:
-            if getattr(self, "use_gradient_checkpoint", False) and self.training:
+            use_ckpt = (
+                getattr(self, "use_gradient_checkpoint", False)
+                and self.training
+                and grad_checkpoint is not None
+                and not getattr(self, "_xla_device", False)
+            )
+            if use_ckpt:
                 x = grad_checkpoint(layer, x, self.freqs, use_reentrant=False)
             else:
                 x = layer(x, self.freqs)

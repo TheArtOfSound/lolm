@@ -394,7 +394,7 @@ def train(config_path: str, resume_from: str = None):
 
                 # NaN/Inf/runaway check — skip BEFORE backward to prevent OOM
                 if (torch.isnan(total_loss) or torch.isinf(total_loss)
-                        or total_loss.item() > 100.0):
+                        or total_loss.item() > 1000.0):
                     if is_main:
                         print(f"step {step+1}: bad loss ({total_loss.item():.1f}), skipping entire step")
                     step_had_nan = True

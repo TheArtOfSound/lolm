@@ -1,0 +1,93 @@
+# LOLM 10B — TPU v6e-64 Pod (64 chips, 16GB HBM each)
+# Full LOLM architecture at maximum scale
+#
+# Memory budget (FSDP across 64 chips):
+#   Params: 10B × 2B = 20GB → 312MB/chip
+#   Adam:   10B × 8B = 80GB → 1.25GB/chip
+#   Grads:  10B × 2B = 20GB → 312MB/chip
+#   Per chip: ~1.9GB + activations (grad checkpointing ON)
+#   16GB/chip → fits with room for activations
+#
+# Effective batch: 1 × 4 accum × 64 chips = 256
+# Tokens/step: 256 × 2048 = 524,288
+
+model:
+  d_model: 4096
+  n_heads: 32
+  n_layers: 32
+  d_ff: 16384
+  vocab_size: 50257
+  max_seq_len: 2048
+  dropout: 0.05
+
+  ssm:
+    enabled: true
+    n_layers: 8
+    d_state: 64
+    expand: 2
+    use_cuda_kernels: false
+    detach_gradients: true
+
+  regime:
+    enabled: true
+    n_codes: 64
+    d_regime: 512
+    temp_start: 1.0
+    temp_end: 0.5
+    temp_anneal_steps: 200000
+    neighbor_interaction: true
+    neighbor_kernel_size: 7
+    gradient_isolation: true
+
+  memory:
+    enabled: true
+    n_slots: 256
+    n_banks: 3
+    slot_dim: 4096
+    n_chunks: 4
+
+  gate:
+    enabled: true
+    init_bias: -0.5
+    normalize_branches: true
+
+training:
+  device: xla
+  batch_size: 1               # Tight on 16GB/chip
+  grad_accumulation_steps: 4  # Effective per-chip = 4
+  seq_len: 2048
+  max_steps: 50000
+  lr: 1.0e-4                  # Lower LR for 10B
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  warmup_steps: 2000
+  grad_clip: 0.5
+  dtype: bfloat16
+  log_interval: 10
+  eval_interval: 5000
+  save_interval: 500
+  cache_clear_interval: 5000
+  compile: false
+  gradient_checkpointing: true
+
+loss:
+  use_cpc: true
+  cpc_proj_dim: 128
+  cpc_temperature: 0.07
+  cpc_max_positions: 256
+  lambda_future: 0.5
+  lambda_competitive: 0.1
+  lambda_manifest: 0.01
+  lambda_changepoint: 0.1
+  lambda_regime: 0.3
+  lambda_balance: 0.5
+  use_load_balance: true
+  lambda_sticky: 0.2
+  lambda_mem: 0.05
+  future_window: 8
+
+data:
+  streaming: true
+  dataset: HuggingFaceFW/fineweb-edu
+  tokenizer: gpt2

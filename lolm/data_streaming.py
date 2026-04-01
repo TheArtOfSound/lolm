@@ -49,15 +49,25 @@ class StreamingTokenDataset(IterableDataset):
         self.world_size = world_size
 
     def __iter__(self):
+        import glob as _glob
         from datasets import load_dataset
 
         enc = tiktoken.get_encoding(self.tokenizer_name)
-        # Support dataset_config for datasets like C4 that need it (e.g., "en")
-        ds_args = [self.dataset_name]
-        if hasattr(self, 'dataset_config') and self.dataset_config:
-            ds_args.append(self.dataset_config)
-        ds = load_dataset(*ds_args, split=self.split,
-                          streaming=True)
+
+        # Local parquet files: if dataset_name is a glob pattern or existing path
+        # e.g.  dataset: "data/fineweb_edu/*.parquet"
+        #       dataset: "/home/bry/data/fineweb_edu/*.parquet"
+        local_files = _glob.glob(self.dataset_name)
+        if local_files:
+            ds = load_dataset("parquet",
+                              data_files={"train": sorted(local_files)},
+                              split="train", streaming=True)
+        else:
+            # Remote HuggingFace dataset (streaming)
+            ds_args = [self.dataset_name]
+            if hasattr(self, 'dataset_config') and self.dataset_config:
+                ds_args.append(self.dataset_config)
+            ds = load_dataset(*ds_args, split=self.split, streaming=True)
 
         # DDP: each rank processes a different shard of the stream
         if self.world_size > 1:
@@ -115,6 +125,6 @@ def get_streaming_dataloader(dataset_name: str, seq_len: int,
         dataset,
         batch_size=batch_size,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=False,  # pin_memory is CUDA-only; meaningless/harmful on XLA/CPU
         drop_last=True,
     )

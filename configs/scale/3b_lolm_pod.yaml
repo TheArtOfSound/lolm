@@ -1,0 +1,94 @@
+# LOLM 3B — TPU v5e-64 Pod (64 chips, 16GB HBM each)
+# Full LOLM architecture at medium scale
+#
+# Memory budget (FSDP across 64 chips):
+#   Params: 3B × 2B = 6GB → 94MB/chip
+#   Adam:   3B × 8B = 24GB → 375MB/chip
+#   Grads:  3B × 2B = 6GB → 94MB/chip
+#   Per chip: ~563MB + activations → very comfortable
+#
+# Effective batch: 4 × 2 accum × 64 chips = 512
+# Tokens/step: 512 × 2048 = 1,048,576
+
+_base_: 1b_v3.4.yaml
+
+model:
+  d_model: 2560
+  n_heads: 20
+  n_layers: 32
+  d_ff: 10240
+  vocab_size: 50257
+  max_seq_len: 2048
+  dropout: 0.05
+
+  ssm:
+    enabled: true
+    n_layers: 6
+    d_state: 64
+    expand: 2
+    use_cuda_kernels: false
+    detach_gradients: true
+
+  regime:
+    enabled: true
+    n_codes: 64
+    d_regime: 256
+    temp_start: 1.0
+    temp_end: 0.5
+    temp_anneal_steps: 200000
+    neighbor_interaction: true
+    neighbor_kernel_size: 7
+    gradient_isolation: true
+
+  memory:
+    enabled: true
+    n_slots: 128
+    n_banks: 3
+    slot_dim: 2560
+    n_chunks: 4
+
+  gate:
+    enabled: true
+    init_bias: -0.5
+    normalize_branches: true
+
+training:
+  device: xla
+  batch_size: 4
+  grad_accumulation_steps: 2
+  seq_len: 2048
+  max_steps: 50000
+  lr: 1.5e-4
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  warmup_steps: 2000
+  grad_clip: 1.0
+  dtype: bfloat16
+  log_interval: 10
+  eval_interval: 2000
+  save_interval: 500
+  cache_clear_interval: 5000
+  compile: false
+  gradient_checkpointing: true
+
+loss:
+  use_cpc: true
+  cpc_proj_dim: 128
+  cpc_temperature: 0.07
+  cpc_max_positions: 256
+  lambda_future: 0.5
+  lambda_competitive: 0.1
+  lambda_manifest: 0.01
+  lambda_changepoint: 0.1
+  lambda_regime: 0.3
+  lambda_balance: 0.5
+  use_load_balance: true
+  lambda_sticky: 0.2
+  lambda_mem: 0.05
+  future_window: 8
+
+data:
+  streaming: true
+  dataset: HuggingFaceFW/fineweb-edu
+  tokenizer: gpt2

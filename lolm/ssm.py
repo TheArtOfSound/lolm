@@ -27,7 +27,10 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.checkpoint import checkpoint as grad_checkpoint
+try:
+    from torch.utils.checkpoint import checkpoint as grad_checkpoint
+except ImportError:
+    grad_checkpoint = None
 
 # Try to import mamba-ssm CUDA kernels (available on GPU)
 _MAMBA_CUDA_AVAILABLE = False
@@ -140,37 +143,23 @@ def _efficient_scan(A_bar: torch.Tensor, Bx: torch.Tensor) -> torch.Tensor:
 def _xla_safe_scan(A_bar: torch.Tensor, Bx: torch.Tensor) -> torch.Tensor:
     """XLA-safe scan for TPU using torch_xla.experimental.scan.
 
-    Compiles as a SINGLE loop in XLA (not unrolled), so compilation is fast
-    regardless of sequence length. Mathematically identical:
-      h[t] = A_bar[t] * h[t-1] + Bx[t],  h[-1] = 0
+    Compiles as a single XLA while_loop — NOT unrolled — so memory is O(B*D*N)
+    regardless of sequence length T. The Python-loop fallback unrolls T=2048
+    steps in the XLA graph causing OOM on v6e-4 (8GB/chip).
     """
+    from torch_xla.experimental.scan import scan
+
     B, T, D, N = A_bar.shape
 
-    try:
-        # Use torch_xla scan primitive — compiles as single XLA while_loop
-        from torch_xla.experimental.scan import scan
+    def step_fn(carry, x_t):
+        A_bar_t, Bx_t = x_t
+        h_new = A_bar_t * carry + Bx_t
+        return h_new, h_new
 
-        def step_fn(carry, x_t):
-            # carry: h (B, D, N)
-            # x_t: (A_bar_t, Bx_t) each (B, D, N)
-            A_bar_t, Bx_t = x_t
-            h_new = A_bar_t * carry + Bx_t
-            return h_new, h_new  # (new_carry, output)
-
-        init_carry = torch.zeros(B, D, N, device=A_bar.device, dtype=A_bar.dtype)
-        # scan expects xs with time dim first: (T, B, D, N)
-        xs = (A_bar.transpose(0, 1), Bx.transpose(0, 1))
-        _, H = scan(step_fn, init_carry, xs)
-        return H.transpose(0, 1)  # (B, T, D, N)
-
-    except (ImportError, Exception):
-        # Fallback: Python loop (slow compilation but correct)
-        h = torch.zeros(B, D, N, device=A_bar.device, dtype=A_bar.dtype)
-        hs = []
-        for t in range(T):
-            h = A_bar[:, t] * h + Bx[:, t]
-            hs.append(h)
-        return torch.stack(hs, dim=1)  # (B, T, D, N)
+    init_carry = torch.zeros(B, D, N, device=A_bar.device, dtype=A_bar.dtype)
+    xs = (A_bar.transpose(0, 1).contiguous(), Bx.transpose(0, 1).contiguous())
+    _, H = scan(step_fn, init_carry, xs)
+    return H.transpose(0, 1).contiguous()  # (B, T, D, N)
 
 
 class CudaSSMLayer(nn.Module):
@@ -245,11 +234,11 @@ class SelectiveSSMLayer(nn.Module):
         Bx = B_bar * x_main.unsqueeze(-1)  # (B, T, d_inner, d_state)
 
         if x.device.type == 'xla':
-            # XLA-safe scan for TPU: cast to float32 to prevent bfloat16 NaN in scan
-            # backward pass. The sequential multiply-accumulate loses precision in bf16.
-            A_bar_f32 = A_bar.float()
-            Bx_f32 = Bx.float()
-            H = _xla_safe_scan(A_bar_f32, Bx_f32).to(x.dtype)  # (B, T, d_inner, d_state)
+            # XLA-safe scan for TPU: keep native dtype (bf16/f32) to avoid
+            # extra 2× memory from float32 copies of A_bar and Bx.
+            # torch_xla.experimental.scan compiles as while_loop — no unrolling.
+            # XLA's while_loop handles bf16 accumulation safely (no NaN observed).
+            H = _xla_safe_scan(A_bar, Bx)  # (B, T, d_inner, d_state), same dtype as input
         elif x.device.type == 'cuda':
             # Memory-efficient scan: custom autograd backward via reverse scan
             # O(B·T·D·N) memory — fits on 80GB GPUs even at d_inner=2048
@@ -310,7 +299,13 @@ class LatentSSMCore(nn.Module):
         """
         z = self.proj_in(h)
         for layer in self.layers:
-            if getattr(self, "use_gradient_checkpoint", False) and self.training:
+            use_ckpt = (
+                getattr(self, "use_gradient_checkpoint", False)
+                and self.training
+                and grad_checkpoint is not None
+                and not getattr(self, "_xla_device", False)
+            )
+            if use_ckpt:
                 z = grad_checkpoint(layer, z, use_reentrant=False)
             else:
                 z = layer(z)

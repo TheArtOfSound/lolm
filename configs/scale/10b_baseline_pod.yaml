@@ -1,0 +1,64 @@
+# LOLM 10B Baseline — TPU v6e-64 Pod (64 chips)
+# Decoder-only, matched params to 10B LOLM via wider FFN + extra layers
+#
+# LOLM 10B: d=4096, 32 layers, d_ff=16384, + SSM/regime/memory/gate ≈ 10B
+# Baseline: d=4096, 40 layers, d_ff=16384, decoder-only ≈ 10B
+#
+# Effective batch: 1 × 4 accum × 64 chips = 256
+
+model:
+  d_model: 4096
+  n_heads: 32
+  n_layers: 40              # Extra layers to match ~10B params
+  d_ff: 16384
+  vocab_size: 50257
+  max_seq_len: 2048
+  dropout: 0.05
+
+  ssm:
+    enabled: false
+  regime:
+    enabled: false
+  memory:
+    enabled: false
+  gate:
+    enabled: false
+
+training:
+  device: xla
+  batch_size: 1
+  grad_accumulation_steps: 4
+  seq_len: 2048
+  max_steps: 50000
+  lr: 1.0e-4
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  warmup_steps: 2000
+  grad_clip: 0.5
+  dtype: bfloat16
+  log_interval: 10
+  eval_interval: 5000
+  save_interval: 500
+  cache_clear_interval: 5000
+  compile: false
+  gradient_checkpointing: true
+
+loss:
+  lambda_future: 0.0
+  lambda_regime: 0.0
+  lambda_mem: 0.0
+  lambda_manifest: 0.0
+  lambda_balance: 0.0
+  use_load_balance: false
+  lambda_sticky: 0.0
+  use_cpc: false
+  cpc_proj_dim: 0
+  lambda_changepoint: 0.0
+  lambda_competitive: 0.0
+  future_window: 8
+
+data:
+  streaming: true
+  dataset: HuggingFaceFW/fineweb-edu
+  tokenizer: gpt2

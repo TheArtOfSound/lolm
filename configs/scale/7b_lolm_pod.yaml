@@ -1,0 +1,92 @@
+# LOLM 7B — TPU v4-32 Pod (32 chips, 32GB HBM each)
+# Full LOLM architecture: decoder + SSM + regime + gate
+# Memory disabled (not yet proven beneficial at scale)
+#
+# Memory budget (FSDP across 32 chips):
+#   Params: 7B × 2B = 14GB → 437MB/chip
+#   Adam:   7B × 8B = 56GB → 1.75GB/chip
+#   Grads:  7B × 2B = 14GB → 437MB/chip
+#   Per chip: ~2.6GB + activations (grad checkpointing ON)
+#   32GB/chip → plenty of room
+#
+# Effective batch: 4 × 2 accum × 32 chips = 256
+# Tokens/step: 256 × 2048 = 524,288
+
+_base_: 1b_v3.4.yaml
+
+model:
+  d_model: 4096
+  n_heads: 32
+  n_layers: 32
+  d_ff: 11008
+  vocab_size: 50257
+  max_seq_len: 2048
+  dropout: 0.05
+
+  ssm:
+    enabled: true
+    n_layers: 4
+    d_state: 64
+    expand: 2
+    use_cuda_kernels: false
+    detach_gradients: true    # TPU: prevent scan BPTT NaN
+
+  regime:
+    enabled: true
+    n_codes: 64
+    d_regime: 256
+    temp_start: 1.0
+    temp_end: 0.5
+    temp_anneal_steps: 200000
+    neighbor_interaction: true
+    neighbor_kernel_size: 7
+    gradient_isolation: true
+
+  memory:
+    enabled: false            # Not proven at scale yet
+
+  gate:
+    enabled: true
+    init_bias: -0.5
+    normalize_branches: true
+
+training:
+  device: xla
+  batch_size: 4               # Per-chip
+  grad_accumulation_steps: 2  # Effective per-chip = 8
+  seq_len: 2048
+  max_steps: 50000
+  lr: 1.5e-4
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  warmup_steps: 2000
+  grad_clip: 0.5
+  dtype: bfloat16
+  log_interval: 10
+  eval_interval: 2000
+  save_interval: 500          # Frequent saves for preemption recovery
+  cache_clear_interval: 5000
+  compile: false
+  gradient_checkpointing: true
+
+loss:
+  use_cpc: true
+  cpc_proj_dim: 128
+  cpc_temperature: 0.07
+  lambda_future: 0.5
+  lambda_competitive: 0.1
+  lambda_manifest: 0.01
+  lambda_changepoint: 0.1
+  lambda_regime: 0.3
+  lambda_balance: 0.1
+  lambda_sticky: 0.01
+  lambda_mem: 0.0
+  future_window: 8
+  use_load_balance: true
+  cpc_max_positions: 256
+
+data:
+  streaming: true
+  dataset: HuggingFaceFW/fineweb-edu
+  tokenizer: gpt2
