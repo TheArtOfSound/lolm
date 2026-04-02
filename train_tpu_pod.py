@@ -46,6 +46,7 @@ import functools
 import json
 import math
 import os
+import subprocess
 import time
 from pathlib import Path
 
@@ -72,6 +73,58 @@ from lolm.decoder import DecoderBlock
 from lolm.losses import LOLMLoss
 from lolm.model import LOLM
 from lolm.ssm import SelectiveSSMLayer
+
+
+# ---------------------------------------------------------------------------
+# GCS checkpoint helpers
+# ---------------------------------------------------------------------------
+
+def gcs_upload(local_path: str, gcs_path: str) -> bool:
+    """Upload a file to GCS. Returns True on success, False on failure."""
+    try:
+        subprocess.run(
+            ["gsutil", "-q", "cp", local_path, gcs_path],
+            check=True, timeout=600,
+        )
+        return True
+    except Exception as e:
+        print(f"[GCS] Upload failed ({local_path} → {gcs_path}): {e}", flush=True)
+        return False
+
+
+def gcs_download(gcs_path: str, local_path: str) -> bool:
+    """Download a file from GCS. Returns True on success, False on failure."""
+    try:
+        subprocess.run(
+            ["gsutil", "-q", "cp", gcs_path, local_path],
+            check=True, timeout=600,
+        )
+        return True
+    except Exception as e:
+        return False
+
+
+def gcs_read_text(gcs_path: str) -> str:
+    """Read a small text file from GCS. Returns '' on failure."""
+    try:
+        result = subprocess.run(
+            ["gsutil", "cat", gcs_path],
+            capture_output=True, text=True, check=True, timeout=30,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return ""
+
+
+def gcs_find_latest(gcs_dir: str) -> str:
+    """Return the GCS path of the latest checkpoint, or '' if none exists.
+
+    Reads <gcs_dir>/latest.txt which contains the checkpoint filename.
+    """
+    latest = gcs_read_text(f"{gcs_dir.rstrip('/')}/latest.txt")
+    if latest:
+        return f"{gcs_dir.rstrip('/')}/{latest}"
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +214,7 @@ def sync_replicated_grads(model: nn.Module, loss_fn: nn.Module,
 # Main training function — runs on every chip
 # ---------------------------------------------------------------------------
 
-def train_fn(index, config_path: str, resume_from: str = None):
+def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = None):
     """Training function executed on each TPU chip in the pod."""
 
     # --- Distributed setup ---
@@ -185,6 +238,8 @@ def train_fn(index, config_path: str, resume_from: str = None):
     effective_batch = tc.batch_size * accum_steps * world_size
     log(f"Config: {config_path}")
     log(f"Batch: {tc.batch_size} x {accum_steps} accum x {world_size} chips = {effective_batch} effective")
+
+    # GCS auto-resume is handled in __main__ before xmp.spawn (see below)
 
     # --- Model (Bryan's LOLM, untouched) ---
     model = LOLM(cfg.model)
@@ -492,7 +547,8 @@ def train_fn(index, config_path: str, resume_from: str = None):
 
         # --- Save checkpoint (master only, XLA-aware) ---
         if (step + 1) % tc.save_interval == 0:
-            ckpt_path = out_dir / f"ckpt_{step+1}.pt"
+            ckpt_name = f"ckpt_{step+1}.pt"
+            ckpt_path = out_dir / ckpt_name
             if is_master:
                 xm.save({
                     "step": step + 1,
@@ -503,6 +559,21 @@ def train_fn(index, config_path: str, resume_from: str = None):
                     "world_size": world_size,
                 }, str(ckpt_path))
                 log(f"Saved checkpoint: {ckpt_path}")
+                if gcs_path:
+                    gcs_dir = gcs_path.rstrip("/")
+                    if gcs_upload(str(ckpt_path), f"{gcs_dir}/{ckpt_name}"):
+                        # Write latest.txt so auto-resume can find it
+                        latest_local = "/tmp/latest.txt"
+                        with open(latest_local, "w") as f:
+                            f.write(ckpt_name)
+                        gcs_upload(latest_local, f"{gcs_dir}/latest.txt")
+                        log(f"GCS: uploaded {ckpt_name}")
+                        # Remove local checkpoint to keep disk from filling up
+                        try:
+                            ckpt_path.unlink()
+                            log(f"GCS: removed local {ckpt_name} (saved in GCS)")
+                        except Exception:
+                            pass
 
     # Final save
     if is_master:
@@ -515,6 +586,10 @@ def train_fn(index, config_path: str, resume_from: str = None):
             "world_size": world_size,
         }, str(out_dir / "final.pt"))
         log(f"Training complete. Final model saved to {out_dir}/final.pt")
+        if gcs_path:
+            gcs_dir = gcs_path.rstrip("/")
+            if gcs_upload(str(out_dir / "final.pt"), f"{gcs_dir}/final.pt"):
+                log(f"GCS: uploaded final.pt")
 
     # XLA metrics
     if is_master:
@@ -523,9 +598,9 @@ def train_fn(index, config_path: str, resume_from: str = None):
         log(met.short_metrics_report())
 
 
-def _mp_fn(index, config_path, resume_from):
+def _mp_fn(index, config_path, resume_from, gcs_path):
     """Entry point for xmp.spawn — each process calls train_fn."""
-    train_fn(index, config_path, resume_from)
+    train_fn(index, config_path, resume_from, gcs_path)
 
 
 if __name__ == "__main__":
@@ -534,9 +609,26 @@ if __name__ == "__main__":
                         help="Path to YAML config (e.g., configs/scale/7b_lolm_pod.yaml)")
     parser.add_argument("--resume", type=str, default=None,
                         help="Path to checkpoint to resume from")
+    parser.add_argument("--gcs-path", type=str, default=None,
+                        help="GCS directory for checkpoint backup + auto-resume (e.g. gs://lolm-tpu-runs/lolm-7b/)")
+    parser.add_argument("--no-auto-resume", action="store_true",
+                        help="Skip GCS auto-resume even if --gcs-path is set")
     parser.add_argument("--use-spawn", action="store_true",
                         help="Use xmp.spawn (for single-host). Pod workers don't need this.")
     args = parser.parse_args()
+
+    # GCS auto-resume: runs BEFORE xmp.spawn so all chips on this host share
+    # the same local checkpoint path. Each host downloads independently.
+    if args.gcs_path and not args.resume and not args.no_auto_resume:
+        latest = gcs_find_latest(args.gcs_path)
+        if latest:
+            local_ckpt = "/tmp/resume_ckpt.pt"
+            print(f"GCS auto-resume: found {latest}, downloading to {local_ckpt}...", flush=True)
+            if gcs_download(latest, local_ckpt):
+                args.resume = local_ckpt
+                print(f"GCS auto-resume: will resume from step in {latest}", flush=True)
+            else:
+                print("GCS auto-resume: download failed, starting from scratch", flush=True)
 
     # Always use xmp.spawn: spawns one process per local chip.
     # In pod mode (--worker=all), PJRT auto-discovers all workers and
@@ -547,6 +639,6 @@ if __name__ == "__main__":
         nprocs = xr.local_device_count() if xr is not None else None
     xmp.spawn(
         _mp_fn,
-        args=(args.config, args.resume),
+        args=(args.config, args.resume, args.gcs_path),
         nprocs=nprocs,
     )
