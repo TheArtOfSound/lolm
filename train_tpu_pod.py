@@ -509,8 +509,12 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
         if cpc_params:
             torch.nn.utils.clip_grad_norm_(cpc_params, tc.grad_clip)
 
-        # XLA optimizer step
-        xm.optimizer_step(optimizer)
+        # Optimizer step. Do NOT use xm.optimizer_step() with FSDP — it does
+        # an extra allreduce on ALL gradients, but FSDP already reduce-scattered
+        # the decoder gradients. Double-reducing corrupts them. Instead, call
+        # optimizer.step() directly and follow with mark_step() to execute.
+        optimizer.step()
+        xm.mark_step()
 
         # Accumulate logs
         for k, v in accum_components.items():
