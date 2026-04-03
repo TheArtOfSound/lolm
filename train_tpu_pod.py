@@ -404,11 +404,18 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
 
         for micro_step in range(accum_steps):
             # Get batch (MpDeviceLoader already puts data on device)
-            try:
-                x, y = next(data_iter)
-            except StopIteration:
-                data_iter = iter(mp_loader)
-                x, y = next(data_iter)
+            for _attempt in range(5):
+                try:
+                    x, y = next(data_iter)
+                    break
+                except StopIteration:
+                    data_iter = iter(mp_loader)
+                except Exception as _de:
+                    log(f"[rank {ordinal}] Data fetch error (attempt {_attempt+1}/5): {_de}, reinit loader")
+                    import time as _time; _time.sleep(2)
+                    data_iter = iter(mp_loader)
+            else:
+                x, y = next(data_iter)  # final attempt, crash if still broken
 
             # Forward with AMP
             with amp_ctx:
