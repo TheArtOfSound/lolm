@@ -70,10 +70,16 @@ class StreamingTokenDataset(IterableDataset):
         # Local parquet files: if dataset_name is a glob pattern or existing path
         # e.g.  dataset: "data/fineweb_edu/*.parquet"
         #       dataset: "/home/bry/data/fineweb_edu/*.parquet"
-        local_files = _glob.glob(self.dataset_name)
+        local_files = sorted(_glob.glob(self.dataset_name))
         if local_files:
+            # True file-level sharding for local files: each rank owns a
+            # disjoint subset of parquet files (no HTTP, no EBADF, efficient).
+            if self.world_size > 1:
+                my_files = local_files[self.rank::self.world_size] or local_files
+            else:
+                my_files = local_files
             ds = load_dataset("parquet",
-                              data_files={"train": sorted(local_files)},
+                              data_files={"train": my_files},
                               split="train", streaming=True)
         else:
             # Remote HuggingFace dataset (streaming)
@@ -82,12 +88,11 @@ class StreamingTokenDataset(IterableDataset):
                 ds_args.append(self.dataset_config)
             ds = load_dataset(*ds_args, split=self.split, streaming=True)
 
-        # DDP: each rank processes a different shard of the stream.
-        # No shuffle — ds.shuffle() uses async aiohttp sessions which cause
-        # EBADF inside xmp.spawn. Sequential access is stable; randomness
-        # comes from SGD noise + multiple ranks seeing different documents.
-        if self.world_size > 1:
-            ds = (ex for i, ex in enumerate(ds) if i % self.world_size == self.rank)
+            # DDP: each rank processes a different shard of the stream.
+            # No shuffle — ds.shuffle() uses async aiohttp sessions which cause
+            # EBADF inside xmp.spawn. Sequential access is stable.
+            if self.world_size > 1:
+                ds = (ex for i, ex in enumerate(ds) if i % self.world_size == self.rank)
 
         # Buffer to accumulate tokens across documents
         buffer = []
