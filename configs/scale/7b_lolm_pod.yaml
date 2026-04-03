@@ -93,5 +93,4 @@ loss:
 data:
   streaming: true
   dataset: HuggingFaceFW/fineweb-edu
-  dataset_config: sample-10BT
   tokenizer: gpt2
