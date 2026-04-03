@@ -50,6 +50,19 @@ class StreamingTokenDataset(IterableDataset):
 
     def __iter__(self):
         import glob as _glob
+        import asyncio
+
+        # MpDeviceLoader fetches batches in a background _Worker thread that has
+        # no asyncio event loop. fsspec/aiohttp (used by HF datasets streaming)
+        # requires a running event loop — without one, socket ops get EBADF.
+        # Set a fresh event loop for this thread before any HF I/O.
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                raise RuntimeError("closed")
+        except RuntimeError:
+            asyncio.set_event_loop(asyncio.new_event_loop())
+
         from datasets import load_dataset
 
         enc = tiktoken.get_encoding(self.tokenizer_name)
