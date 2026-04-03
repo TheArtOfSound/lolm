@@ -20,7 +20,7 @@ model:
   n_layers: 32
   d_ff: 11008
   vocab_size: 50257
-  max_seq_len: 512
+  max_seq_len: 256          # Reduced from 512: sequential scan unrolls T steps in XLA graph; 512 + 5.8B OOMs on 32GB/chip
   dropout: 0.05
 
   ssm:
@@ -58,7 +58,7 @@ training:
   device: xla
   batch_size: 1               # v4 megacore ~31.75GB/chip: batch=2+accum=2 compiles to 32.22GB; batch=1 accum=1 fits
   grad_accumulation_steps: 1  # global batch = 1×1×16 = 16
-  seq_len: 512
+  seq_len: 256
   max_steps: 50000
   lr: 1.5e-4
   weight_decay: 0.1

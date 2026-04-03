@@ -180,9 +180,25 @@ def wrap_with_fsdp(model: nn.Module) -> nn.Module:
         transformer_auto_wrap_policy,
         transformer_layer_cls={DecoderBlock},
     )
+
+    # XLA-compatible gradient checkpointing: wrap each DecoderBlock with
+    # checkpoint_module before FSDP wrapping. This uses XLA optimization
+    # barriers to prevent the compiler from fusing across checkpoint
+    # boundaries, unlike torch.utils.checkpoint which XLA silently ignores.
+    try:
+        from torch_xla.distributed.fsdp import checkpoint_module
+        def _ckpt_wrapper(module, **kwargs):
+            return FSDP(checkpoint_module(module), **kwargs)
+        auto_wrapper_callable = _ckpt_wrapper
+        print("FSDP: using XLA gradient checkpointing per DecoderBlock", flush=True)
+    except ImportError:
+        auto_wrapper_callable = None
+        print("FSDP: no XLA checkpoint_module available, skipping grad checkpointing", flush=True)
+
     model.decoder = FSDP(
         model.decoder,
         auto_wrap_policy=auto_wrap_policy,
+        auto_wrapper_callable=auto_wrapper_callable,
         compute_dtype=torch.bfloat16,
         buffer_dtype=torch.bfloat16,
         flatten_parameters=True,   # MUST be True: tok_emb is [50257, 4096] and 50257 is
