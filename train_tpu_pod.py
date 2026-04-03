@@ -185,7 +185,12 @@ def wrap_with_fsdp(model: nn.Module) -> nn.Module:
         auto_wrap_policy=auto_wrap_policy,
         compute_dtype=torch.bfloat16,
         buffer_dtype=torch.bfloat16,
-        flatten_parameters=False,
+        flatten_parameters=True,   # MUST be True: tok_emb is [50257, 4096] and 50257 is
+                                   # prime (GPT-2 intentional), so 50257 % world_size != 0
+                                   # for any world_size > 1. flatten_parameters=False shards
+                                   # dim-0 → unequal shards → XLA all-gather fatal kill.
+                                   # flatten_parameters=True flattens to 205,852,672 elements
+                                   # which is divisible by any power-of-2 world_size.
         pin_layout_in_collective_ops=True,
     )
     return model
