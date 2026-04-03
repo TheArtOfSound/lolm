@@ -223,6 +223,12 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
     world_size = xm.xrt_world_size()
     is_master = xm.is_master_ordinal()
 
+    # Give each rank its own HF datasets cache to prevent filelock EBADF
+    # when 4+ processes simultaneously access the same lockfile on one host.
+    import os as _os
+    _os.environ['HF_DATASETS_CACHE'] = f'/tmp/hf_cache_rank_{ordinal}'
+    _os.makedirs(f'/tmp/hf_cache_rank_{ordinal}', exist_ok=True)
+
     def log(msg):
         if is_master:
             print(msg, flush=True)
