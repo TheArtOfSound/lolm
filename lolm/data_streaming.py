@@ -83,11 +83,10 @@ class StreamingTokenDataset(IterableDataset):
             ds = load_dataset(*ds_args, split=self.split, streaming=True)
 
         # DDP: each rank processes a different shard of the stream.
-        # Small buffer_size to get past initial fill quickly; training data
-        # randomness comes from multiple training shards, not just shuffle buffer.
+        # No shuffle — ds.shuffle() uses async aiohttp sessions which cause
+        # EBADF inside xmp.spawn. Sequential access is stable; randomness
+        # comes from SGD noise + multiple ranks seeing different documents.
         if self.world_size > 1:
-            ds = ds.shuffle(seed=42 + self.rank, buffer_size=200)
-            # Manually shard: rank k takes every world_size-th document
             ds = (ex for i, ex in enumerate(ds) if i % self.world_size == self.rank)
 
         # Buffer to accumulate tokens across documents
