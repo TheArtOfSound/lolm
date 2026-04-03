@@ -82,9 +82,11 @@ class StreamingTokenDataset(IterableDataset):
                 ds_args.append(self.dataset_config)
             ds = load_dataset(*ds_args, split=self.split, streaming=True)
 
-        # DDP: each rank processes a different shard of the stream
+        # DDP: each rank processes a different shard of the stream.
+        # Small buffer_size to get past initial fill quickly; training data
+        # randomness comes from multiple training shards, not just shuffle buffer.
         if self.world_size > 1:
-            ds = ds.shuffle(seed=42, buffer_size=10000)
+            ds = ds.shuffle(seed=42 + self.rank, buffer_size=200)
             # Manually shard: rank k takes every world_size-th document
             ds = (ex for i, ex in enumerate(ds) if i % self.world_size == self.rank)
 
