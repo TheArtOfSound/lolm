@@ -336,26 +336,29 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
         del ckpt_optimizer_state
 
     # --- Data (rank-aware sharding) ---
-    log("Loading data...")
-    if cfg.data.streaming:
-        from lolm.data_streaming import get_streaming_dataloader
-        train_loader = get_streaming_dataloader(
-            cfg.data.dataset, tc.seq_len, tc.batch_size,
-            tokenizer_name=cfg.data.tokenizer,
-            num_workers=0,  # 0 avoids multi-connection HF rate limiting on TPU
-            dataset_config=getattr(cfg.data, 'dataset_config', None) or None,
-            rank=ordinal,
-            world_size=world_size,
-        )
-        log(f"Streaming from: {cfg.data.dataset} (shard {ordinal}/{world_size})")
-    else:
-        from lolm.data import get_dataloader
-        train_loader = get_dataloader(
-            cfg.data.dataset, cfg.data.cache_dir, tc.seq_len, tc.batch_size
-        )
+    def make_loader():
+        """Create a fresh loader — called on init and on data errors."""
+        if cfg.data.streaming:
+            from lolm.data_streaming import get_streaming_dataloader
+            _loader = get_streaming_dataloader(
+                cfg.data.dataset, tc.seq_len, tc.batch_size,
+                tokenizer_name=cfg.data.tokenizer,
+                num_workers=0,  # 0 avoids multi-connection HF rate limiting on TPU
+                dataset_config=getattr(cfg.data, 'dataset_config', None) or None,
+                rank=ordinal,
+                world_size=world_size,
+            )
+        else:
+            from lolm.data import get_dataloader
+            _loader = get_dataloader(
+                cfg.data.dataset, cfg.data.cache_dir, tc.seq_len, tc.batch_size
+            )
+        return pl.MpDeviceLoader(_loader, device)
 
-    # Wrap with MpDeviceLoader — handles mark_step after each batch
-    mp_loader = pl.MpDeviceLoader(train_loader, device)
+    log("Loading data...")
+    mp_loader = make_loader()
+    if cfg.data.streaming:
+        log(f"Streaming from: {cfg.data.dataset} (shard {ordinal}/{world_size})")
 
     # --- Output directory ---
     config_name = Path(config_path).stem
@@ -409,10 +412,12 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
                     x, y = next(data_iter)
                     break
                 except StopIteration:
+                    mp_loader = make_loader()
                     data_iter = iter(mp_loader)
                 except Exception as _de:
-                    log(f"[rank {ordinal}] Data fetch error (attempt {_attempt+1}/5): {_de}, reinit loader")
-                    import time as _time; _time.sleep(2)
+                    log(f"[rank {ordinal}] Data fetch error (attempt {_attempt+1}/5): {_de}, rebuilding loader")
+                    import time as _time; _time.sleep(2 * (_attempt + 1))
+                    mp_loader = make_loader()
                     data_iter = iter(mp_loader)
             else:
                 x, y = next(data_iter)  # final attempt, crash if still broken
