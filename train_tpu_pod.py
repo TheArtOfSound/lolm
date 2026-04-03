@@ -229,14 +229,10 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
     _os.environ['HF_DATASETS_CACHE'] = f'/tmp/hf_cache_rank_{ordinal}'
     _os.makedirs(f'/tmp/hf_cache_rank_{ordinal}', exist_ok=True)
 
-    # Force a fresh asyncio event loop. fsspec/aiohttp create sessions bound to
-    # the current loop. XLA's background threads can interfere with that loop,
-    # causing EBADF on subsequent socket operations. A new loop avoids this.
+    # Set a fresh asyncio event loop for this rank. Do NOT close the old loop
+    # as that can invalidate XLA's internal FDs. Just register a new one so
+    # fsspec/aiohttp creates sessions bound to a clean loop.
     import asyncio as _asyncio
-    try:
-        _asyncio.get_event_loop().close()
-    except Exception:
-        pass
     _asyncio.set_event_loop(_asyncio.new_event_loop())
 
     def log(msg):
