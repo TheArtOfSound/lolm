@@ -25,7 +25,7 @@ model:
 
   ssm:
     enabled: true
-    n_layers: 4
+    n_layers: 1
     d_state: 64
     expand: 2
     use_cuda_kernels: false
@@ -93,4 +93,5 @@ loss:
 data:
   streaming: true
   dataset: HuggingFaceFW/fineweb-edu
+  dataset_config: sample-10BT
   tokenizer: gpt2

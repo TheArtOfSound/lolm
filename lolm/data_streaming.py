@@ -69,11 +69,22 @@ class StreamingTokenDataset(IterableDataset):
                 ds_args.append(self.dataset_config)
             ds = load_dataset(*ds_args, split=self.split, streaming=True)
 
-        # DDP: use HF native sharding so each rank owns a disjoint slice of
-        # parquet files — avoids 16 processes competing for the same URLs,
-        # which causes rate-limit / Bad-FD errors with unauthenticated requests.
+        # DDP: true file-level sharding — each rank only downloads its own
+        # parquet files, so 16 ranks make 1/16 the connections each.
+        # Streaming ds.shard() reads all files and skips examples, which
+        # causes 16x simultaneous unauthenticated HF connections → EBADF.
         if self.world_size > 1:
-            ds = ds.shard(num_shards=self.world_size, index=self.rank)
+            try:
+                # Get file-level shards from the dataset's underlying file list
+                n_shards = ds.n_shards if hasattr(ds, 'n_shards') else None
+                if n_shards and n_shards >= self.world_size:
+                    # Split parquet files: rank k gets files k, k+world_size, k+2*world_size, ...
+                    ds = ds.shard(num_shards=self.world_size, index=self.rank, contiguous=False)
+                else:
+                    # Fewer files than ranks — fall back to example-level round-robin
+                    ds = (ex for i, ex in enumerate(ds) if i % self.world_size == self.rank)
+            except Exception:
+                ds = (ex for i, ex in enumerate(ds) if i % self.world_size == self.rank)
 
         # Buffer to accumulate tokens across documents
         buffer = []
