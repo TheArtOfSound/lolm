@@ -50,18 +50,6 @@ class StreamingTokenDataset(IterableDataset):
 
     def __iter__(self):
         import glob as _glob
-        import sys
-
-        # Reset urllib3/requests connection pools after fork (xmp.spawn uses fork).
-        # Inherited socket FDs from the parent are invalid in child processes and
-        # cause [Errno 9] Bad file descriptor on the first HTTP request.
-        for _mod_name in list(sys.modules.keys()):
-            if any(k in _mod_name for k in ('urllib3', 'requests', 'huggingface_hub')):
-                try:
-                    del sys.modules[_mod_name]
-                except Exception:
-                    pass
-
         from datasets import load_dataset
 
         enc = tiktoken.get_encoding(self.tokenizer_name)
@@ -81,13 +69,11 @@ class StreamingTokenDataset(IterableDataset):
                 ds_args.append(self.dataset_config)
             ds = load_dataset(*ds_args, split=self.split, streaming=True)
 
-        # DDP: each rank processes a different shard of the stream.
-        # Use rank-specific seed + small buffer to avoid pulling too many
-        # parquet shards simultaneously at startup (which causes connection issues).
+        # DDP: use HF native sharding so each rank owns a disjoint slice of
+        # parquet files — avoids 16 processes competing for the same URLs,
+        # which causes rate-limit / Bad-FD errors with unauthenticated requests.
         if self.world_size > 1:
-            ds = ds.shuffle(seed=42 + self.rank, buffer_size=500)
-            # Manually shard: rank k takes every world_size-th document
-            ds = (ex for i, ex in enumerate(ds) if i % self.world_size == self.rank)
+            ds = ds.shard(num_shards=self.world_size, index=self.rank)
 
         # Buffer to accumulate tokens across documents
         buffer = []
