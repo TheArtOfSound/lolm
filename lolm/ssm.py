@@ -141,25 +141,39 @@ def _efficient_scan(A_bar: torch.Tensor, Bx: torch.Tensor) -> torch.Tensor:
 
 
 def _xla_safe_scan(A_bar: torch.Tensor, Bx: torch.Tensor) -> torch.Tensor:
-    """XLA-safe scan for TPU using torch_xla.experimental.scan.
+    """XLA-safe scan for TPU.
 
-    Compiles as a single XLA while_loop — NOT unrolled — so memory is O(B*D*N)
-    regardless of sequence length T. The Python-loop fallback unrolls T=2048
-    steps in the XLA graph causing OOM on v6e-4 (8GB/chip).
+    Tries torch_xla.experimental.scan (compiles as XLA while_loop, O(1) memory
+    in T) first. Falls back to sequential Python loop if scan is unavailable
+    (torch_xla < 2.5). The sequential fallback unrolls T steps into the XLA
+    graph — acceptable at T≤512 on v4 (32GB/chip) but OOMs at T=2048 on v6e-4
+    (8GB/chip). For long sequences on small chips, upgrade torch_xla.
     """
-    from torch_xla.experimental.scan import scan
+    try:
+        from torch_xla.experimental.scan import scan
 
-    B, T, D, N = A_bar.shape
+        B, T, D, N = A_bar.shape
 
-    def step_fn(carry, x_t):
-        A_bar_t, Bx_t = x_t
-        h_new = A_bar_t * carry + Bx_t
-        return h_new, h_new
+        def step_fn(carry, x_t):
+            A_bar_t, Bx_t = x_t
+            h_new = A_bar_t * carry + Bx_t
+            return h_new, h_new
 
-    init_carry = torch.zeros(B, D, N, device=A_bar.device, dtype=A_bar.dtype)
-    xs = (A_bar.transpose(0, 1).contiguous(), Bx.transpose(0, 1).contiguous())
-    _, H = scan(step_fn, init_carry, xs)
-    return H.transpose(0, 1).contiguous()  # (B, T, D, N)
+        init_carry = torch.zeros(B, D, N, device=A_bar.device, dtype=A_bar.dtype)
+        xs = (A_bar.transpose(0, 1).contiguous(), Bx.transpose(0, 1).contiguous())
+        _, H = scan(step_fn, init_carry, xs)
+        return H.transpose(0, 1).contiguous()  # (B, T, D, N)
+
+    except (ImportError, ModuleNotFoundError):
+        # Fallback: sequential scan. Unrolls T steps in XLA graph.
+        # Safe on v4 (32GB HBM) at T≤512; check memory at longer sequences.
+        B, T, D, N = A_bar.shape
+        h = torch.zeros(B, D, N, device=A_bar.device, dtype=A_bar.dtype)
+        hs = []
+        for t in range(T):
+            h = A_bar[:, t] * h + Bx[:, t]
+            hs.append(h)
+        return torch.stack(hs, dim=1)  # (B, T, D, N)
 
 
 class CudaSSMLayer(nn.Module):
