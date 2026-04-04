@@ -376,12 +376,46 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
         del ckpt
 
     # --- Optimizer ---
-    optimizer = torch.optim.AdamW(
-        list(model.parameters()) + list(loss_fn.parameters()),
-        lr=tc.lr,
-        weight_decay=tc.weight_decay,
-        betas=(tc.beta1, tc.beta2),
-    )
+    # Split into two groups to save HBM on replicated params:
+    #   - FSDP params (decoder + lm_head): AdamW — optimizer states are sharded
+    #   - Replicated params (SSM, memory, gate, fusion, CPC): SGD with momentum
+    #     SGD uses 4B/param (momentum only) vs AdamW's 8B/param (momentum+variance)
+    #     For ~530M replicated params this saves ~2.1GB HBM per chip
+    fsdp_params = []
+    replicated_params = []
+    for name, param in model.named_parameters():
+        if name.startswith('decoder.') or name.startswith('lm_head.'):
+            fsdp_params.append(param)
+        else:
+            replicated_params.append(param)
+    # CPC projection params in loss_fn are also replicated
+    replicated_params.extend(list(loss_fn.parameters()))
+
+    if use_fsdp and replicated_params:
+        optimizer = torch.optim.AdamW(
+            fsdp_params,
+            lr=tc.lr,
+            weight_decay=tc.weight_decay,
+            betas=(tc.beta1, tc.beta2),
+        )
+        optimizer_replicated = torch.optim.SGD(
+            replicated_params,
+            lr=tc.lr,
+            weight_decay=tc.weight_decay,
+            momentum=0.9,
+        )
+        log(f"Optimizer: AdamW for {sum(p.numel() for p in fsdp_params)/1e6:.0f}M FSDP params, "
+            f"SGD for {sum(p.numel() for p in replicated_params)/1e6:.0f}M replicated params "
+            f"(saves ~2GB HBM/chip)")
+    else:
+        optimizer = torch.optim.AdamW(
+            list(model.parameters()) + list(loss_fn.parameters()),
+            lr=tc.lr,
+            weight_decay=tc.weight_decay,
+            betas=(tc.beta1, tc.beta2),
+        )
+        optimizer_replicated = None
+
     if ckpt_optimizer_state is not None:
         optimizer.load_state_dict(ckpt_optimizer_state)
         del ckpt_optimizer_state
@@ -446,12 +480,17 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
         lr = get_lr(step, tc.warmup_steps, tc.max_steps, tc.lr)
         for pg in optimizer.param_groups:
             pg["lr"] = lr
+        if optimizer_replicated is not None:
+            for pg in optimizer_replicated.param_groups:
+                pg["lr"] = lr
 
         # Regime temperature
         temp = get_regime_temperature(step, cfg)
 
         # --- Gradient accumulation loop ---
         optimizer.zero_grad()
+        if optimizer_replicated is not None:
+            optimizer_replicated.zero_grad()
         accum_loss_total = 0.0
         accum_components = {}
         step_had_nan = False
@@ -504,6 +543,8 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
 
         if step_had_nan:
             optimizer.zero_grad()
+            if optimizer_replicated is not None:
+                optimizer_replicated.zero_grad()
             xm.mark_step()
             consecutive_nan += 1
             if consecutive_nan >= 100:
@@ -548,6 +589,8 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
         # the decoder gradients. Double-reducing corrupts them. Instead, call
         # optimizer.step() directly and follow with mark_step() to execute.
         optimizer.step()
+        if optimizer_replicated is not None:
+            optimizer_replicated.step()
         xm.mark_step()
 
         # Accumulate logs
