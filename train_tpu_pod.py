@@ -227,6 +227,25 @@ def wrap_with_fsdp(model: nn.Module) -> nn.Module:
     )
     print("FSDP: wrapped lm_head (saves ~2GB/chip)", flush=True)
 
+    # 3. FSDP-wrap SSM projection layers (170M params — saves ~1.7GB/chip)
+    # The scan itself can't be FSDP'd (carry state is per-device), but the
+    # large linear projections (in_proj, out_proj, dt_proj) CAN be sharded.
+    if hasattr(model, 'ssm') and model.ssm is not None:
+        for i, layer in enumerate(model.ssm.layers):
+            if hasattr(layer, 'in_proj'):
+                layer.in_proj = FSDP(layer.in_proj,
+                    compute_dtype=torch.bfloat16, buffer_dtype=torch.bfloat16,
+                    flatten_parameters=True, pin_layout_in_collective_ops=True)
+            if hasattr(layer, 'out_proj'):
+                layer.out_proj = FSDP(layer.out_proj,
+                    compute_dtype=torch.bfloat16, buffer_dtype=torch.bfloat16,
+                    flatten_parameters=True, pin_layout_in_collective_ops=True)
+            if hasattr(layer, 'dt_proj'):
+                layer.dt_proj = FSDP(layer.dt_proj,
+                    compute_dtype=torch.bfloat16, buffer_dtype=torch.bfloat16,
+                    flatten_parameters=True, pin_layout_in_collective_ops=True)
+        print(f"FSDP: wrapped SSM projections ({len(model.ssm.layers)} layers, saves ~1.7GB/chip)", flush=True)
+
     return model
 
 
@@ -238,9 +257,18 @@ def sync_replicated_grads(model: nn.Module, loss_fn: nn.Module,
     reduce-scatter. All other params (SSM, memory, regime, gate, fusion
     projections, CPC projections) are replicated and need explicit gradient sync.
     """
+    # Collect grads for replicated-only params (skip all FSDP-wrapped modules)
+    fsdp_prefixes = ('decoder.', 'lm_head.')
+    # SSM projection layers are also FSDP-wrapped
+    if hasattr(model, 'ssm') and model.ssm is not None:
+        for i, layer in enumerate(model.ssm.layers):
+            for attr in ('in_proj', 'out_proj', 'dt_proj'):
+                if hasattr(layer, attr) and isinstance(getattr(layer, attr), FSDP):
+                    fsdp_prefixes = fsdp_prefixes + (f'ssm.layers.{i}.{attr}.',)
+
     grads = []
     for name, param in model.named_parameters():
-        if not name.startswith('decoder.') and not name.startswith('lm_head.') and param.grad is not None:
+        if not any(name.startswith(p) for p in fsdp_prefixes) and param.grad is not None:
             grads.append(param.grad)
     for param in loss_fn.parameters():
         if param.grad is not None:
