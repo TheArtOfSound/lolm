@@ -18,7 +18,7 @@ model:
   d_model: 4096
   n_heads: 32
   n_layers: 32
-  d_ff: 11008
+  d_ff: 8192                # 2× d_model — sized for v4-32 (32GB HBM/chip). LLaMA's 11008 with SwiGLU needs 80GB A100s.
   vocab_size: 50257
   max_seq_len: 256          # Reduced from 512: sequential scan unrolls T steps in XLA graph; 512 + 5.8B OOMs on 32GB/chip
   dropout: 0.05
