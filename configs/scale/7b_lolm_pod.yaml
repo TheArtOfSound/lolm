@@ -44,7 +44,7 @@ model:
 
   memory:
     enabled: true             # Required: d_regime_in = h+z+m = 3×d_model; disabling causes shape mismatch
-    n_slots: 128
+    n_slots: 64               # 128 was 0.96MB over HBM budget on v4-32; 64 fits and memory learns at scale (paper §5.5)
     n_banks: 3
     slot_dim: 4096
     n_chunks: 4
