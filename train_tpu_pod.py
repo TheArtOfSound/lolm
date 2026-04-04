@@ -697,6 +697,15 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
                     "world_size": world_size,
                 }, str(ckpt_path))
                 log(f"Saved checkpoint: {ckpt_path}")
+                # Auto-cleanup: keep only latest 2 local checkpoints to prevent disk full
+                existing_ckpts = sorted(out_dir.glob("ckpt_*.pt"), key=lambda p: p.stat().st_mtime)
+                while len(existing_ckpts) > 2:
+                    old = existing_ckpts.pop(0)
+                    try:
+                        old.unlink()
+                        log(f"Deleted old checkpoint: {old.name} (keeping latest 2)")
+                    except Exception:
+                        pass
                 if gcs_path:
                     gcs_dir = gcs_path.rstrip("/")
                     if gcs_upload(str(ckpt_path), f"{gcs_dir}/{ckpt_name}"):
