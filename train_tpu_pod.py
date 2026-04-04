@@ -155,22 +155,28 @@ def get_regime_temperature(step: int, cfg) -> float:
 # ---------------------------------------------------------------------------
 
 def wrap_with_fsdp(model: nn.Module) -> nn.Module:
-    """Wrap only the SurfaceDecoder with XLA FSDP for multi-chip training.
+    """Wrap decoder + LM head + large replicated modules with XLA FSDP.
 
-    ONLY model.decoder is FSDP-sharded (5B+ params, dominant memory cost).
-    The SSM, memory, regime, gate, and fusion projections are replicated on
-    each chip — they're smaller (~1B total) and the SSM scan is incompatible
-    with XlaFSDP all-gather: sharding SSM projection weights produces tensors
-    whose shapes (batch×seq, d_state) don't contract correctly in XLA's mm.
+    Strategy for fitting 5.8B LOLM in 32GB HBM per chip on v4-32:
 
-    The LM head weight is untied from tok_emb before wrapping to avoid
-    cross-boundary parameter aliasing under FSDP.
+    FSDP-sharded (params + optimizer + grads distributed across 16 chips):
+      - model.decoder (5.2B params) — the dominant cost
+      - model.lm_head (206M params) — untied from tok_emb, wrapped separately
 
-    Memory per chip on v4-32 (32GB):
-      Decoder FSDP shard:  5.2B × 2B / 32 chips ≈  325MB params
-      SSM replicated:      694M × 2B              ≈  1.4GB params + 5.6GB Adam
-      Activations:                                 ≈  4GB
-      Total per chip:                              ≈ 12GB — fits in 32GB
+    Replicated (full copy on every chip):
+      - SSM layers (~186M) — scan carry state can't be sharded
+      - Memory banks (~155M) — slot attention is per-chip
+      - Regime (~1M), Gate (~136M), Fusion projections (~51M)
+      Total replicated: ~530M × 10B (bf16 params + fp32 Adam) ≈ 5.3GB/chip
+
+    Memory budget per chip (v4-32, 32GB HBM):
+      Decoder FSDP shard:  5.2B / 16 × 12B (param+adam+grad) ≈  3.9GB
+      LM head FSDP shard:  206M / 16 × 12B                   ≈  155MB
+      Replicated params+opt:                                  ≈  5.3GB
+      FSDP all-gather buffer (1 DecoderBlock at a time):      ≈  0.3GB
+      Activations (with grad checkpointing):                  ≈  2-4GB
+      XLA compiler overhead:                                  ≈  2-4GB
+      Total:                                                  ≈ 14-18GB — fits in 32GB
     """
     # Untie LM head weight from tok_emb — XlaFSDP can't handle parameter
     # aliasing across FSDP boundary (decoder inside, lm_head outside).
@@ -195,6 +201,7 @@ def wrap_with_fsdp(model: nn.Module) -> nn.Module:
         auto_wrapper_callable = None
         print("FSDP: no XLA checkpoint_module available, skipping grad checkpointing", flush=True)
 
+    # 1. FSDP-wrap the decoder (5.2B params)
     model.decoder = FSDP(
         model.decoder,
         auto_wrap_policy=auto_wrap_policy,
@@ -209,20 +216,31 @@ def wrap_with_fsdp(model: nn.Module) -> nn.Module:
                                    # which is divisible by any power-of-2 world_size.
         pin_layout_in_collective_ops=True,
     )
+
+    # 2. FSDP-wrap the LM head (206M params — saves 2GB/chip vs replicated)
+    model.lm_head = FSDP(
+        model.lm_head,
+        compute_dtype=torch.bfloat16,
+        buffer_dtype=torch.bfloat16,
+        flatten_parameters=True,
+        pin_layout_in_collective_ops=True,
+    )
+    print("FSDP: wrapped lm_head (saves ~2GB/chip)", flush=True)
+
     return model
 
 
 def sync_replicated_grads(model: nn.Module, loss_fn: nn.Module,
                           world_size: int) -> None:
-    """Allreduce gradients for params NOT covered by FSDP (non-decoder modules).
+    """Allreduce gradients for params NOT covered by FSDP.
 
-    The decoder is FSDP-wrapped so its grads are handled by reduce-scatter.
-    All other params (SSM, memory, regime, gate, fusion projections, lm_head,
-    CPC projections) are replicated and need explicit gradient sync.
+    The decoder and lm_head are FSDP-wrapped so their grads are handled by
+    reduce-scatter. All other params (SSM, memory, regime, gate, fusion
+    projections, CPC projections) are replicated and need explicit gradient sync.
     """
     grads = []
     for name, param in model.named_parameters():
-        if not name.startswith('decoder.') and param.grad is not None:
+        if not name.startswith('decoder.') and not name.startswith('lm_head.') and param.grad is not None:
             grads.append(param.grad)
     for param in loss_fn.parameters():
         if param.grad is not None:

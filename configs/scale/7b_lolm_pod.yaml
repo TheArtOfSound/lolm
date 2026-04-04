@@ -18,7 +18,7 @@ model:
   d_model: 4096
   n_heads: 32
   n_layers: 32
-  d_ff: 8192                # Reduced from 11008: saves ~180M decoder params → smaller FSDP all-gather buffers; still 2× d_model
+  d_ff: 11008
   vocab_size: 50257
   max_seq_len: 256          # Reduced from 512: sequential scan unrolls T steps in XLA graph; 512 + 5.8B OOMs on 32GB/chip
   dropout: 0.05
@@ -44,7 +44,7 @@ model:
 
   memory:
     enabled: true             # Required: d_regime_in = h+z+m = 3×d_model; disabling causes shape mismatch
-    n_slots: 64               # Reduced from 128: saves ~50M replicated params (query/write projections scale with n_slots)
+    n_slots: 128
     n_banks: 3
     slot_dim: 4096
     n_chunks: 4
