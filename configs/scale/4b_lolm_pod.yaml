@@ -1,23 +1,23 @@
-# LOLM 3B — scaled SSM + regime
+# LOLM 4B — large scale, grad checkpointing required
 
 model:
-  d_model: 3072
-  n_heads: 24
-  n_layers: 24
+  d_model: 3584
+  n_heads: 28
+  n_layers: 28
   d_ff: 8192
   vocab_size: 50257
   max_seq_len: 256
   dropout: 0.05
   ssm:
     enabled: true
-    n_layers: 4
+    n_layers: 2
     d_state: 64
     expand: 2
     use_cuda_kernels: false
     detach_gradients: true
   regime:
     enabled: true
-    n_codes: 48
+    n_codes: 64
     d_regime: 256
     temp_start: 1.0
     temp_end: 0.5
@@ -29,7 +29,7 @@ model:
     enabled: true
     n_slots: 64
     n_banks: 3
-    slot_dim: 3072
+    slot_dim: 3584
     n_chunks: 4
   gate:
     enabled: true
@@ -41,7 +41,7 @@ training:
   grad_accumulation_steps: 1
   seq_len: 256
   max_steps: 50000
-  lr: 0.0002
+  lr: 0.00015
   weight_decay: 0.1
   beta1: 0.9
   beta2: 0.95

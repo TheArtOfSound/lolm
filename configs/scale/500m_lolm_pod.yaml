@@ -1,27 +1,27 @@
-# LOLM 3B — scaled SSM + regime
+# LOLM 500M — fast iteration, fits single v4-8 or v4-32
 
 model:
-  d_model: 3072
-  n_heads: 24
-  n_layers: 24
-  d_ff: 8192
+  d_model: 1024
+  n_heads: 16
+  n_layers: 16
+  d_ff: 4096
   vocab_size: 50257
-  max_seq_len: 256
+  max_seq_len: 512
   dropout: 0.05
   ssm:
     enabled: true
-    n_layers: 4
-    d_state: 64
+    n_layers: 2
+    d_state: 32
     expand: 2
     use_cuda_kernels: false
     detach_gradients: true
   regime:
     enabled: true
-    n_codes: 48
-    d_regime: 256
+    n_codes: 32
+    d_regime: 128
     temp_start: 1.0
     temp_end: 0.5
-    temp_anneal_steps: 200000
+    temp_anneal_steps: 150000
     neighbor_interaction: true
     neighbor_kernel_size: 7
     gradient_isolation: true
@@ -29,7 +29,7 @@ model:
     enabled: true
     n_slots: 64
     n_banks: 3
-    slot_dim: 3072
+    slot_dim: 1024
     n_chunks: 4
   gate:
     enabled: true
@@ -37,20 +37,20 @@ model:
     normalize_branches: true
 training:
   device: xla
-  batch_size: 1
+  batch_size: 4
   grad_accumulation_steps: 1
-  seq_len: 256
+  seq_len: 512
   max_steps: 50000
-  lr: 0.0002
+  lr: 0.0003
   weight_decay: 0.1
   beta1: 0.9
   beta2: 0.95
   warmup_steps: 2000
-  grad_clip: 0.5
+  grad_clip: 1.0
   dtype: bfloat16
   log_interval: 10
   eval_interval: 2000
-  save_interval: 500
+  save_interval: 1000
   compile: false
   gradient_checkpointing: false
 loss:
