@@ -59,7 +59,7 @@ training:
   batch_size: 1               # v4 megacore ~31.75GB/chip: batch=2+accum=2 compiles to 32.22GB; batch=1 accum=1 fits
   grad_accumulation_steps: 1  # global batch = 1×1×16 = 16
   seq_len: 256
-  max_steps: 50000
+  max_steps: 500000
   lr: 1.5e-4
   weight_decay: 0.1
   beta1: 0.9

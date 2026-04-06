@@ -56,7 +56,7 @@ training:
   batch_size: 1               # Tight on 16GB/chip
   grad_accumulation_steps: 4  # Effective per-chip = 4
   seq_len: 2048
-  max_steps: 50000
+  max_steps: 500000
   lr: 1.0e-4                  # Lower LR for 10B
   weight_decay: 0.1
   beta1: 0.9

@@ -38,7 +38,7 @@ training:
   batch_size: 1
   grad_accumulation_steps: 1
   seq_len: 256
-  max_steps: 50000
+  max_steps: 500000
   lr: 0.00015
   weight_decay: 0.1
   beta1: 0.9
