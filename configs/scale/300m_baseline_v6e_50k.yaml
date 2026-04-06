@@ -1,0 +1,54 @@
+# Baseline decoder-only — v6e-4 50K comparison run
+# accum=1 to match LOLM config; fair comparison
+# batch=1, seq=1024, accum=1 → 1024 tokens/step, 51.2M tokens total
+# Expected speed: ~1.0+ steps/s → 50K steps in ~14 hours
+
+model:
+  d_model: 1024
+  n_heads: 16
+  n_layers: 21              # Extra layers to match ~317M params
+  d_ff: 4096
+  vocab_size: 50257
+  max_seq_len: 1024
+  dropout: 0.1
+  ssm:
+    enabled: false
+  regime:
+    enabled: false
+  memory:
+    enabled: false
+  gate:
+    enabled: false
+
+data:
+  dataset: data/fineweb_edu/*.parquet
+  streaming: true
+  tokenizer: gpt2
+
+training:
+  device: xla
+  batch_size: 1
+  grad_accumulation_steps: 1    # accum=1 to match LOLM
+  compile: false
+  gradient_checkpointing: false
+  seq_len: 1024
+  log_interval: 50
+  dtype: bfloat16
+  grad_clip: 1.0
+  lr: 3.0e-4
+  save_interval: 2000
+  max_steps: 50000
+
+loss:
+  lambda_future: 0.0
+  lambda_regime: 0.0
+  lambda_mem: 0.0
+  lambda_manifest: 0.0
+  lambda_balance: 0.0
+  use_load_balance: false
+  lambda_sticky: 0.0
+  use_cpc: false
+  cpc_proj_dim: 0
+  lambda_changepoint: 0.0
+  lambda_competitive: 0.0
+  future_window: 8

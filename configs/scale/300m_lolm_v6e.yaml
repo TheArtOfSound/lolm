@@ -1,0 +1,47 @@
+# LOLM 300M — v6e-4 (8GB HBM per chip, single device)
+# Memory budget at seq=1024, batch=1, bf16:
+#   Model params: ~600MB
+#   Optimizer (Adam f32): ~2.4GB
+#   Decoder activations 16 layers: ~1.4GB
+#   SSM activations 4 layers (no f32 cast): ~4*(128+128+128)MB = ~1.5GB
+#   Regime/memory/gate: ~300MB
+#   Total: ~6.3GB — fits in 8GB with headroom
+# Effective batch=32 via gradient accumulation (32 micro-steps)
+# seq=1024 is scientifically valid — same for LOLM and baseline
+
+_base_: 300m_v3.yaml
+
+model:
+  ssm:
+    enabled: true
+    use_cuda_kernels: false
+  regime:
+    enabled: true
+    gradient_isolation: true
+  memory:
+    enabled: true
+  gate:
+    enabled: true
+
+data:
+  dataset: data/fineweb_edu/*.parquet   # local parquet shards (3×2.1GB); bypasses HF rate limits
+  streaming: true
+  tokenizer: gpt2
+
+training:
+  device: xla
+  batch_size: 1              # 8GB chip: batch=1 seq=1024
+  grad_accumulation_steps: 32  # Effective batch = 32
+  compile: false
+  gradient_checkpointing: false
+  cache_clear_interval: 5000
+  seq_len: 1024              # v6e-4: seq=2048 OOMs (SSM f32 activations ~6GB alone)
+  log_interval: 50
+  dtype: bfloat16
+  grad_clip: 1.0
+  lr: 3.0e-4
+  save_interval: 5000
+  max_steps: 50000
+
+loss:
+  cpc_max_positions: 64     # Static slice — seq=1024, 64 positions is sufficient

@@ -1,0 +1,39 @@
+# LOLM 300M — v6e-4 QUICK TEST: grad_accum=1 to verify training compiles in reasonable time
+# XLA compiles grad_accum micro-steps as separate graphs = 32× longer compile with accum=32
+# This config verifies the model CAN train; then we scale accum back up
+
+_base_: 300m_v3.yaml
+
+model:
+  ssm:
+    enabled: true
+    use_cuda_kernels: false
+  regime:
+    enabled: true
+    gradient_isolation: true
+  memory:
+    enabled: true
+  gate:
+    enabled: true
+
+data:
+  dataset: data/fineweb_edu/*.parquet
+  streaming: true
+  tokenizer: gpt2
+
+training:
+  device: xla
+  batch_size: 1
+  grad_accumulation_steps: 1    # grad_accum=1 to test that model actually trains
+  compile: false
+  gradient_checkpointing: false
+  seq_len: 1024
+  log_interval: 10              # Log every 10 steps to see results quickly
+  dtype: bfloat16
+  grad_clip: 1.0
+  lr: 3.0e-4
+  save_interval: 1000
+  max_steps: 100               # Just 100 steps to verify compilation + training
+
+loss:
+  cpc_max_positions: 64

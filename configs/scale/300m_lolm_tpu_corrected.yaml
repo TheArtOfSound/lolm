@@ -1,0 +1,50 @@
+# LOLM 300M — TPU v4-8 CORRECTED CONFIG
+# Matches H200 training regime: batch=16, seq=2048
+#
+# Previous TPU runs used batch=4, seq=512 — this structurally handicapped:
+#   - CPC contrastive loss (8x fewer negatives)
+#   - SSM discourse tracking (4x shorter context)
+# This config fixes both to match the H200 regime.
+#
+# Memory estimate at 300M + bfloat16:
+#   Model: ~600MB
+#   Activations (batch=16, seq=2048): ~8-12GB
+#   Optimizer: ~2.4GB
+#   Total: ~15GB (fits in 32GB v4-8 HBM)
+
+_base_: 300m_v3.yaml
+
+model:
+  ssm:
+    enabled: true
+    use_cuda_kernels: false
+  regime:
+    enabled: true
+    gradient_isolation: true
+  memory:
+    enabled: true
+  gate:
+    enabled: true
+
+data:
+  dataset: HuggingFaceFW/fineweb-edu
+  streaming: true
+  tokenizer: gpt2
+
+training:
+  device: xla
+  batch_size: 16             # CORRECTED: was 4. Match H200 regime.
+  grad_accumulation_steps: 1
+  compile: false
+  gradient_checkpointing: false  # XLA incompatible; 300M fits in 32GB without it
+  cache_clear_interval: 5000
+  seq_len: 2048              # CORRECTED: was 512. SSM needs long context.
+  log_interval: 50
+  dtype: bfloat16
+  grad_clip: 1.0
+  lr: 3.0e-4
+  save_interval: 5000
+  max_steps: 50000
+
+loss:
+  cpc_max_positions: 128     # Static slice for XLA — prevents (B,T,T) OOM on v6e

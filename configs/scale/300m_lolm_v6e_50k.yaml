@@ -1,0 +1,40 @@
+# LOLM 300M — v6e-4 50K comparison run
+# accum=1 to avoid 32× compilation overhead; fair comparison with baseline
+# batch=1, seq=1024, accum=1 → 1024 tokens/step, 51.2M tokens total
+# Expected speed: 0.4 steps/s → 50K steps in ~35 hours
+
+_base_: 300m_v3.yaml
+
+model:
+  ssm:
+    enabled: true
+    use_cuda_kernels: false
+  regime:
+    enabled: true
+    gradient_isolation: true
+  memory:
+    enabled: true
+  gate:
+    enabled: true
+
+data:
+  dataset: data/fineweb_edu/*.parquet
+  streaming: true
+  tokenizer: gpt2
+
+training:
+  device: xla
+  batch_size: 1
+  grad_accumulation_steps: 1    # accum=1: avoids 32× XLA compilation overhead
+  compile: false
+  gradient_checkpointing: false
+  seq_len: 1024
+  log_interval: 50
+  dtype: bfloat16
+  grad_clip: 1.0
+  lr: 3.0e-4
+  save_interval: 2000
+  max_steps: 50000
+
+loss:
+  cpc_max_positions: 64
