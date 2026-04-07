@@ -35,7 +35,7 @@ model:
     normalize_branches: true
 training:
   device: xla
-  batch_size: 4
+  batch_size: 2
   grad_accumulation_steps: 1
   seq_len: 256
   max_steps: 500000
