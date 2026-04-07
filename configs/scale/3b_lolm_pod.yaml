@@ -24,7 +24,7 @@ model:
     neighbor_kernel_size: 7
     gradient_isolation: true
   memory:
-    enabled: true
+    enabled: false
     n_slots: 64
     n_banks: 3
     slot_dim: 3072
@@ -35,7 +35,7 @@ model:
     normalize_branches: true
 training:
   device: xla
-  batch_size: 1
+  batch_size: 2
   grad_accumulation_steps: 1
   seq_len: 256
   max_steps: 500000
@@ -46,9 +46,9 @@ training:
   warmup_steps: 2000
   grad_clip: 0.5
   dtype: bfloat16
-  log_interval: 10
+  log_interval: 50
   eval_interval: 2000
-  save_interval: 500
+  save_interval: 5000
   compile: false
   gradient_checkpointing: false
 loss:
