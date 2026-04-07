@@ -3,7 +3,7 @@
 # Speed optimizations over 1b_lolm_pod.yaml:
 #   1. Memory DISABLED — 0% contribution, pure overhead
 #   2. batch_size: 4 (was 2) — better chip utilization
-#   3. grad_accumulation_steps: 4 — effective batch 256 (was 32)
+#   3. grad_accumulation_steps: 1 — effective batch 256 (was 32)
 #   4. save_interval: 5000 (was 500) — 10x fewer checkpoint writes
 #   5. log_interval: 50 (was 10) — 5x fewer log writes
 #   6. SSM detach_gradients: false — let token loss reach SSM
@@ -54,7 +54,7 @@ model:
 training:
   device: xla
   batch_size: 4                 # ← DOUBLED: better chip utilization
-  grad_accumulation_steps: 4    # ← ADDED: effective batch 256 (4 * 4 * 16 chips)
+  grad_accumulation_steps: 1    # ← ADDED: effective batch 256 (4 * 4 * 16 chips)
   seq_len: 512
   max_steps: 50000
   lr: 0.0003
