@@ -562,20 +562,22 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
                 )
                 scaled_loss = total_loss / accum_steps
 
-            # NaN check — materialize loss value
-            xm.mark_step()
-            loss_val = total_loss.item()
-            if math.isnan(loss_val) or math.isinf(loss_val) or loss_val > 1000.0:
-                log(f"step {step+1}: bad loss ({loss_val:.1f}), skipping")
-                step_had_nan = True
-                break
-
-            # Backward
+            # Backward — do NOT call mark_step() or .item() here.
+            # Per-step mark_step() forces TPU→CPU sync and kills XLA
+            # pipelining. NaN check happens at log_interval instead.
             scaled_loss.backward()
 
-            accum_loss_total += loss_val
-            for k, v in components.items():
-                accum_components[k] = accum_components.get(k, 0.0) + v / accum_steps
+            # Deferred loss tracking — only materialize at log boundaries
+            if (step + 1) % tc.log_interval == 0:
+                xm.mark_step()
+                loss_val = total_loss.item()
+                if math.isnan(loss_val) or math.isinf(loss_val) or loss_val > 1000.0:
+                    log(f"step {step+1}: bad loss ({loss_val:.1f}), skipping")
+                    step_had_nan = True
+                    break
+                accum_loss_total += loss_val
+                for k, v in components.items():
+                    accum_components[k] = accum_components.get(k, 0.0) + v / accum_steps
 
         if step_had_nan:
             optimizer.zero_grad()
