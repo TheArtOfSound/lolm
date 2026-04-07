@@ -1,24 +1,3 @@
-# LOLM ~0.87B — TPU Pod FAST Config
-#
-# Speed optimizations over 1b_lolm_pod.yaml:
-#   1. Memory DISABLED — 0% contribution, pure overhead
-#   2. batch_size: 4 (was 2) — better chip utilization
-#   3. grad_accumulation_steps: 1 — effective batch 256 (was 32)
-#   4. save_interval: 5000 (was 500) — 10x fewer checkpoint writes
-#   5. log_interval: 50 (was 10) — 5x fewer log writes
-#   6. SSM detach_gradients: false — let token loss reach SSM
-#   7. eval_interval: 5000 (was 2000) — less eval overhead
-#
-# CRITICAL FIX: detach_gradients was true, meaning the SSM could ONLY
-# learn from CPC loss. Since CPC is barely above random chance (5.54 vs 5.55),
-# the SSM was effectively frozen. This is why the gate is stuck at 0.90 —
-# the SSM never improves, so the gate learns to ignore it.
-#
-# Expected speedup: ~2-3x steps/s (from 0.5 to 1.0-1.5)
-#
-# Usage:
-#   python train_tpu_pod.py --config configs/scale/1b_lolm_pod_fast.yaml
-
 model:
   d_model: 2048
   n_heads: 16
@@ -33,7 +12,7 @@ model:
     d_state: 48
     expand: 2
     use_cuda_kernels: false
-    detach_gradients: false     # ← FIXED: Let token loss gradients reach SSM
+    detach_gradients: false
   regime:
     enabled: true
     n_codes: 32
@@ -45,18 +24,21 @@ model:
     neighbor_kernel_size: 7
     gradient_isolation: true
   memory:
-    enabled: false              # ← DISABLED: 0% contribution, saves ~5% compute
+    enabled: true
+    n_slots: 64
+    n_banks: 3
+    slot_dim: 2048
+    n_chunks: 4
   gate:
     enabled: true
     init_bias: -0.5
     normalize_branches: true
-
 training:
   device: xla
-  batch_size: 4                 # ← DOUBLED: better chip utilization
-  grad_accumulation_steps: 1    # ← ADDED: effective batch 256 (4 * 4 * 16 chips)
+  batch_size: 2
+  grad_accumulation_steps: 1
   seq_len: 512
-  max_steps: 50000
+  max_steps: 500000
   lr: 0.0003
   weight_decay: 0.1
   beta1: 0.9
@@ -64,38 +46,27 @@ training:
   warmup_steps: 2000
   grad_clip: 0.5
   dtype: bfloat16
-  log_interval: 50              # ← REDUCED: 5x fewer log operations
-  eval_interval: 5000           # ← REDUCED: less eval overhead
-  save_interval: 5000           # ← REDUCED: 10x fewer checkpoint saves
+  log_interval: 10
+  eval_interval: 2000
+  save_interval: 500
   compile: false
   gradient_checkpointing: false
-
 loss:
   use_cpc: true
   cpc_proj_dim: 128
   cpc_temperature: 0.07
-  lambda_future: 0.8           # ← INCREASED from 0.5: push CPC harder since SSM is now trainable
-  lambda_competitive: 0.15     # ← INCREASED from 0.1: help gate learn to choose
+  lambda_future: 0.5
+  lambda_competitive: 0.1
   lambda_manifest: 0.01
   lambda_changepoint: 0.1
   lambda_regime: 0.3
   lambda_balance: 0.1
   lambda_sticky: 0.01
-  lambda_mem: 0.0              # ← ZEROED: memory disabled
+  lambda_mem: 0.05
   future_window: 8
   use_load_balance: true
   cpc_max_positions: 256
-
 data:
   streaming: true
   dataset: HuggingFaceFW/fineweb-edu
   tokenizer: gpt2
-
-# NFET adaptive training (optional — set enabled: true to activate)
-nfet:
-  enabled: false
-  es_window: 200
-  adaptive_lambdas: true
-  gate_ridge_target: 0.83
-  gate_ridge_strength: 0.05
-  gate_ridge_warmup: 5000
