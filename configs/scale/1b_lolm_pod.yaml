@@ -12,7 +12,7 @@ model:
     d_state: 48
     expand: 2
     use_cuda_kernels: false
-    detach_gradients: false
+    detach_gradients: true
   regime:
     enabled: true
     n_codes: 32
