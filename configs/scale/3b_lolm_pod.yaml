@@ -24,11 +24,11 @@ model:
     neighbor_kernel_size: 7
     gradient_isolation: true
   memory:
-    enabled: false
-    n_slots: 64
-    n_banks: 3
+    enabled: true
+    n_slots: 8
+    n_banks: 1
     slot_dim: 3072
-    n_chunks: 4
+    n_chunks: 1
   gate:
     enabled: true
     init_bias: -0.5
