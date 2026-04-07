@@ -313,9 +313,17 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
     cfg = load_config(config_path)
     tc = cfg.training
 
+    # Environment variable overrides for dashboard-launched runs
+    _env_dataset = os.environ.get("LOLM_DATASET", "")
+    if _env_dataset:
+        cfg.data.dataset = _env_dataset
+        cfg.data.streaming = not _env_dataset.startswith("/")  # local path = not streaming
+
     accum_steps = tc.grad_accumulation_steps
     effective_batch = tc.batch_size * accum_steps * world_size
     log(f"Config: {config_path}")
+    if _env_dataset:
+        log(f"Dataset override: {_env_dataset}")
     log(f"Batch: {tc.batch_size} x {accum_steps} accum x {world_size} chips = {effective_batch} effective")
 
     # GCS auto-resume is handled in __main__ before xmp.spawn (see below)
@@ -769,6 +777,11 @@ if __name__ == "__main__":
     # spawned processes (HF CDN drops concurrent connections from same IP).
     # Local parquet files are read with pyarrow — no HTTP, no EBADF.
     cfg_pre = load_config(args.config)
+    # Apply env var dataset override for pre-download too
+    _env_ds = os.environ.get("LOLM_DATASET", "")
+    if _env_ds:
+        cfg_pre.data.dataset = _env_ds
+        cfg_pre.data.streaming = not _env_ds.startswith("/")
     if getattr(cfg_pre.data, 'streaming', False) and not str(cfg_pre.data.dataset).startswith('/'):
         _hf_dataset = str(cfg_pre.data.dataset)
         _hf_config  = getattr(cfg_pre.data, 'dataset_config', None) or None
