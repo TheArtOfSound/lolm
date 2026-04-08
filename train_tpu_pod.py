@@ -790,8 +790,9 @@ if __name__ == "__main__":
         _local_dir  = '/tmp/hf_parquet_local'
         os.makedirs(_local_dir, exist_ok=True)
 
-        _existing = sorted([f for f in os.listdir(_local_dir) if f.endswith('.parquet')])
-        if len(_existing) >= 100:
+        # Filter out truncated files (from disk-full errors)
+        _existing = sorted([f for f in os.listdir(_local_dir) if f.endswith('.parquet') and os.path.getsize(os.path.join(_local_dir, f)) > 1_000_000])
+        if len(_existing) >= 4:
             print(f"Pre-download: found {len(_existing)} cached parquet files in {_local_dir}", flush=True)
         else:
             print(f"Pre-download: fetching parquet URLs for {_hf_dataset} ({_hf_config or 'default'})...", flush=True)
@@ -800,7 +801,7 @@ if __name__ == "__main__":
                 from huggingface_hub import list_repo_tree as _lrt
                 _repo_prefix = f"sample/{_hf_config.replace('sample-', '')}" if _hf_config and 'sample' in _hf_config else "data"
                 _all_files = [f.path for f in _lrt(_hf_dataset, path_in_repo=_repo_prefix, repo_type="dataset", recursive=True) if f.path.endswith('.parquet')]
-                _all_files = sorted(_all_files)[:200]  # enough data for real training
+                _all_files = sorted(_all_files)[:16]  # first 16 parquet files (~35GB)
                 _base_url = f"https://huggingface.co/datasets/{_hf_dataset}/resolve/main"
                 for _fpath in _all_files:
                     _local_name = _fpath.replace('/', '_')
@@ -813,7 +814,7 @@ if __name__ == "__main__":
             except Exception as _pe:
                 print(f"Pre-download failed ({_pe}), falling back to streaming", flush=True)
 
-        if len(_existing) >= 50:
+        if len(_existing) >= 4:
             # Override config to use local files — write a small override YAML
             import yaml as _yaml
             _override_cfg = args.config + '.local_override.yaml'
