@@ -338,7 +338,71 @@ class NFETTrainingController:
         self._ridge_strength *= self.config.gate_ridge_decay
 
     # ──────────────────────────────────────────────
-    # 6. DIAGNOSTICS
+    # 6. ES-MODULATED LEARNING RATE
+    # ──────────────────────────────────────────────
+
+    def get_lr_multiplier(self) -> float:
+        """Return LR dampening factor based on training phase.
+
+        On the ridge: full LR. During instability: reduce LR to let the
+        model stabilize before pushing harder. During collapse: emergency
+        reduction to prevent divergence.
+        """
+        if self.step < self.config.gate_ridge_warmup:
+            return 1.0
+        if self.current_phase == "ridge":
+            return 1.0
+        elif self.current_phase == "spike":
+            return 0.5
+        elif self.current_phase == "caution":
+            return 0.3
+        elif self.current_phase == "collapse":
+            return 0.1
+        return 1.0
+
+    # ──────────────────────────────────────────────
+    # 7. GATE PHASE TRANSITION DETECTION
+    # ──────────────────────────────────────────────
+
+    def _compute_gate_velocity(self) -> float:
+        """Compute rate of gate change over recent steps."""
+        if len(self._gate_history) < 10:
+            return 0.0
+        recent = list(self._gate_history)[-10:]
+        return abs(recent[-1] - recent[0]) / 10
+
+    def should_pause_aux_losses(self) -> bool:
+        """Return True if gate is in a phase transition.
+
+        When the gate is moving rapidly, the surface-vs-latent balance
+        is shifting. Competing auxiliary losses during this transition
+        can pull the model in conflicting directions. Better to pause
+        aux losses and let the gate settle, keeping only L_tok + L_CPC.
+        """
+        if self.step < self.config.gate_ridge_warmup:
+            return False
+        velocity = self._compute_gate_velocity()
+        return velocity > 0.02
+
+    # ──────────────────────────────────────────────
+    # 8. REGIME DIVERSITY BOOST
+    # ──────────────────────────────────────────────
+
+    def get_regime_boost(self) -> float:
+        """Return multiplier for lambda_regime based on regime health.
+
+        If regime codes are collapsing (low entropy = few codes active),
+        aggressively boost the regime diversity loss to prevent collapse.
+        """
+        health = self._component_health['regime']
+        if health < 0.3:
+            return 3.0
+        elif health < 0.5:
+            return 2.0
+        return 1.0
+
+    # ──────────────────────────────────────────────
+    # 9. DIAGNOSTICS
     # ──────────────────────────────────────────────
 
     def get_diagnostics(self) -> dict:
@@ -346,6 +410,10 @@ class NFETTrainingController:
         return {
             'nfet/es': round(self.current_es, 4),
             'nfet/phase': self.current_phase,
+            'nfet/lr_mult': round(self.get_lr_multiplier(), 2),
+            'nfet/gate_velocity': round(self._compute_gate_velocity(), 5),
+            'nfet/aux_paused': self.should_pause_aux_losses(),
+            'nfet/regime_boost': round(self.get_regime_boost(), 1),
             'nfet/ridge_distance': round(self.ridge_distance, 4),
             'nfet/ridge_strength': round(self._ridge_strength, 6),
             'nfet/health_token': round(self._component_health['token'], 3),

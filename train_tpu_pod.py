@@ -526,8 +526,9 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
     data_iter = iter(mp_loader)
 
     for step in range(start_step, tc.max_steps):
-        # LR schedule
+        # LR schedule + NFET ES-modulated dampening
         lr = get_lr(step, tc.warmup_steps, tc.max_steps, tc.lr)
+        lr = lr * nfet_controller.get_lr_multiplier()
         for pg in optimizer.param_groups:
             pg["lr"] = lr
         if optimizer_replicated is not None:
@@ -561,6 +562,23 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
                     data_iter = iter(mp_loader)
             else:
                 x, y = next(data_iter)  # final attempt, crash if still broken
+
+            # NFET: apply adaptive lambdas to loss function
+            adapted = nfet_controller.get_adaptive_lambdas()
+            loss_fn.lambda_future = adapted.get('lambda_future', loss_fn.lambda_future)
+            loss_fn.lambda_competitive = adapted.get('lambda_competitive', loss_fn.lambda_competitive)
+            loss_fn.lambda_regime = adapted.get('lambda_regime', loss_fn.lambda_regime)
+
+            # NFET: regime diversity boost
+            loss_fn.lambda_regime *= nfet_controller.get_regime_boost()
+
+            # NFET: pause aux losses during gate phase transitions
+            if nfet_controller.should_pause_aux_losses():
+                loss_fn.lambda_changepoint = 0.0
+                loss_fn.lambda_regime = 0.0
+                loss_fn.lambda_competitive = 0.0
+                loss_fn.lambda_manifest = 0.0
+                loss_fn.lambda_mem = 0.0
 
             # Forward with AMP
             with amp_ctx:
