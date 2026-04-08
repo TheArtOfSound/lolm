@@ -340,7 +340,11 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
     # For large models: try FSDP wrapping.
     # If OOM, fall back to single-device mode without FSDP.
     total_params = sum(p.numel() for p in model.parameters())
-    use_fsdp = total_params > 2_000_000_000  # FSDP for >2B params
+    # FSDP threshold: raised to 5B to test pure data-parallel for 2.5B.
+    # FSDP all-gathers entire decoder every fwd+bwd pass across 16 chips
+    # which may be the throughput bottleneck (not mark_step/item).
+    # 2.5B in bf16 + Adam fp32 = ~25GB/chip, leaving ~7GB for activations.
+    use_fsdp = total_params > 5_000_000_000
 
     # XLA device: disable torch.utils.checkpoint (not XLA-compatible in 2.x)
     # The decoder/SSM check _xla_device to skip torch.utils.checkpoint
@@ -562,27 +566,20 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
                 )
                 scaled_loss = total_loss / accum_steps
 
-            # mark_step() before backward to flush the forward graph.
-            # This keeps the same XLA memory layout as the working run.
-            # Do NOT call .item() here — that's the expensive CPU sync.
+            # NaN check — materialize loss value
             xm.mark_step()
+            loss_val = total_loss.item()
+            if math.isnan(loss_val) or math.isinf(loss_val) or loss_val > 1000.0:
+                log(f"step {step+1}: bad loss ({loss_val:.1f}), skipping")
+                step_had_nan = True
+                break
 
             # Backward
             scaled_loss.backward()
 
-            # Only materialize loss at log boundaries to avoid per-step
-            # TPU→CPU sync. The original code called .item() every step
-            # which blocked throughput at 0.0 steps/s.
-            if (step + 1) % tc.log_interval == 0:
-                xm.mark_step()
-                loss_val = total_loss.item()
-                if math.isnan(loss_val) or math.isinf(loss_val) or loss_val > 1000.0:
-                    log(f"step {step+1}: bad loss ({loss_val:.1f}), skipping")
-                    step_had_nan = True
-                    break
-                accum_loss_total += loss_val
-                for k, v in components.items():
-                    accum_components[k] = accum_components.get(k, 0.0) + v / accum_steps
+            accum_loss_total += loss_val
+            for k, v in components.items():
+                accum_components[k] = accum_components.get(k, 0.0) + v / accum_steps
 
         if step_had_nan:
             optimizer.zero_grad()
