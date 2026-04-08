@@ -562,22 +562,20 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
                 )
                 scaled_loss = total_loss / accum_steps
 
-            # Backward — mark_step after backward to flush the full
-            # fwd+bwd graph. Do NOT call .item() every step — it blocks
-            # for TPU→CPU sync. Defer to log_interval boundaries.
-            scaled_loss.backward()
+            # NaN check — materialize loss value
             xm.mark_step()
+            loss_val = total_loss.item()
+            if math.isnan(loss_val) or math.isinf(loss_val) or loss_val > 1000.0:
+                log(f"step {step+1}: bad loss ({loss_val:.1f}), skipping")
+                step_had_nan = True
+                break
 
-            # Only materialize loss at log boundaries
-            if (step + 1) % tc.log_interval == 0:
-                loss_val = total_loss.item()
-                if math.isnan(loss_val) or math.isinf(loss_val) or loss_val > 1000.0:
-                    log(f"step {step+1}: bad loss ({loss_val:.1f}), skipping")
-                    step_had_nan = True
-                    break
-                accum_loss_total += loss_val
-                for k, v in components.items():
-                    accum_components[k] = accum_components.get(k, 0.0) + v / accum_steps
+            # Backward
+            scaled_loss.backward()
+
+            accum_loss_total += loss_val
+            for k, v in components.items():
+                accum_components[k] = accum_components.get(k, 0.0) + v / accum_steps
 
         if step_had_nan:
             optimizer.zero_grad()
