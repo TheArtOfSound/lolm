@@ -562,17 +562,19 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
                 )
                 scaled_loss = total_loss / accum_steps
 
+            # mark_step() before backward to flush the forward graph.
+            # This keeps the same XLA memory layout as the working run.
+            # Do NOT call .item() here — that's the expensive CPU sync.
+            xm.mark_step()
+
             # Backward
             scaled_loss.backward()
 
-            # mark_step() every step to flush XLA graph (prevents OOM from
-            # unbounded graph accumulation). This is cheap — it just submits
-            # the graph for async execution on TPU without blocking.
-            # .item() is the expensive part (blocks until TPU finishes and
-            # copies result to CPU). Only call .item() at log boundaries.
-            xm.mark_step()
-
+            # Only materialize loss at log boundaries to avoid per-step
+            # TPU→CPU sync. The original code called .item() every step
+            # which blocked throughput at 0.0 steps/s.
             if (step + 1) % tc.log_interval == 0:
+                xm.mark_step()
                 loss_val = total_loss.item()
                 if math.isnan(loss_val) or math.isinf(loss_val) or loss_val > 1000.0:
                     log(f"step {step+1}: bad loss ({loss_val:.1f}), skipping")
