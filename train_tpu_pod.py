@@ -340,11 +340,7 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
     # For large models: try FSDP wrapping.
     # If OOM, fall back to single-device mode without FSDP.
     total_params = sum(p.numel() for p in model.parameters())
-    # FSDP threshold: raised to 5B to test pure data-parallel for 2.5B.
-    # FSDP all-gathers entire decoder every fwd+bwd pass across 16 chips
-    # which may be the throughput bottleneck (not mark_step/item).
-    # 2.5B in bf16 + Adam fp32 = ~25GB/chip, leaving ~7GB for activations.
-    use_fsdp = total_params > 5_000_000_000
+    use_fsdp = total_params > 2_000_000_000  # FSDP for >2B params
 
     # XLA device: disable torch.utils.checkpoint (not XLA-compatible in 2.x)
     # The decoder/SSM check _xla_device to skip torch.utils.checkpoint
