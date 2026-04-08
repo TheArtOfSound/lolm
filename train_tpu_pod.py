@@ -389,6 +389,20 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
         loss_fn._init_cpc_proj(cfg.model.d_model, device)
         log(f"CPC projection: d_model={cfg.model.d_model} → d_proj={cfg.loss.cpc_proj_dim}, temp={cfg.loss.cpc_temperature}")
 
+    # --- NFET Adaptive Training Controller ---
+    from lolm.nfet_trainer import NFETTrainingController, NFETTrainingConfig
+    nfet_config = NFETTrainingConfig(
+        enabled=True,
+        gate_ridge_target=0.83,
+        gate_ridge_warmup=5000,
+    )
+    nfet_controller = NFETTrainingController(nfet_config, {
+        'lambda_future': cfg.loss.lambda_future,
+        'lambda_competitive': cfg.loss.lambda_competitive,
+        'lambda_regime': cfg.loss.lambda_regime,
+    })
+    log("NFET adaptive training controller initialized")
+
     # --- Resume ---
     start_step = 0
     ckpt_optimizer_state = None
@@ -560,6 +574,12 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
                     mem_attn=out.mem_attn,
                     gate_values=out.gate_values,
                 )
+
+                # NFET: add gate ridge regularizer to total loss
+                if out.gate_values is not None:
+                    ridge_loss = nfet_controller.gate_ridge_loss(out.gate_values)
+                    total_loss = total_loss + ridge_loss
+
                 scaled_loss = total_loss / accum_steps
 
             # NaN check — materialize loss value
@@ -569,6 +589,25 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
                 log(f"step {step+1}: bad loss ({loss_val:.1f}), skipping")
                 step_had_nan = True
                 break
+
+            # NFET: observe training dynamics
+            gate_mean_val = out.gate_values.mean().item() if out.gate_values is not None else 0.5
+            regime_ent = 0.0
+            if out.regime_indices is not None:
+                hist = torch.bincount(out.regime_indices.view(-1),
+                                      minlength=cfg.model.regime.n_codes).float()
+                hist = hist / hist.sum()
+                regime_ent = -(hist * (hist + 1e-10).log()).sum().item()
+            nfet_controller.observe(
+                step=step,
+                losses={
+                    'total': loss_val,
+                    'token': components.get('loss_tok', 0),
+                    'cpc_future': components.get('loss_future', 0),
+                },
+                gate_mean=gate_mean_val,
+                regime_entropy=regime_ent,
+            )
 
             # Backward
             scaled_loss.backward()
@@ -658,16 +697,25 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
             tokens_per_step = effective_batch * tc.seq_len
             total_tokens = (step + 1) * tokens_per_step
 
+            # NFET diagnostics
+            nfet_diags = nfet_controller.get_diagnostics()
+            nfet_msg = f" | ES={nfet_diags['nfet/es']:.3f} [{nfet_diags['nfet/phase']}]"
+
             log(
                 f"step {step+1:>6d} | loss {avg.get('loss_total', 0):.4f} | "
                 f"tok {avg.get('loss_tok', 0):.4f} | ppl {ppl:.1f} | "
                 f"fut {avg.get('loss_future', 0):.4f} | lr {lr:.2e} | "
                 f"{tc.log_interval/dt:.1f} steps/s | "
                 f"{total_tokens/1e9:.2f}B tok"
-                f"{gate_msg}{regime_msg}{extra_losses}"
+                f"{gate_msg}{regime_msg}{extra_losses}{nfet_msg}"
             )
             log_losses = {}
             t0 = time.time()
+
+            # NFET alerts
+            alert = nfet_controller.should_alert()
+            if alert:
+                log(f"  {alert}")
 
             # Save log (master only)
             if is_master:
@@ -677,6 +725,7 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
                     log_entry["gate_mean"] = out.gate_values.mean().item()
                 if out.regime_indices is not None:
                     log_entry["regime_unique"] = out.regime_indices.unique().numel()
+                log_entry.update(nfet_diags)
                 with open(out_dir / "log.jsonl", "a") as f:
                     f.write(json.dumps(log_entry) + "\n")
 
