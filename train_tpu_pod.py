@@ -600,39 +600,42 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
 
                 scaled_loss = total_loss / accum_steps
 
-            # NaN check — materialize loss value
-            xm.mark_step()
-            loss_val = total_loss.item()
-            if math.isnan(loss_val) or math.isinf(loss_val) or loss_val > 1000.0:
-                log(f"step {step+1}: bad loss ({loss_val:.1f}), skipping")
-                step_had_nan = True
-                break
-
-            # NFET: observe training dynamics
-            gate_mean_val = out.gate_values.mean().item() if out.gate_values is not None else 0.5
-            regime_ent = 0.0
-            if out.regime_indices is not None:
-                hist = torch.bincount(out.regime_indices.view(-1),
-                                      minlength=cfg.model.regime.n_codes).float()
-                hist = hist / hist.sum()
-                regime_ent = -(hist * (hist + 1e-10).log()).sum().item()
-            nfet_controller.observe(
-                step=step,
-                losses={
-                    'total': loss_val,
-                    'token': components.get('loss_tok', 0),
-                    'cpc_future': components.get('loss_future', 0),
-                },
-                gate_mean=gate_mean_val,
-                regime_entropy=regime_ent,
-            )
-
-            # Backward
+            # Backward — NO .item() here. All loss materialization is
+            # deferred to async step closures to avoid blocking the TPU.
+            # Ref: https://docs.pytorch.org/xla/master/learn/api-guide.html
             scaled_loss.backward()
 
-            accum_loss_total += loss_val
-            for k, v in components.items():
-                accum_components[k] = accum_components.get(k, 0.0) + v / accum_steps
+            # Async logging closure — runs AFTER mark_step without blocking
+            # the training loop. Uses xm.add_step_closure with run_async=True.
+            if (step + 1) % tc.log_interval == 0:
+                _step_num = step  # capture for closure
+                _components = dict(components)  # copy for closure
+                def _log_closure(total_loss_t, gate_t, regime_idx_t, _s=_step_num, _c=_components):
+                    loss_val = total_loss_t.item()
+                    gate_val = gate_t.item() if gate_t is not None else 0.5
+                    # NaN check
+                    if math.isnan(loss_val) or math.isinf(loss_val):
+                        return
+                    # NFET observe
+                    regime_ent = 0.0
+                    if regime_idx_t is not None:
+                        hist = torch.bincount(regime_idx_t.view(-1),
+                                              minlength=cfg.model.regime.n_codes).float()
+                        hist = hist / hist.sum()
+                        regime_ent = -(hist * (hist + 1e-10).log()).sum().item()
+                    nfet_controller.observe(
+                        step=_s, losses={'total': loss_val, 'token': _c.get('loss_tok', 0),
+                                         'cpc_future': _c.get('loss_future', 0)},
+                        gate_mean=gate_val, regime_entropy=regime_ent,
+                    )
+                    # Accumulate for logging
+                    nonlocal accum_loss_total, accum_components
+                    accum_loss_total += loss_val
+                    for k, v in _c.items():
+                        accum_components[k] = accum_components.get(k, 0.0) + v / accum_steps
+                _gate_t = out.gate_values.mean() if out.gate_values is not None else None
+                _regime_t = out.regime_indices if out.regime_indices is not None else None
+                xm.add_step_closure(_log_closure, args=(total_loss, _gate_t, _regime_t), run_async=True)
 
         if step_had_nan:
             optimizer.zero_grad()
