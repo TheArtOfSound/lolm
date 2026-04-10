@@ -48,7 +48,7 @@ training:
   dtype: bfloat16
   log_interval: 10
   eval_interval: 2000
-  save_interval: 500
+  save_interval: 100
   compile: false
   gradient_checkpointing: false
 loss:
