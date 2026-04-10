@@ -408,19 +408,9 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
     # --- NFET Adaptive Training Controller ---
     from lolm.nfet_trainer import NFETTrainingController, NFETTrainingConfig
     nfet_config = NFETTrainingConfig(
-        enabled=cfg.nfet.enabled,
-        es_window=cfg.nfet.es_window,
-        es_lambda_risk=cfg.nfet.es_lambda_risk,
-        adaptive_lambdas=cfg.nfet.adaptive_lambdas,
-        lambda_adapt_rate=cfg.nfet.lambda_adapt_rate,
-        lambda_min=cfg.nfet.lambda_min,
-        lambda_max=cfg.nfet.lambda_max,
-        gate_ridge_target=cfg.nfet.gate_ridge_target,
-        gate_ridge_strength=cfg.nfet.gate_ridge_strength,
-        gate_ridge_warmup=cfg.nfet.gate_ridge_warmup,
-        gate_ridge_decay=cfg.nfet.gate_ridge_decay,
-        collapse_threshold=cfg.nfet.collapse_threshold,
-        spike_threshold=cfg.nfet.spike_threshold,
+        enabled=True,
+        gate_ridge_target=0.83,
+        gate_ridge_warmup=5000,
     )
     nfet_controller = NFETTrainingController(nfet_config, {
         'lambda_future': cfg.loss.lambda_future,
