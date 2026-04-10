@@ -83,7 +83,7 @@ def gcs_upload(local_path: str, gcs_path: str) -> bool:
     """Upload a file to GCS. Returns True on success, False on failure."""
     try:
         subprocess.run(
-            ["gsutil", "-q", "cp", local_path, gcs_path],
+            ["gcloud", "storage", "cp", local_path, gcs_path],
             check=True, timeout=600,
         )
         return True
@@ -96,7 +96,7 @@ def gcs_download(gcs_path: str, local_path: str) -> bool:
     """Download a file from GCS. Returns True on success, False on failure."""
     try:
         subprocess.run(
-            ["gsutil", "-q", "cp", gcs_path, local_path],
+            ["gcloud", "storage", "cp", gcs_path, local_path],
             check=True, timeout=600,
         )
         return True
@@ -108,7 +108,7 @@ def gcs_read_text(gcs_path: str) -> str:
     """Read a small text file from GCS. Returns '' on failure."""
     try:
         result = subprocess.run(
-            ["gsutil", "cat", gcs_path],
+            ["gcloud", "storage", "cat", gcs_path],
             capture_output=True, text=True, check=True, timeout=30,
         )
         return result.stdout.strip()
@@ -277,6 +277,22 @@ def sync_replicated_grads(model: nn.Module, loss_fn: nn.Module,
         xm.all_reduce(xm.REDUCE_SUM, grads, scale=1.0 / world_size)
 
 
+def average_scalar_metrics(metrics: dict, device: torch.device,
+                           world_size: int) -> dict:
+    """Average scalar metrics across TPU ranks."""
+    items = list(metrics.items())
+    tensors = []
+    for _, value in items:
+        if isinstance(value, torch.Tensor):
+            tensor = value.detach().to(device=device, dtype=torch.float32)
+        else:
+            tensor = torch.tensor(float(value), device=device, dtype=torch.float32)
+        tensors.append(tensor)
+    if tensors and world_size > 1:
+        xm.all_reduce(xm.REDUCE_SUM, tensors, scale=1.0 / world_size)
+    return {key: float(tensor.item()) for (key, _), tensor in zip(items, tensors)}
+
+
 # ---------------------------------------------------------------------------
 # Main training function — runs on every chip
 # ---------------------------------------------------------------------------
@@ -392,16 +408,38 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
     # --- NFET Adaptive Training Controller ---
     from lolm.nfet_trainer import NFETTrainingController, NFETTrainingConfig
     nfet_config = NFETTrainingConfig(
-        enabled=True,
-        gate_ridge_target=0.83,
-        gate_ridge_warmup=5000,
+        enabled=cfg.nfet.enabled,
+        es_window=cfg.nfet.es_window,
+        es_lambda_risk=cfg.nfet.es_lambda_risk,
+        adaptive_lambdas=cfg.nfet.adaptive_lambdas,
+        lambda_adapt_rate=cfg.nfet.lambda_adapt_rate,
+        lambda_min=cfg.nfet.lambda_min,
+        lambda_max=cfg.nfet.lambda_max,
+        gate_ridge_target=cfg.nfet.gate_ridge_target,
+        gate_ridge_strength=cfg.nfet.gate_ridge_strength,
+        gate_ridge_warmup=cfg.nfet.gate_ridge_warmup,
+        gate_ridge_decay=cfg.nfet.gate_ridge_decay,
+        collapse_threshold=cfg.nfet.collapse_threshold,
+        spike_threshold=cfg.nfet.spike_threshold,
     )
     nfet_controller = NFETTrainingController(nfet_config, {
         'lambda_future': cfg.loss.lambda_future,
         'lambda_competitive': cfg.loss.lambda_competitive,
         'lambda_regime': cfg.loss.lambda_regime,
     })
-    log("NFET adaptive training controller initialized")
+    base_loss_lambdas = {
+        'lambda_future': cfg.loss.lambda_future,
+        'lambda_competitive': cfg.loss.lambda_competitive,
+        'lambda_regime': cfg.loss.lambda_regime,
+        'lambda_changepoint': cfg.loss.lambda_changepoint,
+        'lambda_manifest': cfg.loss.lambda_manifest,
+        'lambda_mem': cfg.loss.lambda_mem,
+    }
+    log(
+        "NFET adaptive training controller initialized"
+        if cfg.nfet.enabled else
+        "NFET adaptive training controller disabled"
+    )
 
     # --- Resume ---
     start_step = 0
@@ -565,9 +603,12 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
 
             # NFET: apply adaptive lambdas to loss function
             adapted = nfet_controller.get_adaptive_lambdas()
-            loss_fn.lambda_future = adapted.get('lambda_future', loss_fn.lambda_future)
-            loss_fn.lambda_competitive = adapted.get('lambda_competitive', loss_fn.lambda_competitive)
-            loss_fn.lambda_regime = adapted.get('lambda_regime', loss_fn.lambda_regime)
+            loss_fn.lambda_future = adapted.get('lambda_future', base_loss_lambdas['lambda_future'])
+            loss_fn.lambda_competitive = adapted.get('lambda_competitive', base_loss_lambdas['lambda_competitive'])
+            loss_fn.lambda_regime = adapted.get('lambda_regime', base_loss_lambdas['lambda_regime'])
+            loss_fn.lambda_changepoint = base_loss_lambdas['lambda_changepoint']
+            loss_fn.lambda_manifest = base_loss_lambdas['lambda_manifest']
+            loss_fn.lambda_mem = base_loss_lambdas['lambda_mem']
 
             # NFET: regime diversity boost
             loss_fn.lambda_regime *= nfet_controller.get_regime_boost()
@@ -661,6 +702,35 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
             optimizer_replicated.step()
         xm.mark_step()
 
+        regime_entropy = 0.0
+        if out.regime_probs is not None:
+            code_freq = out.regime_probs.detach().float().mean(dim=(0, 1)).clamp_min(1e-10)
+            regime_entropy = -(code_freq * code_freq.log()).sum()
+        nfet_observation = average_scalar_metrics(
+            {
+                "loss_total": accum_components.get("loss_total", 0.0),
+                "loss_tok": accum_components.get("loss_tok", 0.0),
+                "loss_future": accum_components.get("loss_future", 0.0),
+                "gate_mean": (
+                    out.gate_values.detach().mean()
+                    if out.gate_values is not None else 0.0
+                ),
+                "regime_entropy": regime_entropy,
+            },
+            device=device,
+            world_size=world_size,
+        )
+        nfet_controller.observe(
+            step + 1,
+            {
+                "total": nfet_observation["loss_total"],
+                "token": nfet_observation["loss_tok"],
+                "cpc_future": nfet_observation["loss_future"],
+            },
+            gate_mean=nfet_observation["gate_mean"],
+            regime_entropy=nfet_observation["regime_entropy"],
+        )
+
         # Accumulate logs
         for k, v in accum_components.items():
             log_losses[k] = log_losses.get(k, 0.0) + v
@@ -694,7 +764,9 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
 
             # NFET diagnostics
             nfet_diags = nfet_controller.get_diagnostics()
-            nfet_msg = f" | ES={nfet_diags['nfet/es']:.3f} [{nfet_diags['nfet/phase']}]"
+            nfet_msg = ""
+            if cfg.nfet.enabled:
+                nfet_msg = f" | ES={nfet_diags['nfet/es']:.3f} [{nfet_diags['nfet/phase']}]"
 
             log(
                 f"step {step+1:>6d} | loss {avg.get('loss_total', 0):.4f} | "
