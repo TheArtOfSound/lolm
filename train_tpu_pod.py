@@ -201,6 +201,15 @@ def wrap_with_fsdp(model: nn.Module) -> nn.Module:
         auto_wrapper_callable = None
         print("FSDP: no XLA checkpoint_module available, skipping grad checkpointing", flush=True)
 
+    def _wrap_leaf(module: nn.Module) -> nn.Module:
+        return FSDP(
+            module,
+            compute_dtype=torch.bfloat16,
+            buffer_dtype=torch.bfloat16,
+            flatten_parameters=True,
+            pin_layout_in_collective_ops=True,
+        )
+
     # 1. FSDP-wrap the decoder (5.2B params)
     model.decoder = FSDP(
         model.decoder,
@@ -233,20 +242,55 @@ def wrap_with_fsdp(model: nn.Module) -> nn.Module:
     if hasattr(model, 'ssm') and model.ssm is not None:
         for i, layer in enumerate(model.ssm.layers):
             if hasattr(layer, 'in_proj'):
-                layer.in_proj = FSDP(layer.in_proj,
-                    compute_dtype=torch.bfloat16, buffer_dtype=torch.bfloat16,
-                    flatten_parameters=True, pin_layout_in_collective_ops=True)
+                layer.in_proj = _wrap_leaf(layer.in_proj)
             if hasattr(layer, 'out_proj'):
-                layer.out_proj = FSDP(layer.out_proj,
-                    compute_dtype=torch.bfloat16, buffer_dtype=torch.bfloat16,
-                    flatten_parameters=True, pin_layout_in_collective_ops=True)
+                layer.out_proj = _wrap_leaf(layer.out_proj)
             if hasattr(layer, 'dt_proj'):
-                layer.dt_proj = FSDP(layer.dt_proj,
-                    compute_dtype=torch.bfloat16, buffer_dtype=torch.bfloat16,
-                    flatten_parameters=True, pin_layout_in_collective_ops=True)
+                layer.dt_proj = _wrap_leaf(layer.dt_proj)
         print(f"FSDP: wrapped SSM projections ({len(model.ssm.layers)} layers, saves ~1.7GB/chip)", flush=True)
 
+    # 4. FSDP-wrap persistent memory projections (153M params replicated today)
+    if hasattr(model, 'memory') and model.memory is not None:
+        for bank in model.memory.banks:
+            for attr in ('query_proj', 'write_proj', 'forget_gate', 'write_gate'):
+                if hasattr(bank, attr):
+                    setattr(bank, attr, _wrap_leaf(getattr(bank, attr)))
+        if hasattr(model.memory, 'combine'):
+            model.memory.combine = _wrap_leaf(model.memory.combine)
+        print(f"FSDP: wrapped memory projections ({len(model.memory.banks)} banks + combine)", flush=True)
+
+    # 5. FSDP-wrap manifestation gate MLP (136M params replicated today)
+    if hasattr(model, 'gate') and model.gate is not None:
+        for attr in ('fc1', 'fc2'):
+            if hasattr(model.gate, attr):
+                setattr(model.gate, attr, _wrap_leaf(getattr(model.gate, attr)))
+        print("FSDP: wrapped gate projections", flush=True)
+
+    # 6. FSDP-wrap fusion projections (proj_h/z/m/r are large linears)
+    wrapped_fusion = 0
+    for attr in ('proj_h', 'proj_z', 'proj_m', 'proj_r'):
+        proj = getattr(model, attr, None)
+        if proj is not None:
+            setattr(model, attr, _wrap_leaf(proj))
+            wrapped_fusion += 1
+    if wrapped_fusion:
+        print(f"FSDP: wrapped fusion projections ({wrapped_fusion})", flush=True)
+
     return model
+
+
+def get_fsdp_param_info(module: nn.Module) -> tuple[list[nn.Parameter], set[int]]:
+    """Return unique parameters owned by FSDP wrappers."""
+    fsdp_params = []
+    fsdp_param_ids = set()
+    for submodule in module.modules():
+        if isinstance(submodule, FSDP):
+            for param in submodule.parameters():
+                if id(param) in fsdp_param_ids:
+                    continue
+                fsdp_param_ids.add(id(param))
+                fsdp_params.append(param)
+    return fsdp_params, fsdp_param_ids
 
 
 def sync_replicated_grads(model: nn.Module, loss_fn: nn.Module,
@@ -257,18 +301,12 @@ def sync_replicated_grads(model: nn.Module, loss_fn: nn.Module,
     reduce-scatter. All other params (SSM, memory, regime, gate, fusion
     projections, CPC projections) are replicated and need explicit gradient sync.
     """
-    # Collect grads for replicated-only params (skip all FSDP-wrapped modules)
-    fsdp_prefixes = ('decoder.', 'lm_head.')
-    # SSM projection layers are also FSDP-wrapped
-    if hasattr(model, 'ssm') and model.ssm is not None:
-        for i, layer in enumerate(model.ssm.layers):
-            for attr in ('in_proj', 'out_proj', 'dt_proj'):
-                if hasattr(layer, attr) and isinstance(getattr(layer, attr), FSDP):
-                    fsdp_prefixes = fsdp_prefixes + (f'ssm.layers.{i}.{attr}.',)
-
+    # Collect grads for replicated-only params (skip any param already owned
+    # by an FSDP wrapper, regardless of where it sits in the model tree).
+    _, fsdp_param_ids = get_fsdp_param_info(model)
     grads = []
-    for name, param in model.named_parameters():
-        if not any(name.startswith(p) for p in fsdp_prefixes) and param.grad is not None:
+    for _, param in model.named_parameters():
+        if id(param) not in fsdp_param_ids and param.grad is not None:
             grads.append(param.grad)
     for param in loss_fn.parameters():
         if param.grad is not None:
@@ -427,8 +465,6 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
     }
     log(
         "NFET adaptive training controller initialized"
-        if cfg.nfet.enabled else
-        "NFET adaptive training controller disabled"
     )
 
     # --- Resume ---
@@ -455,16 +491,14 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
 
     # --- Optimizer ---
     # Split into two groups to save HBM on replicated params:
-    #   - FSDP params (decoder + lm_head): AdamW — optimizer states are sharded
-    #   - Replicated params (SSM, memory, gate, fusion, CPC): SGD with momentum
+    #   - FSDP params: AdamW — optimizer states are sharded
+    #   - Replicated params: SGD with momentum
     #     SGD uses 4B/param (momentum only) vs AdamW's 8B/param (momentum+variance)
-    #     For ~530M replicated params this saves ~2.1GB HBM per chip
-    fsdp_params = []
+    #     for the parameters that remain replicated after FSDP wrapping.
+    fsdp_params, fsdp_param_ids = get_fsdp_param_info(model)
     replicated_params = []
-    for name, param in model.named_parameters():
-        if name.startswith('decoder.') or name.startswith('lm_head.'):
-            fsdp_params.append(param)
-        else:
+    for _, param in model.named_parameters():
+        if id(param) not in fsdp_param_ids:
             replicated_params.append(param)
     # CPC projection params in loss_fn are also replicated
     replicated_params.extend(list(loss_fn.parameters()))
@@ -755,8 +789,7 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
             # NFET diagnostics
             nfet_diags = nfet_controller.get_diagnostics()
             nfet_msg = ""
-            if cfg.nfet.enabled:
-                nfet_msg = f" | ES={nfet_diags['nfet/es']:.3f} [{nfet_diags['nfet/phase']}]"
+            nfet_msg = f" | ES={nfet_diags['nfet/es']:.3f} [{nfet_diags['nfet/phase']}]"
 
             log(
                 f"step {step+1:>6d} | loss {avg.get('loss_total', 0):.4f} | "
