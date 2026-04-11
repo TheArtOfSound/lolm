@@ -665,6 +665,11 @@ def train_fn(index, config_path: str, resume_from: str = None, gcs_path: str = N
 
                 scaled_loss = total_loss / accum_steps
 
+            # mark_step before backward splits the XLA graph into two
+            # smaller graphs (forward + backward). Without this, the
+            # combined graph is too large and takes 90+ min to compile.
+            xm.mark_step()
+
             # Backward
             scaled_loss.backward()
 
