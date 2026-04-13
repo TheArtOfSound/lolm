@@ -128,16 +128,21 @@ app.include_router(benchmarks.router)
 app.include_router(analysis.router)
 app.include_router(chat.router)
 
-# Comparison page (self-contained HTML, no React needed)
+# New modules
+import eval_runner
+import publish
 import compare
+app.include_router(eval_runner.router)
+app.include_router(publish.router)
 app.include_router(compare.router)
 
 
 @app.on_event("startup")
 async def startup_event():
-    """Start background log tailers for any active comparison jobs."""
-    from training import start_tailers_for_active_jobs
+    """Start background services."""
+    from training import start_tailers_for_active_jobs, start_watchdog
     await start_tailers_for_active_jobs()
+    start_watchdog()  # Auto-recover from spot TPU preemption
 
 
 @app.get("/health")

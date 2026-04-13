@@ -143,6 +143,191 @@ def _stop_tailer(label: str):
         del _tailer_tasks[label]
 
 
+# ── Preemption Watchdog — auto-recover from spot TPU preemption ────────────
+
+_watchdog_task = None
+
+AVAILABLE_DATASETS = {
+    "fineweb-edu": "HuggingFaceFW/fineweb-edu",
+    "fineweb": "HuggingFaceFW/fineweb",
+    "the-pile": "EleutherAI/the_pile_deduplicated",
+    "redpajama": "togethercomputer/RedPajama-Data-1T-Sample",
+    "tinystories": "roneneldan/TinyStories",
+    "custom": None,  # User provides path
+}
+
+# TPU setup script — installs deps, clones repo
+TPU_SETUP_SCRIPT = """
+ls ~/Latent/train_tpu_pod.py 2>/dev/null && echo 'repo exists' || git clone https://github.com/TheArtOfSound/lolm.git ~/Latent
+pip install tiktoken datasets huggingface_hub pyarrow pyyaml torch~=2.4.0 'torch_xla[tpu]~=2.4.0' -f https://storage.googleapis.com/libtpu-releases/index.html -f https://storage.googleapis.com/libtpu-wheels/index.html 2>&1 | tail -1
+echo SETUP_DONE
+"""
+
+
+async def _get_tpu_state(tpu_name: str, zone: str = DEFAULT_ZONE) -> str:
+    """Get TPU state via REST API. Returns 'READY', 'PREEMPTED', 'NOT_FOUND', etc."""
+    data = await tpu_request("GET", f"projects/{GCP_PROJECT}/locations/{zone}/nodes/{tpu_name}")
+    if "error" in data:
+        error_msg = str(data.get("error", ""))
+        if "NOT_FOUND" in error_msg or "was not found" in error_msg:
+            return "NOT_FOUND"
+        return "ERROR"
+    return data.get("state", "UNKNOWN")
+
+
+async def _find_latest_gcs_checkpoint(gcs_path: str) -> str:
+    """Find latest checkpoint in GCS by reading latest.txt."""
+    rc, out, _ = await asyncio.create_subprocess_exec(
+        "gcloud", "storage", "cat", f"{gcs_path.rstrip('/')}/latest.txt",
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    ).communicate() if False else (None, None, None)
+    # Use ssh_command approach instead — run from server
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["gcloud", "storage", "cat", f"{gcs_path.rstrip('/')}/latest.txt"],
+            capture_output=True, text=True, timeout=15
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            ckpt_name = result.stdout.strip()
+            return f"{gcs_path.rstrip('/')}/{ckpt_name}"
+    except Exception:
+        pass
+    return ""
+
+
+async def _auto_recover(label: str, job: dict):
+    """Auto-recover from preemption: create new TPU, resume from GCS."""
+    global active_jobs
+    import subprocess
+
+    tpu_name = job.get("tpu_name", "lolm-train")
+    zone = job.get("zone", DEFAULT_ZONE)
+    config = job.get("config", "configs/scale/1b_lolm_pod.yaml")
+    gcs_path = job.get("gcs_path", "gs://lolm-tpu-runs/nfet-stable/")
+    accel_type = job.get("accelerator_type", "v4-8")
+
+    print(f"[WATCHDOG] Preemption detected for {label} ({tpu_name}). Auto-recovering...", flush=True)
+
+    # Update status
+    active_jobs[label]["status"] = "recovering"
+    active_jobs[label]["recovery_count"] = active_jobs[label].get("recovery_count", 0) + 1
+    _save_active_jobs(active_jobs)
+
+    # 1. Delete preempted TPU
+    try:
+        await tpu_request("DELETE", f"projects/{GCP_PROJECT}/locations/{zone}/nodes/{tpu_name}")
+        await asyncio.sleep(30)  # Wait for delete
+    except Exception:
+        pass
+
+    # 2. Create new spot TPU
+    body = {
+        "acceleratorType": accel_type,
+        "runtimeVersion": "tpu-ubuntu2204-base",
+        "networkConfig": {"enableExternalIps": True},
+        "schedulingConfig": {"preemptible": True},
+    }
+
+    print(f"[WATCHDOG] Creating new {accel_type} in {zone}...", flush=True)
+    create_result = await tpu_request(
+        "POST",
+        f"projects/{GCP_PROJECT}/locations/{zone}/nodes?nodeId={tpu_name}",
+        body=body, timeout=600,
+    )
+    if "error" in create_result:
+        print(f"[WATCHDOG] Create failed: {create_result}", flush=True)
+        active_jobs[label]["status"] = "recovery_failed"
+        _save_active_jobs(active_jobs)
+        return
+
+    # Wait for READY state
+    for _ in range(60):
+        state = await _get_tpu_state(tpu_name, zone)
+        if state == "READY":
+            break
+        await asyncio.sleep(10)
+    else:
+        print(f"[WATCHDOG] TPU never reached READY state", flush=True)
+        active_jobs[label]["status"] = "recovery_failed"
+        _save_active_jobs(active_jobs)
+        return
+
+    # 3. Get IPs and setup
+    ips = await get_tpu_ips(tpu_name, zone)
+    if not ips:
+        active_jobs[label]["status"] = "recovery_failed"
+        _save_active_jobs(active_jobs)
+        return
+
+    # 4. Setup all workers
+    for ip in ips:
+        await ssh_command(ip, TPU_SETUP_SCRIPT, timeout=600)
+
+    # 5. Find latest GCS checkpoint
+    resume_path = await _find_latest_gcs_checkpoint(gcs_path)
+    print(f"[WATCHDOG] Resuming from: {resume_path or 'scratch'}", flush=True)
+
+    # 6. Launch training
+    dataset = job.get("dataset")
+    result = await _do_launch(
+        tpu_name, config, zone, ips, resume_path or None, gcs_path, 0,
+        dataset=dataset,
+    )
+
+    if result.get("success"):
+        active_jobs[label]["status"] = "running"
+        active_jobs[label]["ips"] = ips
+        active_jobs[label]["recovered_at"] = datetime.now(timezone.utc).isoformat()
+        _save_active_jobs(active_jobs)
+        # Restart tailer
+        _start_tailer(label, ips[0])
+        print(f"[WATCHDOG] Recovery successful! Training resumed.", flush=True)
+    else:
+        active_jobs[label]["status"] = "recovery_failed"
+        _save_active_jobs(active_jobs)
+        print(f"[WATCHDOG] Recovery failed: {result}", flush=True)
+
+
+async def _preemption_watchdog():
+    """Background task: check all active jobs every 60s for preemption."""
+    while True:
+        try:
+            for label, job in list(active_jobs.items()):
+                if job.get("status") not in ("running", "recovering"):
+                    continue
+                if job.get("status") == "recovering":
+                    continue  # Already recovering
+
+                tpu_name = job.get("tpu_name")
+                zone = job.get("zone", DEFAULT_ZONE)
+                if not tpu_name:
+                    continue
+
+                state = await _get_tpu_state(tpu_name, zone)
+                if state in ("PREEMPTED", "NOT_FOUND"):
+                    max_recoveries = 10
+                    if job.get("recovery_count", 0) < max_recoveries:
+                        await _auto_recover(label, job)
+                    else:
+                        print(f"[WATCHDOG] Max recoveries reached for {label}", flush=True)
+                        active_jobs[label]["status"] = "max_recoveries"
+                        _save_active_jobs(active_jobs)
+        except Exception as e:
+            print(f"[WATCHDOG] Error: {e}", flush=True)
+
+        await asyncio.sleep(60)
+
+
+def start_watchdog():
+    """Start the preemption watchdog background task."""
+    global _watchdog_task
+    if _watchdog_task and not _watchdog_task.done():
+        return
+    _watchdog_task = asyncio.create_task(_preemption_watchdog())
+    print("[WATCHDOG] Preemption watchdog started", flush=True)
+
+
 async def get_tpu_ips(tpu_name: str, zone: str = DEFAULT_ZONE) -> list[str]:
     """Get external IPs of all workers in a TPU VM via REST API."""
     data = await tpu_request("GET", f"projects/{GCP_PROJECT}/locations/{zone}/nodes/{tpu_name}")
@@ -321,11 +506,23 @@ async def launch_training(
             "attempt": attempt + 1,
             "overrides": overrides,
             "auto_retry": auto_retry,
+            "gcs_path": gcs_path or "gs://lolm-tpu-runs/nfet-stable/",
+            "dataset": dataset,
+            "accelerator_type": "v4-8",  # Default, updated by TPU describe
+            "recovery_count": 0,
             "started_at": datetime.now(timezone.utc).isoformat(),
             "status": "running",
+            "model_type": "lolm",
         }
         _save_active_job(active_job)
         _save_run(run)
+
+        # Also update multi-job tracking for watchdog
+        active_jobs["lolm"] = dict(active_job)
+        _save_active_jobs(active_jobs)
+
+        # Start tailer + watchdog
+        _start_tailer("lolm", ips[0])
 
         return {
             "success": True,
@@ -650,6 +847,35 @@ async def compare_logs(label: str = "lolm", lines: int = 50):
     """Get recent raw log lines for a specific job."""
     log = list(raw_log_lines.get(label, []))
     return {"lines": log[-lines:]}
+
+
+@router.get("/datasets")
+async def list_datasets():
+    """List available training datasets."""
+    return {"datasets": [
+        {"id": "fineweb-edu", "name": "FineWeb-Edu", "tokens": "~15B", "description": "Curated educational web text"},
+        {"id": "fineweb", "name": "FineWeb", "tokens": "~627B", "description": "Large web crawl"},
+        {"id": "the-pile", "name": "The Pile", "tokens": "~300B", "description": "Diverse text corpus (EleutherAI)"},
+        {"id": "redpajama", "name": "RedPajama Sample", "tokens": "~1B", "description": "Open-source LLaMA data replica"},
+        {"id": "tinystories", "name": "TinyStories", "tokens": "~0.5B", "description": "Short children's stories for small models"},
+    ]}
+
+
+@router.get("/watchdog-status")
+async def watchdog_status():
+    """Get auto-recovery watchdog status."""
+    return {
+        "active": _watchdog_task is not None and not _watchdog_task.done(),
+        "jobs": {
+            label: {
+                "status": job.get("status"),
+                "recovery_count": job.get("recovery_count", 0),
+                "tpu_name": job.get("tpu_name"),
+                "gcs_path": job.get("gcs_path"),
+            }
+            for label, job in active_jobs.items()
+        },
+    }
 
 
 async def start_tailers_for_active_jobs():
