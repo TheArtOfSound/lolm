@@ -33,6 +33,7 @@ class HFBackboneOutput:
     logits: torch.Tensor
     hidden_states: torch.Tensor
     raw: Any
+    past_key_values: Any = None
 
 
 class FrozenHFBackbone(nn.Module):
@@ -113,13 +114,26 @@ class FrozenHFBackbone(nn.Module):
             batch = {key: value.to(device) for key, value in batch.items()}
         return batch
 
-    def forward(self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None, **kwargs: Any) -> HFBackboneOutput:
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        past_key_values: Any = None,
+        use_cache: bool = False,
+        **kwargs: Any,
+    ) -> HFBackboneOutput:
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
+            past_key_values=past_key_values,
             output_hidden_states=True,
-            use_cache=False,
+            use_cache=use_cache,
             **kwargs,
         )
         hidden = outputs.hidden_states[-1]
-        return HFBackboneOutput(logits=outputs.logits, hidden_states=hidden, raw=outputs)
+        return HFBackboneOutput(
+            logits=outputs.logits,
+            hidden_states=hidden,
+            raw=outputs,
+            past_key_values=getattr(outputs, "past_key_values", None),
+        )
