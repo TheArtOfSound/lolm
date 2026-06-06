@@ -28,6 +28,7 @@ from pydantic import BaseModel
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).resolve().parent / "static"
 LOCAL_MAX_PARAMS = int(os.environ.get("LOCAL_UI_MAX_PARAMS", "10000000000"))
+ENABLE_MPS_AUTO = os.environ.get("LOCAL_UI_ENABLE_MPS", "0") == "1"
 
 import sys
 sys.path.insert(0, str(ROOT))
@@ -74,7 +75,7 @@ class RuntimeState:
 
 
 STATE = RuntimeState()
-app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.1")
+app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.2")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -89,7 +90,10 @@ def pick_device(name: str) -> Optional[torch.device]:
     if name == "auto":
         if torch.cuda.is_available():
             return torch.device("cuda")
-        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        # Apple MPS can crash hard on mixed accumulator/output dtype matmuls in
+        # this graft path. Default auto to CPU on Mac; opt in with
+        # LOCAL_UI_ENABLE_MPS=1 or explicit device=mps after testing.
+        if ENABLE_MPS_AUTO and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return torch.device("mps")
         return torch.device("cpu")
     if name in {"none", "device_map"}:
@@ -149,6 +153,7 @@ def status():
         "loaded_at": STATE.loaded_at,
         "history_count": len(STATE.history),
         "local_max_params": LOCAL_MAX_PARAMS,
+        "mps_auto_enabled": ENABLE_MPS_AUTO,
     }
 
 
