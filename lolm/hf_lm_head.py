@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import torch
 import torch.nn.functional as F
 
 
 def project_with_backbone_lm_head(backbone_model, hidden: torch.Tensor) -> torch.Tensor:
-    """Project hidden states through a Hugging Face causal-LM output head."""
+    """Project hidden states through a Hugging Face causal-LM output head.
+
+    HF checkpoints may keep the LM head on a specific device and dtype, while the
+    LOLM-NFET graft may run in float32 for local stability. Aligning here avoids
+    hard-to-read matmul dtype/device errors during local chat and eval.
+    """
     head = backbone_model.get_output_embeddings()
     if head is None:
         raise ValueError("Backbone has no output embedding / LM head")
+    weight = getattr(head, "weight", None)
+    if weight is not None:
+        hidden = hidden.to(device=weight.device, dtype=weight.dtype)
     return head(hidden)
 
 
