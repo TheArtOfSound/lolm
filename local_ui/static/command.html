@@ -23,11 +23,13 @@
           <label>Top-p <input id="topP" type="number" min="0.01" max="1" step="0.01" value="0.9" /></label>
         </div>
         <button id="runBtn">Run Command</button>
+        <div class="splitBtns"><button id="thinkBtn" class="secondary">Think Now</button><button id="statusBtn" class="secondary">Refresh Self</button></div>
         <div id="status" class="status">Load a model from Lab View first, or start this server and use /api/load.</div>
       </section>
 
       <section class="outputPanel">
         <div class="card hero"><h2>Result</h2><div id="resultBox" class="body">No command run yet.</div></div>
+        <div class="card"><h2>Self Inbox</h2><div id="selfBox" class="body muted">No self-tick yet. Press Think Now.</div></div>
         <div class="grid">
           <div class="card"><h3>Plan</h3><div id="planBox" class="body muted">—</div></div>
           <div class="card"><h3>Actions</h3><div id="actionsBox" class="body muted">—</div></div>
