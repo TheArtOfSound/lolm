@@ -11,6 +11,7 @@ checkpoint, optionally attach a LOLM-NFET graft, and chat through a browser UI.
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -247,4 +248,6 @@ def history():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=7860)
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT", "7860"))
+    uvicorn.run(app, host=host, port=port)
