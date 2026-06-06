@@ -1,12 +1,4 @@
-"""Local GPT-style chat server for LOLM-NFET.
-
-Run from repo root:
-    python local_ui/server.py
-    open http://localhost:7860
-
-This is separate from the TPU dashboard. It is for local hosting: load a HF
-checkpoint, optionally attach a LOLM-NFET graft, and chat through a browser UI.
-"""
+"""Local GPT-style chat server for LOLM-NFET."""
 
 from __future__ import annotations
 
@@ -32,13 +24,8 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 IMPROVEMENT_LOG = DATA_DIR / "improvement_log.jsonl"
 LOCAL_MAX_PARAMS = int(os.environ.get("LOCAL_UI_MAX_PARAMS", "10000000000"))
 ENABLE_MPS_AUTO = os.environ.get("LOCAL_UI_ENABLE_MPS", "0") == "1"
-CONTROL_LABELS = {
-    0: "continue",
-    1: "retrieve",
-    2: "verify",
-    3: "branch",
-    4: "finalize",
-}
+ALLOW_LIVE_SELECTIVE_SSM = os.environ.get("LOCAL_UI_ALLOW_SELECTIVE_SSM", "0") == "1"
+CONTROL_LABELS = {0: "continue", 1: "retrieve", 2: "verify", 3: "branch", 4: "finalize"}
 
 import sys
 sys.path.insert(0, str(ROOT))
@@ -55,7 +42,7 @@ class LoadRequest(BaseModel):
     device: str = "auto"
     use_graft: bool = True
     graft_checkpoint: Optional[str] = None
-    latent_backend: str = "selective_ssm"
+    latent_backend: str = "gru_debug"
     allow_large: bool = False
 
 
@@ -86,12 +73,14 @@ class RuntimeState:
     profile: Optional[str] = None
     device: Optional[torch.device] = None
     use_graft: bool = True
+    latent_backend: Optional[str] = None
+    requested_latent_backend: Optional[str] = None
     loaded_at: float = 0.0
     history: List[Dict[str, Any]] = field(default_factory=list)
 
 
 STATE = RuntimeState()
-app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.3")
+app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.4")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -112,6 +101,31 @@ def pick_device(name: str) -> Optional[torch.device]:
     if name in {"none", "device_map"}:
         return None
     return torch.device(name)
+
+
+def live_safe_backend(requested: str) -> tuple[str, Optional[str]]:
+    if requested == "selective_ssm" and not ALLOW_LIVE_SELECTIVE_SSM:
+        return "gru_debug", "selective_ssm is disabled for live local chat; using gru_debug visualizer. Set LOCAL_UI_ALLOW_SELECTIVE_SSM=1 to opt in."
+    return requested, None
+
+
+def build_graft(d_model: int, backend: str, device: Optional[torch.device]) -> LOLMNFETGraft:
+    graft = LOLMNFETGraft(d_model=d_model, latent_backend=backend)  # type: ignore[arg-type]
+    if device is not None:
+        graft.to(device)
+    graft.eval()
+    return graft
+
+
+def ensure_live_safe_graft(backbone: FrozenHFBackbone) -> Optional[str]:
+    if STATE.graft is None:
+        return None
+    backend = getattr(STATE.graft, "latent_backend", STATE.latent_backend)
+    if backend == "selective_ssm" and not ALLOW_LIVE_SELECTIVE_SSM:
+        STATE.graft = build_graft(backbone.hidden_size, "gru_debug", STATE.device)
+        STATE.latent_backend = "gru_debug"
+        return "Existing selective_ssm graft was replaced with gru_debug for live-chat stability."
+    return None
 
 
 def render_prompt(messages: List[ChatMessage]) -> str:
@@ -179,10 +193,13 @@ def status():
         "profile": STATE.profile,
         "device": str(STATE.device) if STATE.device else None,
         "use_graft": STATE.use_graft,
+        "latent_backend": STATE.latent_backend,
+        "requested_latent_backend": STATE.requested_latent_backend,
         "loaded_at": STATE.loaded_at,
         "history_count": len(STATE.history),
         "local_max_params": LOCAL_MAX_PARAMS,
         "mps_auto_enabled": ENABLE_MPS_AUTO,
+        "live_selective_ssm_enabled": ALLOW_LIVE_SELECTIVE_SSM,
         "improvement_log": str(IMPROVEMENT_LOG),
     }
 
@@ -212,6 +229,7 @@ def load_model(req: LoadRequest):
             ),
         )
     device = pick_device(req.device)
+    backend, fallback_reason = live_safe_backend(req.latent_backend)
     backbone = FrozenHFBackbone.from_registry(req.profile, str(ROOT / req.registry), freeze=True)
     if device is not None:
         try:
@@ -220,20 +238,28 @@ def load_model(req: LoadRequest):
             return {"warning": f"model loaded, but device move failed: {exc}", "profile": req.profile}
     graft = None
     if req.use_graft:
-        graft = LOLMNFETGraft(d_model=backbone.hidden_size, latent_backend=req.latent_backend)  # type: ignore[arg-type]
+        graft = build_graft(backbone.hidden_size, backend, device)
         if req.graft_checkpoint:
             ckpt = torch.load(req.graft_checkpoint, map_location="cpu")
             graft.load_state_dict(ckpt["graft"])
-        if device is not None:
-            graft.to(device)
-        graft.eval()
     STATE.backbone = backbone
     STATE.graft = graft
     STATE.profile = req.profile
     STATE.device = device
     STATE.use_graft = req.use_graft
+    STATE.latent_backend = backend if graft is not None else None
+    STATE.requested_latent_backend = req.latent_backend
     STATE.loaded_at = time.time()
-    return {"loaded": True, "profile": req.profile, "hidden_size": backbone.hidden_size, "device": str(device), "size_b": round(profile.approximate_parameters / 1_000_000_000, 2)}
+    return {
+        "loaded": True,
+        "profile": req.profile,
+        "hidden_size": backbone.hidden_size,
+        "device": str(device),
+        "size_b": round(profile.approximate_parameters / 1_000_000_000, 2),
+        "latent_backend": STATE.latent_backend,
+        "requested_latent_backend": req.latent_backend,
+        "fallback_reason": fallback_reason,
+    }
 
 
 @app.post("/api/chat")
@@ -241,6 +267,7 @@ def chat(req: ChatRequest):
     if STATE.backbone is None:
         raise HTTPException(status_code=400, detail="No model loaded. Click Load model first. For this Mac, use qwen3_0_6b_smoke.")
     backbone = STATE.backbone
+    fallback_note = ensure_live_safe_graft(backbone)
     graft = STATE.graft if req.use_graft and STATE.graft is not None else None
     prompt = render_prompt(req.messages)
     batch = backbone.tokenizer(prompt, return_tensors="pt")
@@ -263,30 +290,37 @@ def chat(req: ChatRequest):
                 "base_entropy": entropy_from_logits(base_next_logits),
                 "base_top": top_token(backbone, base_next_logits),
                 "used_graft": graft is not None,
+                "latent_backend": STATE.latent_backend,
             }
             if graft is not None:
-                gout = graft(base.hidden_states, base_logits=base.logits, ablation_mode=req.ablation_mode)  # type: ignore[arg-type]
-                logits = project_with_backbone_lm_head(backbone.model, gout.corrected_hidden)
-                graft_next_logits = logits[:, -1, :]
-                gate_value = float(gout.gate.mean().detach().cpu())
-                regime_value = float(gout.nfet_state.regime_entropy.mean().detach().cpu())
-                drift_value = float(gout.nfet_state.hidden_drift.mean().detach().cpu())
-                control_id = int(gout.nfet_state.control_logits.argmax(dim=-1)[0].detach().cpu().item())
-                gate_means.append(gate_value)
-                regimes.append(regime_value)
-                controls.append(control_id)
-                token_trace.update({
-                    "gate_mean": gate_value,
-                    "surface_share": gate_value,
-                    "latent_share": 1.0 - gate_value,
-                    "regime_entropy": regime_value,
-                    "hidden_drift": drift_value,
-                    "control_id": control_id,
-                    "control": CONTROL_LABELS.get(control_id, str(control_id)),
-                    "graft_entropy": entropy_from_logits(graft_next_logits),
-                    "graft_top": top_token(backbone, graft_next_logits),
-                    "base_graft_delta_l2": float((graft_next_logits - base_next_logits).pow(2).mean().sqrt().detach().float().cpu().item()),
-                })
+                try:
+                    gout = graft(base.hidden_states, base_logits=base.logits, ablation_mode=req.ablation_mode)  # type: ignore[arg-type]
+                    logits = project_with_backbone_lm_head(backbone.model, gout.corrected_hidden)
+                    graft_next_logits = logits[:, -1, :]
+                    gate_value = float(gout.gate.mean().detach().cpu())
+                    regime_value = float(gout.nfet_state.regime_entropy.mean().detach().cpu())
+                    drift_value = float(gout.nfet_state.hidden_drift.mean().detach().cpu())
+                    control_id = int(gout.nfet_state.control_logits.argmax(dim=-1)[0].detach().cpu().item())
+                    gate_means.append(gate_value)
+                    regimes.append(regime_value)
+                    controls.append(control_id)
+                    token_trace.update({
+                        "gate_mean": gate_value,
+                        "surface_share": gate_value,
+                        "latent_share": 1.0 - gate_value,
+                        "regime_entropy": regime_value,
+                        "hidden_drift": drift_value,
+                        "control_id": control_id,
+                        "control": CONTROL_LABELS.get(control_id, str(control_id)),
+                        "graft_entropy": entropy_from_logits(graft_next_logits),
+                        "graft_top": top_token(backbone, graft_next_logits),
+                        "base_graft_delta_l2": float((graft_next_logits - base_next_logits).pow(2).mean().sqrt().detach().float().cpu().item()),
+                    })
+                except Exception as exc:
+                    token_trace.update({"used_graft": False, "graft_error": str(exc)[:500]})
+                    graft = None
+                    STATE.graft = None
+                    STATE.latent_backend = None
             next_token = sample_next(logits[:, -1, :], req.temperature, req.top_p)
             token_id = int(next_token[0, 0].detach().cpu().item())
             token_text = backbone.tokenizer.decode([token_id])
@@ -312,6 +346,7 @@ def chat(req: ChatRequest):
         "tokens": len(generated),
         "timestamp": time.time(),
         "trace": trace,
+        "fallback_note": fallback_note,
         "summary": {
             "avg_gate": avg_gate,
             "avg_surface_share": avg_gate,
@@ -329,6 +364,8 @@ def chat(req: ChatRequest):
         "tokens": len(generated),
         "profile": STATE.profile,
         "use_graft": graft is not None,
+        "latent_backend": STATE.latent_backend,
+        "fallback_note": fallback_note,
         "trace": trace,
         "summary": entry["summary"],
         "nfet": {
