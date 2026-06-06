@@ -22,7 +22,7 @@
 
   function list(items) {
     if (!items || !items.length) return '<span class="muted">None.</span>';
-    return items.map((x) => `<div class="item"><b>${esc(typeof x === 'string' ? x : x.kind || x.title || 'item')}</b><span>${esc(typeof x === 'string' ? '' : x.text || x.status || JSON.stringify(x.meta || x))}</span></div>`).join('');
+    return items.map((x) => `<div class="item"><b>${esc(typeof x === 'string' ? x : x.kind || x.title || 'item')}</b><span>${esc(typeof x === 'string' ? '' : x.text || x.status || x.summary || JSON.stringify(x.meta || x))}</span></div>`).join('');
   }
 
   function verdictClass(v) {
@@ -35,15 +35,26 @@
     const proof = data.proof || {};
     const result = data.result || {};
     const base = data.base || {};
+    const candidates = data.candidates || [];
+    const critique = data.critique || {};
+    const evidence = data.web_evidence || [];
     $('resultBox').textContent = result.response || '(empty result)';
     $('planBox').innerHTML = list(data.plan || []);
     $('actionsBox').innerHTML = list(data.actions || []);
     $('memoryBox').innerHTML = list(data.memory_used || []);
-    $('baseBox').textContent = base.response || '(empty base comparison)';
+    $('baseBox').innerHTML = `<div class="item"><b>Base-only answer</b><span>${esc(base.response || '(empty base comparison)')}</span></div>`;
+    if (candidates.length) {
+      $('baseBox').innerHTML += candidates.map((c, i) => `<div class="item"><b>Candidate ${i + 1}</b><span>${esc(c.response || '')}</span></div>`).join('');
+    }
+    if (critique.response) {
+      $('baseBox').innerHTML += `<div class="item"><b>Verifier critique</b><span>${esc(critique.response)}</span></div>`;
+    }
     $('proofBox').innerHTML = `
       <div class="item"><b class="${verdictClass(proof.verdict)}">${esc(proof.verdict || 'unknown')}</b><span>${esc(proof.plain || '')}</span></div>
-      <div class="item"><b>Metrics</b><span>similarity=${esc(proof.word_similarity)} · memory hits=${esc(proof.memory_hits_available)} · latent=${proof.avg_latent_share == null ? '—' : Math.round(proof.avg_latent_share * 100) + '%'} · control=${esc(proof.last_control || '—')}</span></div>
-      <div class="item"><b>Speed</b><span>base=${esc(proof.base_tok_per_sec)} tok/s · command=${esc(proof.command_tok_per_sec)} tok/s</span></div>
+      <div class="item"><b>Metrics</b><span>similarity=${esc(proof.word_similarity)} · memory hits=${esc(proof.memory_hits_available)} · web=${esc(proof.web_evidence_count)} · latent=${proof.avg_latent_share == null ? '—' : Math.round(proof.avg_latent_share * 100) + '%'} · control=${esc(proof.last_control || '—')}</span></div>
+      <div class="item"><b>Behavior flags</b><span>memory=${esc(proof.used_memory)} · web=${esc(proof.used_web)} · verify=${esc(proof.used_verify)}</span></div>
+      <div class="item"><b>Speed</b><span>base=${esc(proof.base_tok_per_sec)} tok/s · final=${esc(proof.command_tok_per_sec)} tok/s</span></div>
+      ${evidence.length ? `<div class="item"><b>Web evidence</b><span>${esc(evidence.map(e => `${e.kind}: ${e.title || e.url || e.error || ''}`).join('\n'))}</span></div>` : ''}
     `;
     $('learningBox').innerHTML = `<pre>${esc(JSON.stringify(data.saved_learning || {}, null, 2))}</pre>`;
   }
@@ -71,22 +82,24 @@
       return;
     }
     $('runBtn').disabled = true;
-    $('status').textContent = 'Running Command Center. This does memory retrieval, LOLM generation, base comparison, proof, and saved learning...';
-    $('resultBox').textContent = 'Working...';
+    $('status').textContent = 'Running Action Orchestrator: memory retrieval, optional web evidence, branch candidates, verification, final answer, proof, saved learning...';
+    $('resultBox').textContent = 'Working through orchestrated actions...';
     try {
-      const data = await postJSON('/api/command/run', {
+      const data = await postJSON('/api/agent/run', {
         command,
         max_new_tokens: Number($('maxTokens').value || 128),
         temperature: Number($('temperature').value || 0.35),
         top_p: Number($('topP').value || 0.9),
         use_graft: true,
         ablation_mode: 'full',
+        allow_web: /\b(search|web|internet|latest|current|today|research|look up|source|url|http)/i.test(command),
+        web_limit: 4,
       });
       render(data);
       $('status').textContent = `Done. Verdict: ${data.proof?.verdict || 'unknown'}`;
     } catch (e) {
-      $('status').textContent = `Command failed: ${e.message}\nMake sure the model is loaded. Start with: PORT=7861 PYTHONPATH=. python local_ui/server_command.py`;
-      $('resultBox').textContent = 'Command failed.';
+      $('status').textContent = `Agent run failed: ${e.message}\nStart with: PORT=7861 PYTHONPATH=. python local_ui/server_agent.py`;
+      $('resultBox').textContent = 'Agent run failed.';
     } finally {
       $('runBtn').disabled = false;
     }
