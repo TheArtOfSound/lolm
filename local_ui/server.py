@@ -27,8 +27,18 @@ from pydantic import BaseModel
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).resolve().parent / "static"
+DATA_DIR = Path(os.environ.get("LOCAL_UI_DATA_DIR", str(ROOT / "local_ui" / "data")))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+IMPROVEMENT_LOG = DATA_DIR / "improvement_log.jsonl"
 LOCAL_MAX_PARAMS = int(os.environ.get("LOCAL_UI_MAX_PARAMS", "10000000000"))
 ENABLE_MPS_AUTO = os.environ.get("LOCAL_UI_ENABLE_MPS", "0") == "1"
+CONTROL_LABELS = {
+    0: "continue",
+    1: "retrieve",
+    2: "verify",
+    3: "branch",
+    4: "finalize",
+}
 
 import sys
 sys.path.insert(0, str(ROOT))
@@ -63,6 +73,12 @@ class ChatRequest(BaseModel):
     ablation_mode: str = "full"
 
 
+class FeedbackRequest(BaseModel):
+    entry_id: str
+    rating: str
+    note: str = ""
+
+
 @dataclass
 class RuntimeState:
     backbone: Optional[FrozenHFBackbone] = None
@@ -75,7 +91,7 @@ class RuntimeState:
 
 
 STATE = RuntimeState()
-app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.2")
+app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.3")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -90,9 +106,6 @@ def pick_device(name: str) -> Optional[torch.device]:
     if name == "auto":
         if torch.cuda.is_available():
             return torch.device("cuda")
-        # Apple MPS can crash hard on mixed accumulator/output dtype matmuls in
-        # this graft path. Default auto to CPU on Mac; opt in with
-        # LOCAL_UI_ENABLE_MPS=1 or explicit device=mps after testing.
         if ENABLE_MPS_AUTO and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return torch.device("mps")
         return torch.device("cpu")
@@ -138,6 +151,22 @@ def sample_next(logits: torch.Tensor, temperature: float, top_p: float) -> torch
     return torch.multinomial(probs, num_samples=1)
 
 
+def entropy_from_logits(logits: torch.Tensor) -> float:
+    log_probs = F.log_softmax(logits, dim=-1)
+    probs = log_probs.exp()
+    return float((-(probs * log_probs).sum(dim=-1)).detach().float().cpu().item())
+
+
+def top_token(backbone: FrozenHFBackbone, logits: torch.Tensor) -> Dict[str, Any]:
+    idx = int(torch.argmax(logits, dim=-1).detach().cpu().item())
+    return {"id": idx, "text": backbone.tokenizer.decode([idx])}
+
+
+def append_improvement_event(entry: Dict[str, Any]) -> None:
+    with IMPROVEMENT_LOG.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
 @app.get("/")
 def index():
     return FileResponse(str(STATIC / "index.html"))
@@ -154,6 +183,7 @@ def status():
         "history_count": len(STATE.history),
         "local_max_params": LOCAL_MAX_PARAMS,
         "mps_auto_enabled": ENABLE_MPS_AUTO,
+        "improvement_log": str(IMPROVEMENT_LOG),
     }
 
 
@@ -221,27 +251,59 @@ def chat(req: ChatRequest):
     gate_means: List[float] = []
     regimes: List[float] = []
     controls: List[int] = []
+    trace: List[Dict[str, Any]] = []
 
     with torch.no_grad():
-        for _ in range(req.max_new_tokens):
+        for step in range(req.max_new_tokens):
             base = backbone(input_ids=input_ids)
+            base_next_logits = base.logits[:, -1, :]
+            logits = base.logits
+            token_trace: Dict[str, Any] = {
+                "step": step + 1,
+                "base_entropy": entropy_from_logits(base_next_logits),
+                "base_top": top_token(backbone, base_next_logits),
+                "used_graft": graft is not None,
+            }
             if graft is not None:
                 gout = graft(base.hidden_states, base_logits=base.logits, ablation_mode=req.ablation_mode)  # type: ignore[arg-type]
                 logits = project_with_backbone_lm_head(backbone.model, gout.corrected_hidden)
-                gate_means.append(float(gout.gate.mean().detach().cpu()))
-                regimes.append(float(gout.nfet_state.regime_entropy.mean().detach().cpu()))
-                controls.extend(gout.nfet_state.control_logits.argmax(dim=-1).detach().cpu().tolist())
-            else:
-                logits = base.logits
+                graft_next_logits = logits[:, -1, :]
+                gate_value = float(gout.gate.mean().detach().cpu())
+                regime_value = float(gout.nfet_state.regime_entropy.mean().detach().cpu())
+                drift_value = float(gout.nfet_state.hidden_drift.mean().detach().cpu())
+                control_id = int(gout.nfet_state.control_logits.argmax(dim=-1)[0].detach().cpu().item())
+                gate_means.append(gate_value)
+                regimes.append(regime_value)
+                controls.append(control_id)
+                token_trace.update({
+                    "gate_mean": gate_value,
+                    "surface_share": gate_value,
+                    "latent_share": 1.0 - gate_value,
+                    "regime_entropy": regime_value,
+                    "hidden_drift": drift_value,
+                    "control_id": control_id,
+                    "control": CONTROL_LABELS.get(control_id, str(control_id)),
+                    "graft_entropy": entropy_from_logits(graft_next_logits),
+                    "graft_top": top_token(backbone, graft_next_logits),
+                    "base_graft_delta_l2": float((graft_next_logits - base_next_logits).pow(2).mean().sqrt().detach().float().cpu().item()),
+                })
             next_token = sample_next(logits[:, -1, :], req.temperature, req.top_p)
+            token_id = int(next_token[0, 0].detach().cpu().item())
+            token_text = backbone.tokenizer.decode([token_id])
+            token_trace["sampled"] = {"id": token_id, "text": token_text}
+            trace.append(token_trace)
             input_ids = torch.cat([input_ids, next_token], dim=1)
             eos = getattr(backbone.tokenizer, "eos_token_id", None)
-            if eos is not None and int(next_token[0, 0].detach().cpu()) == int(eos):
+            if eos is not None and token_id == int(eos):
                 break
 
     generated = input_ids[0, start_len:].detach().cpu().tolist()
     text = backbone.tokenizer.decode(generated, skip_special_tokens=True)
+    entry_id = f"chat-{int(time.time() * 1000)}"
+    avg_gate = sum(gate_means) / len(gate_means) if gate_means else None
+    avg_regime = sum(regimes) / len(regimes) if regimes else None
     entry = {
+        "id": entry_id,
         "prompt": prompt,
         "response": text,
         "profile": STATE.profile,
@@ -249,25 +311,66 @@ def chat(req: ChatRequest):
         "ablation_mode": req.ablation_mode,
         "tokens": len(generated),
         "timestamp": time.time(),
+        "trace": trace,
+        "summary": {
+            "avg_gate": avg_gate,
+            "avg_surface_share": avg_gate,
+            "avg_latent_share": 1.0 - avg_gate if avg_gate is not None else None,
+            "avg_regime_entropy": avg_regime,
+            "last_control": CONTROL_LABELS.get(controls[-1], str(controls[-1])) if controls else None,
+        },
     }
     STATE.history.append(entry)
     STATE.history = STATE.history[-200:]
+    append_improvement_event({"type": "chat", **entry})
     return {
+        "id": entry_id,
         "response": text,
         "tokens": len(generated),
         "profile": STATE.profile,
         "use_graft": graft is not None,
+        "trace": trace,
+        "summary": entry["summary"],
         "nfet": {
-            "gate_mean": sum(gate_means) / len(gate_means) if gate_means else None,
-            "regime_entropy": sum(regimes) / len(regimes) if regimes else None,
+            "gate_mean": avg_gate,
+            "regime_entropy": avg_regime,
             "last_control": controls[-1] if controls else None,
+            "last_control_label": CONTROL_LABELS.get(controls[-1], str(controls[-1])) if controls else None,
         },
     }
+
+
+@app.post("/api/feedback")
+def feedback(req: FeedbackRequest):
+    target = None
+    for item in reversed(STATE.history):
+        if item.get("id") == req.entry_id:
+            target = item
+            break
+    event = {
+        "type": "feedback",
+        "entry_id": req.entry_id,
+        "rating": req.rating,
+        "note": req.note,
+        "timestamp": time.time(),
+        "profile": STATE.profile,
+        "target_found": target is not None,
+    }
+    append_improvement_event(event)
+    return {"saved": True, "event": event, "log": str(IMPROVEMENT_LOG)}
 
 
 @app.get("/api/history")
 def history():
     return {"history": STATE.history[-100:]}
+
+
+@app.get("/api/improvement-log")
+def improvement_log(limit: int = 50):
+    if not IMPROVEMENT_LOG.exists():
+        return {"items": [], "path": str(IMPROVEMENT_LOG)}
+    lines = IMPROVEMENT_LOG.read_text(encoding="utf-8").splitlines()[-limit:]
+    return {"items": [json.loads(line) for line in lines if line.strip()], "path": str(IMPROVEMENT_LOG)}
 
 
 if __name__ == "__main__":
