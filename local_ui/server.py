@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -80,7 +81,7 @@ class RuntimeState:
 
 
 STATE = RuntimeState()
-app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.5")
+app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.6")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -137,25 +138,68 @@ def ensure_live_safe_graft(backbone: FrozenHFBackbone) -> Optional[str]:
     return None
 
 
-def render_prompt(messages: List[ChatMessage]) -> str:
-    parts = []
-    system_seen = False
+def normalized_chat_messages(messages: List[ChatMessage]) -> List[Dict[str, str]]:
+    out: List[Dict[str, str]] = []
+    has_system = False
     for msg in messages:
         role = msg.role.strip().lower()
         content = msg.content.strip()
         if not content:
             continue
+        if role not in {"system", "user", "assistant"}:
+            role = "user"
         if role == "system":
-            system_seen = True
-            parts.append(f"System: {content}")
-        elif role == "assistant":
-            parts.append(f"Assistant: {content}")
-        else:
-            parts.append(f"User: {content}")
-    if not system_seen:
-        parts.insert(0, "System: You are LOLM-NFET, a local research assistant. Be precise, direct, and honest about uncertainty.")
+            has_system = True
+        out.append({"role": role, "content": content})
+    if not has_system:
+        out.insert(0, {"role": "system", "content": "You are LOLM-NFET, a local assistant. Answer directly. Do not reveal hidden reasoning or narrate your thought process."})
+    return out
+
+
+def prepare_chat_inputs(backbone: FrozenHFBackbone, messages: List[ChatMessage], device: Optional[torch.device]) -> Dict[str, torch.Tensor]:
+    chat_messages = normalized_chat_messages(messages)
+    tokenizer = backbone.tokenizer
+    try:
+        batch = tokenizer.apply_chat_template(
+            chat_messages,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_tensors="pt",
+            enable_thinking=False,
+        )
+        if isinstance(batch, torch.Tensor):
+            batch = {"input_ids": batch}
+    except TypeError:
+        try:
+            batch = tokenizer.apply_chat_template(chat_messages, add_generation_prompt=True, tokenize=True, return_tensors="pt")
+            if isinstance(batch, torch.Tensor):
+                batch = {"input_ids": batch}
+        except Exception:
+            batch = tokenizer(render_prompt_fallback(chat_messages), return_tensors="pt")
+    except Exception:
+        batch = tokenizer(render_prompt_fallback(chat_messages), return_tensors="pt")
+    if device is not None:
+        batch = {key: value.to(device) for key, value in batch.items()}
+    return batch
+
+
+def render_prompt_fallback(messages: List[Dict[str, str]]) -> str:
+    parts = []
+    for msg in messages:
+        role = msg["role"].capitalize()
+        parts.append(f"{role}: {msg['content']}")
     parts.append("Assistant:")
     return "\n".join(parts)
+
+
+def clean_response_text(text: str) -> str:
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"(?is)^\s*(okay|alright|let me|i need to|the user).*?(?=\n\n|$)", "", text).strip()
+    return text.strip()
+
+
+def prompt_for_log(messages: List[ChatMessage]) -> str:
+    return render_prompt_fallback(normalized_chat_messages(messages))
 
 
 def sample_next(logits: torch.Tensor, temperature: float, top_p: float) -> torch.Tensor:
@@ -231,13 +275,7 @@ def load_model(req: LoadRequest):
     registry = HFRegistry.load(ROOT / req.registry)
     profile = registry.get(req.profile)
     if not req.allow_large and (profile.role == "teacher" or profile.approximate_parameters > LOCAL_MAX_PARAMS):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Refusing local load of {profile.name} ({profile.approximate_parameters:,} params, role={profile.role}). "
-                "Use qwen3_0_6b_smoke or qwen3_4b_lab locally. Teachers are for hosted inference/distillation, not MacBook local loading."
-            ),
-        )
+        raise HTTPException(status_code=400, detail=f"Refusing local load of {profile.name} ({profile.approximate_parameters:,} params, role={profile.role}). Use qwen3_0_6b_smoke or qwen3_4b_lab locally.")
     device = pick_device(req.device)
     backend, fallback_reason = live_safe_backend(req.latent_backend)
     backbone = FrozenHFBackbone.from_registry(req.profile, str(ROOT / req.registry), freeze=True)
@@ -260,16 +298,7 @@ def load_model(req: LoadRequest):
     STATE.latent_backend = backend if graft is not None else None
     STATE.requested_latent_backend = req.latent_backend
     STATE.loaded_at = time.time()
-    return {
-        "loaded": True,
-        "profile": req.profile,
-        "hidden_size": backbone.hidden_size,
-        "device": str(device),
-        "size_b": round(profile.approximate_parameters / 1_000_000_000, 2),
-        "latent_backend": STATE.latent_backend,
-        "requested_latent_backend": req.latent_backend,
-        "fallback_reason": fallback_reason,
-    }
+    return {"loaded": True, "profile": req.profile, "hidden_size": backbone.hidden_size, "device": str(device), "size_b": round(profile.approximate_parameters / 1_000_000_000, 2), "latent_backend": STATE.latent_backend, "requested_latent_backend": req.latent_backend, "fallback_reason": fallback_reason}
 
 
 @app.post("/api/chat")
@@ -279,10 +308,8 @@ def chat(req: ChatRequest):
     backbone = STATE.backbone
     fallback_note = ensure_live_safe_graft(backbone)
     graft = STATE.graft if req.use_graft and STATE.graft is not None else None
-    prompt = render_prompt(req.messages)
-    batch = backbone.tokenizer(prompt, return_tensors="pt")
-    if STATE.device is not None:
-        batch = {k: v.to(STATE.device) for k, v in batch.items()}
+    prompt = prompt_for_log(req.messages)
+    batch = prepare_chat_inputs(backbone, req.messages, STATE.device)
     input_ids = batch["input_ids"]
     start_len = input_ids.size(1)
     gate_means: List[float] = []
@@ -293,16 +320,10 @@ def chat(req: ChatRequest):
 
     with torch.no_grad():
         for step in range(req.max_new_tokens):
-            base = backbone(input_ids=input_ids)
+            base = backbone(**batch)
             base_next_logits = base.logits[:, -1, :]
             logits = base.logits
-            token_trace: Dict[str, Any] = {
-                "step": step + 1,
-                "base_entropy": entropy_from_logits(base_next_logits),
-                "base_top": top_token(backbone, base_next_logits),
-                "used_graft": graft is not None,
-                "latent_backend": STATE.latent_backend,
-            }
+            token_trace: Dict[str, Any] = {"step": step + 1, "base_entropy": entropy_from_logits(base_next_logits), "base_top": top_token(backbone, base_next_logits), "used_graft": graft is not None, "latent_backend": STATE.latent_backend}
             if graft is not None:
                 try:
                     graft_hidden, graft_logits = cast_for_graft(base.hidden_states, base.logits, graft)
@@ -316,19 +337,7 @@ def chat(req: ChatRequest):
                     gate_means.append(gate_value)
                     regimes.append(regime_value)
                     controls.append(control_id)
-                    token_trace.update({
-                        "used_graft": True,
-                        "gate_mean": gate_value,
-                        "surface_share": gate_value,
-                        "latent_share": 1.0 - gate_value,
-                        "regime_entropy": regime_value,
-                        "hidden_drift": drift_value,
-                        "control_id": control_id,
-                        "control": CONTROL_LABELS.get(control_id, str(control_id)),
-                        "graft_entropy": entropy_from_logits(graft_next_logits),
-                        "graft_top": top_token(backbone, graft_next_logits),
-                        "base_graft_delta_l2": float((graft_next_logits.float() - base_next_logits.to(graft_next_logits.device).float()).pow(2).mean().sqrt().detach().cpu().item()),
-                    })
+                    token_trace.update({"used_graft": True, "gate_mean": gate_value, "surface_share": gate_value, "latent_share": 1.0 - gate_value, "regime_entropy": regime_value, "hidden_drift": drift_value, "control_id": control_id, "control": CONTROL_LABELS.get(control_id, str(control_id)), "graft_entropy": entropy_from_logits(graft_next_logits), "graft_top": top_token(backbone, graft_next_logits), "base_graft_delta_l2": float((graft_next_logits.float() - base_next_logits.to(graft_next_logits.device).float()).pow(2).mean().sqrt().detach().cpu().item())})
                 except Exception as exc:
                     last_graft_error = str(exc)[:500]
                     token_trace.update({"used_graft": False, "graft_error": last_graft_error})
@@ -337,60 +346,27 @@ def chat(req: ChatRequest):
                     STATE.latent_backend = None
             next_token = sample_next(logits[:, -1, :], req.temperature, req.top_p)
             token_id = int(next_token[0, 0].detach().cpu().item())
-            token_text = backbone.tokenizer.decode([token_id])
-            token_trace["sampled"] = {"id": token_id, "text": token_text}
+            token_trace["sampled"] = {"id": token_id, "text": backbone.tokenizer.decode([token_id])}
             trace.append(token_trace)
             input_ids = torch.cat([input_ids.to(next_token.device), next_token], dim=1)
+            batch["input_ids"] = input_ids
+            if "attention_mask" in batch:
+                pad = torch.ones((batch["attention_mask"].size(0), 1), dtype=batch["attention_mask"].dtype, device=batch["attention_mask"].device)
+                batch["attention_mask"] = torch.cat([batch["attention_mask"], pad], dim=1)
             eos = getattr(backbone.tokenizer, "eos_token_id", None)
             if eos is not None and token_id == int(eos):
                 break
 
     generated = input_ids[0, start_len:].detach().cpu().tolist()
-    text = backbone.tokenizer.decode(generated, skip_special_tokens=True)
+    text = clean_response_text(backbone.tokenizer.decode(generated, skip_special_tokens=True))
     entry_id = f"chat-{int(time.time() * 1000)}"
     avg_gate = sum(gate_means) / len(gate_means) if gate_means else None
     avg_regime = sum(regimes) / len(regimes) if regimes else None
-    entry = {
-        "id": entry_id,
-        "prompt": prompt,
-        "response": text,
-        "profile": STATE.profile,
-        "use_graft": graft is not None,
-        "ablation_mode": req.ablation_mode,
-        "tokens": len(generated),
-        "timestamp": time.time(),
-        "trace": trace,
-        "fallback_note": fallback_note,
-        "last_graft_error": last_graft_error,
-        "summary": {
-            "avg_gate": avg_gate,
-            "avg_surface_share": avg_gate,
-            "avg_latent_share": 1.0 - avg_gate if avg_gate is not None else None,
-            "avg_regime_entropy": avg_regime,
-            "last_control": CONTROL_LABELS.get(controls[-1], str(controls[-1])) if controls else None,
-        },
-    }
+    entry = {"id": entry_id, "prompt": prompt, "response": text, "profile": STATE.profile, "use_graft": graft is not None, "ablation_mode": req.ablation_mode, "tokens": len(generated), "timestamp": time.time(), "trace": trace, "fallback_note": fallback_note, "last_graft_error": last_graft_error, "summary": {"avg_gate": avg_gate, "avg_surface_share": avg_gate, "avg_latent_share": 1.0 - avg_gate if avg_gate is not None else None, "avg_regime_entropy": avg_regime, "last_control": CONTROL_LABELS.get(controls[-1], str(controls[-1])) if controls else None}}
     STATE.history.append(entry)
     STATE.history = STATE.history[-200:]
     append_improvement_event({"type": "chat", **entry})
-    return {
-        "id": entry_id,
-        "response": text,
-        "tokens": len(generated),
-        "profile": STATE.profile,
-        "use_graft": graft is not None,
-        "latent_backend": STATE.latent_backend,
-        "fallback_note": fallback_note,
-        "last_graft_error": last_graft_error,
-        "trace": trace,
-        "summary": entry["summary"],
-        "nfet": {
-            "gate_mean": avg_gate,
-            "regime_entropy": avg_regime,
-            "last_control": controls[-1] if controls else None,
-            "last_control_label": CONTROL_LABELS.get(controls[-1], str(controls[-1])) if controls else None,
-        },
-    }
+    return {"id": entry_id, "response": text, "tokens": len(generated), "profile": STATE.profile, "use_graft": graft is not None, "latent_backend": STATE.latent_backend, "fallback_note": fallback_note, "last_graft_error": last_graft_error, "trace": trace, "summary": entry["summary"], "nfet": {"gate_mean": avg_gate, "regime_entropy": avg_regime, "last_control": controls[-1] if controls else None, "last_control_label": CONTROL_LABELS.get(controls[-1], str(controls[-1])) if controls else None}}
 
 
 @app.post("/api/feedback")
@@ -400,15 +376,7 @@ def feedback(req: FeedbackRequest):
         if item.get("id") == req.entry_id:
             target = item
             break
-    event = {
-        "type": "feedback",
-        "entry_id": req.entry_id,
-        "rating": req.rating,
-        "note": req.note,
-        "timestamp": time.time(),
-        "profile": STATE.profile,
-        "target_found": target is not None,
-    }
+    event = {"type": "feedback", "entry_id": req.entry_id, "rating": req.rating, "note": req.note, "timestamp": time.time(), "profile": STATE.profile, "target_found": target is not None}
     append_improvement_event(event)
     return {"saved": True, "event": event, "log": str(IMPROVEMENT_LOG)}
 
