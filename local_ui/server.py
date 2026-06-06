@@ -31,6 +31,7 @@ CONTROL_LABELS = {0: "continue", 1: "retrieve", 2: "verify", 3: "branch", 4: "fi
 import sys
 sys.path.insert(0, str(ROOT))
 
+from local_ui.auto_context import build_auto_context
 from lolm.hf_backbone import FrozenHFBackbone
 from lolm.hf_lm_head import project_with_backbone_lm_head
 from lolm.hf_registry import HFRegistry
@@ -81,7 +82,7 @@ class RuntimeState:
 
 
 STATE = RuntimeState()
-app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.7")
+app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.8")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -151,8 +152,13 @@ def normalized_chat_messages(messages: List[ChatMessage]) -> List[Dict[str, str]
         if role == "system":
             has_system = True
         out.append({"role": role, "content": content})
-    if not has_system:
-        out.insert(0, {"role": "system", "content": "You are LOLM-NFET, a local assistant. Answer directly. Do not reveal hidden reasoning or narrate your thought process."})
+    base_system = "You are LOLM-NFET, a local assistant. Answer directly. Do not reveal hidden reasoning or narrate your thought process. Use the AUTO_CONTEXT as private operating context, not as text to repeat."
+    auto = build_auto_context(DATA_DIR)
+    if has_system:
+        out.insert(1, {"role": "system", "content": auto})
+    else:
+        out.insert(0, {"role": "system", "content": base_system})
+        out.insert(1, {"role": "system", "content": auto})
     return out
 
 
