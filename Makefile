@@ -1,4 +1,4 @@
-.PHONY: hf-smoke hf-train-tiny hf-train-stream hf-compare hf-compare-ablations hf-tests
+.PHONY: hf-smoke hf-train-tiny hf-train-stream hf-compare hf-compare-ablations hf-tests local-ui
 
 PROFILE ?= qwen3_0_6b_smoke
 DEVICE ?=
@@ -27,3 +27,6 @@ hf-compare-ablations:
 
 hf-tests:
 	PYTHONPATH=. pytest -q tests/test_hf_registry_and_graft.py
+
+local-ui:
+	PYTHONPATH=. python local_ui/server.py
