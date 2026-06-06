@@ -8,13 +8,13 @@ import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 import torch
 import torch.nn.functional as F
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -81,7 +81,7 @@ class RuntimeState:
 
 
 STATE = RuntimeState()
-app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.6")
+app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.7")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -156,17 +156,19 @@ def normalized_chat_messages(messages: List[ChatMessage]) -> List[Dict[str, str]
     return out
 
 
+def render_prompt_fallback(messages: List[Dict[str, str]]) -> str:
+    parts = []
+    for msg in messages:
+        parts.append(f"{msg['role'].capitalize()}: {msg['content']}")
+    parts.append("Assistant:")
+    return "\n".join(parts)
+
+
 def prepare_chat_inputs(backbone: FrozenHFBackbone, messages: List[ChatMessage], device: Optional[torch.device]) -> Dict[str, torch.Tensor]:
     chat_messages = normalized_chat_messages(messages)
     tokenizer = backbone.tokenizer
     try:
-        batch = tokenizer.apply_chat_template(
-            chat_messages,
-            add_generation_prompt=True,
-            tokenize=True,
-            return_tensors="pt",
-            enable_thinking=False,
-        )
+        batch = tokenizer.apply_chat_template(chat_messages, add_generation_prompt=True, tokenize=True, return_tensors="pt", enable_thinking=False)
         if isinstance(batch, torch.Tensor):
             batch = {"input_ids": batch}
     except TypeError:
@@ -181,15 +183,6 @@ def prepare_chat_inputs(backbone: FrozenHFBackbone, messages: List[ChatMessage],
     if device is not None:
         batch = {key: value.to(device) for key, value in batch.items()}
     return batch
-
-
-def render_prompt_fallback(messages: List[Dict[str, str]]) -> str:
-    parts = []
-    for msg in messages:
-        role = msg["role"].capitalize()
-        parts.append(f"{role}: {msg['content']}")
-    parts.append("Assistant:")
-    return "\n".join(parts)
 
 
 def clean_response_text(text: str) -> str:
@@ -235,6 +228,81 @@ def append_improvement_event(entry: Dict[str, Any]) -> None:
         handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
+def sse(event: str, data: Dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+def generation_loop(req: ChatRequest) -> Iterator[Dict[str, Any]]:
+    if STATE.backbone is None:
+        yield {"event": "error", "data": {"error": "No model loaded. Click Load model first."}}
+        return
+    backbone = STATE.backbone
+    fallback_note = ensure_live_safe_graft(backbone)
+    graft = STATE.graft if req.use_graft and STATE.graft is not None else None
+    prompt = prompt_for_log(req.messages)
+    batch = prepare_chat_inputs(backbone, req.messages, STATE.device)
+    input_ids = batch["input_ids"]
+    start_len = input_ids.size(1)
+    gate_means: List[float] = []
+    regimes: List[float] = []
+    controls: List[int] = []
+    trace: List[Dict[str, Any]] = []
+    last_graft_error: Optional[str] = None
+
+    yield {"event": "start", "data": {"profile": STATE.profile, "use_graft": graft is not None, "latent_backend": STATE.latent_backend, "fallback_note": fallback_note}}
+    with torch.no_grad():
+        for step in range(req.max_new_tokens):
+            base = backbone(**batch)
+            base_next_logits = base.logits[:, -1, :]
+            logits = base.logits
+            token_trace: Dict[str, Any] = {"step": step + 1, "base_entropy": entropy_from_logits(base_next_logits), "base_top": top_token(backbone, base_next_logits), "used_graft": graft is not None, "latent_backend": STATE.latent_backend}
+            if graft is not None:
+                try:
+                    graft_hidden, graft_logits = cast_for_graft(base.hidden_states, base.logits, graft)
+                    gout = graft(graft_hidden, base_logits=graft_logits, ablation_mode=req.ablation_mode)  # type: ignore[arg-type]
+                    logits = project_with_backbone_lm_head(backbone.model, gout.corrected_hidden)
+                    graft_next_logits = logits[:, -1, :]
+                    gate_value = float(gout.gate.mean().detach().cpu())
+                    regime_value = float(gout.nfet_state.regime_entropy.mean().detach().cpu())
+                    drift_value = float(gout.nfet_state.hidden_drift.mean().detach().cpu())
+                    control_id = int(gout.nfet_state.control_logits.argmax(dim=-1)[0].detach().cpu().item())
+                    gate_means.append(gate_value)
+                    regimes.append(regime_value)
+                    controls.append(control_id)
+                    token_trace.update({"used_graft": True, "gate_mean": gate_value, "surface_share": gate_value, "latent_share": 1.0 - gate_value, "regime_entropy": regime_value, "hidden_drift": drift_value, "control_id": control_id, "control": CONTROL_LABELS.get(control_id, str(control_id)), "graft_entropy": entropy_from_logits(graft_next_logits), "graft_top": top_token(backbone, graft_next_logits), "base_graft_delta_l2": float((graft_next_logits.float() - base_next_logits.to(graft_next_logits.device).float()).pow(2).mean().sqrt().detach().cpu().item())})
+                except Exception as exc:
+                    last_graft_error = str(exc)[:500]
+                    token_trace.update({"used_graft": False, "graft_error": last_graft_error})
+                    graft = None
+                    STATE.graft = None
+                    STATE.latent_backend = None
+            next_token = sample_next(logits[:, -1, :], req.temperature, req.top_p)
+            token_id = int(next_token[0, 0].detach().cpu().item())
+            token_text = backbone.tokenizer.decode([token_id])
+            token_trace["sampled"] = {"id": token_id, "text": token_text}
+            trace.append(token_trace)
+            yield {"event": "token", "data": {"token": token_text, "token_id": token_id, "trace": token_trace, "nfet": {"gate_mean": token_trace.get("gate_mean"), "latent_share": token_trace.get("latent_share"), "regime_entropy": token_trace.get("regime_entropy"), "hidden_drift": token_trace.get("hidden_drift"), "control": token_trace.get("control"), "base_graft_delta_l2": token_trace.get("base_graft_delta_l2")}}}
+            input_ids = torch.cat([input_ids.to(next_token.device), next_token], dim=1)
+            batch["input_ids"] = input_ids
+            if "attention_mask" in batch:
+                pad = torch.ones((batch["attention_mask"].size(0), 1), dtype=batch["attention_mask"].dtype, device=batch["attention_mask"].device)
+                batch["attention_mask"] = torch.cat([batch["attention_mask"], pad], dim=1)
+            eos = getattr(backbone.tokenizer, "eos_token_id", None)
+            if eos is not None and token_id == int(eos):
+                break
+
+    generated = input_ids[0, start_len:].detach().cpu().tolist()
+    text = clean_response_text(backbone.tokenizer.decode(generated, skip_special_tokens=True))
+    entry_id = f"chat-{int(time.time() * 1000)}"
+    avg_gate = sum(gate_means) / len(gate_means) if gate_means else None
+    avg_regime = sum(regimes) / len(regimes) if regimes else None
+    entry = {"id": entry_id, "prompt": prompt, "response": text, "profile": STATE.profile, "use_graft": graft is not None, "ablation_mode": req.ablation_mode, "tokens": len(generated), "timestamp": time.time(), "trace": trace, "fallback_note": fallback_note, "last_graft_error": last_graft_error, "summary": {"avg_gate": avg_gate, "avg_surface_share": avg_gate, "avg_latent_share": 1.0 - avg_gate if avg_gate is not None else None, "avg_regime_entropy": avg_regime, "last_control": CONTROL_LABELS.get(controls[-1], str(controls[-1])) if controls else None}}
+    STATE.history.append(entry)
+    STATE.history = STATE.history[-200:]
+    append_improvement_event({"type": "chat", **entry})
+    yield {"event": "done", "data": {"id": entry_id, "response": text, "tokens": len(generated), "profile": STATE.profile, "use_graft": graft is not None, "latent_backend": STATE.latent_backend, "fallback_note": fallback_note, "last_graft_error": last_graft_error, "trace": trace, "summary": entry["summary"], "nfet": {"gate_mean": avg_gate, "regime_entropy": avg_regime, "last_control": controls[-1] if controls else None, "last_control_label": CONTROL_LABELS.get(controls[-1], str(controls[-1])) if controls else None}}}
+
+
 @app.get("/")
 def index():
     return FileResponse(str(STATIC / "index.html"))
@@ -242,20 +310,7 @@ def index():
 
 @app.get("/api/status")
 def status():
-    return {
-        "loaded": STATE.backbone is not None,
-        "profile": STATE.profile,
-        "device": str(STATE.device) if STATE.device else None,
-        "use_graft": STATE.use_graft,
-        "latent_backend": STATE.latent_backend,
-        "requested_latent_backend": STATE.requested_latent_backend,
-        "loaded_at": STATE.loaded_at,
-        "history_count": len(STATE.history),
-        "local_max_params": LOCAL_MAX_PARAMS,
-        "mps_auto_enabled": ENABLE_MPS_AUTO,
-        "live_selective_ssm_enabled": ALLOW_LIVE_SELECTIVE_SSM,
-        "improvement_log": str(IMPROVEMENT_LOG),
-    }
+    return {"loaded": STATE.backbone is not None, "profile": STATE.profile, "device": str(STATE.device) if STATE.device else None, "use_graft": STATE.use_graft, "latent_backend": STATE.latent_backend, "requested_latent_backend": STATE.requested_latent_backend, "loaded_at": STATE.loaded_at, "history_count": len(STATE.history), "local_max_params": LOCAL_MAX_PARAMS, "mps_auto_enabled": ENABLE_MPS_AUTO, "live_selective_ssm_enabled": ALLOW_LIVE_SELECTIVE_SSM, "improvement_log": str(IMPROVEMENT_LOG)}
 
 
 @app.get("/api/profiles")
@@ -303,70 +358,23 @@ def load_model(req: LoadRequest):
 
 @app.post("/api/chat")
 def chat(req: ChatRequest):
-    if STATE.backbone is None:
-        raise HTTPException(status_code=400, detail="No model loaded. Click Load model first. For this Mac, use qwen3_0_6b_smoke.")
-    backbone = STATE.backbone
-    fallback_note = ensure_live_safe_graft(backbone)
-    graft = STATE.graft if req.use_graft and STATE.graft is not None else None
-    prompt = prompt_for_log(req.messages)
-    batch = prepare_chat_inputs(backbone, req.messages, STATE.device)
-    input_ids = batch["input_ids"]
-    start_len = input_ids.size(1)
-    gate_means: List[float] = []
-    regimes: List[float] = []
-    controls: List[int] = []
-    trace: List[Dict[str, Any]] = []
-    last_graft_error: Optional[str] = None
+    result = None
+    for item in generation_loop(req):
+        if item["event"] == "error":
+            raise HTTPException(status_code=400, detail=item["data"].get("error", "Chat failed"))
+        if item["event"] == "done":
+            result = item["data"]
+    if result is None:
+        raise HTTPException(status_code=500, detail="Generation produced no result")
+    return result
 
-    with torch.no_grad():
-        for step in range(req.max_new_tokens):
-            base = backbone(**batch)
-            base_next_logits = base.logits[:, -1, :]
-            logits = base.logits
-            token_trace: Dict[str, Any] = {"step": step + 1, "base_entropy": entropy_from_logits(base_next_logits), "base_top": top_token(backbone, base_next_logits), "used_graft": graft is not None, "latent_backend": STATE.latent_backend}
-            if graft is not None:
-                try:
-                    graft_hidden, graft_logits = cast_for_graft(base.hidden_states, base.logits, graft)
-                    gout = graft(graft_hidden, base_logits=graft_logits, ablation_mode=req.ablation_mode)  # type: ignore[arg-type]
-                    logits = project_with_backbone_lm_head(backbone.model, gout.corrected_hidden)
-                    graft_next_logits = logits[:, -1, :]
-                    gate_value = float(gout.gate.mean().detach().cpu())
-                    regime_value = float(gout.nfet_state.regime_entropy.mean().detach().cpu())
-                    drift_value = float(gout.nfet_state.hidden_drift.mean().detach().cpu())
-                    control_id = int(gout.nfet_state.control_logits.argmax(dim=-1)[0].detach().cpu().item())
-                    gate_means.append(gate_value)
-                    regimes.append(regime_value)
-                    controls.append(control_id)
-                    token_trace.update({"used_graft": True, "gate_mean": gate_value, "surface_share": gate_value, "latent_share": 1.0 - gate_value, "regime_entropy": regime_value, "hidden_drift": drift_value, "control_id": control_id, "control": CONTROL_LABELS.get(control_id, str(control_id)), "graft_entropy": entropy_from_logits(graft_next_logits), "graft_top": top_token(backbone, graft_next_logits), "base_graft_delta_l2": float((graft_next_logits.float() - base_next_logits.to(graft_next_logits.device).float()).pow(2).mean().sqrt().detach().cpu().item())})
-                except Exception as exc:
-                    last_graft_error = str(exc)[:500]
-                    token_trace.update({"used_graft": False, "graft_error": last_graft_error})
-                    graft = None
-                    STATE.graft = None
-                    STATE.latent_backend = None
-            next_token = sample_next(logits[:, -1, :], req.temperature, req.top_p)
-            token_id = int(next_token[0, 0].detach().cpu().item())
-            token_trace["sampled"] = {"id": token_id, "text": backbone.tokenizer.decode([token_id])}
-            trace.append(token_trace)
-            input_ids = torch.cat([input_ids.to(next_token.device), next_token], dim=1)
-            batch["input_ids"] = input_ids
-            if "attention_mask" in batch:
-                pad = torch.ones((batch["attention_mask"].size(0), 1), dtype=batch["attention_mask"].dtype, device=batch["attention_mask"].device)
-                batch["attention_mask"] = torch.cat([batch["attention_mask"], pad], dim=1)
-            eos = getattr(backbone.tokenizer, "eos_token_id", None)
-            if eos is not None and token_id == int(eos):
-                break
 
-    generated = input_ids[0, start_len:].detach().cpu().tolist()
-    text = clean_response_text(backbone.tokenizer.decode(generated, skip_special_tokens=True))
-    entry_id = f"chat-{int(time.time() * 1000)}"
-    avg_gate = sum(gate_means) / len(gate_means) if gate_means else None
-    avg_regime = sum(regimes) / len(regimes) if regimes else None
-    entry = {"id": entry_id, "prompt": prompt, "response": text, "profile": STATE.profile, "use_graft": graft is not None, "ablation_mode": req.ablation_mode, "tokens": len(generated), "timestamp": time.time(), "trace": trace, "fallback_note": fallback_note, "last_graft_error": last_graft_error, "summary": {"avg_gate": avg_gate, "avg_surface_share": avg_gate, "avg_latent_share": 1.0 - avg_gate if avg_gate is not None else None, "avg_regime_entropy": avg_regime, "last_control": CONTROL_LABELS.get(controls[-1], str(controls[-1])) if controls else None}}
-    STATE.history.append(entry)
-    STATE.history = STATE.history[-200:]
-    append_improvement_event({"type": "chat", **entry})
-    return {"id": entry_id, "response": text, "tokens": len(generated), "profile": STATE.profile, "use_graft": graft is not None, "latent_backend": STATE.latent_backend, "fallback_note": fallback_note, "last_graft_error": last_graft_error, "trace": trace, "summary": entry["summary"], "nfet": {"gate_mean": avg_gate, "regime_entropy": avg_regime, "last_control": controls[-1] if controls else None, "last_control_label": CONTROL_LABELS.get(controls[-1], str(controls[-1])) if controls else None}}
+@app.post("/api/chat/stream")
+def chat_stream(req: ChatRequest):
+    def events() -> Iterator[str]:
+        for item in generation_loop(req):
+            yield sse(item["event"], item["data"])
+    return StreamingResponse(events(), media_type="text/event-stream")
 
 
 @app.post("/api/feedback")
