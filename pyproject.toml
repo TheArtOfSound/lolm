@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lolm"
+version = "0.1.0"
+description = "Latent Order Language Model research code"
+requires-python = ">=3.10"
+authors = [
+  { name = "Bryan Leonard" },
+  { name = "Brandyn Leonard" }
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lolm*"]
