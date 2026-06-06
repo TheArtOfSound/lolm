@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const messages = [];
+let modelLoaded = false;
 
 function addMessage(role, content, meta = '') {
   messages.push({ role, content });
@@ -27,22 +28,44 @@ async function api(path, opts = {}) {
   return data;
 }
 
+function profileLabel(p) {
+  const safe = p.local_safe ? 'LOCAL' : 'HOSTED/TEACHER';
+  const size = p.size_b == null ? '' : `${p.size_b}B`;
+  return `${safe} · ${p.name} · ${size} · ${p.model_id}`;
+}
+
 async function loadProfiles() {
   const data = await api('/api/profiles');
   const select = $('profile');
   select.innerHTML = '';
-  data.profiles.forEach((p) => {
+  const localFirst = data.profiles.slice().sort((a, b) => Number(b.local_safe) - Number(a.local_safe));
+  localFirst.forEach((p) => {
     const opt = document.createElement('option');
     opt.value = p.name;
-    opt.textContent = `${p.name} — ${p.model_id}`;
+    opt.textContent = profileLabel(p);
+    opt.dataset.localSafe = String(p.local_safe);
+    opt.dataset.role = p.role;
+    opt.dataset.sizeB = String(p.size_b || '');
     if (p.name === 'qwen3_0_6b_smoke') opt.selected = true;
     select.appendChild(opt);
   });
+  updateProfileWarning();
+}
+
+function updateProfileWarning() {
+  const opt = $('profile').selectedOptions[0];
+  if (!opt) return;
+  if (opt.dataset.localSafe !== 'true') {
+    $('status').textContent = `Selected profile is not safe for local Mac loading. Pick qwen3_0_6b_smoke first.\nRole: ${opt.dataset.role}\nSize: ${opt.dataset.sizeB}B`;
+  } else if (!modelLoaded) {
+    $('status').textContent = 'Ready to load local profile. Click Load model before chatting.';
+  }
 }
 
 async function refreshStatus() {
   const s = await api('/api/status');
-  $('status').textContent = s.loaded ? `Loaded: ${s.profile}\nDevice: ${s.device || 'device_map'}` : 'Not loaded';
+  modelLoaded = Boolean(s.loaded);
+  $('status').textContent = s.loaded ? `Loaded: ${s.profile}\nDevice: ${s.device || 'device_map'}` : 'Not loaded. Click Load model before chatting.';
 }
 
 async function loadModel() {
@@ -58,8 +81,10 @@ async function loadModel() {
         latent_backend: 'selective_ssm',
       }),
     });
-    $('status').textContent = `Loaded: ${data.profile}\nHidden: ${data.hidden_size}\nDevice: ${data.device}`;
+    modelLoaded = true;
+    $('status').textContent = `Loaded: ${data.profile}\nHidden: ${data.hidden_size}\nSize: ${data.size_b}B\nDevice: ${data.device}`;
   } catch (e) {
+    modelLoaded = false;
     $('status').textContent = `Load failed: ${e.message}`;
   } finally {
     $('loadBtn').disabled = false;
@@ -70,6 +95,10 @@ async function sendMessage(ev) {
   ev.preventDefault();
   const prompt = $('prompt').value.trim();
   if (!prompt) return;
+  if (!modelLoaded) {
+    addMessage('assistant', 'No model loaded. Pick qwen3_0_6b_smoke, click Load model, wait for Loaded status, then chat.');
+    return;
+  }
   $('prompt').value = '';
   addMessage('user', prompt);
   $('sendBtn').disabled = true;
@@ -99,12 +128,14 @@ async function sendMessage(ev) {
   } catch (e) {
     placeholder.remove();
     addMessage('assistant', `Error: ${e.message}`);
+    if (String(e.message).includes('No model loaded')) modelLoaded = false;
   } finally {
     $('sendBtn').disabled = false;
   }
 }
 
 $('loadBtn').addEventListener('click', loadModel);
+$('profile').addEventListener('change', updateProfileWarning);
 $('composer').addEventListener('submit', sendMessage);
 $('clearBtn').addEventListener('click', () => {
   messages.length = 0;
