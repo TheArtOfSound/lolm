@@ -21,6 +21,7 @@ import torch.nn.functional as F
 from lolm.ssm import LatentSSMCore
 
 LatentBackend = Literal["selective_ssm", "gru_debug"]
+AblationMode = Literal["full", "no_latent", "no_regime", "no_gate", "no_residual", "latent_only"]
 
 
 @dataclass
@@ -41,6 +42,7 @@ class GraftOutput:
     gate: torch.Tensor
     regime_probs: torch.Tensor
     nfet_state: NFETState
+    ablation_mode: str = "full"
 
 
 class LatentGRUDebugPath(nn.Module):
@@ -85,6 +87,16 @@ class RegimeDetector(nn.Module):
         regime = probs @ self.emb.weight
         return probs, regime.detach()
 
+    def disabled(self, hidden: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        probs = torch.full(
+            (*hidden.shape[:2], self.n_regimes),
+            fill_value=1.0 / float(self.n_regimes),
+            device=hidden.device,
+            dtype=hidden.dtype,
+        )
+        regime = torch.zeros_like(hidden)
+        return probs, regime
+
 
 class ManifestationAdapter(nn.Module):
     """Per-dimension manifestation gate and residual correction."""
@@ -106,11 +118,23 @@ class ManifestationAdapter(nn.Module):
             nn.Linear(d_model * 2, d_model),
         )
 
-    def forward(self, surface: torch.Tensor, latent: torch.Tensor, regime: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self,
+        surface: torch.Tensor,
+        latent: torch.Tensor,
+        regime: torch.Tensor,
+        mode: AblationMode = "full",
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         s = self.surface_norm(surface)
         z = self.latent_norm(latent)
         r = self.regime_norm(regime)
         gate = self.gate(torch.cat([s, z, r], dim=-1))
+        if mode == "no_gate":
+            gate = torch.full_like(gate, 0.5)
+        elif mode == "latent_only":
+            gate = torch.zeros_like(gate)
+        elif mode == "no_latent":
+            gate = torch.ones_like(gate)
         fused = gate * s + (1.0 - gate) * z + 0.1 * r
         return self.residual(fused), gate
 
@@ -211,11 +235,28 @@ class LOLMNFETGraft(nn.Module):
         self.adapter = ManifestationAdapter(d_model=d_model)
         self.nfet = NFETController(d_model=d_model)
 
-    def forward(self, hidden: torch.Tensor, base_logits: Optional[torch.Tensor] = None) -> GraftOutput:
-        latent = self.latent(hidden)
-        regime_probs, regime = self.regime(hidden)
-        residual, gate = self.adapter(hidden, latent, regime)
-        corrected = hidden + self.residual_scale * residual
+    def forward(
+        self,
+        hidden: torch.Tensor,
+        base_logits: Optional[torch.Tensor] = None,
+        ablation_mode: AblationMode = "full",
+    ) -> GraftOutput:
+        if ablation_mode == "no_residual":
+            latent = torch.zeros_like(hidden)
+            regime_probs, _ = self.regime.disabled(hidden)
+            gate = torch.ones_like(hidden)
+            residual = torch.zeros_like(hidden)
+            corrected = hidden
+        else:
+            latent = self.latent(hidden)
+            if ablation_mode == "no_latent":
+                latent = torch.zeros_like(hidden)
+            if ablation_mode == "no_regime":
+                regime_probs, regime = self.regime.disabled(hidden)
+            else:
+                regime_probs, regime = self.regime(hidden)
+            residual, gate = self.adapter(hidden, latent, regime, mode=ablation_mode)
+            corrected = hidden + self.residual_scale * residual
         nfet_state = self.nfet(corrected, base_logits=base_logits, gate=gate, regime_probs=regime_probs)
         return GraftOutput(
             corrected_hidden=corrected,
@@ -223,6 +264,7 @@ class LOLMNFETGraft(nn.Module):
             gate=gate,
             regime_probs=regime_probs,
             nfet_state=nfet_state,
+            ablation_mode=ablation_mode,
         )
 
 
