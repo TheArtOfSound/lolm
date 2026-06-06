@@ -1,22 +1,26 @@
 """LOLM-NFET graft modules for frozen Hugging Face backbones.
 
-This file implements the first practical target:
-    frozen pretrained LM hidden states -> trainable latent-order adapter ->
+Practical target:
+    frozen pretrained LM hidden states -> LOLM latent-order adapter ->
     residual correction + NFET control signals.
 
-It is intentionally compact and dependency-light. The first milestone is to
-prove positive signal before replacing this SSM stub with the full LOLM SSM
-implementation already present in the repository.
+This version uses the repository's real ``LatentSSMCore`` by default. A tiny GRU
+fallback remains available only for debugging environments where the selective
+SSM path is too slow or unavailable.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, Literal, Optional
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+from lolm.ssm import LatentSSMCore
+
+LatentBackend = Literal["selective_ssm", "gru_debug"]
 
 
 @dataclass
@@ -39,13 +43,8 @@ class GraftOutput:
     nfet_state: NFETState
 
 
-class LatentSSMStub(nn.Module):
-    """Cheap recurrent latent path used for first graft tests.
-
-    This is not the final LOLM selective SSM. It gives us a trainable slow path
-    with deterministic shape behavior so we can validate the HF graft pipeline.
-    Replace with the repository's full selective SSM after the smoke tests pass.
-    """
+class LatentGRUDebugPath(nn.Module):
+    """Cheap recurrent latent path reserved for debugging only."""
 
     def __init__(self, d_model: int, d_latent: int) -> None:
         super().__init__()
@@ -61,7 +60,14 @@ class LatentSSMStub(nn.Module):
 
 
 class RegimeDetector(nn.Module):
-    """Discrete phase detector with soft regime probabilities."""
+    """Discrete phase detector with soft regime probabilities.
+
+    Uses the same survival principles as LOLM proper:
+      - clamped logits
+      - local neighbor interaction
+      - Gumbel-Softmax
+      - detached regime embedding before fusion
+    """
 
     def __init__(self, d_model: int, n_regimes: int = 32, temperature: float = 0.7) -> None:
         super().__init__()
@@ -69,21 +75,19 @@ class RegimeDetector(nn.Module):
         self.temperature = temperature
         self.proj = nn.Linear(d_model, n_regimes)
         self.emb = nn.Embedding(n_regimes, d_model)
-        self.smooth = nn.Conv1d(n_regimes, n_regimes, kernel_size=5, padding=4, groups=1)
+        self.smooth = nn.Conv1d(n_regimes, n_regimes, kernel_size=5, padding=4)
 
     def forward(self, hidden: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         logits = self.proj(hidden).clamp(-5.0, 5.0)
-        # Causal-ish smoothing: conv pads both sides, then trim future positions.
         smooth_in = logits.transpose(1, 2)
         smooth_logits = self.smooth(smooth_in)[:, :, : logits.size(1)].transpose(1, 2)
         probs = F.gumbel_softmax(logits + 0.1 * smooth_logits, tau=self.temperature, hard=False, dim=-1)
-        # Gradient isolation: the embedding injected into fusion is detached from token loss.
         regime = probs @ self.emb.weight
         return probs, regime.detach()
 
 
 class ManifestationAdapter(nn.Module):
-    """Per-dimension gate and residual correction."""
+    """Per-dimension manifestation gate and residual correction."""
 
     def __init__(self, d_model: int) -> None:
         super().__init__()
@@ -112,19 +116,23 @@ class ManifestationAdapter(nn.Module):
 
 
 class NFETController(nn.Module):
-    """Small controller head over trajectory observables.
+    """Controller head over trajectory observables.
 
-    Control classes are deliberately abstract for now:
-        0 continue, 1 retrieve, 2 verify, 3 branch, 4 stop
-    The controller can be supervised later with task traces.
+    Control classes:
+        0 continue
+        1 retrieve memory
+        2 verify/criticize
+        3 branch/explore
+        4 stop/finalize
     """
 
     def __init__(self, d_model: int, n_controls: int = 5) -> None:
         super().__init__()
+        hidden = max(64, d_model // 2)
         self.head = nn.Sequential(
-            nn.Linear(d_model + 4, d_model // 2),
+            nn.Linear(d_model + 4, hidden),
             nn.GELU(),
-            nn.Linear(d_model // 2, n_controls),
+            nn.Linear(hidden, n_controls),
         )
 
     def forward(
@@ -135,9 +143,13 @@ class NFETController(nn.Module):
         regime_probs: torch.Tensor,
     ) -> NFETState:
         pooled = corrected_hidden.mean(dim=1)
-        drift = (corrected_hidden[:, 1:] - corrected_hidden[:, :-1]).pow(2).mean(dim=(1, 2))
+        if corrected_hidden.size(1) > 1:
+            drift = (corrected_hidden[:, 1:] - corrected_hidden[:, :-1]).pow(2).mean(dim=(1, 2))
+        else:
+            drift = torch.zeros(corrected_hidden.size(0), device=corrected_hidden.device, dtype=corrected_hidden.dtype)
         gate_mean = gate.mean(dim=(1, 2))
-        regime_entropy = -(regime_probs.clamp_min(1e-8) * regime_probs.clamp_min(1e-8).log()).sum(dim=-1).mean(dim=1)
+        regime_probs_safe = regime_probs.clamp_min(1e-8)
+        regime_entropy = -(regime_probs_safe * regime_probs_safe.log()).sum(dim=-1).mean(dim=1)
         if base_logits is None:
             logit_entropy = torch.zeros_like(gate_mean)
         else:
@@ -166,12 +178,35 @@ class NFETController(nn.Module):
 class LOLMNFETGraft(nn.Module):
     """Trainable LOLM-NFET graft for a frozen pretrained LM."""
 
-    def __init__(self, d_model: int, d_latent: Optional[int] = None, n_regimes: int = 32, residual_scale: float = 0.1) -> None:
+    def __init__(
+        self,
+        d_model: int,
+        d_latent: Optional[int] = None,
+        n_regimes: int = 32,
+        residual_scale: float = 0.1,
+        latent_backend: LatentBackend = "selective_ssm",
+        ssm_layers: int = 1,
+        ssm_d_state: int = 16,
+        ssm_expand: int = 1,
+        use_cuda_kernels: bool = False,
+    ) -> None:
         super().__init__()
         d_latent = d_latent or max(128, d_model // 4)
         self.d_model = d_model
         self.residual_scale = residual_scale
-        self.latent = LatentSSMStub(d_model=d_model, d_latent=d_latent)
+        self.latent_backend = latent_backend
+        if latent_backend == "selective_ssm":
+            self.latent = LatentSSMCore(
+                d_model=d_model,
+                n_layers=ssm_layers,
+                d_state=ssm_d_state,
+                expand=ssm_expand,
+                use_cuda_kernels=use_cuda_kernels,
+            )
+        elif latent_backend == "gru_debug":
+            self.latent = LatentGRUDebugPath(d_model=d_model, d_latent=d_latent)
+        else:
+            raise ValueError(f"Unknown latent backend: {latent_backend}")
         self.regime = RegimeDetector(d_model=d_model, n_regimes=n_regimes)
         self.adapter = ManifestationAdapter(d_model=d_model)
         self.nfet = NFETController(d_model=d_model)
@@ -199,10 +234,9 @@ def graft_regularization_loss(output: GraftOutput) -> Dict[str, torch.Tensor]:
     usage_entropy = -(usage * usage.clamp_min(1e-8).log()).sum()
     n_regimes = regime_probs.size(-1)
     max_entropy = torch.log(torch.tensor(float(n_regimes), device=regime_probs.device))
-    losses = {
+    return {
         "regime_token_entropy_reward": -token_entropy,
         "regime_usage_entropy_reward": -(usage_entropy / max_entropy),
         "gate_balance": (output.gate.mean() - 0.7).pow(2),
         "residual_l2": output.residual.pow(2).mean(),
     }
-    return losses
