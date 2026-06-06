@@ -27,6 +27,7 @@ from pydantic import BaseModel
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).resolve().parent / "static"
+LOCAL_MAX_PARAMS = int(os.environ.get("LOCAL_UI_MAX_PARAMS", "10000000000"))
 
 import sys
 sys.path.insert(0, str(ROOT))
@@ -44,6 +45,7 @@ class LoadRequest(BaseModel):
     use_graft: bool = True
     graft_checkpoint: Optional[str] = None
     latent_backend: str = "selective_ssm"
+    allow_large: bool = False
 
 
 class ChatMessage(BaseModel):
@@ -72,7 +74,7 @@ class RuntimeState:
 
 
 STATE = RuntimeState()
-app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.0")
+app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -146,17 +148,34 @@ def status():
         "use_graft": STATE.use_graft,
         "loaded_at": STATE.loaded_at,
         "history_count": len(STATE.history),
+        "local_max_params": LOCAL_MAX_PARAMS,
     }
 
 
 @app.get("/api/profiles")
 def profiles():
     registry = HFRegistry.load(ROOT / "configs/hf_models.yaml")
-    return {"profiles": [p.__dict__ for p in registry.iter_profiles()]}
+    items = []
+    for p in registry.iter_profiles():
+        row = p.__dict__.copy()
+        row["local_safe"] = p.approximate_parameters <= LOCAL_MAX_PARAMS and p.role != "teacher"
+        row["size_b"] = round(p.approximate_parameters / 1_000_000_000, 2)
+        items.append(row)
+    return {"profiles": items, "local_max_params": LOCAL_MAX_PARAMS}
 
 
 @app.post("/api/load")
 def load_model(req: LoadRequest):
+    registry = HFRegistry.load(ROOT / req.registry)
+    profile = registry.get(req.profile)
+    if not req.allow_large and (profile.role == "teacher" or profile.approximate_parameters > LOCAL_MAX_PARAMS):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Refusing local load of {profile.name} ({profile.approximate_parameters:,} params, role={profile.role}). "
+                "Use qwen3_0_6b_smoke or qwen3_4b_lab locally. Teachers are for hosted inference/distillation, not MacBook local loading."
+            ),
+        )
     device = pick_device(req.device)
     backbone = FrozenHFBackbone.from_registry(req.profile, str(ROOT / req.registry), freeze=True)
     if device is not None:
@@ -179,13 +198,13 @@ def load_model(req: LoadRequest):
     STATE.device = device
     STATE.use_graft = req.use_graft
     STATE.loaded_at = time.time()
-    return {"loaded": True, "profile": req.profile, "hidden_size": backbone.hidden_size, "device": str(device)}
+    return {"loaded": True, "profile": req.profile, "hidden_size": backbone.hidden_size, "device": str(device), "size_b": round(profile.approximate_parameters / 1_000_000_000, 2)}
 
 
 @app.post("/api/chat")
 def chat(req: ChatRequest):
     if STATE.backbone is None:
-        raise HTTPException(status_code=400, detail="No model loaded. Load a profile first.")
+        raise HTTPException(status_code=400, detail="No model loaded. Click Load model first. For this Mac, use qwen3_0_6b_smoke.")
     backbone = STATE.backbone
     graft = STATE.graft if req.use_graft and STATE.graft is not None else None
     prompt = render_prompt(req.messages)
