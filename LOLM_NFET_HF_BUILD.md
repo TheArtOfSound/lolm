@@ -20,40 +20,56 @@ This is the practical checkpoint plan for building LOLM-NFET on top of existing 
 
 ```bash
 pip install -r requirements.txt
-python scripts/run_hf_graft_smoke.py --profile qwen3_0_6b_smoke
+make hf-tests
+make hf-smoke PROFILE=qwen3_0_6b_smoke
 ```
 
-Expected result: JSON summary with hidden-state shape, corrected-hidden shape, gate mean, regime entropy, logit entropy, and NFET control logits.
+Expected smoke result: JSON summary with hidden-state shape, corrected-hidden shape, gate mean, regime entropy, logit entropy, and NFET control logits.
 
-## Architecture committed in this pass
+## Tiny training run
+
+```bash
+make hf-train-tiny PROFILE=qwen3_0_6b_smoke STEPS=20
+make hf-compare PROFILE=qwen3_0_6b_smoke CKPT=runs/hf_graft_tiny/ckpt.pt
+```
+
+The comparison script is intentionally strict: it measures base loss and graft-corrected loss on the same text, same frozen backbone, and same LM head. The graft only wins if corrected hidden states reduce token loss.
+
+## Architecture committed
 
 ```text
 Frozen Hugging Face causal LM
   -> final hidden states
-  -> LOLM latent path stub
-  -> regime detector
+  -> LOLM selective SSM latent path
+  -> regime detector with Gumbel-Softmax + detached regime embedding
   -> manifestation adapter
   -> residual correction
   -> NFET controller observables
+  -> base LM head for token loss
 ```
 
 Files:
 
 ```text
-configs/hf_models.yaml        # checkpoint registry
-lolm/hf_registry.py           # typed registry loader
-lolm/hf_backbone.py           # frozen HF backbone wrapper
-lolm/nfet_graft.py            # LOLM-NFET graft skeleton
-scripts/run_hf_graft_smoke.py # first executable smoke test
+configs/hf_models.yaml         # checkpoint registry
+lolm/hf_registry.py            # typed registry loader
+lolm/hf_backbone.py            # frozen HF backbone wrapper
+lolm/nfet_graft.py             # LOLM-NFET graft using real LatentSSMCore by default
+lolm/hf_lm_head.py             # token-loss projection helper
+scripts/run_hf_graft_smoke.py  # executable smoke test
+scripts/train_hf_graft_tiny.py # minimal graft-only training loop
+scripts/eval_hf_graft_compare.py # base-vs-graft comparison
+tests/test_hf_registry_and_graft.py # offline tests, no model download required
+Makefile                       # command surface
 ```
 
 ## Next engineering moves
 
-1. Replace `LatentSSMStub` with the repository's full selective SSM module.
-2. Add adapter training against token loss using frozen Qwen hidden states.
-3. Add teacher trace generation from GLM/Kimi.
-4. Add eval matrix: base vs base+LOLM graft vs base+NFET vs base+LOLM+NFET.
-5. Add ablations for latent path, regime, gate, NFET controller, and memory.
+1. Replace toy text in `train_hf_graft_tiny.py` with streaming FineWeb-Edu or local trace data.
+2. Add teacher trace generation from GLM/Kimi.
+3. Add eval matrix: base vs base+LOLM graft vs base+NFET vs base+LOLM+NFET.
+4. Add ablations for latent path, regime, gate, NFET controller, and memory.
+5. Add checkpoint upload/publish path once a graft beats the frozen base on controlled eval.
 
 ## Rule
 
