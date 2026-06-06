@@ -7,82 +7,44 @@
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <div class="app">
+  <div class="app app3">
     <aside class="sidebar">
       <div class="brand">
         <div class="logo">Ω</div>
-        <div>
-          <h1>LOLM-NFET</h1>
-          <p>Local Workspace</p>
-        </div>
+        <div><h1>LOLM-NFET</h1><p>Local Workspace</p></div>
       </div>
-
       <section class="panel">
-        <label>Checkpoint profile</label>
-        <select id="profile"></select>
-        <label>Device</label>
-        <select id="device">
-          <option value="auto">auto</option>
-          <option value="cpu">cpu</option>
-          <option value="mps">mps</option>
-          <option value="device_map">device_map</option>
-        </select>
-        <label>LOLM engine mode</label>
-        <select id="latentBackend">
-          <option value="gru_debug" selected>stable local visualizer</option>
-          <option value="selective_ssm">real selective SSM</option>
-        </select>
+        <label>Checkpoint profile</label><select id="profile"></select>
+        <label>Device</label><select id="device"><option value="auto">auto</option><option value="cpu">cpu</option><option value="mps">mps</option><option value="device_map">device_map</option></select>
+        <label>LOLM engine mode</label><select id="latentBackend"><option value="gru_debug" selected>stable local visualizer</option><option value="selective_ssm">real selective SSM</option></select>
         <label class="check"><input type="checkbox" id="useGraft" checked /> Enable LOLM-NFET graft</label>
-        <label>Ablation</label>
-        <select id="ablation">
-          <option value="full">full</option>
-          <option value="no_latent">no_latent</option>
-          <option value="no_regime">no_regime</option>
-          <option value="no_gate">no_gate</option>
-          <option value="latent_only">latent_only</option>
-          <option value="no_residual">no_residual</option>
-        </select>
-        <button id="loadBtn">Load model</button>
-        <div id="status" class="status">Not loaded</div>
+        <label>Ablation</label><select id="ablation"><option value="full">full</option><option value="no_latent">no_latent</option><option value="no_regime">no_regime</option><option value="no_gate">no_gate</option><option value="latent_only">latent_only</option><option value="no_residual">no_residual</option></select>
+        <button id="loadBtn">Load model</button><div id="status" class="status">Not loaded</div>
       </section>
-
       <section class="panel grid2">
-        <div>
-          <label>Max tokens</label>
-          <input id="maxTokens" type="number" value="32" min="1" max="512" />
-        </div>
-        <div>
-          <label>Temp</label>
-          <input id="temperature" type="number" value="0.8" min="0.01" max="2" step="0.05" />
-        </div>
-        <div>
-          <label>Top-p</label>
-          <input id="topP" type="number" value="0.95" min="0.01" max="1" step="0.01" />
-        </div>
+        <div><label>Max tokens</label><input id="maxTokens" type="number" value="32" min="1" max="512" /></div>
+        <div><label>Temp</label><input id="temperature" type="number" value="0.8" min="0.01" max="2" step="0.05" /></div>
+        <div><label>Top-p</label><input id="topP" type="number" value="0.95" min="0.01" max="1" step="0.01" /></div>
       </section>
-
       <section class="panel telemetry">
         <h2>NFET telemetry</h2>
         <div><span>Gate</span><b id="gate">—</b></div>
+        <div><span>Latent share</span><b id="latentShare">—</b></div>
         <div><span>Regime entropy</span><b id="regime">—</b></div>
         <div><span>Control</span><b id="control">—</b></div>
       </section>
+      <section class="panel telemetry"><h2>Improvement log</h2><div><span>Trace events</span><b id="improveCount">0</b></div></section>
     </aside>
-
     <main class="chat">
-      <header>
-        <div>
-          <h2>Chat</h2>
-          <p>Frozen HF model + optional LOLM-NFET graft, hosted locally.</p>
-        </div>
-        <button id="clearBtn" class="ghost">Clear</button>
-      </header>
+      <header><div><h2>Chat</h2><p>Frozen HF model + LOLM/NFET graft, hosted locally.</p></div><button id="clearBtn" class="ghost">Clear</button></header>
       <div id="messages" class="messages"></div>
-      <form id="composer" class="composer">
-        <textarea id="prompt" placeholder="Message LOLM-NFET..." rows="3"></textarea>
-        <button id="sendBtn" type="submit">Send</button>
-      </form>
+      <form id="composer" class="composer"><textarea id="prompt" placeholder="Message LOLM-NFET..." rows="3"></textarea><button id="sendBtn" type="submit">Send</button></form>
     </main>
+    <aside class="inspector">
+      <section class="panel"><h2>Inside LOLM</h2><p>Surface path is language. Latent path is the hidden trajectory correction.</p><div class="barLabel"><span>Surface</span><b id="surfacePct">—</b></div><div class="bar"><div id="surfaceBar"></div></div><div class="barLabel"><span>Latent</span><b id="latentPct">—</b></div><div class="bar"><div id="latentBar"></div></div><div class="barLabel"><span>Base to graft</span><b id="deltaAvg">—</b></div><div class="bar"><div id="deltaBar"></div></div></section>
+      <section class="panel"><h2>Token trace</h2><div id="trace" class="trace empty">No trace yet.</div></section>
+      <section class="panel"><h2>Feedback loop</h2><p>Rate output quality to build local training data.</p><div class="feedbackBtns"><button id="goodBtn" class="small">Good</button><button id="badBtn" class="small danger">Bad</button></div><textarea id="feedbackNote" placeholder="Optional correction note" rows="3"></textarea><div id="feedbackStatus" class="status"></div></section>
+    </aside>
   </div>
   <script src="/static/app.js"></script>
 </body>
