@@ -33,6 +33,10 @@ function setText(id, value) { const el = $(id); if (el) el.textContent = value; 
 function setHTML(id, value) { const el = $(id); if (el) el.innerHTML = value; }
 function setBar(id, pct) { const el = $(id); if (el) el.style.width = `${Math.max(0, Math.min(100, pct))}%`; }
 
+function escapeHTML(s) {
+  return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
 function profileLabel(p) {
   const safe = p.local_safe ? 'LOCAL' : 'HOSTED/TEACHER';
   const size = p.size_b == null ? '' : `${p.size_b}B`;
@@ -78,10 +82,7 @@ async function loadModel() {
   $('status').textContent = 'Loading model... first load can take a while.';
   const backend = $('latentBackend') ? $('latentBackend').value : 'gru_debug';
   try {
-    const data = await api('/api/load', {
-      method: 'POST',
-      body: JSON.stringify({ profile: $('profile').value, device: $('device').value, use_graft: $('useGraft').checked, latent_backend: backend }),
-    });
+    const data = await api('/api/load', { method: 'POST', body: JSON.stringify({ profile: $('profile').value, device: $('device').value, use_graft: $('useGraft').checked, latent_backend: backend }) });
     modelLoaded = true;
     $('status').textContent = `Loaded: ${data.profile}\nHidden: ${data.hidden_size}\nSize: ${data.size_b}B\nDevice: ${data.device}\nLOLM engine: ${data.latent_backend || backend}`;
   } catch (e) {
@@ -93,14 +94,7 @@ async function loadModel() {
 }
 
 function controlMeaning(control) {
-  return {
-    continue: 'kept generating normally',
-    retrieve: 'wanted more context or memory',
-    verify: 'wanted to check the answer',
-    branch: 'considered alternatives',
-    finalize: 'was ready to close the response',
-    base: 'used the base model path',
-  }[control] || 'made an internal control move';
+  return { continue: 'kept generating normally', retrieve: 'wanted more context or memory', verify: 'wanted to check the answer', branch: 'considered alternatives', finalize: 'was ready to close the response', base: 'used the base model path' }[control] || 'made an internal control move';
 }
 
 function updatePlainExplanation(nfet, trace) {
@@ -109,12 +103,7 @@ function updatePlainExplanation(nfet, trace) {
   const latent = Math.round((nfet.latent_share ?? (1 - nfet.gate_mean)) * 100);
   const control = nfet.control || 'base';
   const delta = nfet.base_graft_delta_l2 == null ? 'small' : nfet.base_graft_delta_l2.toFixed(3);
-  setHTML('plainExplain', `
-    <div><b>What happened:</b> The answer was ${surface}% base-language path and ${latent}% LOLM latent correction.</div>
-    <div><b>NFET move:</b> ${control} — ${controlMeaning(control)}.</div>
-    <div><b>How much LOLM changed it:</b> base→graft movement was ${delta} on this token.</div>
-    <div><b>Simple meaning:</b> the model did not only autocomplete text; the graft nudged the hidden state and NFET chose a control posture.</div>
-  `);
+  setHTML('plainExplain', `<div><b>What happened:</b> The answer was ${surface}% base-language path and ${latent}% LOLM latent correction.</div><div><b>NFET move:</b> ${control} — ${controlMeaning(control)}.</div><div><b>How much LOLM changed it:</b> base→graft movement was ${delta} on this token.</div><div><b>Simple meaning:</b> the model did not only autocomplete text; the graft nudged the hidden state and NFET chose a control posture.</div>`);
 }
 
 function updateReflection(data) {
@@ -124,12 +113,7 @@ function updateReflection(data) {
   const latent = summary.avg_latent_share == null ? null : Math.round(summary.avg_latent_share * 100);
   reflectionCount += 1;
   setText('reflectionCount', String(reflectionCount));
-  setHTML('selfReflection', `
-    <div><b>Memory event written.</b></div>
-    <div>This response is now stored with prompt, output, token trace, gate behavior, regime entropy, NFET control, and feedback slot.</div>
-    <div><b>Average behavior:</b> ${gate ?? '—'}% surface / ${latent ?? '—'}% latent, final control: ${control}.</div>
-    <div><b>Next improvement use:</b> bad ratings become correction examples; good ratings become preferred local behavior.</div>
-  `);
+  setHTML('selfReflection', `<div><b>Memory event written.</b></div><div>This response is now stored with prompt, output, token trace, gate behavior, regime entropy, NFET control, and feedback slot.</div><div><b>Average behavior:</b> ${gate ?? '—'}% surface / ${latent ?? '—'}% latent, final control: ${control}.</div><div><b>Next improvement use:</b> bad ratings become correction examples; good ratings become preferred local behavior.</div>`);
 }
 
 function addTraceRow(t) {
@@ -146,7 +130,7 @@ function addTraceRow(t) {
   const reg = t.regime_entropy == null ? '—' : t.regime_entropy.toFixed(2);
   const drift = t.hidden_drift == null ? '—' : t.hidden_drift.toFixed(3);
   const delta = t.base_graft_delta_l2 == null ? '—' : t.base_graft_delta_l2.toFixed(3);
-  row.innerHTML = `<b>${token.replace(/</g, '&lt;')}</b><span>${controlMeaning(control)} · gate=${gate} latent=${latent} regime=${reg} drift=${drift} Δ=${delta}</span>`;
+  row.innerHTML = `<b>${escapeHTML(token)}</b><span>${controlMeaning(control)} · gate=${gate} latent=${latent} regime=${reg} drift=${drift} Δ=${delta}</span>`;
   box.prepend(row);
   while (box.children.length > 80) box.removeChild(box.lastChild);
 }
@@ -215,29 +199,13 @@ async function sendMessage(ev) {
   bubble.appendChild(meta);
   let accumulated = '';
   try {
-    const response = await fetch('/api/chat/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, max_new_tokens: Number($('maxTokens').value), temperature: Number($('temperature').value), top_p: Number($('topP').value), use_graft: $('useGraft').checked, ablation_mode: $('ablation').value }),
-    });
+    const response = await fetch('/api/chat/stream', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages, max_new_tokens: Number($('maxTokens').value), temperature: Number($('temperature').value), top_p: Number($('topP').value), use_graft: $('useGraft').checked, ablation_mode: $('ablation').value }) });
     if (!response.ok) throw new Error(await response.text());
     await readSSE(response, (event, data) => {
-      if (event === 'start') {
-        meta.textContent = `${data.profile} · live stream · graft=${data.use_graft} · engine=${data.latent_backend}`;
-      } else if (event === 'token') {
-        accumulated += data.token || '';
-        content.textContent = accumulated || '...';
-        renderLiveToken(data);
-      } else if (event === 'done') {
-        lastEntryId = data.id;
-        const finalText = data.response || accumulated || '(empty response)';
-        content.textContent = finalText;
-        meta.textContent = `${data.profile} · ${data.tokens} tokens · graft=${data.use_graft} · engine=${data.latent_backend}`;
-        messages.push({ role: 'assistant', content: finalText });
-        renderTrace(data);
-      } else if (event === 'error') {
-        throw new Error(data.error || 'Stream failed');
-      }
+      if (event === 'start') meta.textContent = `${data.profile} · live stream · graft=${data.use_graft} · engine=${data.latent_backend}`;
+      else if (event === 'token') { accumulated += data.token || ''; content.textContent = accumulated || '...'; renderLiveToken(data); }
+      else if (event === 'done') { lastEntryId = data.id; const finalText = data.response || accumulated || '(empty response)'; content.textContent = finalText; meta.textContent = `${data.profile} · ${data.tokens} tokens · graft=${data.use_graft} · engine=${data.latent_backend}`; messages.push({ role: 'assistant', content: finalText }); renderTrace(data); }
+      else if (event === 'error') throw new Error(data.error || 'Stream failed');
     });
   } catch (e) {
     content.textContent = `Error: ${e.message}`;
@@ -255,11 +223,52 @@ async function sendFeedback(rating) {
   setText('feedbackStatus', `Saved ${rating} feedback to local improvement log.`);
 }
 
+async function loadMemoryPanels() {
+  try {
+    const mem = await api('/api/memory/recent?limit=8');
+    setHTML('memoryList', mem.items.length ? mem.items.map((m) => `<div class="listItem"><b>${escapeHTML(m.tag || 'note')} · ${escapeHTML(m.importance)}</b><span>${escapeHTML(m.text)}</span></div>`).join('') : 'No memories yet.');
+    const goals = await api('/api/goals');
+    setHTML('goalList', goals.items.length ? goals.items.map((g) => `<div class="listItem"><b>${escapeHTML(g.title)}</b><span>${escapeHTML(g.why || '')}</span></div>`).join('') : 'No goals yet.');
+    const journal = await api('/api/journal?max_chars=1200');
+    setHTML('journalBox', journal.journal ? `<pre>${escapeHTML(journal.journal)}</pre>` : 'No journal yet.');
+  } catch (e) {
+    setHTML('memoryList', `Memory load failed: ${escapeHTML(e.message)}`);
+  }
+}
+
+async function saveMemory() {
+  const text = $('memoryText')?.value.trim();
+  if (!text) return;
+  await api('/api/memory/note', { method: 'POST', body: JSON.stringify({ text, tag: $('memoryTag').value || 'note', importance: Number($('memoryImportance').value || 5) }) });
+  $('memoryText').value = '';
+  await loadMemoryPanels();
+}
+
+async function saveGoal() {
+  const title = $('goalTitle')?.value.trim();
+  if (!title) return;
+  await api('/api/goals', { method: 'POST', body: JSON.stringify({ title, why: $('goalWhy').value || '', priority: 5 }) });
+  $('goalTitle').value = '';
+  $('goalWhy').value = '';
+  await loadMemoryPanels();
+}
+
+async function saveJournal() {
+  const markdown = $('journalText')?.value.trim();
+  if (!markdown) return;
+  await api('/api/journal', { method: 'POST', body: JSON.stringify({ markdown }) });
+  $('journalText').value = '';
+  await loadMemoryPanels();
+}
+
 $('loadBtn').addEventListener('click', loadModel);
 $('profile').addEventListener('change', updateProfileWarning);
 $('composer').addEventListener('submit', sendMessage);
 $('clearBtn').addEventListener('click', () => { messages.length = 0; $('messages').innerHTML = ''; });
 if ($('goodBtn')) $('goodBtn').addEventListener('click', () => sendFeedback('good'));
 if ($('badBtn')) $('badBtn').addEventListener('click', () => sendFeedback('bad'));
+if ($('saveMemoryBtn')) $('saveMemoryBtn').addEventListener('click', saveMemory);
+if ($('saveGoalBtn')) $('saveGoalBtn').addEventListener('click', saveGoal);
+if ($('saveJournalBtn')) $('saveJournalBtn').addEventListener('click', saveJournal);
 
-loadProfiles().then(refreshStatus).catch((e) => { $('status').textContent = `Init failed: ${e.message}`; });
+loadProfiles().then(refreshStatus).then(loadMemoryPanels).catch((e) => { $('status').textContent = `Init failed: ${e.message}`; });
