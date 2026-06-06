@@ -32,10 +32,14 @@ import sys
 sys.path.insert(0, str(ROOT))
 
 from local_ui.auto_context import build_auto_context
+from local_ui.memory_store import MemoryStore
 from lolm.hf_backbone import FrozenHFBackbone
 from lolm.hf_lm_head import project_with_backbone_lm_head
 from lolm.hf_registry import HFRegistry
 from lolm.nfet_graft import LOLMNFETGraft
+
+
+MEMORY = MemoryStore(DATA_DIR)
 
 
 class LoadRequest(BaseModel):
@@ -68,6 +72,26 @@ class FeedbackRequest(BaseModel):
     note: str = ""
 
 
+class MemoryNoteRequest(BaseModel):
+    text: str
+    tag: str = "note"
+    importance: int = 3
+
+
+class IdentityLineRequest(BaseModel):
+    line: str
+
+
+class GoalRequest(BaseModel):
+    title: str
+    why: str = ""
+    priority: int = 3
+
+
+class JournalRequest(BaseModel):
+    markdown: str
+
+
 @dataclass
 class RuntimeState:
     backbone: Optional[FrozenHFBackbone] = None
@@ -82,7 +106,7 @@ class RuntimeState:
 
 
 STATE = RuntimeState()
-app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.8")
+app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.9")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -393,6 +417,55 @@ def feedback(req: FeedbackRequest):
     event = {"type": "feedback", "entry_id": req.entry_id, "rating": req.rating, "note": req.note, "timestamp": time.time(), "profile": STATE.profile, "target_found": target is not None}
     append_improvement_event(event)
     return {"saved": True, "event": event, "log": str(IMPROVEMENT_LOG)}
+
+
+@app.post("/api/memory/note")
+def save_memory_note(req: MemoryNoteRequest):
+    item_id = MEMORY.append_note(req.text, tag=req.tag, importance=req.importance)
+    return {"saved": True, "id": item_id}
+
+
+@app.get("/api/memory/recent")
+def recent_memory(limit: int = 8):
+    return {"items": MEMORY.recent_notes(limit=limit)}
+
+
+@app.get("/api/memory/search")
+def search_memory(q: str, limit: int = 12):
+    return {"items": MEMORY.search_notes(q, limit=limit)}
+
+
+@app.get("/api/memory/identity")
+def get_identity():
+    return {"identity": MEMORY.read_identity()}
+
+
+@app.post("/api/memory/identity-line")
+def add_identity_line(req: IdentityLineRequest):
+    MEMORY.append_identity_line(req.line)
+    return {"saved": True, "identity": MEMORY.read_identity()}
+
+
+@app.get("/api/goals")
+def get_goals():
+    return {"items": MEMORY.get_goals()}
+
+
+@app.post("/api/goals")
+def add_goal(req: GoalRequest):
+    item_id = MEMORY.add_goal(req.title, why=req.why, priority=req.priority)
+    return {"saved": True, "id": item_id, "items": MEMORY.get_goals()}
+
+
+@app.get("/api/journal")
+def get_journal(max_chars: int = 8000):
+    return {"journal": MEMORY.read_journal(max_chars=max_chars)}
+
+
+@app.post("/api/journal")
+def add_journal(req: JournalRequest):
+    MEMORY.append_journal(req.markdown)
+    return {"saved": True, "journal": MEMORY.read_journal()}
 
 
 @app.get("/api/history")
