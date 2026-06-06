@@ -1,0 +1,135 @@
+# Hugging Face checkpoint registry for LOLM-NFET.
+# This file separates three roles:
+#   1. lab_base: small enough to actually load, instrument, and adapter-train.
+#   2. scale_base: target base checkpoint once the graft proves useful.
+#   3. teacher: frontier/large models used for distillation, synthetic traces, and adversarial comparison.
+#
+# Do not start by trying to finetune the teacher models. Use them to generate traces and evaluation pressure.
+
+active_profile: qwen3_0_6b_smoke
+
+profiles:
+  qwen3_0_6b_smoke:
+    role: lab_base
+    model_id: Qwen/Qwen3-0.6B
+    tokenizer_id: Qwen/Qwen3-0.6B
+    family: qwen3
+    license: apache-2.0
+    approximate_parameters: 751600000
+    dtype: auto
+    trust_remote_code: false
+    device_map: auto
+    purpose: CPU/MPS/small-GPU smoke tests, hidden-state extraction, adapter wiring.
+
+  qwen3_4b_lab:
+    role: lab_base
+    model_id: Qwen/Qwen3-4B
+    tokenizer_id: Qwen/Qwen3-4B
+    family: qwen3
+    license: apache-2.0
+    approximate_parameters: 4022500000
+    dtype: bfloat16
+    trust_remote_code: false
+    device_map: auto
+    purpose: first serious LOLM-NFET graft training target.
+
+  qwen3_8b_main:
+    role: scale_base
+    model_id: Qwen/Qwen3-8B
+    tokenizer_id: Qwen/Qwen3-8B
+    family: qwen3
+    license: apache-2.0
+    approximate_parameters: 8190700000
+    dtype: bfloat16
+    trust_remote_code: false
+    device_map: auto
+    purpose: main lab target after 4B graft shows positive signal.
+
+  qwen3_32b_scale:
+    role: scale_base
+    model_id: Qwen/Qwen3-32B
+    tokenizer_id: Qwen/Qwen3-32B
+    family: qwen3
+    license: apache-2.0
+    approximate_parameters: 32762100000
+    dtype: bfloat16
+    trust_remote_code: false
+    device_map: auto
+    purpose: scale target for larger adapter and long-context tests.
+
+  qwen3_embedding_memory:
+    role: memory_embedding
+    model_id: Qwen/Qwen3-Embedding-0.6B
+    tokenizer_id: Qwen/Qwen3-Embedding-0.6B
+    family: qwen3_embedding
+    license: apache-2.0
+    approximate_parameters: 595800000
+    dtype: auto
+    trust_remote_code: false
+    device_map: auto
+    purpose: retrieval embedding model for external memory experiments.
+
+  glm_5_1_teacher:
+    role: teacher
+    model_id: zai-org/GLM-5.1
+    tokenizer_id: zai-org/GLM-5.1
+    family: glm_moe_dsa
+    license: mit
+    approximate_parameters: 753864100000
+    dtype: bfloat16
+    trust_remote_code: true
+    device_map: auto
+    purpose: high-end teacher for trace distillation and adversarial task comparison.
+
+  glm_5_1_fp8_teacher:
+    role: teacher
+    model_id: zai-org/GLM-5.1-FP8
+    tokenizer_id: zai-org/GLM-5.1-FP8
+    family: glm_moe_dsa
+    license: mit
+    approximate_parameters: 753910000000
+    dtype: auto
+    trust_remote_code: true
+    device_map: auto
+    purpose: lower-memory GLM-5.1 teacher/inference target when FP8 serving is available.
+
+  kimi_k2_thinking_teacher:
+    role: teacher
+    model_id: moonshotai/Kimi-K2-Thinking
+    tokenizer_id: moonshotai/Kimi-K2-Thinking
+    family: kimi_k2
+    license: other
+    approximate_parameters: 1058118300000
+    dtype: auto
+    trust_remote_code: true
+    device_map: auto
+    purpose: largest reasoning teacher for hard traces. Do not adapter-train directly.
+
+  kimi_k2_instruct_teacher:
+    role: teacher
+    model_id: moonshotai/Kimi-K2-Instruct-0905
+    tokenizer_id: moonshotai/Kimi-K2-Instruct-0905
+    family: kimi_k2
+    license: other
+    approximate_parameters: 1026470700000
+    dtype: auto
+    trust_remote_code: true
+    device_map: auto
+    purpose: high-throughput instruction teacher for distillation traces and comparison.
+
+download_sets:
+  smoke:
+    - qwen3_0_6b_smoke
+  lab:
+    - qwen3_0_6b_smoke
+    - qwen3_4b_lab
+    - qwen3_embedding_memory
+  scale:
+    - qwen3_8b_main
+    - qwen3_32b_scale
+    - qwen3_embedding_memory
+  teachers:
+    - glm_5_1_teacher
+    - glm_5_1_fp8_teacher
+    - kimi_k2_thinking_teacher
+    - kimi_k2_instruct_teacher
