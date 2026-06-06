@@ -106,7 +106,7 @@ class RuntimeState:
 
 
 STATE = RuntimeState()
-app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.9")
+app = FastAPI(title="LOLM-NFET Local Workspace", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -272,23 +272,31 @@ def generation_loop(req: ChatRequest) -> Iterator[Dict[str, Any]]:
     prompt = prompt_for_log(req.messages)
     batch = prepare_chat_inputs(backbone, req.messages, STATE.device)
     input_ids = batch["input_ids"]
+    attention_mask = batch.get("attention_mask")
+    if attention_mask is None:
+        attention_mask = torch.ones_like(input_ids)
     start_len = input_ids.size(1)
     gate_means: List[float] = []
     regimes: List[float] = []
     controls: List[int] = []
     trace: List[Dict[str, Any]] = []
     last_graft_error: Optional[str] = None
+    past_key_values: Any = None
+    next_input_ids = input_ids
 
-    yield {"event": "start", "data": {"profile": STATE.profile, "use_graft": graft is not None, "latent_backend": STATE.latent_backend, "fallback_note": fallback_note}}
+    yield {"event": "start", "data": {"profile": STATE.profile, "use_graft": graft is not None, "latent_backend": STATE.latent_backend, "fallback_note": fallback_note, "fast_mode": True}}
     with torch.no_grad():
         for step in range(req.max_new_tokens):
-            base = backbone(**batch)
+            base = backbone(input_ids=next_input_ids, attention_mask=attention_mask, past_key_values=past_key_values, use_cache=True)
+            past_key_values = base.past_key_values
             base_next_logits = base.logits[:, -1, :]
-            logits = base.logits
-            token_trace: Dict[str, Any] = {"step": step + 1, "base_entropy": entropy_from_logits(base_next_logits), "base_top": top_token(backbone, base_next_logits), "used_graft": graft is not None, "latent_backend": STATE.latent_backend}
+            logits = base.logits[:, -1:, :]
+            token_trace: Dict[str, Any] = {"step": step + 1, "base_entropy": entropy_from_logits(base_next_logits), "base_top": top_token(backbone, base_next_logits), "used_graft": graft is not None, "latent_backend": STATE.latent_backend, "fast_mode": True}
             if graft is not None:
                 try:
-                    graft_hidden, graft_logits = cast_for_graft(base.hidden_states, base.logits, graft)
+                    last_hidden = base.hidden_states[:, -1:, :]
+                    last_logits = base.logits[:, -1:, :]
+                    graft_hidden, graft_logits = cast_for_graft(last_hidden, last_logits, graft)
                     gout = graft(graft_hidden, base_logits=graft_logits, ablation_mode=req.ablation_mode)  # type: ignore[arg-type]
                     logits = project_with_backbone_lm_head(backbone.model, gout.corrected_hidden)
                     graft_next_logits = logits[:, -1, :]
@@ -313,10 +321,9 @@ def generation_loop(req: ChatRequest) -> Iterator[Dict[str, Any]]:
             trace.append(token_trace)
             yield {"event": "token", "data": {"token": token_text, "token_id": token_id, "trace": token_trace, "nfet": {"gate_mean": token_trace.get("gate_mean"), "latent_share": token_trace.get("latent_share"), "regime_entropy": token_trace.get("regime_entropy"), "hidden_drift": token_trace.get("hidden_drift"), "control": token_trace.get("control"), "base_graft_delta_l2": token_trace.get("base_graft_delta_l2")}}}
             input_ids = torch.cat([input_ids.to(next_token.device), next_token], dim=1)
-            batch["input_ids"] = input_ids
-            if "attention_mask" in batch:
-                pad = torch.ones((batch["attention_mask"].size(0), 1), dtype=batch["attention_mask"].dtype, device=batch["attention_mask"].device)
-                batch["attention_mask"] = torch.cat([batch["attention_mask"], pad], dim=1)
+            pad = torch.ones((attention_mask.size(0), 1), dtype=attention_mask.dtype, device=attention_mask.device)
+            attention_mask = torch.cat([attention_mask, pad], dim=1)
+            next_input_ids = next_token
             eos = getattr(backbone.tokenizer, "eos_token_id", None)
             if eos is not None and token_id == int(eos):
                 break
@@ -330,7 +337,7 @@ def generation_loop(req: ChatRequest) -> Iterator[Dict[str, Any]]:
     STATE.history.append(entry)
     STATE.history = STATE.history[-200:]
     append_improvement_event({"type": "chat", **entry})
-    yield {"event": "done", "data": {"id": entry_id, "response": text, "tokens": len(generated), "profile": STATE.profile, "use_graft": graft is not None, "latent_backend": STATE.latent_backend, "fallback_note": fallback_note, "last_graft_error": last_graft_error, "trace": trace, "summary": entry["summary"], "nfet": {"gate_mean": avg_gate, "regime_entropy": avg_regime, "last_control": controls[-1] if controls else None, "last_control_label": CONTROL_LABELS.get(controls[-1], str(controls[-1])) if controls else None}}}
+    yield {"event": "done", "data": {"id": entry_id, "response": text, "tokens": len(generated), "profile": STATE.profile, "use_graft": graft is not None, "latent_backend": STATE.latent_backend, "fallback_note": fallback_note, "last_graft_error": last_graft_error, "trace": trace, "summary": entry["summary"], "nfet": {"gate_mean": avg_gate, "regime_entropy": avg_regime, "last_control": controls[-1] if controls else None, "last_control_label": CONTROL_LABELS.get(controls[-1], str(controls[-1])) if controls else None}, "fast_mode": True}}
 
 
 @app.get("/")
