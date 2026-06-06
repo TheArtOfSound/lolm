@@ -23,9 +23,14 @@
         <label>Device</label>
         <select id="device">
           <option value="auto">auto</option>
-          <option value="mps">mps</option>
           <option value="cpu">cpu</option>
+          <option value="mps">mps</option>
           <option value="device_map">device_map</option>
+        </select>
+        <label>LOLM engine mode</label>
+        <select id="latentBackend">
+          <option value="gru_debug" selected>stable local visualizer</option>
+          <option value="selective_ssm">real selective SSM</option>
         </select>
         <label class="check"><input type="checkbox" id="useGraft" checked /> Enable LOLM-NFET graft</label>
         <label>Ablation</label>
@@ -44,7 +49,7 @@
       <section class="panel grid2">
         <div>
           <label>Max tokens</label>
-          <input id="maxTokens" type="number" value="96" min="1" max="512" />
+          <input id="maxTokens" type="number" value="32" min="1" max="512" />
         </div>
         <div>
           <label>Temp</label>
