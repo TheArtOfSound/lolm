@@ -27,6 +27,15 @@ def _read_jsonl(path: Path, limit: int = 20) -> List[Dict[str, Any]]:
     return out
 
 
+def _read_json(path: Path) -> Any:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+
 def _latest_chat_summaries(data_dir: Path, limit: int = 3) -> List[str]:
     log = data_dir / "improvement_log.jsonl"
     items = _read_jsonl(log, limit=200)
@@ -50,24 +59,44 @@ def build_auto_context(data_dir: Path) -> str:
     lines.append(f"cwd: {os.getcwd()}")
     lines.append(f"timezone: {time.tzname[0] if time.tzname else '?'}")
 
-    goals_path = data_dir / "goals.jsonl"
-    goals = [g for g in _read_jsonl(goals_path, limit=50) if g.get("status", "active") == "active"]
-    if goals:
-        lines.append("\n--- active goals ---")
-        for g in goals[-8:]:
-            lines.append(f"[{g.get('id', '?')}] {g.get('title', '')} — {g.get('why', '')}")
+    identity_path = data_dir / "identity.md"
+    if identity_path.exists():
+        identity = identity_path.read_text(encoding="utf-8").strip()
+        if identity:
+            lines.append("\n--- durable identity / project facts ---")
+            lines.append(identity[-2500:])
 
-    memory_path = data_dir / "memory.jsonl"
-    memory = _read_jsonl(memory_path, limit=8)
+    goals = _read_json(data_dir / "goals.json")
+    if isinstance(goals, list):
+        active = [g for g in goals if g.get("status", "active") == "active"]
+        if active:
+            lines.append("\n--- active goals ---")
+            for g in sorted(active, key=lambda x: x.get("priority", 3), reverse=True)[-8:]:
+                lines.append(f"[{g.get('id', '?')}] {g.get('title', '')} — {g.get('why', '')}")
+
+    memory = _read_jsonl(data_dir / "memory.jsonl", limit=8)
     if memory:
-        lines.append("\n--- local memory ---")
+        lines.append("\n--- local memory notes ---")
         for m in memory:
             lines.append(f"• {m.get('text', m.get('content', ''))}")
 
-    summaries = _latest_chat_summaries(data_dir)
+    summaries = _read_jsonl(data_dir / "summaries.jsonl", limit=5)
     if summaries:
+        lines.append("\n--- rolling summaries ---")
+        for s in summaries:
+            lines.append(f"[{s.get('span', 'summary')}] {s.get('summary', '')}")
+
+    recent_state = _latest_chat_summaries(data_dir)
+    if recent_state:
         lines.append("\n--- recent LOLM/NFET state summaries ---")
-        lines.extend(summaries)
+        lines.extend(recent_state)
+
+    journal_path = data_dir / "journal.md"
+    if journal_path.exists():
+        journal = journal_path.read_text(encoding="utf-8").strip()
+        if journal:
+            lines.append("\n--- recent running journal ---")
+            lines.append(journal[-2500:])
 
     lines.append("=== END_AUTO_CONTEXT ===")
     return "\n".join(lines)
