@@ -183,7 +183,7 @@ class ActionOrchestrator:
         if not req.allow_web or not self._needs_web(command):
             return []
         evidence: List[Dict[str, Any]] = []
-        urls = re.findall(r"https?://[^\s)\]}>"]+", command)
+        urls = re.findall(r'https?://[^\s)\]}>"\']+', command)
         for url in urls[:2]:
             try:
                 fetched = fetch_url(url)
