@@ -64,3 +64,29 @@ def test_graft_random_tensor_path_selective_ssm():
     loss = out.corrected_hidden.pow(2).mean()
     loss.backward()
     assert any(p.grad is not None for p in graft.parameters() if p.requires_grad)
+
+
+def test_graft_ablation_modes_are_shape_safe():
+    torch.manual_seed(13)
+    hidden = torch.randn(2, 6, 48)
+    base_logits = torch.randn(2, 6, 256)
+    graft = LOLMNFETGraft(
+        d_model=48,
+        n_regimes=6,
+        latent_backend="gru_debug",
+        residual_scale=0.05,
+    )
+    for mode in ["full", "no_latent", "no_regime", "no_gate", "latent_only", "no_residual"]:
+        out = graft(hidden, base_logits=base_logits, ablation_mode=mode)
+        assert out.ablation_mode == mode
+        assert out.corrected_hidden.shape == hidden.shape
+        assert out.gate.shape == hidden.shape
+        assert out.regime_probs.shape == (2, 6, 6)
+        if mode == "no_residual":
+            assert torch.allclose(out.corrected_hidden, hidden)
+        if mode == "no_gate":
+            assert torch.allclose(out.gate, torch.full_like(out.gate, 0.5))
+        if mode == "latent_only":
+            assert torch.allclose(out.gate, torch.zeros_like(out.gate))
+        if mode == "no_latent":
+            assert torch.allclose(out.gate, torch.ones_like(out.gate))
