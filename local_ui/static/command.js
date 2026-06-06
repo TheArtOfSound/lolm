@@ -13,6 +13,13 @@
     return data;
   }
 
+  async function getJSON(path) {
+    const res = await fetch(path);
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.detail || data.error || JSON.stringify(data));
+    return data;
+  }
+
   function list(items) {
     if (!items || !items.length) return '<span class="muted">None.</span>';
     return items.map((x) => `<div class="item"><b>${esc(typeof x === 'string' ? x : x.kind || x.title || 'item')}</b><span>${esc(typeof x === 'string' ? '' : x.text || x.status || JSON.stringify(x.meta || x))}</span></div>`).join('');
@@ -39,6 +46,22 @@
       <div class="item"><b>Speed</b><span>base=${esc(proof.base_tok_per_sec)} tok/s · command=${esc(proof.command_tok_per_sec)} tok/s</span></div>
     `;
     $('learningBox').innerHTML = `<pre>${esc(JSON.stringify(data.saved_learning || {}, null, 2))}</pre>`;
+  }
+
+  function renderSelf(data) {
+    const box = $('selfBox');
+    if (!box) return;
+    const result = data.inbox || data.last_result?.inbox || data.last_result?.inbox || null;
+    const statusInbox = data.inbox || [];
+    if (Array.isArray(statusInbox) && statusInbox.length) {
+      box.innerHTML = statusInbox.slice().reverse().map((x) => `<div class="item"><b>${esc(x.directive || x.id || 'self tick')}</b><span>${esc(x.summary || '')}</span></div>`).join('');
+      return;
+    }
+    if (result) {
+      box.innerHTML = `<div class="item"><b>${esc(result.directive || result.id || 'self tick')}</b><span>${esc(result.summary || '')}</span></div>`;
+      return;
+    }
+    box.textContent = 'No self-tick yet. Press Think Now.';
   }
 
   async function run() {
@@ -69,7 +92,43 @@
     }
   }
 
+  async function thinkNow() {
+    $('thinkBtn').disabled = true;
+    $('status').textContent = 'Self Tick running. It is reading memory/goals/journal and creating an inbox item...';
+    $('selfBox').textContent = 'Thinking...';
+    try {
+      const directive = $('commandInput').value.trim();
+      const data = await postJSON('/api/self/tick', {
+        directive,
+        max_new_tokens: Math.min(Number($('maxTokens').value || 96), 160),
+        temperature: Number($('temperature').value || 0.35),
+        top_p: Number($('topP').value || 0.9),
+        use_graft: true,
+      });
+      renderSelf(data);
+      $('status').textContent = 'Self Tick done. Inbox item saved to memory, journal, summary, and improvement log.';
+    } catch (e) {
+      $('status').textContent = `Self Tick failed: ${e.message}`;
+      $('selfBox').textContent = 'Self Tick failed.';
+    } finally {
+      $('thinkBtn').disabled = false;
+    }
+  }
+
+  async function refreshSelf() {
+    try {
+      const data = await getJSON('/api/self/status');
+      renderSelf(data);
+      $('status').textContent = 'Self status refreshed.';
+    } catch (e) {
+      $('status').textContent = `Refresh failed: ${e.message}`;
+    }
+  }
+
   window.addEventListener('DOMContentLoaded', () => {
     $('runBtn')?.addEventListener('click', run);
+    $('thinkBtn')?.addEventListener('click', thinkNow);
+    $('statusBtn')?.addEventListener('click', refreshSelf);
+    refreshSelf().catch(() => {});
   });
 })();
