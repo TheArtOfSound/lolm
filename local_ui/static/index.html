@@ -32,6 +32,7 @@
       <form id="composer" class="composer"><textarea id="prompt" placeholder="Message LOLM-NFET..." rows="3"></textarea><button id="sendBtn" type="submit">Send</button></form>
     </main>
     <aside class="inspector">
+      <section class="panel"><h2>Proof Mode</h2><p>Runs the current prompt as base-only and LOLM/NFET, then shows whether the graft changed anything meaningful.</p><button id="proofBtn" class="small">Compare base vs LOLM</button><div id="proofBox" class="listBox">Load a model, type a prompt, then run Proof Mode.</div></section>
       <section class="panel"><h2>Inside LOLM</h2><p>Surface path is the base model's normal language path. Latent path is the extra hidden correction layer.</p><div class="barLabel"><span>Surface</span><b id="surfacePct">—</b></div><div class="bar"><div id="surfaceBar"></div></div><div class="barLabel"><span>Latent</span><b id="latentPct">—</b></div><div class="bar"><div id="latentBar"></div></div><div class="barLabel"><span>Base to graft</span><b id="deltaAvg">—</b></div><div class="bar"><div id="deltaBar"></div></div></section>
       <section class="panel"><h2>Plain-English readout</h2><div id="plainExplain" class="explainBox">Ask something to see what LOLM and NFET did in normal words.</div></section>
       <section class="panel"><h2>Self-reflection memory</h2><div id="selfReflection" class="explainBox">After each answer, the system writes a local reflection event for future training.</div></section>
