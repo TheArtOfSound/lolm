@@ -80,7 +80,7 @@ class RuntimeState:
 
 
 STATE = RuntimeState()
-app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.4")
+app = FastAPI(title="LOLM-NFET Local Workspace", version="0.1.5")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -115,6 +115,15 @@ def build_graft(d_model: int, backend: str, device: Optional[torch.device]) -> L
         graft.to(device)
     graft.eval()
     return graft
+
+
+def graft_param(graft: LOLMNFETGraft) -> torch.nn.Parameter:
+    return next(graft.parameters())
+
+
+def cast_for_graft(hidden: torch.Tensor, logits: torch.Tensor, graft: LOLMNFETGraft) -> tuple[torch.Tensor, torch.Tensor]:
+    param = graft_param(graft)
+    return hidden.to(device=param.device, dtype=param.dtype), logits.to(device=param.device, dtype=param.dtype)
 
 
 def ensure_live_safe_graft(backbone: FrozenHFBackbone) -> Optional[str]:
@@ -166,6 +175,7 @@ def sample_next(logits: torch.Tensor, temperature: float, top_p: float) -> torch
 
 
 def entropy_from_logits(logits: torch.Tensor) -> float:
+    logits = logits.float()
     log_probs = F.log_softmax(logits, dim=-1)
     probs = log_probs.exp()
     return float((-(probs * log_probs).sum(dim=-1)).detach().float().cpu().item())
@@ -279,6 +289,7 @@ def chat(req: ChatRequest):
     regimes: List[float] = []
     controls: List[int] = []
     trace: List[Dict[str, Any]] = []
+    last_graft_error: Optional[str] = None
 
     with torch.no_grad():
         for step in range(req.max_new_tokens):
@@ -294,7 +305,8 @@ def chat(req: ChatRequest):
             }
             if graft is not None:
                 try:
-                    gout = graft(base.hidden_states, base_logits=base.logits, ablation_mode=req.ablation_mode)  # type: ignore[arg-type]
+                    graft_hidden, graft_logits = cast_for_graft(base.hidden_states, base.logits, graft)
+                    gout = graft(graft_hidden, base_logits=graft_logits, ablation_mode=req.ablation_mode)  # type: ignore[arg-type]
                     logits = project_with_backbone_lm_head(backbone.model, gout.corrected_hidden)
                     graft_next_logits = logits[:, -1, :]
                     gate_value = float(gout.gate.mean().detach().cpu())
@@ -305,6 +317,7 @@ def chat(req: ChatRequest):
                     regimes.append(regime_value)
                     controls.append(control_id)
                     token_trace.update({
+                        "used_graft": True,
                         "gate_mean": gate_value,
                         "surface_share": gate_value,
                         "latent_share": 1.0 - gate_value,
@@ -314,10 +327,11 @@ def chat(req: ChatRequest):
                         "control": CONTROL_LABELS.get(control_id, str(control_id)),
                         "graft_entropy": entropy_from_logits(graft_next_logits),
                         "graft_top": top_token(backbone, graft_next_logits),
-                        "base_graft_delta_l2": float((graft_next_logits - base_next_logits).pow(2).mean().sqrt().detach().float().cpu().item()),
+                        "base_graft_delta_l2": float((graft_next_logits.float() - base_next_logits.to(graft_next_logits.device).float()).pow(2).mean().sqrt().detach().cpu().item()),
                     })
                 except Exception as exc:
-                    token_trace.update({"used_graft": False, "graft_error": str(exc)[:500]})
+                    last_graft_error = str(exc)[:500]
+                    token_trace.update({"used_graft": False, "graft_error": last_graft_error})
                     graft = None
                     STATE.graft = None
                     STATE.latent_backend = None
@@ -326,7 +340,7 @@ def chat(req: ChatRequest):
             token_text = backbone.tokenizer.decode([token_id])
             token_trace["sampled"] = {"id": token_id, "text": token_text}
             trace.append(token_trace)
-            input_ids = torch.cat([input_ids, next_token], dim=1)
+            input_ids = torch.cat([input_ids.to(next_token.device), next_token], dim=1)
             eos = getattr(backbone.tokenizer, "eos_token_id", None)
             if eos is not None and token_id == int(eos):
                 break
@@ -347,6 +361,7 @@ def chat(req: ChatRequest):
         "timestamp": time.time(),
         "trace": trace,
         "fallback_note": fallback_note,
+        "last_graft_error": last_graft_error,
         "summary": {
             "avg_gate": avg_gate,
             "avg_surface_share": avg_gate,
@@ -366,6 +381,7 @@ def chat(req: ChatRequest):
         "use_graft": graft is not None,
         "latent_backend": STATE.latent_backend,
         "fallback_note": fallback_note,
+        "last_graft_error": last_graft_error,
         "trace": trace,
         "summary": entry["summary"],
         "nfet": {
