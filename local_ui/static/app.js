@@ -32,12 +32,6 @@ function setText(id, value) {
   if (el) el.textContent = value;
 }
 
-function setBar(id, pct) {
-  const el = $(id);
-  if (!el) return;
-  el.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-}
-
 function profileLabel(p) {
   const safe = p.local_safe ? 'LOCAL' : 'HOSTED/TEACHER';
   const size = p.size_b == null ? '' : `${p.size_b}B`;
@@ -81,13 +75,14 @@ async function refreshStatus() {
 async function loadModel() {
   $('loadBtn').disabled = true;
   $('status').textContent = 'Loading model... first load can take a while.';
+  const backend = $('latentBackend') ? $('latentBackend').value : 'gru_debug';
   try {
     const data = await api('/api/load', {
       method: 'POST',
-      body: JSON.stringify({ profile: $('profile').value, device: $('device').value, use_graft: $('useGraft').checked, latent_backend: 'selective_ssm' }),
+      body: JSON.stringify({ profile: $('profile').value, device: $('device').value, use_graft: $('useGraft').checked, latent_backend: backend }),
     });
     modelLoaded = true;
-    $('status').textContent = `Loaded: ${data.profile}\nHidden: ${data.hidden_size}\nSize: ${data.size_b}B\nDevice: ${data.device}`;
+    $('status').textContent = `Loaded: ${data.profile}\nHidden: ${data.hidden_size}\nSize: ${data.size_b}B\nDevice: ${data.device}\nLOLM engine: ${backend}`;
   } catch (e) {
     modelLoaded = false;
     $('status').textContent = `Load failed: ${e.message}`;
@@ -97,34 +92,16 @@ async function loadModel() {
 }
 
 function renderTrace(data) {
-  const summary = data.summary || {};
   const nfet = data.nfet || {};
   const gate = nfet.gate_mean;
   const latent = gate == null ? null : 1 - gate;
   setText('gate', gate == null ? '—' : gate.toFixed(4));
-  setText('latentShare', latent == null ? '—' : latent.toFixed(4));
   setText('regime', nfet.regime_entropy == null ? '—' : nfet.regime_entropy.toFixed(4));
   setText('control', nfet.last_control_label || (nfet.last_control == null ? '—' : String(nfet.last_control)));
-  setText('surfacePct', gate == null ? '—' : `${Math.round(gate * 100)}%`);
-  setText('latentPct', latent == null ? '—' : `${Math.round(latent * 100)}%`);
-  setBar('surfaceBar', gate == null ? 0 : gate * 100);
-  setBar('latentBar', latent == null ? 0 : latent * 100);
+  setText('latentShare', latent == null ? '—' : latent.toFixed(4));
   const trace = data.trace || [];
   traceCount += trace.length;
   setText('improveCount', String(traceCount));
-  const avgDelta = trace.length ? trace.reduce((s, t) => s + (t.base_graft_delta_l2 || 0), 0) / trace.length : 0;
-  setText('deltaAvg', avgDelta ? avgDelta.toFixed(4) : '—');
-  setBar('deltaBar', Math.min(100, avgDelta * 100));
-  const box = $('trace');
-  if (!box) return;
-  box.classList.remove('empty');
-  box.innerHTML = '';
-  trace.slice(0, 80).forEach((t) => {
-    const row = document.createElement('div');
-    row.className = 'traceRow';
-    row.innerHTML = `<b>${t.sampled?.text || ''}</b><span>ctrl=${t.control || 'base'} gate=${t.gate_mean == null ? '—' : t.gate_mean.toFixed(2)} reg=${t.regime_entropy == null ? '—' : t.regime_entropy.toFixed(2)} Δ=${t.base_graft_delta_l2 == null ? '—' : t.base_graft_delta_l2.toFixed(3)}</span>`;
-    box.appendChild(row);
-  });
 }
 
 async function sendMessage(ev) {
@@ -161,21 +138,9 @@ async function sendMessage(ev) {
   }
 }
 
-async function sendFeedback(rating) {
-  if (!lastEntryId) {
-    setText('feedbackStatus', 'No response to rate yet.');
-    return;
-  }
-  const note = $('feedbackNote') ? $('feedbackNote').value : '';
-  const data = await api('/api/feedback', { method: 'POST', body: JSON.stringify({ entry_id: lastEntryId, rating, note }) });
-  setText('feedbackStatus', `Saved ${rating} feedback to local improvement log.`);
-}
-
 $('loadBtn').addEventListener('click', loadModel);
 $('profile').addEventListener('change', updateProfileWarning);
 $('composer').addEventListener('submit', sendMessage);
 $('clearBtn').addEventListener('click', () => { messages.length = 0; $('messages').innerHTML = ''; });
-if ($('goodBtn')) $('goodBtn').addEventListener('click', () => sendFeedback('good'));
-if ($('badBtn')) $('badBtn').addEventListener('click', () => sendFeedback('bad'));
 
 loadProfiles().then(refreshStatus).catch((e) => { $('status').textContent = `Init failed: ${e.message}`; });
