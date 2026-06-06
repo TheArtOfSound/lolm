@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 
 import torch
 
@@ -25,6 +24,8 @@ DEFAULT_TEXTS = [
     "Regime codes only matter if they align with meaningful phase changes and survive ablation.",
 ]
 
+ABLATIONS = ["full", "no_latent", "no_regime", "no_gate", "latent_only", "no_residual"]
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -35,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seq-len", type=int, default=128)
     parser.add_argument("--device", default=None)
     parser.add_argument("--latent-backend", default="selective_ssm", choices=["selective_ssm", "gru_debug"])
+    parser.add_argument("--ablations", action="store_true", help="Report all graft ablations")
     return parser.parse_args()
 
 
@@ -62,6 +64,7 @@ def main() -> int:
         graft.to(device)
     graft.eval()
 
+    modes = ABLATIONS if args.ablations else ["full"]
     rows = []
     with torch.no_grad():
         for text in texts:
@@ -71,24 +74,30 @@ def main() -> int:
             labels = batch["input_ids"].clone()
             base = backbone(**batch)
             base_loss = shifted_language_model_loss(base.logits, labels)
-            out = graft(base.hidden_states, base_logits=base.logits)
-            graft_logits = project_with_backbone_lm_head(backbone.model, out.corrected_hidden)
-            graft_loss = shifted_language_model_loss(graft_logits, labels)
-            row = {
-                "text": text,
-                "base_loss": scalar(base_loss),
-                "graft_loss": scalar(graft_loss),
-                "delta": scalar(graft_loss - base_loss),
-                "gate_mean": scalar(out.gate.mean()),
-                "regime_entropy": scalar(out.nfet_state.regime_entropy.mean()),
-                "control": out.nfet_state.control_logits.argmax(dim=-1).detach().cpu().tolist(),
-            }
-            rows.append(row)
-            print(json.dumps(row))
+            for mode in modes:
+                out = graft(base.hidden_states, base_logits=base.logits, ablation_mode=mode)
+                graft_logits = project_with_backbone_lm_head(backbone.model, out.corrected_hidden)
+                graft_loss = shifted_language_model_loss(graft_logits, labels)
+                row = {
+                    "text": text,
+                    "mode": mode,
+                    "base_loss": scalar(base_loss),
+                    "graft_loss": scalar(graft_loss),
+                    "delta": scalar(graft_loss - base_loss),
+                    "gate_mean": scalar(out.gate.mean()),
+                    "regime_entropy": scalar(out.nfet_state.regime_entropy.mean()),
+                    "control": out.nfet_state.control_logits.argmax(dim=-1).detach().cpu().tolist(),
+                }
+                rows.append(row)
+                print(json.dumps(row))
 
-    avg_base = sum(row["base_loss"] for row in rows) / len(rows)
-    avg_graft = sum(row["graft_loss"] for row in rows) / len(rows)
-    print(json.dumps({"avg_base_loss": avg_base, "avg_graft_loss": avg_graft, "avg_delta": avg_graft - avg_base}))
+    summary = {}
+    for mode in modes:
+        subset = [row for row in rows if row["mode"] == mode]
+        avg_base = sum(row["base_loss"] for row in subset) / len(subset)
+        avg_graft = sum(row["graft_loss"] for row in subset) / len(subset)
+        summary[mode] = {"avg_base_loss": avg_base, "avg_graft_loss": avg_graft, "avg_delta": avg_graft - avg_base}
+    print(json.dumps({"summary": summary}))
     return 0
 
 
