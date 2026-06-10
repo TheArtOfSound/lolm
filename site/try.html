@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Try the LOLM Agent — an AI that knows when it's unsure</title>
+<meta name="description" content="Ask a question and watch the AI notice its own uncertainty — checking notes, double-checking drafts, and deciding when it's done. No jargon, live, free.">
+<meta property="og:title" content="Try the LOLM Agent">
+<meta property="og:description" content="An AI that measures its own uncertainty and acts on it — watch it happen, live.">
+<meta property="og:url" content="https://lolm.imagineqira.com/try.html">
+<style>
+  :root{
+    --bg:#07090d; --bg2:#0c1016; --panel:#11161f; --line:#1d2530;
+    --text:#d7dde6; --dim:#8b96a5; --faint:#5a6675;
+    --blue:#4ea1ff; --purple:#b07fff; --amber:#ffb454; --green:#3fd6a0; --pink:#ff6b81;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{max-width:760px;margin:0 auto;padding:0 20px}
+  header{position:sticky;top:0;z-index:10;background:rgba(7,9,13,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  nav{display:flex;align-items:center;height:54px;gap:14px}
+  .brand{font-family:var(--mono);font-weight:700;letter-spacing:.12em;font-size:14px;color:var(--text)}
+  .brand b{color:var(--blue)}
+  nav a.right{margin-left:auto;font-size:13px;color:var(--dim)}
+
+  .hero{padding:54px 0 10px;text-align:center}
+  h1{font-size:clamp(28px,6vw,44px);line-height:1.12;letter-spacing:-.015em}
+  h1 em{font-style:normal;background:linear-gradient(92deg,var(--blue),var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p{margin:16px auto 0;max-width:560px;color:var(--dim);font-size:16.5px}
+  .honest{margin:22px auto 0;max-width:560px;font-size:13px;color:var(--faint);background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 16px}
+  .honest b{color:var(--dim)}
+
+  .examples{margin:34px 0 8px}
+  .ex-label{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);text-align:center;margin-bottom:14px}
+  .ex-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media (max-width:560px){ .ex-grid{grid-template-columns:1fr} }
+  .ex{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer;text-align:left;color:var(--text);font-size:14.5px;font-family:var(--sans);transition:border-color .15s}
+  .ex:hover{border-color:var(--blue)}
+  .ex small{display:block;color:var(--faint);font-size:11.5px;margin-top:5px;font-family:var(--mono)}
+  .ex small.live-tag{color:#caa45a}
+
+  .ask{display:flex;gap:10px;margin:22px 0 6px}
+  .ask input{flex:1;background:var(--bg2);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:14px 16px;font-size:15.5px}
+  .ask input:focus{outline:none;border-color:var(--blue)}
+  .ask button{background:var(--blue);color:#06121f;border:none;border-radius:12px;padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer}
+  .ask button[disabled]{opacity:.45;cursor:not-allowed}
+  .ask-note{font-size:12px;color:var(--faint);text-align:center;min-height:16px;margin-bottom:10px}
+
+  .stage{display:none;margin:26px 0}
+  .stage.on{display:block}
+  .q-bubble{background:var(--panel);border:1px solid var(--line);border-radius:14px 14px 4px 14px;padding:13px 17px;font-size:15px;margin-left:15%;margin-bottom:18px;color:var(--text)}
+  .activity{display:flex;flex-direction:column;gap:9px;margin-bottom:18px}
+  .act{display:flex;gap:11px;align-items:baseline;font-size:14px;color:var(--dim);opacity:0;animation:fadein .4s forwards}
+  @keyframes fadein{to{opacity:1}}
+  .act .dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--faint);position:relative;top:-1px}
+  .act.think .dot{background:var(--faint)}
+  .act.write .dot{background:var(--blue)}
+  .act.notes .dot{background:var(--blue);box-shadow:0 0 7px var(--blue)}
+  .act.check .dot{background:var(--amber);box-shadow:0 0 7px var(--amber)}
+  .act.fork .dot{background:var(--purple);box-shadow:0 0 7px var(--purple)}
+  .act.done .dot{background:var(--green);box-shadow:0 0 7px var(--green)}
+  .act b{color:var(--text);font-weight:600}
+  .act .why{color:var(--faint);font-size:12.5px}
+  .working{font-family:var(--mono);font-size:11.5px;color:var(--faint);padding-left:19px}
+  .working .tick{display:inline-block;min-width:34px;color:var(--dim)}
+
+  .answer{background:rgba(63,214,160,.05);border:1px solid #1d3a31;border-radius:4px 14px 14px 14px;padding:17px 20px;font-size:15.5px;color:var(--text);white-space:pre-wrap;margin-right:8%;display:none}
+  .answer.on{display:block}
+  .answer-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:8px}
+
+  .friendly-receipt{display:none;margin-top:16px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px 18px;font-size:13.5px;color:var(--dim)}
+  .friendly-receipt.on{display:block}
+  .friendly-receipt b{color:var(--text)}
+  .friendly-receipt .row{margin-top:8px;font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+
+  details.behind{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+  details.behind summary{cursor:pointer;font-size:13px;color:var(--dim)}
+  details.behind pre{font-family:var(--mono);font-size:12px;color:var(--faint);white-space:pre-wrap;margin-top:10px;max-height:260px;overflow-y:auto}
+
+  .explainer{margin:54px 0 0;border-top:1px solid var(--line);padding-top:34px}
+  .explainer h2{font-size:21px;margin-bottom:10px;text-align:center}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:18px}
+  .step{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 15px;font-size:13px;color:var(--dim)}
+  .step b{display:block;font-size:14px;color:var(--text);margin-bottom:4px}
+  .step .tag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+  footer{margin-top:60px;border-top:1px solid var(--line);padding:26px 0 40px;color:var(--faint);font-size:12.5px;text-align:center}
+</style>
+</head>
+<body>
+
+<header><div class="wrap"><nav>
+  <span class="brand">LO<b>LM</b> agent</span>
+  <a class="right" href="/">the science →</a>
+</nav></div></header>
+
+<div class="wrap">
+
+<div class="hero">
+  <h1>An AI that <em>knows when it's unsure</em> — and does something about it.</h1>
+  <p>Most chatbots just keep talking. This one measures its own uncertainty while it writes.
+  When the signal spikes, it stops to check its notes or re-read its draft. When it's confident,
+  it wraps up. You watch every decision happen.</p>
+  <div class="honest"><b>Honest note:</b> this demo runs a tiny 0.6-billion-parameter research model
+  on a small shared server — its prose is modest. What's special is the <b>decision-making machinery</b>,
+  and that same machinery can ride on much bigger models.</div>
+</div>
+
+<div class="examples">
+  <div class="ex-label">Tap one — instant replays of real runs</div>
+  <div class="ex-grid" id="exGrid"></div>
+</div>
+
+<div class="ask">
+  <input id="q" maxlength="300" placeholder="…or ask your own question, run live">
+  <button id="go" disabled>Ask</button>
+</div>
+<p class="ask-note" id="askNote">checking the live backend…</p>
+
+<div class="stage" id="stage">
+  <div class="q-bubble" id="qBubble"></div>
+  <div class="activity" id="activity"></div>
+  <div class="answer" id="answer"><div class="answer-label">final answer</div><span id="answerText"></span></div>
+  <div class="friendly-receipt" id="receipt"></div>
+  <details class="behind" id="behind" style="display:none">
+    <summary>Behind the scenes — the working draft it wrote first</summary>
+    <pre id="draftText"></pre>
+  </details>
+</div>
+
+<div class="explainer">
+  <h2>What you're watching</h2>
+  <p style="text-align:center;color:var(--dim);font-size:14px;max-width:560px;margin:0 auto">
+  While it writes, the model's inner signals are measured on every word.
+  A trained controller turns those signals into one of five moves:</p>
+  <div class="steps">
+    <div class="step"><span class="tag" style="color:var(--faint)">steady</span><b>Keep writing</b>Signals look healthy — carry on.</div>
+    <div class="step"><span class="tag" style="color:var(--blue)">unsure</span><b>Check notes</b>Uncertainty is rising — go find evidence.</div>
+    <div class="step"><span class="tag" style="color:var(--amber)">wobble</span><b>Double-check</b>Something shifted — re-read the draft.</div>
+    <div class="step"><span class="tag" style="color:var(--purple)">stuck</span><b>Try two paths</b>In a rut — fork and keep the steadier one.</div>
+    <div class="step"><span class="tag" style="color:var(--green)">confident</span><b>Finish</b>Calm and sure — write the final answer.</div>
+  </div>
+  <p style="text-align:center;margin-top:22px;font-size:13.5px"><a href="/#demo">Want the full instruments — entropy, drift, z-scores? Open the technical demo →</a></p>
+</div>
+
+<footer>© 2026 Qira LLC · <a href="https://imagineqira.com">imagineqira.com</a> · LOLM — patent pending</footer>
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const FRIENDLY_TITLES = {
+    "gate": "What is the “gate” inside this AI?",
+    "dependency-inversion": "What is “dependency inversion” in LOLM?",
+    "eval-plan": "Plan how to test a language model",
+    "entropy-retrieve": "Why check notes when you're unsure?",
+    "five-controls": "What five moves can the agent make?"
+  };
+  let playing = false, draftBuf = '', tokenCount = 0, workingLine = null;
+
+  function addAct(cls, html, why){
+    const div = document.createElement('div');
+    div.className = 'act ' + cls;
+    div.innerHTML = `<span class="dot"></span><span>${html}${why ? ` <span class="why">${why}</span>` : ''}</span>`;
+    $('activity').appendChild(div);
+    div.scrollIntoView({block:'nearest'});
+    return div;
+  }
+  function working(){
+    if (workingLine) return workingLine;
+    const div = document.createElement('div');
+    div.className = 'working';
+    div.innerHTML = 'writing <span class="tick">0</span> words…';
+    $('activity').appendChild(div);
+    workingLine = div.querySelector('.tick');
+    return workingLine;
+  }
+  function resetStage(q){
+    $('stage').classList.add('on');
+    $('qBubble').textContent = q;
+    $('activity').innerHTML = ''; $('answerText').textContent = '';
+    $('answer').classList.remove('on'); $('receipt').classList.remove('on');
+    $('receipt').innerHTML = ''; $('behind').style.display = 'none'; $('draftText').textContent = '';
+    draftBuf = ''; tokenCount = 0; workingLine = null;
+    $('stage').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+  const ENDED = {nfet_finalize:'it decided on its own that it was done',
+                 natural_eos:'it reached a natural stopping point',
+                 segment_budget:'it hit the demo length limit'};
+
+  function handle(ev){
+    const {event, data} = ev;
+    if (event === 'run_start'){
+      addAct('think', '<b>Reading your question…</b>');
+    } else if (event === 'segment_start'){
+      if (data.segment === 1) addAct('write', '<b>Starting a draft</b>');
+      workingLine = null;
+    } else if (event === 'token'){
+      if (data.channel === 'draft'){ draftBuf += data.token; tokenCount++; working().textContent = tokenCount; }
+      else if (data.channel === 'final'){
+        $('answer').classList.add('on');
+        $('answerText').textContent += data.token;
+      }
+    } else if (event === 'decision'){
+      const d = data.decision; const why = d.source === 'head' ? 'its trained controller called this' : d.source === 'budget' ? 'demo limit reached — kept writing instead' : 'its built-in instincts called this';
+      if (d.label === 'retrieve') addAct('notes', '<b>It noticed it wasn’t sure</b> — checking its notes', '(' + why + ')');
+      else if (d.label === 'verify') addAct('check', '<b>Something felt off</b> — double-checking the draft', '(' + why + ')');
+      else if (d.label === 'branch') addAct('fork', '<b>It felt stuck</b> — trying two directions', '(' + why + ')');
+      else if (d.label === 'finalize') addAct('done', '<b>It feels confident</b> — finishing up', '(' + why + ')');
+    } else if (event === 'action'){
+      if (data.kind === 'retrieve') addAct('notes', `Found <b>${data.added}</b> useful note${data.added === 1 ? '' : 's'} and kept them in mind`);
+      else if (data.kind === 'verify') addAct('check', data.verdict === 'revise' ? 'It <b>caught an issue</b> in its own draft and noted a fix' : 'The draft <b>checks out</b>');
+      else if (data.kind === 'branch') addAct('fork', `Kept the <b>steadier</b> of ${ (data.candidates||[]).length || 2 } drafts`);
+    } else if (event === 'phase'){
+      if (data.phase === 'finalize') addAct('done', '<b>Writing the final answer…</b>');
+      if (data.phase === 'base_comparison') addAct('think', 'Comparing against a plain chatbot answer <span class="why">(for the receipt)</span>');
+    } else if (event === 'proof'){
+      const r = $('receipt');
+      const checks = data.control_counts || {};
+      const friendly =
+        data.verdict === 'nfet_control_visible' ? 'During this run the AI <b>acted on its own uncertainty</b> — and its final answer is clearly different from a plain chatbot’s.' :
+        data.verdict === 'nfet_finalize_visible' ? 'The AI <b>decided for itself when it was done</b> — and its answer differs from a plain chatbot’s.' :
+        data.verdict === 'changed_but_controls_quiet' ? 'The AI <b>stayed confident the whole way</b> — no checks were needed this time. Its answer still differs from a plain chatbot’s.' :
+        'This run didn’t clearly beat a plain chatbot. The receipt is honest — some runs are like that.';
+      const bits = [];
+      if (checks.retrieve) bits.push(checks.retrieve + '× checked notes');
+      if (checks.verify) bits.push(checks.verify + '× double-checked');
+      if (checks.branch) bits.push(checks.branch + '× explored paths');
+      bits.push((100 - Math.round((data.word_similarity||0)*100)) + '% different from the plain answer');
+      if (ENDED[data.ended_by]) bits.push(ENDED[data.ended_by]);
+      r.innerHTML = `<b>Receipt</b> — ${friendly}<div class="row">${bits.join(' · ')}</div>`;
+      r.classList.add('on');
+    } else if (event === 'run_done'){
+      playing = false;
+      if (draftBuf.trim()){ $('draftText').textContent = draftBuf.trim(); $('behind').style.display = 'block'; }
+      pollStatus();
+    } else if (event === 'error'){
+      addAct('check', '<b>Hit a snag:</b> ' + (data.error || 'unknown'));
+      playing = false;
+    }
+  }
+
+  async function playReplay(id, title){
+    if (playing) return; playing = true;
+    resetStage(title);
+    try {
+      const replay = await (await fetch('replays/' + id + '.json')).json();
+      for (const ev of replay.events){
+        handle(ev);
+        if (ev.event === 'decision' || ev.event === 'action') await sleep(700);
+        else if (ev.event === 'token') await sleep(ev.data.channel === 'final' ? 22 : 6);
+        else await sleep(180);
+      }
+    } catch(e){ addAct('check', '<b>Replay failed:</b> ' + e.message); }
+    playing = false;
+  }
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  async function runLive(q){
+    if (playing) return; playing = true;
+    resetStage(q);
+    addAct('think', '<b>Connecting to the live model…</b>', '(a real run takes a minute or two)');
+    try {
+      const resp = await fetch('/api/demo/run/stream', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({command:q})});
+      if (!resp.ok){
+        const err = await resp.json().catch(() => ({error:'HTTP ' + resp.status}));
+        addAct('check', '<b>Couldn’t start:</b> ' + (err.error || resp.status));
+        playing = false; return;
+      }
+      const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = '';
+      while (true){
+        const {done, value} = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, {stream:true});
+        let i;
+        while ((i = buf.indexOf('\n\n')) >= 0){
+          const block = buf.slice(0, i); buf = buf.slice(i + 2);
+          let name = null, data = null;
+          for (const line of block.split('\n')){
+            if (line.startsWith('event: ')) name = line.slice(7);
+            else if (line.startsWith('data: ')) data = JSON.parse(line.slice(6));
+          }
+          if (name) handle({event:name, data});
+        }
+      }
+    } catch(e){ addAct('check', '<b>Stream lost:</b> ' + e.message); }
+    playing = false;
+  }
+
+  $('go').addEventListener('click', () => { const q = $('q').value.trim(); if (q) runLive(q); });
+  $('q').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
+
+  fetch('replays/index.json').then(r => r.json()).then(idx => {
+    const grid = $('exGrid');
+    (idx.replays || []).forEach(meta => {
+      const b = document.createElement('button');
+      b.className = 'ex';
+      const title = FRIENDLY_TITLES[meta.id] || meta.title;
+      b.innerHTML = `${title}<small>▶ instant — a recorded real run</small>`;
+      b.addEventListener('click', () => playReplay(meta.id, title));
+      grid.appendChild(b);
+    });
+    const live = document.createElement('button');
+    live.className = 'ex';
+    live.innerHTML = `Ask anything you like<small class="live-tag">⚡ live — the real model runs for you (1–2 min)</small>`;
+    live.addEventListener('click', () => $('q').focus());
+    grid.appendChild(live);
+  }).catch(() => {});
+
+  function pollStatus(){
+    fetch('/api/demo/status').then(r => r.json()).then(s => {
+      const b = $('go'), n = $('askNote');
+      if (!s.model_ready){ b.disabled = true; n.textContent = 'the live model is warming up — replays above are instant'; }
+      else if (s.busy){ b.disabled = true; n.textContent = 'someone else’s run is in progress — replays are instant while you wait'; }
+      else { b.disabled = false; n.textContent = 'live runs take 1–2 minutes on our little server · a few runs per hour per visitor'; }
+    }).catch(() => { $('go').disabled = true; $('askNote').textContent = 'live backend offline — replays still work'; });
+  }
+  pollStatus(); setInterval(pollStatus, 12000);
+})();
+</script>
+</body>
+</html>

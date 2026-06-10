@@ -172,9 +172,11 @@
 <header><div class="wrap"><nav>
   <span class="brand">LO<b>LM</b></span>
   <span class="links">
+    <a href="try.html">Try it</a>
     <a href="#architecture">Architecture</a>
     <a href="#results">Results</a>
     <a href="#agent">NFET Agent</a>
+    <a href="#different">Why different</a>
     <a href="#cite">Cite</a>
   </span>
 </nav></div></header>
@@ -195,8 +197,8 @@
     <span class="badge">provisional patent <i>64002166</i></span>
   </div>
   <div class="cta">
-    <a class="btn primary" href="#architecture">See the architecture</a>
-    <a class="btn ghost" href="#agent">The NFET Agent →</a>
+    <a class="btn primary" href="try.html">▶ Try the agent — no jargon</a>
+    <a class="btn ghost" href="#architecture">See the architecture</a>
   </div>
   <canvas id="streams" aria-hidden="true"></canvas>
 </div>
@@ -353,6 +355,52 @@
       <button data-speed="0">skip</button>
     </div>
   </div>
+</section>
+
+<section id="different">
+  <div class="sec-kicker">Positioning</div>
+  <h2>What it does that others don't.</h2>
+  <p class="sub">These are mechanism claims, not benchmark claims — every row is something you can
+  verify yourself in the demo above or in the code.</p>
+
+  <table>
+    <tr><th></th><th>Plain chatbot</th><th>Prompted agent (ReAct-style)</th><th>LOLM-NFET agent</th></tr>
+    <tr>
+      <td>How it decides to check facts or verify</td>
+      <td>It doesn't</td>
+      <td>Asks itself in words — a self-report, which models are famously bad at</td>
+      <td><span class="win">Measures</span> entropy, drift, gate and regime in its own activations, every token</td>
+    </tr>
+    <tr>
+      <td>Can you see why it acted?</td>
+      <td>—</td>
+      <td>Reasoning text (post-hoc; can confabulate)</td>
+      <td><span class="win">Numbers</span> — the exact telemetry and z-scores behind every decision</td>
+    </tr>
+    <tr>
+      <td>Proof an answer beat a baseline</td>
+      <td>None</td>
+      <td>None</td>
+      <td><span class="win">A receipt on every run</span> — same question, base mode vs agent mode</td>
+    </tr>
+    <tr>
+      <td>Learns from your usage</td>
+      <td>No</td>
+      <td>No (or cloud fine-tuning)</td>
+      <td><span class="win">Yes, locally</span> — the controller retrains on your own logged runs</td>
+    </tr>
+    <tr>
+      <td>Runs on</td>
+      <td>Someone else's cloud</td>
+      <td>A frontier-model API</td>
+      <td><span class="win">2 vCPUs</span> — no GPU, no API key, fully private (this very demo)</td>
+    </tr>
+  </table>
+
+  <p class="sub" style="margin-top:6px">The honest caveat: the demo's 0.6B research model will not out-write
+  GPT-class systems — the claim is the <b style="color:var(--text)">control mechanism</b>, and it is
+  model-agnostic. The same graft rides on any open backbone (0.6B → 32B tested targets), and a hybrid mode
+  lets the latent machinery monitor a frontier model while <em>it</em> does the writing.</p>
 </section>
 
 <section id="cite">

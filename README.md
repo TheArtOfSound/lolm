@@ -1,5 +1,7 @@
 # LOLM — Latent Order Language Model
 
+**Live:** [lolm.imagineqira.com](https://lolm.imagineqira.com) — research page with a live agent demo · [/try.html](https://lolm.imagineqira.com/try.html) — the no-jargon version anyone can use.
+
 A hybrid Transformer-SSM architecture that separates surface token prediction from latent state tracking. At 1.57B parameters on H200, LOLM achieves **33.2 PPL** versus **39.1** for a matched decoder-only baseline at step ~24K — a **15% improvement** (training ongoing). Cross-hardware validation on Google TPU v4 confirms LOLM converges **up to 43% faster** than a parameter-matched baseline during early training.
 
 > **Key finding:** The latent SSM path comprises only ~29% of the fused representation, yet removing it causes perplexity to explode from 34.5 to **485 million** — a 14,000,000x increase. We call this *dependency inversion*: the minority path becomes increasingly critical at scale.
