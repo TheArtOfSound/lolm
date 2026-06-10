@@ -45,3 +45,9 @@ nfet-smoke:
 
 nfet-mcp:
 	PYTHONPATH=. python local_ui/mcp_server.py
+
+demo-replays:
+	LOCAL_UI_ENABLE_MPS=1 PYTHONPATH=. python scripts/record_demo_replays.py --device mps --ckpt runs/nfet_controller/live_qwen06b.pt
+
+demo-server:
+	PYTHONPATH=. python local_ui/server_public_demo.py

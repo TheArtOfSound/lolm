@@ -166,3 +166,19 @@ scripts/train_nfet_controller.py # flywheel trainer CLI
 scripts/smoke_nfet_agent.py      # end-to-end smoke
 tests/test_nfet_*.py, tests/test_claude_reasoner.py, tests/test_mcp_server.py
 ```
+
+## The public demo (lolm.imagineqira.com)
+
+The agent runs live at [lolm.imagineqira.com](https://lolm.imagineqira.com):
+`local_ui/server_public_demo.py` binds the workspace to localhost on the web
+box; nginx forwards only `/api/demo/` (everything else stays loopback-only).
+`local_ui/public_demo.py` clamps budgets, enforces one run at a time, and
+rate-limits per visitor — sized for a shared 2-vCPU host. The page plays a
+library of recorded real runs (`make demo-replays`) instantly and streams live
+runs over SSE (`/api/agent/nfet/run/stream` is the same protocol locally).
+
+The controller checkpoint serving the demo was bootstrapped from synthetic
+scenarios, then retrained on the workspace's own logged traffic
+(`--log improvement_log.jsonl`) — the first turn of the flywheel. Decision
+sources are visible in every timeline: `head` where it is confident,
+`heuristic` where it is not, `budget` where limits intervened.
