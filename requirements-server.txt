@@ -1,0 +1,15 @@
+# Minimal deps for the public demo service (CPU inference + FastAPI)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.4.0
+tiktoken>=0.5.0
+pyyaml>=6.0
+tqdm>=4.65.0
+numpy>=1.24.0
+transformers>=4.51.0
+huggingface_hub>=0.30.0
+accelerate>=0.30.0
+safetensors>=0.4.3
+fastapi>=0.115.0
+uvicorn>=0.30.0
+pydantic>=2.7.0
+requests>=2.32.0
