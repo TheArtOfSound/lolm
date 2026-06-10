@@ -1,0 +1,107 @@
+{
+  "replays": [
+    {
+      "id": "gate",
+      "title": "Explain the manifestation gate in LOLM and why it matters",
+      "command": "Explain the manifestation gate in LOLM and why it matters",
+      "recorded_at": "2026-06-10T10:25:56",
+      "seconds": 90.5,
+      "head_trained": true,
+      "ended_by": "segment_budget",
+      "verdict": "nfet_control_visible",
+      "control_counts": {
+        "retrieve": 1,
+        "continue": 2
+      },
+      "counters": {
+        "segments": 3,
+        "tokens": 180,
+        "retrieves": 1,
+        "verifies": 0,
+        "branches": 0
+      }
+    },
+    {
+      "id": "dependency-inversion",
+      "title": "What is dependency inversion in the LOLM architecture?",
+      "command": "What is dependency inversion in the LOLM architecture?",
+      "recorded_at": "2026-06-10T10:27:01",
+      "seconds": 65.2,
+      "head_trained": true,
+      "ended_by": "nfet_finalize",
+      "verdict": "nfet_finalize_visible",
+      "control_counts": {
+        "continue": 1,
+        "finalize": 1
+      },
+      "counters": {
+        "segments": 2,
+        "tokens": 152,
+        "retrieves": 0,
+        "verifies": 0,
+        "branches": 0
+      }
+    },
+    {
+      "id": "eval-plan",
+      "title": "Write a short plan to evaluate a 304M language model against Pythia-410M",
+      "command": "Write a short plan to evaluate a 304M language model against Pythia-410M",
+      "recorded_at": "2026-06-10T10:28:19",
+      "seconds": 77.7,
+      "head_trained": true,
+      "ended_by": "segment_budget",
+      "verdict": "changed_but_controls_quiet",
+      "control_counts": {
+        "continue": 3
+      },
+      "counters": {
+        "segments": 3,
+        "tokens": 180,
+        "retrieves": 0,
+        "verifies": 0,
+        "branches": 0
+      }
+    },
+    {
+      "id": "entropy-retrieve",
+      "title": "Why should an agent retrieve evidence when its token entropy spikes?",
+      "command": "Why should an agent retrieve evidence when its token entropy spikes?",
+      "recorded_at": "2026-06-10T10:29:24",
+      "seconds": 65.8,
+      "head_trained": true,
+      "ended_by": "nfet_finalize",
+      "verdict": "nfet_finalize_visible",
+      "control_counts": {
+        "continue": 1,
+        "finalize": 1
+      },
+      "counters": {
+        "segments": 2,
+        "tokens": 152,
+        "retrieves": 0,
+        "verifies": 0,
+        "branches": 0
+      }
+    },
+    {
+      "id": "five-controls",
+      "title": "Summarize what the NFET controller's five actions do",
+      "command": "Summarize what the NFET controller's five actions do",
+      "recorded_at": "2026-06-10T10:30:49",
+      "seconds": 84.7,
+      "head_trained": true,
+      "ended_by": "segment_budget",
+      "verdict": "changed_but_controls_quiet",
+      "control_counts": {
+        "continue": 3
+      },
+      "counters": {
+        "segments": 3,
+        "tokens": 145,
+        "retrieves": 0,
+        "verifies": 0,
+        "branches": 0
+      }
+    }
+  ]
+}

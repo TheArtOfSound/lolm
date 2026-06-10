@@ -105,6 +105,66 @@
   footer{margin-top:80px;border-top:1px solid var(--line);padding:36px 0 48px;color:var(--faint);font-size:13.5px}
   footer .row{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:baseline}
   @media (max-width:640px){ .hero{padding-top:56px} section{padding-top:48px} }
+
+  /* ── live demo theater ─────────────────────────────────────────── */
+  .demo-picker{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 14px}
+  .replay-chip{font-size:13px;border:1px solid var(--line);background:var(--panel);color:var(--dim);
+    border-radius:999px;padding:8px 15px;cursor:pointer;transition:border-color .15s}
+  .replay-chip:hover{border-color:var(--accent);color:var(--text)}
+  .replay-chip .rec{color:var(--gate);font-size:10px;margin-right:6px}
+  .live-row{display:flex;gap:10px;margin:8px 0 22px;flex-wrap:wrap}
+  .live-row input{flex:1;min-width:240px;background:var(--bg2);border:1px solid var(--line);
+    border-radius:9px;color:var(--text);padding:11px 14px;font-size:14px;font-family:var(--sans)}
+  .live-row input:focus{outline:none;border-color:var(--accent)}
+  .live-row .btn{cursor:pointer}
+  .live-row .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .demo-note{font-size:12.5px;color:var(--faint);margin:-12px 0 18px}
+  .theater{border:1px solid var(--line);border-radius:16px;background:var(--bg2);overflow:hidden;display:none}
+  .theater.on{display:block}
+  .theater-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--dim)}
+  .theater-head .mode{color:var(--bg);background:var(--memory);border-radius:5px;padding:2px 9px;font-weight:700}
+  .theater-head .mode.live{background:var(--gate)}
+  .theater-head .ctrl-lamp{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .lamp{width:9px;height:9px;border-radius:50%;background:var(--faint);transition:background .2s}
+  .lamp.on{background:var(--memory);box-shadow:0 0 8px var(--memory)}
+  .theater-body{display:grid;grid-template-columns:minmax(0,1fr) 250px;min-height:300px}
+  @media (max-width:760px){ .theater-body{grid-template-columns:1fr} .tele{border-left:none;border-top:1px solid var(--line)} }
+  .feed{padding:18px 20px;max-height:520px;overflow-y:auto;font-size:14px}
+  .feed .seg{margin-bottom:14px}
+  .feed .seg-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+  .feed .seg-text{color:var(--dim);white-space:pre-wrap}
+  .feed .seg-text.final-text{color:var(--text);background:rgba(63,214,160,.05);border:1px solid #1d3a31;border-radius:10px;padding:13px 16px}
+  .decision-badge{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin:14px 0;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel)}
+  .decision-badge .dlabel{font-family:var(--mono);font-weight:700;font-size:13.5px}
+  .decision-badge .dsource{font-family:var(--mono);font-size:10.5px;border:1px solid var(--line);border-radius:4px;padding:1px 7px;color:var(--dim)}
+  .decision-badge .dsource.head{color:var(--gate);border-color:var(--gate)}
+  .decision-badge .dreason{flex-basis:100%;font-size:12.5px;color:var(--dim)}
+  .decision-badge .dz{flex-basis:100%;font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .decision-badge .dresult{font-size:12.5px;color:var(--memory)}
+  .d-continue{border-left:3px solid var(--faint)} .d-continue .dlabel{color:var(--dim)}
+  .d-retrieve{border-left:3px solid var(--surface)} .d-retrieve .dlabel{color:var(--surface)}
+  .d-verify{border-left:3px solid var(--regime)} .d-verify .dlabel{color:var(--regime)}
+  .d-branch{border-left:3px solid var(--latent)} .d-branch .dlabel{color:var(--latent)}
+  .d-finalize{border-left:3px solid var(--memory)} .d-finalize .dlabel{color:var(--memory)}
+  .side-card{margin:10px 0;border:1px dashed var(--line);border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--faint)}
+  .side-card .sc-label{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px}
+  .tele{border-left:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:13px}
+  .tele h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+  #spark{width:100%;height:64px;background:var(--bg);border:1px solid var(--line);border-radius:8px}
+  .gauges{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .gauge{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+  .gauge .gv{font-family:var(--mono);font-size:16px;color:var(--text)}
+  .gauge .gl{font-size:10.5px;color:var(--faint);margin-top:2px}
+  .status-line{font-size:12px;color:var(--faint);font-family:var(--mono);min-height:18px}
+  .receipt{margin:14px 18px 18px;border:1px solid #1d3a31;background:rgba(63,214,160,.04);border-radius:12px;padding:15px 18px;display:none}
+  .receipt.on{display:block}
+  .receipt .verdict{font-family:var(--mono);font-weight:700;color:var(--memory);font-size:14px}
+  .receipt .plain{font-size:13px;color:var(--dim);margin:6px 0 10px}
+  .receipt .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .receipt .chip{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:5px;padding:3px 9px;color:var(--dim)}
+  .speed-row{display:flex;gap:8px;align-items:center;padding:0 18px 14px}
+  .speed-row button{font-family:var(--mono);font-size:11px;background:var(--panel);color:var(--dim);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+  .speed-row button.on{color:var(--text);border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -251,6 +311,50 @@
   <b>Model Context Protocol</b>, so it plugs into any modern agent stack.</p>
 </section>
 
+<section id="demo">
+  <div class="sec-kicker">Live Demo</div>
+  <h2>Watch it think.</h2>
+  <p class="sub">Real runs of the NFET agent on a 0.6B-parameter backbone with the
+  bootstrapped control head. Every decision badge you see was made from measured
+  telemetry — entropy, drift, gate, regime — not from a prompt.</p>
+
+  <div class="demo-picker" id="replayPicker"></div>
+
+  <div class="live-row">
+    <input id="liveCommand" maxlength="300" placeholder="…or give it your own command and run it live">
+    <button class="btn primary" id="liveBtn" disabled>Run live</button>
+  </div>
+  <p class="demo-note" id="liveNote">checking the live backend…</p>
+
+  <div class="theater" id="theater">
+    <div class="theater-head">
+      <span class="mode" id="theaterMode">REPLAY</span>
+      <span id="theaterCommand"></span>
+      <span class="ctrl-lamp"><span class="status-line" id="statusLine"></span><span class="lamp" id="lamp"></span></span>
+    </div>
+    <div class="theater-body">
+      <div class="feed" id="feed"></div>
+      <div class="tele">
+        <h4>logit entropy</h4>
+        <canvas id="spark"></canvas>
+        <div class="gauges">
+          <div class="gauge"><div class="gv" id="gGate">—</div><div class="gl">gate (surface share)</div></div>
+          <div class="gauge"><div class="gv" id="gDrift">—</div><div class="gl">hidden drift</div></div>
+          <div class="gauge"><div class="gv" id="gRegime">—</div><div class="gl">regime entropy</div></div>
+          <div class="gauge"><div class="gv" id="gControl">—</div><div class="gl">last control</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="receipt" id="receipt"></div>
+    <div class="speed-row" id="speedRow" style="display:none">
+      <span style="font-size:11px;color:var(--faint)">playback</span>
+      <button data-speed="1" class="on">1×</button>
+      <button data-speed="3">3×</button>
+      <button data-speed="0">skip</button>
+    </div>
+  </div>
+</section>
+
 <section id="cite">
   <div class="sec-kicker">Reference</div>
   <h2>Cite LOLM.</h2>
@@ -334,6 +438,224 @@
   }
   window.addEventListener('resize', resize);
   resize(); step();
+})();
+
+/* ── demo theater ──────────────────────────────────────────────── */
+(function(){
+  const $ = id => document.getElementById(id);
+  const feed = $('feed'), theater = $('theater'), receipt = $('receipt');
+  const spark = $('spark'), sctx = spark.getContext('2d');
+  const CTRL_COLOR = {continue:'#8b96a5', retrieve:'#4ea1ff', verify:'#ffb454', branch:'#b07fff', finalize:'#3fd6a0'};
+  let entropies = [], curSeg = null, sideCards = {}, playSpeed = 1, playing = false;
+
+  function resetTheater(mode, command){
+    feed.innerHTML = ''; receipt.innerHTML = ''; receipt.classList.remove('on');
+    entropies = []; curSeg = null; sideCards = {}; drawSpark();
+    ['gGate','gDrift','gRegime','gControl'].forEach(g => $(g).textContent = '—');
+    $('theaterMode').textContent = mode.toUpperCase();
+    $('theaterMode').className = 'mode' + (mode === 'live' ? ' live' : '');
+    $('theaterCommand').textContent = command.slice(0, 80);
+    $('lamp').classList.add('on');
+    theater.classList.add('on');
+    theater.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+  function status(text){ $('statusLine').textContent = text; }
+  function drawSpark(){
+    const dpr = Math.min(window.devicePixelRatio||1, 2);
+    const w = spark.clientWidth, h = spark.clientHeight;
+    spark.width = w*dpr; spark.height = h*dpr; sctx.setTransform(dpr,0,0,dpr,0,0);
+    sctx.clearRect(0,0,w,h);
+    if (entropies.length < 2) return;
+    const max = Math.max(...entropies, 4), min = Math.min(...entropies, 0);
+    sctx.strokeStyle = '#4ea1ff'; sctx.lineWidth = 1.5; sctx.beginPath();
+    const window_ = entropies.slice(-160);
+    window_.forEach((e, i) => {
+      const x = i/(window_.length-1)*(w-8)+4;
+      const y = h-6-((e-min)/(max-min+1e-6))*(h-12);
+      i ? sctx.lineTo(x,y) : sctx.moveTo(x,y);
+    });
+    sctx.stroke();
+  }
+  function segBlock(label, cls){
+    const div = document.createElement('div'); div.className = 'seg';
+    div.innerHTML = `<div class="seg-label">${label}</div><div class="seg-text ${cls||''}"></div>`;
+    feed.appendChild(div); feed.scrollTop = feed.scrollHeight;
+    return div.querySelector('.seg-text');
+  }
+  function sideCard(key, label){
+    if (sideCards[key]) return sideCards[key];
+    const div = document.createElement('div'); div.className = 'side-card';
+    div.innerHTML = `<div class="sc-label">${label}</div><span></span>`;
+    feed.appendChild(div);
+    sideCards[key] = div.querySelector('span');
+    return sideCards[key];
+  }
+  function fmt(x, d=3){ return (x===null||x===undefined) ? '—' : Number(x).toFixed(d); }
+
+  function handle(ev){
+    const {event, data} = ev;
+    if (event === 'run_start'){
+      status(data.head_trained ? 'trained control head armed' : 'calibrated heuristic policy');
+    } else if (event === 'phase'){
+      if (data.phase === 'base_comparison') status('base-mode comparison shot…');
+      if (data.phase === 'finalize'){ status('composing final answer'); curSeg = segBlock('final answer','final-text'); curSeg.dataset.channel='final'; }
+    } else if (event === 'segment_start'){
+      curSeg = segBlock('segment ' + data.segment); curSeg.dataset.channel='draft';
+      status('drafting segment ' + data.segment + '…');
+      sideCards = {};
+    } else if (event === 'token'){
+      const ch = data.channel;
+      if (ch === 'draft' || ch === 'final'){
+        if (curSeg && curSeg.dataset.channel !== ch){ /* phase handled creation */ }
+        if (curSeg) { curSeg.textContent += data.token; feed.scrollTop = feed.scrollHeight; }
+      } else if (ch === 'verify'){
+        sideCard('verify','verifier pass').textContent += data.token;
+      } else if (ch && ch.startsWith('branch:')){
+        sideCard(ch, 'branch candidate ' + ch.split(':')[1]).textContent += data.token;
+      }
+      if (data.nfet){
+        if (typeof data.nfet.entropy === 'number'){ entropies.push(data.nfet.entropy); drawSpark(); }
+        $('gGate').textContent = fmt(data.nfet.gate, 2);
+        $('gDrift').textContent = fmt(data.nfet.drift, 4);
+        $('gRegime').textContent = fmt(data.nfet.regime, 2);
+        if (data.nfet.control){ $('gControl').textContent = data.nfet.control; $('gControl').style.color = CTRL_COLOR[data.nfet.control] || ''; }
+      }
+    } else if (event === 'decision'){
+      const d = data.decision;
+      const div = document.createElement('div');
+      div.className = 'decision-badge d-' + d.label;
+      const z = d.zscores || {};
+      div.innerHTML = `<span class="dlabel">▸ ${d.label}</span>
+        <span class="dsource ${d.source==='head'?'head':''}">${d.source}</span>
+        <span class="dresult"></span>
+        <span class="dreason">${d.reason || ''}</span>
+        <span class="dz">z — entropy ${fmt(z.entropy,2)} · drift ${fmt(z.drift,2)} · gate ${fmt(z.gate,2)} · regime ${fmt(z.regime,2)}</span>`;
+      feed.appendChild(div); feed.scrollTop = feed.scrollHeight;
+      div.id = 'dec-' + data.segment;
+      status('NFET decision: ' + d.label);
+    } else if (event === 'action'){
+      const badge = document.querySelector('#dec-' + data.segment + ' .dresult');
+      if (!badge) return;
+      if (data.kind === 'retrieve') badge.textContent = '+' + data.added + ' evidence';
+      else if (data.kind === 'verify') badge.textContent = 'verdict: ' + data.verdict;
+      else if (data.kind === 'branch') badge.textContent = 'kept candidate ' + data.chosen;
+    } else if (event === 'proof'){
+      const counts = Object.entries(data.control_counts||{}).map(([k,v])=>`${k}×${v}`).join(' · ');
+      const sources = Object.entries(data.decision_sources||{}).map(([k,v])=>`${k}×${v}`).join(' · ');
+      receipt.innerHTML = `<div class="verdict">⊨ ${data.verdict}</div>
+        <div class="plain">${data.plain||''}</div>
+        <div class="chips">
+          <span class="chip">controls: ${counts||'—'}</span>
+          <span class="chip">sources: ${sources||'—'}</span>
+          <span class="chip">vs base similarity: ${fmt(data.word_similarity,2)}</span>
+          <span class="chip">ended by: ${data.ended_by||'—'}</span>
+        </div>`;
+      receipt.classList.add('on');
+    } else if (event === 'run_done'){
+      status('run complete'); $('lamp').classList.remove('on'); playing = false;
+      feed.scrollTop = feed.scrollHeight;
+    } else if (event === 'error'){
+      status('error: ' + (data.error||'unknown')); $('lamp').classList.remove('on'); playing = false;
+    }
+  }
+
+  /* replay playback with pacing */
+  async function playReplay(id){
+    if (playing) return;
+    playing = true; playSpeed = 1;
+    document.querySelectorAll('.speed-row button').forEach(b => b.classList.toggle('on', b.dataset.speed==='1'));
+    $('speedRow').style.display = 'flex';
+    try {
+      const r = await fetch('replays/' + id + '.json');
+      const replay = await r.json();
+      resetTheater('replay', replay.meta.command);
+      for (const ev of replay.events){
+        if (!playing) break;
+        handle(ev);
+        if (playSpeed === 0) continue;
+        const wait = ev.event === 'token' ? 24 : (ev.event === 'decision' ? 850 : 220);
+        await new Promise(res => setTimeout(res, wait / playSpeed));
+      }
+      if (playSpeed === 0){ /* ensure terminal state rendered */ }
+    } catch(e){ status('replay failed: ' + e.message); }
+    playing = false; $('lamp').classList.remove('on');
+  }
+
+  /* live run over fetch-SSE */
+  async function runLive(command){
+    if (playing) return;
+    playing = true; $('speedRow').style.display = 'none';
+    resetTheater('live', command);
+    status('contacting the box…');
+    try {
+      const resp = await fetch('/api/demo/run/stream', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({command}),
+      });
+      if (!resp.ok){
+        const err = await resp.json().catch(()=>({error: resp.status}));
+        status('refused: ' + (err.error||resp.status)); $('lamp').classList.remove('on'); playing = false;
+        return;
+      }
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      while (true){
+        const {done, value} = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, {stream:true});
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) >= 0){
+          const block = buf.slice(0, idx); buf = buf.slice(idx+2);
+          let name=null, data=null;
+          for (const line of block.split('\n')){
+            if (line.startsWith('event: ')) name = line.slice(7);
+            else if (line.startsWith('data: ')) data = JSON.parse(line.slice(6));
+          }
+          if (name) handle({event:name, data});
+        }
+      }
+    } catch(e){ status('stream lost: ' + e.message); }
+    playing = false; $('lamp').classList.remove('on');
+  }
+
+  /* wire-up */
+  $('speedRow').addEventListener('click', e => {
+    if (e.target.dataset.speed === undefined) return;
+    playSpeed = Number(e.target.dataset.speed);
+    document.querySelectorAll('.speed-row button').forEach(b => b.classList.toggle('on', b===e.target));
+  });
+  $('liveBtn').addEventListener('click', () => {
+    const cmd = $('liveCommand').value.trim();
+    if (cmd) runLive(cmd);
+  });
+  $('liveCommand').addEventListener('keydown', e => { if (e.key === 'Enter') $('liveBtn').click(); });
+
+  fetch('replays/index.json').then(r => r.json()).then(idx => {
+    const picker = $('replayPicker');
+    (idx.replays||[]).forEach(meta => {
+      const b = document.createElement('button');
+      b.className = 'replay-chip';
+      b.innerHTML = `<span class="rec">●</span>${meta.title}`;
+      b.title = `recorded ${meta.recorded_at} · ${meta.seconds}s · ${meta.verdict}`;
+      b.addEventListener('click', () => playReplay(meta.id));
+      picker.appendChild(b);
+    });
+  }).catch(()=>{});
+
+  function pollStatus(){
+    fetch('/api/demo/status').then(r => r.json()).then(s => {
+      const btn = $('liveBtn'), note = $('liveNote');
+      if (!s.model_ready){ btn.disabled = true; note.textContent = 'live backend is loading the model — replays are instant meanwhile'; }
+      else if (s.busy){ btn.disabled = true; note.textContent = 'another live run is in progress on the shared 2-vCPU box — replays are instant'; }
+      else { btn.disabled = false; note.textContent =
+        `live runs execute the real 0.6B model + control head on a shared 2-vCPU box — expect ~1–2 minutes · ${s.limits.rate_per_hour} runs/hour per visitor`; }
+    }).catch(() => {
+      $('liveBtn').disabled = true;
+      $('liveNote').textContent = 'live backend offline — replays of real recorded runs still work';
+    });
+  }
+  pollStatus(); setInterval(pollStatus, 12000);
 })();
 </script>
 </body>
