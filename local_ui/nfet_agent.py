@@ -26,7 +26,7 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Generator, Iterator, List, Optional
 
 from pydantic import BaseModel
 
@@ -127,8 +127,15 @@ class NFETAgent:
             return self.deps.frontier_loop
         return self.deps.generation_loop
 
-    def _collect(self, messages: List[Any], req: NFETAgentRequest, *, tokens: int,
-                 temperature: Optional[float] = None, use_graft: Optional[bool] = None) -> SegmentResult:
+    def _collect_stream(self, messages: List[Any], req: NFETAgentRequest, *, tokens: int,
+                        temperature: Optional[float] = None, use_graft: Optional[bool] = None,
+                        channel: Optional[str] = None, segment: Optional[int] = None,
+                        ) -> Generator[Dict[str, Any], None, SegmentResult]:
+        """Drive one generation call; yield compact token events, return the result.
+
+        When ``channel`` is None the call is silent (no token events) — used for
+        the base-mode comparison shot.
+        """
         chat_req = self.deps.ChatRequest(
             messages=messages,
             max_new_tokens=tokens,
@@ -157,6 +164,19 @@ class NFETAgent:
                     logits = trace.get("control_logits")
                     if isinstance(logits, list) and logits:
                         last_logits = [float(x) for x in logits]
+                if channel is not None:
+                    compact: Dict[str, Any] = {"token": data.get("token", ""), "channel": channel}
+                    if segment is not None:
+                        compact["segment"] = segment
+                    if trace.get("used_graft"):
+                        compact["nfet"] = {
+                            "entropy": trace.get("graft_entropy"),
+                            "drift": trace.get("hidden_drift"),
+                            "gate": trace.get("gate_mean"),
+                            "regime": trace.get("regime_entropy"),
+                            "control": trace.get("control"),
+                        }
+                    yield {"event": "token", "data": compact}
             if kind == "done":
                 final = data
         elapsed = max(time.perf_counter() - started, 1e-9)
@@ -173,6 +193,16 @@ class NFETAgent:
             text=clean, frames=frames, last_control_logits=last_logits,
             hit_eos=hit_eos, raw=final, mean_entropy=mean_entropy,
         )
+
+    def _collect(self, messages: List[Any], req: NFETAgentRequest, *, tokens: int,
+                 temperature: Optional[float] = None, use_graft: Optional[bool] = None) -> SegmentResult:
+        gen = self._collect_stream(messages, req, tokens=tokens, temperature=temperature,
+                                   use_graft=use_graft, channel=None)
+        while True:
+            try:
+                next(gen)
+            except StopIteration as stop:
+                return stop.value
 
     # ------------------------------------------------------------------
     # Context construction
@@ -254,7 +284,7 @@ Continue the draft. Write the next segment only."""
         return [r for r in rows if r.get("text")]
 
     def _do_verify(self, command: str, draft: str, evidence: List[Dict[str, Any]],
-                   req: NFETAgentRequest) -> Dict[str, Any]:
+                   req: NFETAgentRequest) -> Generator[Dict[str, Any], None, Dict[str, Any]]:
         ChatMessage = self.deps.ChatMessage
         system = (
             "You are the verifier of the LOLM-NFET agent. Check the draft against the "
@@ -268,22 +298,25 @@ Continue the draft. Write the next segment only."""
 
 DRAFT:
 {draft}"""
-        seg = self._collect(
+        seg = yield from self._collect_stream(
             [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
-            req, tokens=min(req.segment_tokens * 2, 128),
+            req, tokens=min(req.segment_tokens * 2, 128), channel="verify",
         )
         lower = seg.text.lower()
         verdict = "revise" if "revise" in lower.split("verdict:")[-1][:40] else "ok"
         return {"verdict": verdict, "notes": seg.text, "raw_id": seg.raw.get("id")}
 
     def _do_branch(self, command: str, draft: str, memory_hits: List[Dict[str, Any]],
-                   evidence: List[Dict[str, Any]], req: NFETAgentRequest) -> Dict[str, Any]:
+                   evidence: List[Dict[str, Any]], req: NFETAgentRequest,
+                   ) -> Generator[Dict[str, Any], None, Dict[str, Any]]:
         candidates: List[SegmentResult] = []
-        for _ in range(max(req.branch_width, 2)):
-            candidates.append(self._collect(
+        for k in range(max(req.branch_width, 2)):
+            candidate = yield from self._collect_stream(
                 self._segment_messages(command, draft, memory_hits, evidence),
                 req, tokens=req.segment_tokens, temperature=req.branch_temperature,
-            ))
+                channel=f"branch:{k}",
+            )
+            candidates.append(candidate)
         # Healthiest continuation = lowest mean logit entropy (most confident);
         # candidates without telemetry rank last.
         def score(seg: SegmentResult) -> float:
@@ -299,7 +332,7 @@ DRAFT:
         }
 
     def _do_finalize(self, command: str, draft: str, evidence: List[Dict[str, Any]],
-                     req: NFETAgentRequest) -> SegmentResult:
+                     req: NFETAgentRequest) -> Generator[Dict[str, Any], None, SegmentResult]:
         ChatMessage = self.deps.ChatMessage
         system = (
             "You are the finalizer of the LOLM-NFET agent. Turn the working draft into "
@@ -313,10 +346,11 @@ DRAFT:
 
 WORKING DRAFT:
 {draft}"""
-        return self._collect(
+        result = yield from self._collect_stream(
             [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
-            req, tokens=req.final_tokens,
+            req, tokens=req.final_tokens, channel="final",
         )
+        return result
 
     def _generate_base(self, command: str, req: NFETAgentRequest) -> SegmentResult:
         ChatMessage = self.deps.ChatMessage
@@ -350,10 +384,23 @@ WORKING DRAFT:
     # ------------------------------------------------------------------
     # Main loop
     # ------------------------------------------------------------------
-    def run(self, req: NFETAgentRequest) -> Dict[str, Any]:
+    def run_events(self, req: NFETAgentRequest) -> Iterator[Dict[str, Any]]:
+        """The agent loop as a live event stream.
+
+        Event protocol (each item ``{"event": ..., "data": ...}``):
+            run_start      command, reasoner, head_trained, memory hits
+            phase          base_comparison | finalize
+            segment_start  segment index
+            token          streamed text with channel (draft/verify/branch:k/final)
+            decision       NFET control decision with z-scores and source
+            action         what the decision did (evidence added, verdict, ...)
+            proof          the proof receipt
+            run_done       the full result payload (same shape run() returns)
+        """
         command = req.command.strip()
         if not command:
-            return {"error": "empty command"}
+            yield {"event": "error", "data": {"error": "empty command"}}
+            return
 
         started = time.time()
         head_trained = bool(self.deps.head_trained_fn())
@@ -366,12 +413,19 @@ WORKING DRAFT:
         draft = ""
         ended_by = "segment_budget"
 
+        yield {"event": "run_start", "data": {
+            "command": command, "reasoner": req.reasoner, "head_trained": head_trained,
+            "memory_hits": len(memory_hits), "max_segments": req.max_segments,
+            "segment_tokens": req.segment_tokens,
+        }}
+        yield {"event": "phase", "data": {"phase": "base_comparison"}}
         base = self._generate_base(command, req)
 
         for seg_idx in range(req.max_segments):
-            segment = self._collect(
+            yield {"event": "segment_start", "data": {"segment": seg_idx + 1}}
+            segment = yield from self._collect_stream(
                 self._segment_messages(command, draft, memory_hits, evidence),
-                req, tokens=req.segment_tokens,
+                req, tokens=req.segment_tokens, channel="draft", segment=seg_idx + 1,
             )
             counters.segments += 1
             counters.tokens += int(segment.raw.get("tokens") or 0)
@@ -390,15 +444,17 @@ WORKING DRAFT:
                 "segment_mean_entropy": round(segment.mean_entropy, 4),
                 "telemetry_frames": len(segment.frames),
             }
+            yield {"event": "decision", "data": entry}
 
             if decision.control == CONTROL_RETRIEVE:
                 counters.retrieves += 1
                 new_evidence = self._do_retrieve(command, draft, req)
                 evidence.extend(new_evidence)
-                entry["action"] = {"kind": "retrieve", "added": len(new_evidence)}
+                entry["action"] = {"kind": "retrieve", "added": len(new_evidence),
+                                   "evidence": new_evidence[:6]}
             elif decision.control == CONTROL_VERIFY:
                 counters.verifies += 1
-                verdict = self._do_verify(command, draft, evidence, req)
+                verdict = yield from self._do_verify(command, draft, evidence, req)
                 entry["action"] = {"kind": "verify", "verdict": verdict["verdict"]}
                 if verdict["verdict"] == "revise":
                     evidence.append({
@@ -407,7 +463,7 @@ WORKING DRAFT:
                     })
             elif decision.control == CONTROL_BRANCH:
                 counters.branches += 1
-                branch = self._do_branch(command, draft, memory_hits, evidence, req)
+                branch = yield from self._do_branch(command, draft, memory_hits, evidence, req)
                 chosen: SegmentResult = branch["segment"]
                 policy.observe_all(chosen.frames)
                 all_frames.extend(chosen.frames)
@@ -420,19 +476,22 @@ WORKING DRAFT:
             elif decision.control == CONTROL_FINALIZE:
                 entry["action"] = {"kind": "finalize"}
                 timeline.append(entry)
+                yield {"event": "action", "data": {"segment": seg_idx + 1, **entry["action"]}}
                 ended_by = "nfet_finalize"
                 break
             else:
                 entry["action"] = {"kind": "continue"}
 
             timeline.append(entry)
+            yield {"event": "action", "data": {"segment": seg_idx + 1, **entry["action"]}}
             if segment.hit_eos and decision.control == CONTROL_CONTINUE and seg_idx >= 1:
                 ended_by = "natural_eos"
                 break
         else:
             ended_by = "segment_budget"
 
-        final = self._do_finalize(command, draft, evidence, req)
+        yield {"event": "phase", "data": {"phase": "finalize", "ended_by": ended_by}}
+        final = yield from self._do_finalize(command, draft, evidence, req)
         counters.tokens += int(final.raw.get("tokens") or 0)
         proof = self._proof(base, final, memory_hits, evidence, timeline, head_trained, ended_by)
 
@@ -482,7 +541,21 @@ WORKING DRAFT:
             "saved_learning_type": "nfet_agent_run",
         }
         self.last_run = result
-        return result
+        yield {"event": "proof", "data": proof}
+        yield {"event": "run_done", "data": result}
+
+    def run(self, req: NFETAgentRequest) -> Dict[str, Any]:
+        """Run the loop to completion and return the final payload."""
+        result: Optional[Dict[str, Any]] = None
+        error: Optional[Dict[str, Any]] = None
+        for event in self.run_events(req):
+            if event["event"] == "run_done":
+                result = event["data"]
+            elif event["event"] == "error":
+                error = event["data"]
+        if result is not None:
+            return result
+        return error or {"error": "run produced no result"}
 
     # ------------------------------------------------------------------
     # Proof receipt
@@ -544,10 +617,25 @@ WORKING DRAFT:
         }
 
 
+def sse_event(event: str, data: Dict[str, Any]) -> str:
+    import json
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
 def register_nfet_agent_routes(app: Any, agent: NFETAgent) -> None:
+    from fastapi.responses import StreamingResponse
+
     @app.post("/api/agent/nfet/run")
     def nfet_agent_run(req: NFETAgentRequest):
         return agent.run(req)
+
+    @app.post("/api/agent/nfet/run/stream")
+    def nfet_agent_run_stream(req: NFETAgentRequest):
+        def events() -> Iterator[str]:
+            for item in agent.run_events(req):
+                yield sse_event(item["event"], item["data"])
+        return StreamingResponse(events(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.get("/api/agent/nfet/last")
     def nfet_agent_last():

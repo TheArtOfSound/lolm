@@ -251,3 +251,64 @@ def test_trained_head_decision_recorded(tmp_path):
     head_entry = out["timeline"][sources.index("head")]
     assert head_entry["decision"]["label"] == "retrieve"
     assert out["proof"]["decision_sources"].get("head", 0) >= 1
+
+
+def test_run_events_protocol_order_and_content(tmp_path):
+    loop = FakeLoop(segments=[
+        segment_spec([3.0] * 48, "steady opening segment"),
+        segment_spec([3.0] * 36 + [6.5] * 12, "uncertain segment needs evidence"),
+        segment_spec([0.8] * 48, "calm confident closing segment", drift=0.01),
+    ])
+    agent, _ = make_agent(tmp_path, loop)
+    events = list(agent.run_events(NFETAgentRequest(command="explain the lolm latent order model")))
+    names = [e["event"] for e in events]
+
+    assert names[0] == "run_start"
+    assert "segment_start" in names and "decision" in names and "action" in names
+    assert names[-2:] == ["proof", "run_done"]
+    # token streaming present, channel-tagged
+    token_events = [e for e in events if e["event"] == "token"]
+    assert token_events, "expected streamed tokens"
+    channels = {t["data"]["channel"] for t in token_events}
+    assert "draft" in channels and "final" in channels
+    # draft tokens carry compact nfet telemetry
+    draft_tokens = [t for t in token_events if t["data"]["channel"] == "draft"]
+    assert any(t["data"].get("nfet", {}).get("entropy") is not None for t in draft_tokens)
+    # decisions appear before their actions per segment
+    idx_decision = names.index("decision")
+    idx_action = names.index("action")
+    assert idx_decision < idx_action
+    # run_done payload matches run() shape
+    done = events[-1]["data"]
+    assert done["proof"]["verdict"] == "nfet_control_visible"
+    assert done["ended_by"] == "nfet_finalize"
+
+
+def test_run_events_verify_streams_verify_channel(tmp_path):
+    loop = FakeLoop(
+        segments=[
+            segment_spec([3.0] * 48, "steady opening segment"),
+            segment_spec([3.4] * 48, "drifting segment", drifts=[0.05] * 36 + [0.9] * 12),
+            segment_spec([3.0] * 48, "post verify segment", eos=True),
+        ],
+        verify_text="VERDICT: revise\nThe draft misstates the gate equation.",
+    )
+    agent, _ = make_agent(tmp_path, loop)
+    events = list(agent.run_events(NFETAgentRequest(command="describe the gate")))
+    channels = {e["data"]["channel"] for e in events if e["event"] == "token"}
+    assert "verify" in channels
+
+
+def test_run_collector_matches_stream(tmp_path):
+    spec = [
+        segment_spec([3.0] * 48, "steady opening segment"),
+        segment_spec([3.0] * 48, "second segment", eos=True),
+    ]
+    agent1, _ = make_agent(tmp_path, FakeLoop(segments=list(spec)))
+    out1 = agent1.run(NFETAgentRequest(command="explain lolm"))
+    agent2, _ = make_agent(tmp_path, FakeLoop(segments=list(spec)))
+    done = [e for e in agent2.run_events(NFETAgentRequest(command="explain lolm"))
+            if e["event"] == "run_done"][0]["data"]
+    assert out1["ended_by"] == done["ended_by"]
+    assert out1["counters"] == done["counters"]
+    assert out1["proof"]["verdict"] == done["proof"]["verdict"]
