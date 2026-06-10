@@ -75,6 +75,33 @@ The surface decoder *cannot function* without the latent SSM — deep bidirectio
 | No Gate (gate=0.5) | 595.43 | +905% |
 | Decoder Only | 2,198.58 | +3,612% |
 
+## The NFET Agent — control from latent dynamics
+
+LOLM's telemetry is not just for charts. The workspace ships an agent whose
+control decisions — **continue / retrieve / verify / branch / finalize** —
+are driven by the model's measured internal dynamics (logit entropy, hidden
+drift, gate balance, regime entropy) instead of prompted self-reports:
+
+- a **calibrated control policy** works untrained from the first run;
+- the **control head trains on the workspace's own logged traffic**
+  (`make nfet-controller`) and takes over decision-by-decision once confident;
+- every run produces a **proof receipt** comparing against base mode;
+- a **frontier mode** lets Claude generate while the local latent machinery
+  monitors and controls (`reasoner: "claude"`);
+- the whole workspace is exposed as an **MCP server** (`.mcp.json` included)
+  for Claude Code, Claude Desktop, and any MCP client.
+
+```bash
+pip install -r requirements-agent.txt
+make nfet-tests        # offline tests, no model download
+make nfet-controller   # bootstrap the control head (~1 min, CPU)
+make nfet-smoke        # end-to-end agent run on Qwen3-0.6B
+make agent-ui          # full product stack: POST /api/agent/nfet/run
+```
+
+Read [AGENT.md](AGENT.md) for the architecture and the self-improvement
+flywheel.
+
 ## Quick Start
 
 ### Install

@@ -1,4 +1,4 @@
-.PHONY: hf-smoke hf-train-tiny hf-train-stream hf-compare hf-compare-ablations hf-tests local-ui
+.PHONY: hf-smoke hf-train-tiny hf-train-stream hf-compare hf-compare-ablations hf-tests local-ui agent-ui nfet-tests nfet-controller nfet-smoke nfet-mcp
 
 PROFILE ?= qwen3_0_6b_smoke
 DEVICE ?=
@@ -30,3 +30,18 @@ hf-tests:
 
 local-ui:
 	PYTHONPATH=. python local_ui/server.py
+
+agent-ui:
+	PYTHONPATH=. python local_ui/server_agent.py
+
+nfet-tests:
+	PYTHONPATH=. pytest -q tests/test_nfet_policy.py tests/test_nfet_agent.py tests/test_nfet_controller_train.py tests/test_claude_reasoner.py tests/test_mcp_server.py
+
+nfet-controller:
+	PYTHONPATH=. python scripts/train_nfet_controller.py --synthetic 400 --d-model 1024 --epochs 10 --out runs/nfet_controller/bootstrap_qwen06b.pt
+
+nfet-smoke:
+	PYTHONPATH=. python scripts/smoke_nfet_agent.py --ckpt runs/nfet_controller/bootstrap_qwen06b.pt
+
+nfet-mcp:
+	PYTHONPATH=. python local_ui/mcp_server.py
