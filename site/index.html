@@ -497,7 +497,7 @@
     if (event === 'run_start'){
       status(data.head_trained ? 'trained control head armed' : 'calibrated heuristic policy');
     } else if (event === 'phase'){
-      if (data.phase === 'base_comparison') status('base-mode comparison shot…');
+      if (data.phase === 'base_comparison') status('comparing against base mode…');
       if (data.phase === 'finalize'){ status('composing final answer'); curSeg = segBlock('final answer','final-text'); curSeg.dataset.channel='final'; }
     } else if (event === 'segment_start'){
       curSeg = segBlock('segment ' + data.segment); curSeg.dataset.channel='draft';

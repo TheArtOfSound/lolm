@@ -418,8 +418,6 @@ WORKING DRAFT:
             "memory_hits": len(memory_hits), "max_segments": req.max_segments,
             "segment_tokens": req.segment_tokens,
         }}
-        yield {"event": "phase", "data": {"phase": "base_comparison"}}
-        base = self._generate_base(command, req)
 
         for seg_idx in range(req.max_segments):
             yield {"event": "segment_start", "data": {"segment": seg_idx + 1}}
@@ -493,6 +491,12 @@ WORKING DRAFT:
         yield {"event": "phase", "data": {"phase": "finalize", "ended_by": ended_by}}
         final = yield from self._do_finalize(command, draft, evidence, req)
         counters.tokens += int(final.raw.get("tokens") or 0)
+
+        # Base-mode comparison shot runs LAST: the proof only needs it at the
+        # end, and running it first would delay time-to-first-token (and
+        # disconnect detection) by a full silent generation.
+        yield {"event": "phase", "data": {"phase": "base_comparison"}}
+        base = self._generate_base(command, req)
         proof = self._proof(base, final, memory_hits, evidence, timeline, head_trained, ended_by)
 
         learning = {
