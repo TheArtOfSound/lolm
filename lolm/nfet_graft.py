@@ -165,9 +165,14 @@ class NFETController(nn.Module):
         base_logits: Optional[torch.Tensor],
         gate: torch.Tensor,
         regime_probs: torch.Tensor,
+        drift_override: Optional[torch.Tensor] = None,
     ) -> NFETState:
         pooled = corrected_hidden.mean(dim=1)
-        if corrected_hidden.size(1) > 1:
+        if drift_override is not None:
+            # Streaming generation calls the graft with T=1, where in-sequence
+            # drift is undefined; callers supply lag-1 drift across calls.
+            drift = drift_override.to(device=corrected_hidden.device, dtype=corrected_hidden.dtype)
+        elif corrected_hidden.size(1) > 1:
             drift = (corrected_hidden[:, 1:] - corrected_hidden[:, :-1]).pow(2).mean(dim=(1, 2))
         else:
             drift = torch.zeros(corrected_hidden.size(0), device=corrected_hidden.device, dtype=corrected_hidden.dtype)
@@ -240,6 +245,7 @@ class LOLMNFETGraft(nn.Module):
         hidden: torch.Tensor,
         base_logits: Optional[torch.Tensor] = None,
         ablation_mode: AblationMode = "full",
+        drift_override: Optional[torch.Tensor] = None,
     ) -> GraftOutput:
         if ablation_mode == "no_residual":
             latent = torch.zeros_like(hidden)
@@ -257,7 +263,7 @@ class LOLMNFETGraft(nn.Module):
                 regime_probs, regime = self.regime(hidden)
             residual, gate = self.adapter(hidden, latent, regime, mode=ablation_mode)
             corrected = hidden + self.residual_scale * residual
-        nfet_state = self.nfet(corrected, base_logits=base_logits, gate=gate, regime_probs=regime_probs)
+        nfet_state = self.nfet(corrected, base_logits=base_logits, gate=gate, regime_probs=regime_probs, drift_override=drift_override)
         return GraftOutput(
             corrected_hidden=corrected,
             residual=residual,

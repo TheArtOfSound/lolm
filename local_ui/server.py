@@ -102,6 +102,7 @@ class RuntimeState:
     latent_backend: Optional[str] = None
     requested_latent_backend: Optional[str] = None
     loaded_at: float = 0.0
+    head_trained: bool = False
     history: List[Dict[str, Any]] = field(default_factory=list)
 
 
@@ -283,6 +284,8 @@ def generation_loop(req: ChatRequest) -> Iterator[Dict[str, Any]]:
     last_graft_error: Optional[str] = None
     past_key_values: Any = None
     next_input_ids = input_ids
+    prev_corrected: Optional[torch.Tensor] = None
+    prev_drift = 0.0
 
     yield {"event": "start", "data": {"profile": STATE.profile, "use_graft": graft is not None, "latent_backend": STATE.latent_backend, "fallback_note": fallback_note, "fast_mode": True}}
     with torch.no_grad():
@@ -297,17 +300,27 @@ def generation_loop(req: ChatRequest) -> Iterator[Dict[str, Any]]:
                     last_hidden = base.hidden_states[:, -1:, :]
                     last_logits = base.logits[:, -1:, :]
                     graft_hidden, graft_logits = cast_for_graft(last_hidden, last_logits, graft)
-                    gout = graft(graft_hidden, base_logits=graft_logits, ablation_mode=req.ablation_mode)  # type: ignore[arg-type]
+                    drift_feature = torch.full((graft_hidden.size(0),), prev_drift, device=graft_hidden.device, dtype=graft_hidden.dtype)
+                    gout = graft(graft_hidden, base_logits=graft_logits, ablation_mode=req.ablation_mode, drift_override=drift_feature)  # type: ignore[arg-type]
                     logits = project_with_backbone_lm_head(backbone.model, gout.corrected_hidden)
                     graft_next_logits = logits[:, -1, :]
                     gate_value = float(gout.gate.mean().detach().cpu())
                     regime_value = float(gout.nfet_state.regime_entropy.mean().detach().cpu())
-                    drift_value = float(gout.nfet_state.hidden_drift.mean().detach().cpu())
+                    # Real lag-1 drift across streamed tokens (in-sequence drift is
+                    # undefined at T=1; the controller sees the previous step's value).
+                    corrected_last = gout.corrected_hidden[:, -1, :].detach()
+                    if prev_corrected is not None:
+                        drift_value = float((corrected_last.float() - prev_corrected.float()).pow(2).mean().cpu().item())
+                    else:
+                        drift_value = 0.0
+                    prev_corrected = corrected_last
+                    prev_drift = drift_value
+                    control_logits_row = [round(float(x), 4) for x in gout.nfet_state.control_logits[0].detach().float().cpu().tolist()]
                     control_id = int(gout.nfet_state.control_logits.argmax(dim=-1)[0].detach().cpu().item())
                     gate_means.append(gate_value)
                     regimes.append(regime_value)
                     controls.append(control_id)
-                    token_trace.update({"used_graft": True, "gate_mean": gate_value, "surface_share": gate_value, "latent_share": 1.0 - gate_value, "regime_entropy": regime_value, "hidden_drift": drift_value, "control_id": control_id, "control": CONTROL_LABELS.get(control_id, str(control_id)), "graft_entropy": entropy_from_logits(graft_next_logits), "graft_top": top_token(backbone, graft_next_logits), "base_graft_delta_l2": float((graft_next_logits.float() - base_next_logits.to(graft_next_logits.device).float()).pow(2).mean().sqrt().detach().cpu().item())})
+                    token_trace.update({"used_graft": True, "gate_mean": gate_value, "surface_share": gate_value, "latent_share": 1.0 - gate_value, "regime_entropy": regime_value, "hidden_drift": drift_value, "control_id": control_id, "control": CONTROL_LABELS.get(control_id, str(control_id)), "control_logits": control_logits_row, "graft_entropy": entropy_from_logits(graft_next_logits), "graft_top": top_token(backbone, graft_next_logits), "base_graft_delta_l2": float((graft_next_logits.float() - base_next_logits.to(graft_next_logits.device).float()).pow(2).mean().sqrt().detach().cpu().item())})
                 except Exception as exc:
                     last_graft_error = str(exc)[:500]
                     token_trace.update({"used_graft": False, "graft_error": last_graft_error})
@@ -347,7 +360,7 @@ def index():
 
 @app.get("/api/status")
 def status():
-    return {"loaded": STATE.backbone is not None, "profile": STATE.profile, "device": str(STATE.device) if STATE.device else None, "use_graft": STATE.use_graft, "latent_backend": STATE.latent_backend, "requested_latent_backend": STATE.requested_latent_backend, "loaded_at": STATE.loaded_at, "history_count": len(STATE.history), "local_max_params": LOCAL_MAX_PARAMS, "mps_auto_enabled": ENABLE_MPS_AUTO, "live_selective_ssm_enabled": ALLOW_LIVE_SELECTIVE_SSM, "improvement_log": str(IMPROVEMENT_LOG)}
+    return {"loaded": STATE.backbone is not None, "profile": STATE.profile, "device": str(STATE.device) if STATE.device else None, "use_graft": STATE.use_graft, "latent_backend": STATE.latent_backend, "requested_latent_backend": STATE.requested_latent_backend, "loaded_at": STATE.loaded_at, "head_trained": STATE.head_trained, "history_count": len(STATE.history), "local_max_params": LOCAL_MAX_PARAMS, "mps_auto_enabled": ENABLE_MPS_AUTO, "live_selective_ssm_enabled": ALLOW_LIVE_SELECTIVE_SSM, "improvement_log": str(IMPROVEMENT_LOG)}
 
 
 @app.get("/api/profiles")
@@ -377,11 +390,13 @@ def load_model(req: LoadRequest):
         except RuntimeError as exc:
             return {"warning": f"model loaded, but device move failed: {exc}", "profile": req.profile}
     graft = None
+    head_trained = False
     if req.use_graft:
         graft = build_graft(backbone.hidden_size, backend, device)
         if req.graft_checkpoint:
             ckpt = torch.load(req.graft_checkpoint, map_location="cpu")
             graft.load_state_dict(ckpt["graft"])
+            head_trained = bool(ckpt.get("head_trained", False))
     STATE.backbone = backbone
     STATE.graft = graft
     STATE.profile = req.profile
@@ -390,7 +405,8 @@ def load_model(req: LoadRequest):
     STATE.latent_backend = backend if graft is not None else None
     STATE.requested_latent_backend = req.latent_backend
     STATE.loaded_at = time.time()
-    return {"loaded": True, "profile": req.profile, "hidden_size": backbone.hidden_size, "device": str(device), "size_b": round(profile.approximate_parameters / 1_000_000_000, 2), "latent_backend": STATE.latent_backend, "requested_latent_backend": req.latent_backend, "fallback_reason": fallback_reason}
+    STATE.head_trained = head_trained
+    return {"loaded": True, "profile": req.profile, "hidden_size": backbone.hidden_size, "device": str(device), "size_b": round(profile.approximate_parameters / 1_000_000_000, 2), "latent_backend": STATE.latent_backend, "requested_latent_backend": req.latent_backend, "head_trained": head_trained, "fallback_reason": fallback_reason}
 
 
 @app.post("/api/chat")
