@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOLM — Latent Order Language Model · Qira</title>
+<meta name="description" content="LOLM is a hybrid Transformer-SSM architecture that separates surface token prediction from latent state tracking — with an agent controlled by its own latent dynamics.">
+<meta property="og:title" content="LOLM — Latent Order Language Model">
+<meta property="og:description" content="Five parallel streams, one fused representation. An agent that measures its uncertainty instead of guessing it. Patent pending — Qira LLC.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lolm.imagineqira.com">
+<style>
+  :root{
+    --bg:#07090d; --bg2:#0c1016; --panel:#11161f; --line:#1d2530;
+    --text:#d7dde6; --dim:#8b96a5; --faint:#5a6675;
+    --surface:#4ea1ff; --latent:#b07fff; --regime:#ffb454; --memory:#3fd6a0; --gate:#ff6b81;
+    --accent:#4ea1ff; --good:#3fd6a0;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 24px}
+  header{position:sticky;top:0;z-index:10;background:rgba(7,9,13,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  nav{display:flex;align-items:center;gap:22px;height:58px}
+  .brand{font-family:var(--mono);font-weight:700;letter-spacing:.12em;color:var(--text);font-size:15px}
+  .brand b{color:var(--accent)}
+  nav .links{margin-left:auto;display:flex;gap:18px;font-size:13.5px}
+  nav .links a{color:var(--dim)} nav .links a:hover{color:var(--text);text-decoration:none}
+
+  .hero{padding:84px 0 36px;position:relative;overflow:hidden}
+  .hero .kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;margin-bottom:18px}
+  h1{font-size:clamp(34px,5.4vw,58px);line-height:1.08;font-weight:760;letter-spacing:-.015em}
+  h1 .grad{background:linear-gradient(92deg,var(--surface),var(--latent) 55%,var(--memory));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.lead{margin:22px 0 8px;max-width:680px;font-size:17.5px;color:var(--dim)}
+  .badges{display:flex;flex-wrap:wrap;gap:10px;margin:26px 0 8px}
+  .badge{font-family:var(--mono);font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:5px 13px;background:var(--bg2)}
+  .badge i{font-style:normal;color:var(--good)}
+  .cta{display:flex;gap:14px;margin-top:30px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:11px 20px;border-radius:9px;font-size:14.5px;font-weight:600;border:1px solid var(--line)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#06121f}
+  .btn.primary:hover{filter:brightness(1.1);text-decoration:none}
+  .btn.ghost{color:var(--text);background:var(--panel)}
+  .btn.ghost:hover{border-color:var(--faint);text-decoration:none}
+
+  #streams{display:block;width:100%;height:240px;margin:36px 0 0;border:1px solid var(--line);border-radius:14px;background:var(--bg2)}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:44px 0 8px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+  .stat .num{font-family:var(--mono);font-size:27px;font-weight:700;color:var(--text)}
+  .stat .num span{color:var(--good)}
+  .stat .lbl{font-size:13px;color:var(--dim);margin-top:6px}
+
+  section{padding:64px 0 8px}
+  .sec-kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin-bottom:10px}
+  h2{font-size:clamp(24px,3.4vw,34px);letter-spacing:-.01em;margin-bottom:14px}
+  .sub{color:var(--dim);max-width:720px;margin-bottom:30px}
+
+  .eq{font-family:var(--mono);font-size:clamp(13px,2.4vw,17px);background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:18px 22px;overflow-x:auto;color:var(--text);margin-bottom:28px}
+  .eq .g{color:var(--gate)} .eq .h{color:var(--surface)} .eq .z{color:var(--latent)} .eq .m{color:var(--memory)} .eq .r{color:var(--regime)}
+
+  .streams-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
+  .stream{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;border-top:3px solid var(--line)}
+  .stream h3{font-size:16px;margin-bottom:6px}
+  .stream .role{font-family:var(--mono);font-size:12px;color:var(--dim);margin-bottom:10px}
+  .stream p{font-size:14px;color:var(--dim)}
+  .stream.s1{border-top-color:var(--surface)} .stream.s2{border-top-color:var(--latent)}
+  .stream.s3{border-top-color:var(--regime)} .stream.s4{border-top-color:var(--memory)}
+  .stream.s5{border-top-color:var(--gate)}
+
+  .callout{background:linear-gradient(180deg,rgba(176,127,255,.08),rgba(78,161,255,.04));border:1px solid #2a3040;border-radius:16px;padding:30px 32px;margin-top:36px}
+  .callout .big{font-family:var(--mono);font-size:clamp(22px,4vw,34px);font-weight:700;color:var(--latent)}
+  .callout p{color:var(--dim);margin-top:10px;max-width:760px}
+  .callout b{color:var(--text)}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 26px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+  th{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600}
+  td{color:var(--dim)} td:first-child{color:var(--text)}
+  td .win{color:var(--good);font-weight:600}
+  .tables{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px}
+  .tbl h3{font-size:15px;margin-bottom:8px}
+  .tbl .note{font-size:12.5px;color:var(--faint);margin-top:-18px}
+
+  .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:26px 0}
+  .ctrl{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .ctrl .id{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .ctrl .name{font-family:var(--mono);font-weight:700;font-size:15px;margin:4px 0 6px}
+  .ctrl p{font-size:13px;color:var(--dim)}
+  .ctrl.c0 .name{color:var(--dim)} .ctrl.c1 .name{color:var(--surface)} .ctrl.c2 .name{color:var(--regime)}
+  .ctrl.c3 .name{color:var(--latent)} .ctrl.c4 .name{color:var(--memory)}
+
+  .quote{border-left:3px solid var(--accent);padding:6px 0 6px 22px;margin:30px 0;font-size:19px;color:var(--text);max-width:720px}
+  .quote i{color:var(--dim);font-size:14px;display:block;margin-top:8px;font-style:normal}
+
+  .flow{font-family:var(--mono);font-size:12.5px;color:var(--dim);background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:20px 22px;overflow-x:auto;white-space:pre;line-height:1.7}
+
+  details{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin:26px 0}
+  summary{cursor:pointer;font-size:14px;color:var(--dim);font-weight:600}
+  pre.bib{font-family:var(--mono);font-size:12.5px;color:var(--dim);margin-top:14px;overflow-x:auto;line-height:1.6}
+
+  footer{margin-top:80px;border-top:1px solid var(--line);padding:36px 0 48px;color:var(--faint);font-size:13.5px}
+  footer .row{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:baseline}
+  @media (max-width:640px){ .hero{padding-top:56px} section{padding-top:48px} }
+</style>
+</head>
+<body>
+
+<header><div class="wrap"><nav>
+  <span class="brand">LO<b>LM</b></span>
+  <span class="links">
+    <a href="#architecture">Architecture</a>
+    <a href="#results">Results</a>
+    <a href="#agent">NFET Agent</a>
+    <a href="#cite">Cite</a>
+  </span>
+</nav></div></header>
+
+<div class="wrap">
+
+<div class="hero">
+  <div class="kicker">Qira Research · Patent Pending</div>
+  <h1>Language modeling<br><span class="grad">beyond the surface.</span></h1>
+  <p class="lead">LOLM — the <b>Latent Order Language Model</b> — is a hybrid Transformer-SSM
+  architecture that separates surface token prediction from latent state tracking.
+  Five parallel streams, one learned fusion, and an agent that acts on its own
+  measured internal dynamics.</p>
+  <div class="badges">
+    <span class="badge">trained to <i>1.57B</i> params</span>
+    <span class="badge">H200 · TPU v4 validated</span>
+    <span class="badge">64/64 regimes alive</span>
+    <span class="badge">provisional patent <i>64002166</i></span>
+  </div>
+  <div class="cta">
+    <a class="btn primary" href="#architecture">See the architecture</a>
+    <a class="btn ghost" href="#agent">The NFET Agent →</a>
+  </div>
+  <canvas id="streams" aria-hidden="true"></canvas>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="num"><span>−15%</span> PPL</div><div class="lbl">vs a parameter-matched decoder-only baseline at 1.57B (33.2 vs 39.1, step ~24K, FineWeb-Edu)</div></div>
+  <div class="stat"><div class="num"><span>−52%</span> PPL</div><div class="lbl">vs Pythia-410M on WikiText-103 — with 26% fewer parameters (LOLM-304M)</div></div>
+  <div class="stat"><div class="num"><span>43%</span> faster</div><div class="lbl">early-training convergence vs matched baseline, cross-validated on Google TPU v4</div></div>
+  <div class="stat"><div class="num"><span>14,000,000×</span></div><div class="lbl">perplexity explosion when the latent path is removed — dependency inversion</div></div>
+</div>
+
+<section id="architecture">
+  <div class="sec-kicker">Architecture</div>
+  <h2>Five streams. One fused representation.</h2>
+  <p class="sub">Each token flows through five parallel streams that converge via learned,
+  per-dimension fusion — the surface stays fluent while the latent core tracks
+  what the sequence is actually doing.</p>
+
+  <div class="eq">o<sub>t</sub> = <span class="g">g</span> · LN(W<sub>h</sub> <span class="h">h<sub>t</sub></span>) + (1 − <span class="g">g</span>) · LN(W<sub>z</sub> <span class="z">z<sub>t</sub></span>) + W<sub>m</sub> <span class="m">m<sub>t</sub></span> + W<sub>r</sub> <span class="r">r<sub>t</sub></span></div>
+
+  <div class="streams-grid">
+    <div class="stream s1"><h3>Surface Decoder</h3><div class="role">h — local token relationships</div><p>Pre-norm Transformer with rotary position embeddings. The fluent voice.</p></div>
+    <div class="stream s2"><h3>Latent SSM Core</h3><div class="role">z — slow latent dynamics</div><p>Selective state-space model (Mamba-style) with parallel scan. Tracks the order beneath the words.</p></div>
+    <div class="stream s3"><h3>Regime Layer</h3><div class="role">r — discrete phase detection</div><p>Gumbel-Softmax over 64 codes with causal-conv neighbor interaction. Gradient-isolated so no code collapses.</p></div>
+    <div class="stream s4"><h3>Persistent Memory</h3><div class="role">m — cross-sequence state</div><p>Three banks — episodic, semantic, self — with gated, chunked read/write that keeps gradients flowing.</p></div>
+    <div class="stream s5"><h3>Manifestation Gate</h3><div class="role">g — surface vs latent arbitration</div><p>Per-dimension sigmoid deciding, feature by feature, whether the surface or the latent stream speaks.</p></div>
+  </div>
+
+  <div class="callout">
+    <div class="big">34.47 → 485,000,000 PPL</div>
+    <p><b>Dependency inversion.</b> The latent SSM path carries only ~29% of the fused
+    representation — yet forcing the gate to surface-only makes perplexity explode by a
+    factor of fourteen million. The minority path becomes load-bearing at scale: the
+    surface decoder <b>cannot function</b> without the latent order beneath it.</p>
+  </div>
+</section>
+
+<section id="results">
+  <div class="sec-kicker">Results</div>
+  <h2>Measured, matched, cross-hardware.</h2>
+  <p class="sub">Identical data, batch size, and comparable parameter count for every baseline.
+  Trained on FineWeb-Edu; validated independently on NVIDIA H200 and Google TPU v4.</p>
+
+  <div class="tables">
+    <div class="tbl">
+      <h3>LOLM-1.57B vs matched decoder-only</h3>
+      <table>
+        <tr><th>Metric</th><th>LOLM</th><th>Baseline</th></tr>
+        <tr><td>Parameters</td><td>1.57B</td><td>~1.57B</td></tr>
+        <tr><td>PPL @ step ~24K</td><td><span class="win">33.2</span></td><td>39.1</td></tr>
+        <tr><td>Gate equilibrium</td><td>0.72 (learned)</td><td>—</td></tr>
+        <tr><td>Regimes alive</td><td><span class="win">64 / 64</span></td><td>—</td></tr>
+      </table>
+    </div>
+    <div class="tbl">
+      <h3>LOLM-304M vs Pythia-410M</h3>
+      <table>
+        <tr><th>Metric</th><th>LOLM</th><th>Pythia</th></tr>
+        <tr><td>Parameters</td><td><span class="win">304M</span></td><td>410M</td></tr>
+        <tr><td>Eval PPL (WikiText-103)</td><td><span class="win">68.4</span></td><td>142.9</td></tr>
+        <tr><td>Late-position BPC</td><td><span class="win">1.02</span></td><td>1.23</td></tr>
+        <tr><td>Distinct-2 generation</td><td><span class="win">0.687</span></td><td>0.607</td></tr>
+      </table>
+    </div>
+    <div class="tbl">
+      <h3>Component ablation (304M, inference-time)</h3>
+      <table>
+        <tr><th>Configuration</th><th>PPL</th><th>Δ</th></tr>
+        <tr><td>Full LOLM</td><td><span class="win">59.2</span></td><td>—</td></tr>
+        <tr><td>No regime layer</td><td>123.7</td><td>+109%</td></tr>
+        <tr><td>No SSM path</td><td>500.0</td><td>+744%</td></tr>
+        <tr><td>No gate</td><td>595.4</td><td>+905%</td></tr>
+        <tr><td>Decoder only</td><td>2,198.6</td><td>+3,612%</td></tr>
+      </table>
+      <p class="note">Every stream earns its place — remove one and the whole degrades.</p>
+    </div>
+  </div>
+</section>
+
+<section id="agent">
+  <div class="sec-kicker">The NFET Agent</div>
+  <h2>Control from latent dynamics.</h2>
+  <p class="sub">Every token, the model measures four observables of its own trajectory —
+  logit entropy, hidden drift, gate balance, regime entropy. A learned controller maps
+  them to five actions that drive a real agent loop.</p>
+
+  <div class="quote">Prompted agents <b>ask</b> the model whether it is uncertain.
+  This agent <b>measures</b> it.<i>— Noise-Driven Functional Emergence Theory (NFET), applied</i></div>
+
+  <div class="controls">
+    <div class="ctrl c0"><div class="id">0</div><div class="name">continue</div><p>Trajectory healthy — keep generating.</p></div>
+    <div class="ctrl c1"><div class="id">1</div><div class="name">retrieve</div><p>Sustained uncertainty — go get evidence from memory or the web.</p></div>
+    <div class="ctrl c2"><div class="id">2</div><div class="name">verify</div><p>Representation jumped while uncertain — check the draft.</p></div>
+    <div class="ctrl c3"><div class="id">3</div><div class="name">branch</div><p>Stuck in a rut — fork alternatives, keep the healthiest.</p></div>
+    <div class="ctrl c4"><div class="id">4</div><div class="name">finalize</div><p>Confident and stable — wrap up and answer.</p></div>
+  </div>
+
+  <div class="flow">command ──► generate segment ──► decide(telemetry, head)
+                 ▲                       │
+                 │       continue ───────┤
+                 │       retrieve ───────┼──► evidence injected mid-run
+                 │       verify ─────────┼──► critique fed back to the draft
+                 │       branch ─────────┼──► healthiest fork survives
+                 └───────────────────────┘
+                         finalize ───────► answer + proof receipt</div>
+
+  <p class="sub" style="margin-top:26px">A calibrated control policy works untrained from the first run;
+  the control head then <b>trains on the workspace's own logged traffic</b> and takes over
+  decision-by-decision once confident. Every run emits a proof receipt against base mode.
+  A frontier mode lets a large reasoner generate while LOLM's latent machinery monitors
+  and controls — and the whole workspace speaks the open
+  <b>Model Context Protocol</b>, so it plugs into any modern agent stack.</p>
+</section>
+
+<section id="cite">
+  <div class="sec-kicker">Reference</div>
+  <h2>Cite LOLM.</h2>
+  <details open>
+    <summary>BibTeX</summary>
+    <pre class="bib">@article{leonard2026lolm,
+  title  = {LOLM: Language Modeling Beyond the Surface with Hybrid
+            Transformer-SSM Latent Order Fields},
+  author = {Leonard, Bryan and Leonard, Brandyn},
+  year   = {2026},
+  note   = {Qira LLC. Provisional patent application No. 64002166.}
+}</pre>
+  </details>
+  <p class="sub">Code is private during patent review and available under the
+  <b>LOLM Community License</b> — free for research, education, and small entities.
+  Access and commercial licensing on request via <a href="https://imagineqira.com">imagineqira.com</a>.</p>
+</section>
+
+<footer>
+  <div class="row">
+    <div>© 2026 <b>Qira LLC</b> — Bryan Leonard &amp; Brandyn Leonard · Patent pending</div>
+    <div><a href="https://imagineqira.com">imagineqira.com</a></div>
+  </div>
+</footer>
+
+</div>
+
+<script>
+(function(){
+  const cv = document.getElementById('streams');
+  const ctx = cv.getContext('2d');
+  const COLORS = ['#4ea1ff','#b07fff','#ffb454','#3fd6a0','#ff6b81'];
+  let W, H, dpr, particles = [];
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function laneY(i){ return H * (0.18 + i * 0.16); }
+  function spawn(){
+    const lane = Math.floor(Math.random() * 5);
+    particles.push({lane, x: -10, y: laneY(lane), v: 0.8 + Math.random() * 1.4, r: 1 + Math.random() * 1.6});
+  }
+  function step(){
+    ctx.clearRect(0, 0, W, H);
+    const fuseX = W * 0.62, outY = H * 0.5;
+    // lanes
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++){
+      ctx.strokeStyle = COLORS[i] + '22';
+      ctx.beginPath(); ctx.moveTo(0, laneY(i));
+      ctx.bezierCurveTo(fuseX * 0.7, laneY(i), fuseX * 0.85, outY, fuseX, outY);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = '#d7dde622';
+    ctx.beginPath(); ctx.moveTo(fuseX, outY); ctx.lineTo(W, outY); ctx.stroke();
+    // fusion node
+    ctx.fillStyle = '#d7dde6';
+    ctx.beginPath(); ctx.arc(fuseX, outY, 3.2, 0, 7); ctx.fill();
+    ctx.font = '10px ui-monospace,monospace'; ctx.fillStyle = '#5a6675';
+    ctx.fillText('fusion', fuseX - 16, outY - 12);
+    const labels = ['surface h','latent z','regime r','memory m','gate g'];
+    for (let i = 0; i < 5; i++){ ctx.fillStyle = COLORS[i] + 'aa'; ctx.fillText(labels[i], 8, laneY(i) - 7); }
+    // particles
+    if (Math.random() < 0.5 && particles.length < 140) spawn();
+    particles = particles.filter(p => p.x < W + 12);
+    for (const p of particles){
+      p.x += p.v;
+      let y;
+      if (p.x < fuseX){
+        const t = Math.max(0, (p.x - fuseX * 0.55) / (fuseX * 0.45));
+        y = laneY(p.lane) * (1 - t * t) + outY * (t * t);
+      } else { y = outY; }
+      ctx.fillStyle = p.x < fuseX ? COLORS[p.lane] : '#d7dde6';
+      ctx.globalAlpha = p.x < fuseX ? 0.85 : 0.95;
+      ctx.beginPath(); ctx.arc(p.x, y, p.r, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    requestAnimationFrame(step);
+  }
+  window.addEventListener('resize', resize);
+  resize(); step();
+})();
+</script>
+</body>
+</html>
