@@ -1,0 +1,253 @@
+from __future__ import annotations
+
+import json
+import random
+from typing import Any, Dict, Iterator, List
+
+from local_ui.memory_store import MemoryStore
+from local_ui.nfet_agent import AgentDeps, NFETAgent, NFETAgentRequest
+from lolm.nfet_policy import PolicyConfig
+
+
+class Msg:
+    def __init__(self, role: str, content: str):
+        self.role = role
+        self.content = content
+
+
+class Req:
+    def __init__(self, messages, max_new_tokens=96, temperature=0.35, top_p=0.9,
+                 use_graft=True, ablation_mode="full"):
+        self.messages = messages
+        self.max_new_tokens = max_new_tokens
+        self.temperature = temperature
+        self.top_p = top_p
+        self.use_graft = use_graft
+        self.ablation_mode = ablation_mode
+
+
+def frame_trace(step: int, entropy: float, drift: float = 0.05, gate: float = 0.7,
+                regime: float = 2.0, control_logits=None) -> Dict[str, Any]:
+    return {
+        "step": step,
+        "used_graft": True,
+        "graft_entropy": entropy,
+        "hidden_drift": drift,
+        "gate_mean": gate,
+        "regime_entropy": regime,
+        "control_logits": control_logits or [0.1, 0.1, 0.1, 0.1, 0.1],
+    }
+
+
+def segment_spec(entropies: List[float], text: str, *, drift: float = 0.05,
+                 regime: float = 2.0, drifts: List[float] | None = None,
+                 eos: bool = False) -> Dict[str, Any]:
+    return {"entropies": entropies, "drifts": drifts, "drift": drift,
+            "regime": regime, "text": text, "eos": eos}
+
+
+class FakeLoop:
+    """Scripted generation loop. Routes calls by system-prompt role marker."""
+
+    def __init__(self, segments: List[Dict[str, Any]],
+                 base_text: str = "base answer about latent order",
+                 verify_text: str = "VERDICT: ok\nLooks fine.",
+                 final_text: str = "Result: the finished answer.\nWhat I used: evidence.",
+                 branch_specs: List[Dict[str, Any]] | None = None):
+        self.segments = list(segments)
+        self.base_text = base_text
+        self.verify_text = verify_text
+        self.final_text = final_text
+        self.branch_specs = list(branch_specs or [])
+        self.calls: List[Dict[str, Any]] = []
+        self.rng = random.Random(11)
+        self.counter = 0
+
+    def _emit(self, spec: Dict[str, Any], req: Any) -> Iterator[Dict[str, Any]]:
+        entropies = spec["entropies"]
+        drifts = spec.get("drifts") or [spec.get("drift", 0.05)] * len(entropies)
+        n = len(entropies) if spec.get("eos") else max(len(entropies), req.max_new_tokens)
+        words = (spec["text"].split() or ["..."])
+        for i in range(n):
+            entropy = entropies[i] if i < len(entropies) else entropies[-1]
+            drift = drifts[i] if i < len(drifts) else drifts[-1]
+            token = (" " if i else "") + words[i % len(words)]
+            yield {"event": "token", "data": {
+                "token": token,
+                "trace": frame_trace(i + 1, entropy + self.rng.uniform(-0.05, 0.05),
+                                     drift=drift, regime=spec.get("regime", 2.0)),
+            }}
+        self.counter += 1
+        yield {"event": "done", "data": {
+            "id": f"fake-{self.counter}", "response": spec["text"],
+            "tokens": n, "summary": {},
+        }}
+
+    def _plain(self, text: str, tokens: int = 8) -> Iterator[Dict[str, Any]]:
+        for i in range(tokens):
+            yield {"event": "token", "data": {"token": " x", "trace": {"used_graft": False}}}
+        self.counter += 1
+        yield {"event": "done", "data": {"id": f"fake-{self.counter}", "response": text,
+                                          "tokens": tokens, "summary": {}}}
+
+    def __call__(self, req: Any) -> Iterator[Dict[str, Any]]:
+        system = req.messages[0].content if req.messages else ""
+        self.calls.append({"system": system[:60], "user": req.messages[-1].content,
+                           "temperature": req.temperature, "use_graft": req.use_graft})
+        if "normal local chatbot" in system:
+            yield from self._plain(self.base_text)
+        elif "verifier" in system:
+            yield from self._plain(self.verify_text)
+        elif "finalizer" in system:
+            yield from self._plain(self.final_text, tokens=24)
+        elif "drafting engine" in system:
+            if req.temperature > 0.5 and self.branch_specs:
+                spec = self.branch_specs.pop(0)
+            else:
+                spec = self.segments.pop(0) if self.segments else segment_spec(
+                    [1.0] * 16, "trailing calm segment", drift=0.01)
+            yield from self._emit(spec, req)
+        else:
+            yield from self._plain("unknown role")
+
+
+def make_agent(tmp_path, loop: FakeLoop, head_trained: bool = False,
+               policy: PolicyConfig | None = None) -> tuple[NFETAgent, list]:
+    events: List[Dict[str, Any]] = []
+    memory = MemoryStore(tmp_path / "data")
+    memory.append_note("LOLM separates surface tokens from latent state tracking", tag="research", importance=5)
+    memory.add_goal("Ship the NFET agent", why="close the control loop", priority=5)
+    deps = AgentDeps(
+        memory=memory, ChatMessage=Msg, ChatRequest=Req,
+        generation_loop=loop, append_event=events.append,
+        head_trained_fn=lambda: head_trained,
+    )
+    cfg = policy or PolicyConfig(min_calibration=12, sustain=4, cooldown=16,
+                                 min_steps_before_finalize=32, window=160)
+    return NFETAgent(deps, policy_config=cfg), events
+
+
+def test_entropy_spike_drives_retrieve_then_finalize(tmp_path):
+    loop = FakeLoop(segments=[
+        segment_spec([3.0] * 48, "steady opening segment"),
+        segment_spec([3.0] * 36 + [6.5] * 12, "uncertain segment needs evidence"),
+        segment_spec([0.8] * 48, "calm confident closing segment", drift=0.01),
+    ])
+    agent, events = make_agent(tmp_path, loop)
+    out = agent.run(NFETAgentRequest(command="explain the lolm latent order model", max_segments=6))
+
+    kinds = [t["action"]["kind"] for t in out["timeline"]]
+    assert kinds[0] == "continue"
+    assert kinds[1] == "retrieve"
+    assert kinds[2] == "finalize"
+    assert out["ended_by"] == "nfet_finalize"
+    assert out["counters"]["retrieves"] == 1
+    # retrieve found the memory note and injected it
+    assert any(e["kind"] == "memory" for e in out["evidence"])
+    # the segment after retrieve saw the evidence
+    drafting_calls = [c for c in loop.calls if "drafting engine" in c["system"]]
+    assert "EVIDENCE GATHERED THIS RUN" in drafting_calls[2]["user"]
+    assert "latent state tracking" in drafting_calls[2]["user"]
+    # proof receipt records control activity
+    assert out["proof"]["verdict"] == "nfet_control_visible"
+    assert out["proof"]["control_counts"].get("retrieve") == 1
+    # learning event captured frames for the flywheel
+    assert events and events[0]["type"] == "nfet_agent_run"
+    assert len(events[0]["frames"]) >= 96
+    assert json.dumps(events[0])  # serializable
+
+
+def test_drift_spike_drives_verify_and_critique_feeds_back(tmp_path):
+    loop = FakeLoop(
+        segments=[
+            segment_spec([3.0] * 48, "steady opening segment"),
+            segment_spec([3.4] * 48, "drifting segment",
+                         drifts=[0.05] * 36 + [0.9] * 12),
+            segment_spec([3.0] * 48, "post verify segment", eos=True),
+        ],
+        verify_text="VERDICT: revise\nThe draft misstates the gate equation.",
+    )
+    agent, _ = make_agent(tmp_path, loop)
+    out = agent.run(NFETAgentRequest(command="describe the gate", max_segments=5))
+
+    kinds = [t["action"]["kind"] for t in out["timeline"]]
+    assert "verify" in kinds
+    verify_entry = out["timeline"][kinds.index("verify")]
+    assert verify_entry["action"]["verdict"] == "revise"
+    assert any(e["kind"] == "verifier_note" for e in out["evidence"])
+    drafting_calls = [c for c in loop.calls if "drafting engine" in c["system"]]
+    assert any("verification pass flagged" in c["user"] for c in drafting_calls)
+
+
+def test_regime_collapse_drives_branch_and_picks_calmest(tmp_path):
+    loop = FakeLoop(
+        segments=[
+            segment_spec([3.0] * 48, "steady opening segment"),
+            segment_spec([3.1] * 48, "stuck segment", regime=0.1),
+        ],
+        branch_specs=[
+            segment_spec([4.5] * 24, "wild alternative", eos=True),
+            segment_spec([1.5] * 24, "calm alternative wins", eos=True),
+        ],
+    )
+    agent, _ = make_agent(tmp_path, loop)
+    out = agent.run(NFETAgentRequest(command="pick a direction", max_segments=3,
+                                     max_branches=1, branch_width=2))
+    kinds = [t["action"]["kind"] for t in out["timeline"]]
+    assert "branch" in kinds
+    branch_entry = out["timeline"][kinds.index("branch")]
+    assert branch_entry["action"]["chosen"] == 1
+    assert "calm alternative wins" in out["draft"]
+
+
+def test_budget_exhaustion_degrades_to_continue(tmp_path):
+    loop = FakeLoop(segments=[
+        segment_spec([3.0] * 48, "steady opening segment"),
+        segment_spec([3.0] * 36 + [6.5] * 12, "spike one"),
+        segment_spec([3.0] * 36 + [7.0] * 12, "spike two"),
+        segment_spec([3.0] * 48, "tail", eos=True),
+    ])
+    agent, _ = make_agent(tmp_path, loop)
+    out = agent.run(NFETAgentRequest(command="explain lolm", max_segments=5, max_retrieves=1))
+    sources = [t["decision"]["source"] for t in out["timeline"]]
+    kinds = [t["action"]["kind"] for t in out["timeline"]]
+    assert kinds.count("retrieve") == 1
+    assert "budget" in sources  # second spike got degraded
+    assert out["counters"]["retrieves"] == 1
+
+
+def test_forced_finalize_on_segment_budget(tmp_path):
+    loop = FakeLoop(segments=[
+        segment_spec([3.0] * 48, f"segment number {i}") for i in range(3)
+    ])
+    agent, _ = make_agent(tmp_path, loop)
+    out = agent.run(NFETAgentRequest(command="explain lolm", max_segments=2))
+    assert out["ended_by"] == "segment_budget"
+    assert out["counters"]["segments"] == 2
+    assert out["result"]["response"].startswith("Result:")
+
+
+def test_trained_head_decision_recorded(tmp_path):
+    # Head says retrieve with high confidence on every token.
+    confident_retrieve = [0.0, 8.0, 0.0, 0.0, 0.0]
+
+    class HeadLoop(FakeLoop):
+        def _emit(self, spec, req):
+            for event in super()._emit(spec, req):
+                trace = event.get("data", {}).get("trace")
+                if trace and trace.get("used_graft"):
+                    trace["control_logits"] = confident_retrieve
+                yield event
+
+    loop = HeadLoop(segments=[
+        segment_spec([3.0] * 48, "steady opening segment"),
+        segment_spec([3.0] * 48, "head takes over here"),
+        segment_spec([3.0] * 48, "tail segment", eos=True),
+    ])
+    agent, _ = make_agent(tmp_path, loop, head_trained=True)
+    out = agent.run(NFETAgentRequest(command="explain lolm", max_segments=4))
+    sources = [t["decision"]["source"] for t in out["timeline"]]
+    assert "head" in sources
+    head_entry = out["timeline"][sources.index("head")]
+    assert head_entry["decision"]["label"] == "retrieve"
+    assert out["proof"]["decision_sources"].get("head", 0) >= 1
