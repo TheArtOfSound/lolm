@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "lolm-nfet": {
+      "command": ".venv/bin/python",
+      "args": ["local_ui/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}
