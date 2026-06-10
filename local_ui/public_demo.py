@@ -64,15 +64,42 @@ class DemoRunRequest(BaseModel):
 
 
 class DemoGate:
-    """Single-flight lock plus per-IP rolling-hour rate limit."""
+    """Single-flight lease plus per-IP rolling-hour rate limit.
+
+    The lease (not a bare lock) is deliberate: a public client can vanish
+    before the response generator ever runs, in which case no ``finally``
+    fires and a plain lock would stay held forever. A lease records when the
+    run started and is considered stale — and taken over — after
+    ``max_run_seconds``, so the demo always self-heals.
+    """
 
     def __init__(self, limits: DemoLimits):
         self.limits = limits
-        self.lock = threading.Lock()
+        self.max_run_seconds = _int_env("DEMO_MAX_RUN_SECONDS", 300)
+        self._mutex = threading.Lock()
+        self._lease_since: Optional[float] = None
         self.history: Dict[str, Deque[float]] = defaultdict(deque)
         self.runs_started = 0
         self.runs_completed = 0
         self.last_run_seconds: Optional[float] = None
+
+    def try_acquire(self) -> bool:
+        with self._mutex:
+            now = time.time()
+            if self._lease_since is not None and now - self._lease_since < self.max_run_seconds:
+                return False
+            self._lease_since = now
+            return True
+
+    def release(self) -> None:
+        with self._mutex:
+            self._lease_since = None
+
+    @property
+    def busy(self) -> bool:
+        with self._mutex:
+            return (self._lease_since is not None
+                    and time.time() - self._lease_since < self.max_run_seconds)
 
     def allow(self, ip: str) -> Optional[str]:
         """Return a refusal reason, or None if the run may proceed."""
@@ -135,7 +162,7 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
     def demo_status():
         return {
             "model_ready": bool(model_ready_fn()),
-            "busy": gate.lock.locked(),
+            "busy": gate.busy,
             "limits": limits.to_dict(),
             "runs_started": gate.runs_started,
             "runs_completed": gate.runs_completed,
@@ -168,7 +195,7 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
         refusal = gate.allow(ip)
         if refusal:
             return JSONResponse({"error": refusal}, status_code=429)
-        if not gate.lock.acquire(blocking=False):
+        if not gate.try_acquire():
             return JSONResponse(
                 {"error": "another live run is in progress on this little 2-vCPU box; "
                           "watch a replay while you wait"},
@@ -188,7 +215,7 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
                 yield sse_event("error", {"error": str(exc)[:300]})
             finally:
                 gate.last_run_seconds = round(time.time() - started, 2)
-                gate.lock.release()
+                gate.release()
 
         return StreamingResponse(events(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache",

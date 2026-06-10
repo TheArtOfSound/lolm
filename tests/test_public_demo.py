@@ -75,16 +75,32 @@ def test_demo_rate_limit(tmp_path):
     assert "rate limit" in second.json()["error"]
 
 
-def test_demo_busy_lock(tmp_path):
+def test_demo_busy_lease(tmp_path):
     app, gate = make_app(tmp_path)
     client = TestClient(app)
-    gate.lock.acquire()
+    assert gate.try_acquire()
     try:
         resp = client.post("/api/demo/run/stream", json={"command": "explain lolm"})
         assert resp.status_code == 429
         assert "in progress" in resp.json()["error"]
+        assert client.get("/api/demo/status").json()["busy"] is True
     finally:
-        gate.lock.release()
+        gate.release()
+    assert client.get("/api/demo/status").json()["busy"] is False
+
+
+def test_demo_stale_lease_self_heals(tmp_path):
+    """A vanished client whose generator never ran must not lock the demo forever."""
+    app, gate = make_app(tmp_path)
+    client = TestClient(app)
+    assert gate.try_acquire()
+    # simulate a run that leaked its lease 10 minutes ago
+    gate._lease_since = __import__("time").time() - 600
+    assert client.get("/api/demo/status").json()["busy"] is False
+    resp = client.post("/api/demo/run/stream", json={"command": "explain lolm"})
+    assert resp.status_code == 200  # stale lease was taken over
+    events = parse_sse(resp.text)
+    assert events[-1]["event"] == "run_done"
 
 
 def test_demo_model_not_ready(tmp_path):
