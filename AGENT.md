@@ -182,3 +182,38 @@ scenarios, then retrained on the workspace's own logged traffic
 (`--log improvement_log.jsonl`) — the first turn of the flywheel. Decision
 sources are visible in every timeline: `head` where it is confident,
 `heuristic` where it is not, `budget` where limits intervened.
+
+## Scaling the backbone
+
+The machinery is backbone-agnostic: the graft attaches to any Hugging Face
+causal LM. The 4B pipeline, end to end on a Mac (M-series, 24GB):
+
+```bash
+# 1. graft (token-loss path) — ~15 min on MPS, streams FineWeb-Edu
+PYTHONPATH=. python scripts/train_hf_graft_stream.py \
+  --profile qwen3_4b_lab --device mps --latent-backend gru_debug \
+  --steps 300 --seq-len 256 --out runs/hf_graft_4b/graft.pt
+
+# 2. control head (observables + your logged traffic + outcome labels) — ~2 min CPU
+PYTHONPATH=. python scripts/train_nfet_controller.py \
+  --log local_ui/data/improvement_log.jsonl --outcomes local_ui/data/improvement_log.jsonl \
+  --synthetic 150 --d-model 2560 --latent-backend gru_debug \
+  --checkpoint-in runs/hf_graft_4b/graft.pt --out runs/nfet_controller/live_qwen4b.pt
+
+# 3. run it
+PYTHONPATH=. python scripts/smoke_nfet_agent.py --profile qwen3_4b_lab \
+  --device mps --ckpt runs/nfet_controller/live_qwen4b.pt
+```
+
+The same controller training rides on top regardless of scale because the
+policy operates on observables, not on the backbone's width.
+
+## Bring your own notes
+
+```bash
+make import-notes NOTES=~/your/markdown-folder   # heading-aware, idempotent, local
+make agent-ui                                    # retrieval now hits YOUR facts
+```
+
+Retrieval ranks by relevance x importance over the whole store; recency is a
+tiebreak, never a reason to inject something off-topic.
