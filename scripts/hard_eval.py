@@ -314,12 +314,22 @@ def main() -> None:
     ap.add_argument("--final-tokens", type=int, default=110)
     ap.add_argument("--pause", type=float, default=3.0, help="live mode: seconds between runs")
     ap.add_argument("--categories", default="", help="comma-filter categories")
+    ap.add_argument("--limit", type=int, default=0, help="cap total cases (rate-respectful live runs)")
     args = ap.parse_args()
 
     cases = BATTERY
     if args.categories:
         keep = {c.strip() for c in args.categories.split(",")}
         cases = [c for c in cases if c.category in keep]
+    if args.limit:
+        # one representative per category, up to the cap
+        seen, picked = set(), []
+        for c in cases:
+            if c.category not in seen:
+                seen.add(c.category); picked.append(c)
+            if len(picked) >= args.limit:
+                break
+        cases = picked
 
     out = Path(__file__).resolve().parents[1] / "launch"
     if args.url:
