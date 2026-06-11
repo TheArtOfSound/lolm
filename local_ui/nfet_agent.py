@@ -338,19 +338,37 @@ Continue the draft. Write the next segment only."""
 
     def _scored_notes(self, command: str, limit: int = 4,
                       min_matches: int = 2) -> List[Dict[str, Any]]:
-        """Relevance-scored fallback: notes sharing >=2 substantive words with
-        the command. Returns nothing for off-topic or conversational input."""
+        """Relevance-ranked scan of the WHOLE note store.
+
+        Score = (matched substantive words) x importance weight, so a vault
+        import of hundreds of notes still surfaces the right ones — recency
+        is only a tiebreak, never a reason to inject something off-topic.
+        Returns nothing for conversational input.
+        """
         words = {w for w in re.split(r"\W+", command.lower()) if len(w) > 3}
         if not words:
             return []
         scored = []
-        for note in self.deps.memory.recent_notes(limit=50):
+        for idx, note in enumerate(self.deps.memory.recent_notes(limit=100_000)):
             text = (note.get("text") or "").lower()
             matches = sum(1 for w in words if w in text)
             if matches >= min(min_matches, len(words)):
-                scored.append((matches, note))
-        scored.sort(key=lambda pair: pair[0], reverse=True)
-        return [note for _, note in scored[:limit]]
+                weight = 1.0 + 0.15 * (int(note.get("importance", 3)) - 3)
+                scored.append((matches * weight, idx, note))
+        scored.sort(key=lambda triple: (triple[0], triple[1]), reverse=True)
+        return [note for _, _, note in scored[:limit]]
+
+    @staticmethod
+    def _rank_notes(notes: List[Dict[str, Any]], command: str, limit: int = 6) -> List[Dict[str, Any]]:
+        """Order AND-search hits by relevance x importance instead of recency."""
+        words = {w for w in re.split(r"\W+", command.lower()) if len(w) > 3}
+
+        def score(note: Dict[str, Any]) -> float:
+            text = (note.get("text") or "").lower()
+            matches = sum(1 for w in words if w in text) if words else 0
+            return matches * (1.0 + 0.15 * (int(note.get("importance", 3)) - 3))
+
+        return sorted(notes, key=score, reverse=True)[:limit]
 
     def _do_retrieve(self, command: str, draft: str, req: NFETAgentRequest) -> List[Dict[str, Any]]:
         query = self._focus_query(command, draft)
@@ -359,11 +377,12 @@ Continue the draft. Write the next segment only."""
         # focused query to the bare command to scored token overlap. No blind
         # recency fallback: off-topic notes hijack small models, and "found
         # nothing relevant" is an honest, useful outcome.
-        notes = self.deps.memory.search_notes(query, limit=6)
+        notes = self.deps.memory.search_notes(query, limit=12)
         if not notes:
-            notes = self.deps.memory.search_notes(command, limit=6)
+            notes = self.deps.memory.search_notes(command, limit=12)
         if not notes:
             notes = self._scored_notes(command)
+        notes = self._rank_notes(notes, command)
         for note in notes:
             rows.append({"kind": "memory", "text": note.get("text", ""), "meta": {"tag": note.get("tag")}})
         if req.allow_web and self.deps.web_search is not None:
