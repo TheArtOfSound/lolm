@@ -47,7 +47,7 @@ class DemoLimits:
     def __init__(self) -> None:
         self.max_segments = _int_env("DEMO_MAX_SEGMENTS", 3)
         self.segment_tokens = _int_env("DEMO_SEGMENT_TOKENS", 28)
-        self.final_tokens = _int_env("DEMO_FINAL_TOKENS", 96)
+        self.final_tokens = _int_env("DEMO_FINAL_TOKENS", 140)
         self.max_retrieves = _int_env("DEMO_MAX_RETRIEVES", 1)
         self.max_verifies = _int_env("DEMO_MAX_VERIFIES", 1)
         self.max_branches = _int_env("DEMO_MAX_BRANCHES", 1)
