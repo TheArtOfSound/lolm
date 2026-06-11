@@ -130,3 +130,37 @@ def test_demo_empty_command(tmp_path):
     app, _ = make_app(tmp_path)
     client = TestClient(app)
     assert client.post("/api/demo/run/stream", json={"command": "  "}).status_code == 400
+
+
+def test_demo_stats_durable_from_log(tmp_path):
+    import json as _json
+    log = tmp_path / "improvement_log.jsonl"
+    rows = [
+        {"type": "nfet_agent_run", "timestamp": __import__("time").time(),
+         "proof": {"verdict": "nfet_control_visible",
+                   "control_counts": {"retrieve": 1, "continue": 2},
+                   "decision_sources": {"head": 2, "heuristic": 1}}},
+        {"type": "nfet_agent_run", "timestamp": 1000.0,
+         "proof": {"verdict": "changed_but_controls_quiet",
+                   "control_counts": {"continue": 3},
+                   "decision_sources": {"heuristic": 3}}},
+        {"type": "chat"},
+    ]
+    log.write_text("\n".join(_json.dumps(r) for r in rows))
+
+    from local_ui.public_demo import load_run_stats
+    stats = load_run_stats(log)
+    assert stats["total_runs"] == 2
+    assert stats["runs_24h"] == 1
+    assert stats["control_visible_runs"] == 1
+    assert stats["controls"]["retrieve"] == 1
+    assert stats["head_decisions"] == 2
+    # cache: same key returns same object without reparse
+    assert load_run_stats(log) is stats
+
+
+def test_demo_stats_route(tmp_path):
+    app, _ = make_app(tmp_path)
+    client = TestClient(app)
+    stats = client.get("/api/demo/stats").json()
+    assert stats["total_runs"] == 0  # no log configured in test app

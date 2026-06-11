@@ -141,6 +141,52 @@ def clamp_request(command: str, limits: DemoLimits) -> NFETAgentRequest:
     )
 
 
+_STATS_CACHE: Dict[str, Any] = {"key": None, "value": None}
+
+
+def load_run_stats(log_path: Optional[Path]) -> Dict[str, Any]:
+    """Durable run statistics straight from the improvement log.
+
+    The gate's in-memory counters die on every service restart; the log is
+    the ground truth. Cached by (mtime, size) so the endpoint stays cheap.
+    """
+    empty = {"total_runs": 0, "runs_24h": 0, "verdicts": {}, "controls": {},
+             "decision_sources": {}, "head_decisions": 0}
+    if not log_path or not log_path.exists():
+        return empty
+    stat = log_path.stat()
+    cache_key = (str(log_path), stat.st_mtime_ns, stat.st_size)
+    if _STATS_CACHE["key"] == cache_key:
+        return _STATS_CACHE["value"]
+    now = time.time()
+    out = dict(empty, verdicts={}, controls={}, decision_sources={})
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") != "nfet_agent_run":
+            continue
+        out["total_runs"] += 1
+        if float(event.get("timestamp", 0)) > now - 86400:
+            out["runs_24h"] += 1
+        proof = event.get("proof") or {}
+        verdict = proof.get("verdict", "?")
+        out["verdicts"][verdict] = out["verdicts"].get(verdict, 0) + 1
+        for key, val in (proof.get("control_counts") or {}).items():
+            out["controls"][key] = out["controls"].get(key, 0) + int(val)
+        for key, val in (proof.get("decision_sources") or {}).items():
+            out["decision_sources"][key] = out["decision_sources"].get(key, 0) + int(val)
+    out["head_decisions"] = out["decision_sources"].get("head", 0)
+    out["control_visible_runs"] = sum(
+        v for k, v in out["verdicts"].items()
+        if k in ("nfet_control_visible", "nfet_finalize_visible")
+    )
+    _STATS_CACHE["key"] = cache_key
+    _STATS_CACHE["value"] = out
+    return out
+
+
 def load_replay_index(replays_dir: Path) -> Dict[str, Any]:
     index_path = replays_dir / "index.json"
     if not index_path.exists():
@@ -153,10 +199,19 @@ def load_replay_index(replays_dir: Path) -> Dict[str, Any]:
 
 def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
                          limits: Optional[DemoLimits] = None,
-                         model_ready_fn: Any = lambda: True) -> DemoGate:
+                         model_ready_fn: Any = lambda: True,
+                         log_path: Optional[Path] = None) -> DemoGate:
     limits = limits or DemoLimits()
     gate = DemoGate(limits)
     replays_dir = Path(replays_dir)
+    if log_path is None:
+        data_dir = os.environ.get("LOCAL_UI_DATA_DIR")
+        if data_dir:
+            log_path = Path(data_dir) / "improvement_log.jsonl"
+
+    @app.get("/api/demo/stats")
+    def demo_stats():
+        return load_run_stats(log_path)
 
     @app.get("/api/demo/status")
     def demo_status():

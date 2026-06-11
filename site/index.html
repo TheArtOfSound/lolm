@@ -322,6 +322,8 @@
   show calmer telemetry and earlier confident finishes. Every decision badge you see was
   made from measured telemetry — entropy, drift, gate, regime — not from a prompt.</p>
 
+  <p id="liveStats" style="display:none;font-family:var(--mono);font-size:12px;color:var(--faint);margin:-14px 0 18px"></p>
+
   <div class="demo-picker" id="replayPicker"></div>
 
   <div class="live-row">
@@ -744,6 +746,17 @@
     });
   }
   pollStatus(); setInterval(pollStatus, 12000);
+
+  fetch('/api/demo/stats').then(r => r.json()).then(s => {
+    if (!s.total_runs) return;
+    const el = $('liveStats');
+    const bits = [`${s.total_runs} real runs served`];
+    if (s.runs_24h) bits.push(`${s.runs_24h} in the last day`);
+    if (s.control_visible_runs) bits.push(`control actions visible in ${s.control_visible_runs}`);
+    if (s.head_decisions) bits.push(`${s.head_decisions} decisions by the trained head`);
+    el.textContent = '⊨ ' + bits.join(' · ') + ' — every one logged with an honest receipt';
+    el.style.display = 'block';
+  }).catch(() => {});
 })();
 </script>
 </body>
