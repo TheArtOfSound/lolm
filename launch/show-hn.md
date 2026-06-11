@@ -46,3 +46,14 @@ the whole workspace speaks MCP so it plugs into Claude Code/Desktop.
 
 Happy to answer anything — especially skeptical questions about whether
 measured uncertainty actually beats prompted self-assessment.
+
+---
+**Field-verification note (2026-06-11):** we surveyed the source of 127 public
+agent frameworks/repos (autogen, semantic-kernel, MetaGPT, crewAI, OpenHands,
+cline, aider, google-adk, AutoGPT, plus 100+ smaller agent/memory projects).
+Every confidence signal we found is self-reported by the model in its own
+output (regex-parsed "Confidence: 0.8" lines, JSON fields the model wrote) or
+an embedding-similarity score; every `logprobs` reference is a pass-through
+API option that no decision logic consumes. We found no public agent that
+drives control decisions from measured model internals. If you know of one,
+we genuinely want to hear about it.
