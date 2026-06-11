@@ -1,21 +1,41 @@
 {
   "replays": [
     {
+      "id": "hello",
+      "title": "Hello!",
+      "command": "Hello!",
+      "recorded_at": "2026-06-10T21:01:40",
+      "seconds": 62.6,
+      "head_trained": true,
+      "ended_by": "social_direct",
+      "verdict": "social_direct_reply",
+      "control_counts": {
+        "finalize": 1
+      },
+      "counters": {
+        "segments": 0,
+        "tokens": 10,
+        "retrieves": 0,
+        "verifies": 0,
+        "branches": 0
+      }
+    },
+    {
       "id": "gate",
       "title": "Explain the manifestation gate in LOLM and why it matters",
       "command": "Explain the manifestation gate in LOLM and why it matters",
-      "recorded_at": "2026-06-10T10:45:31",
-      "seconds": 105.9,
+      "recorded_at": "2026-06-10T21:07:45",
+      "seconds": 365.6,
       "head_trained": true,
-      "ended_by": "segment_budget",
+      "ended_by": "repetition_stall",
       "verdict": "nfet_control_visible",
       "control_counts": {
         "retrieve": 1,
-        "continue": 2
+        "finalize": 1
       },
       "counters": {
-        "segments": 3,
-        "tokens": 180,
+        "segments": 2,
+        "tokens": 152,
         "retrieves": 1,
         "verifies": 0,
         "branches": 0
@@ -25,38 +45,40 @@
       "id": "dependency-inversion",
       "title": "What is dependency inversion in the LOLM architecture?",
       "command": "What is dependency inversion in the LOLM architecture?",
-      "recorded_at": "2026-06-10T10:47:19",
-      "seconds": 107.9,
+      "recorded_at": "2026-06-10T21:14:04",
+      "seconds": 378.7,
       "head_trained": true,
-      "ended_by": "segment_budget",
-      "verdict": "changed_but_controls_quiet",
+      "ended_by": "repetition_stall",
+      "verdict": "nfet_control_visible",
       "control_counts": {
-        "continue": 3
+        "branch": 1,
+        "finalize": 1
       },
       "counters": {
-        "segments": 3,
-        "tokens": 180,
+        "segments": 2,
+        "tokens": 126,
         "retrieves": 0,
         "verifies": 0,
-        "branches": 0
+        "branches": 1
       }
     },
     {
       "id": "eval-plan",
       "title": "Write a short plan to evaluate a 304M language model against Pythia-410M",
       "command": "Write a short plan to evaluate a 304M language model against Pythia-410M",
-      "recorded_at": "2026-06-10T10:48:57",
-      "seconds": 98.5,
+      "recorded_at": "2026-06-10T21:15:12",
+      "seconds": 67.8,
       "head_trained": true,
-      "ended_by": "segment_budget",
+      "ended_by": "repetition_stall",
       "verdict": "nfet_control_visible",
       "control_counts": {
+        "continue": 1,
         "retrieve": 1,
-        "continue": 2
+        "finalize": 1
       },
       "counters": {
         "segments": 3,
-        "tokens": 180,
+        "tokens": 135,
         "retrieves": 1,
         "verifies": 0,
         "branches": 0
@@ -66,41 +88,41 @@
       "id": "entropy-retrieve",
       "title": "Why should an agent retrieve evidence when its token entropy spikes?",
       "command": "Why should an agent retrieve evidence when its token entropy spikes?",
-      "recorded_at": "2026-06-10T10:51:02",
-      "seconds": 124.9,
+      "recorded_at": "2026-06-10T21:16:11",
+      "seconds": 59.6,
       "head_trained": true,
-      "ended_by": "segment_budget",
+      "ended_by": "repetition_stall",
       "verdict": "nfet_control_visible",
       "control_counts": {
-        "retrieve": 1,
-        "branch": 1,
-        "continue": 1
+        "verify": 1,
+        "finalize": 1
       },
       "counters": {
-        "segments": 3,
-        "tokens": 208,
-        "retrieves": 1,
-        "verifies": 0,
-        "branches": 1
+        "segments": 2,
+        "tokens": 84,
+        "retrieves": 0,
+        "verifies": 1,
+        "branches": 0
       }
     },
     {
       "id": "five-controls",
       "title": "Summarize what the NFET controller's five actions do",
       "command": "Summarize what the NFET controller's five actions do",
-      "recorded_at": "2026-06-10T10:52:42",
-      "seconds": 100.0,
+      "recorded_at": "2026-06-10T21:17:10",
+      "seconds": 59.2,
       "head_trained": true,
-      "ended_by": "segment_budget",
-      "verdict": "changed_but_controls_quiet",
+      "ended_by": "repetition_stall",
+      "verdict": "nfet_control_visible",
       "control_counts": {
-        "continue": 3
+        "verify": 1,
+        "finalize": 1
       },
       "counters": {
-        "segments": 3,
-        "tokens": 145,
+        "segments": 2,
+        "tokens": 90,
         "retrieves": 0,
-        "verifies": 0,
+        "verifies": 1,
         "branches": 0
       }
     }
