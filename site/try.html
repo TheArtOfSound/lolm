@@ -48,6 +48,12 @@
   .ask button{background:var(--blue);color:#06121f;border:none;border-radius:12px;padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer}
   .ask button[disabled]{opacity:.45;cursor:not-allowed}
   .ask-note{font-size:12px;color:var(--faint);text-align:center;min-height:16px;margin-bottom:10px}
+  .backend-row{display:none;justify-content:center;gap:8px;margin:-2px 0 8px}
+  .backend-row.on{display:flex}
+  .be-chip{font-family:var(--mono);font-size:11.5px;border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:999px;padding:5px 13px;cursor:pointer}
+  .be-chip.active{border-color:var(--blue);color:var(--text)}
+  .be-chip[disabled]{opacity:.4;cursor:not-allowed}
+  .be-chip .lab{color:var(--purple)}
 
   .stage{display:none;margin:26px 0}
   .stage.on{display:block}
@@ -116,6 +122,10 @@
 <div class="ask">
   <input id="q" maxlength="300" placeholder="…or ask your own question, run live">
   <button id="go" disabled>Ask</button>
+</div>
+<div class="backend-row" id="backendRow">
+  <button class="be-chip active" id="be06" data-base="/api/demo">0.6B · server</button>
+  <button class="be-chip" id="be4b" data-base="/api/demo4b" disabled><span class="lab">4B · lab line</span></button>
 </div>
 <p class="ask-note" id="askNote">checking the live backend…</p>
 
@@ -282,12 +292,15 @@
   }
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+  let activeBase = '/api/demo';
+
   async function runLive(q){
     if (playing) return; playing = true;
     resetStage(q);
-    addAct('think', '<b>Connecting to the live model…</b>', '(a real run takes a minute or two)');
+    const label = activeBase === '/api/demo4b' ? 'the 4B lab model' : 'the live model';
+    addAct('think', `<b>Connecting to ${label}…</b>`, '(a real run takes a few minutes)');
     try {
-      const resp = await fetch('/api/demo/run/stream', {method:'POST',
+      const resp = await fetch(activeBase + '/run/stream', {method:'POST',
         headers:{'Content-Type':'application/json'}, body: JSON.stringify({command:q})});
       if (!resp.ok){
         const err = await resp.json().catch(() => ({error:'HTTP ' + resp.status}));
@@ -336,14 +349,41 @@
     grid.appendChild(live);
   }).catch(() => {});
 
-  function pollStatus(){
-    fetch('/api/demo/status').then(r => r.json()).then(s => {
-      const b = $('go'), n = $('askNote');
-      if (!s.model_ready){ b.disabled = true; n.textContent = 'the live model is warming up — replays above are instant'; }
-      else if (s.busy){ b.disabled = true; n.textContent = 'someone else’s run is in progress — replays are instant while you wait'; }
-      else { b.disabled = false; n.textContent = 'live runs take 1–2 minutes on our little server · a few runs per hour per visitor'; }
-    }).catch(() => { $('go').disabled = true; $('askNote').textContent = 'live backend offline — replays still work'; });
+  const lines = {
+    '/api/demo':   {ready: false, busy: false, label: '0.6B · server',
+                    note: 'live runs take 1–2 minutes on our little server · a few runs per hour per visitor'},
+    '/api/demo4b': {ready: false, busy: false, label: '4B · lab line',
+                    note: 'the 4B runs on our lab machine over a tunnel — better answers, ~3–5 minutes per run'},
+  };
+
+  function applyLineState(){
+    const cur = lines[activeBase];
+    const b = $('go'), n = $('askNote');
+    // 4B chip appears only when the lab line is actually up
+    $('backendRow').classList.toggle('on', lines['/api/demo4b'].ready || lines['/api/demo4b'].busy);
+    $('be4b').disabled = !lines['/api/demo4b'].ready;
+    $('be06').disabled = !lines['/api/demo'].ready && !lines['/api/demo'].busy;
+    if (!cur.ready && activeBase === '/api/demo4b'){ activeBase = '/api/demo'; return applyLineState(); }
+    if (!cur.ready){ b.disabled = true; n.textContent = 'the live model is warming up — replays above are instant'; }
+    else if (cur.busy){ b.disabled = true; n.textContent = 'someone else’s run is in progress on ' + cur.label + ' — replays are instant while you wait'; }
+    else { b.disabled = false; n.textContent = cur.note; }
+    $('be06').classList.toggle('active', activeBase === '/api/demo');
+    $('be4b').classList.toggle('active', activeBase === '/api/demo4b');
   }
+
+  function pollStatus(){
+    Promise.allSettled(Object.keys(lines).map(base =>
+      fetch(base + '/status').then(r => r.json()).then(s => {
+        lines[base].ready = !!s.model_ready && !s.busy;
+        lines[base].busy = !!s.busy;
+      }).catch(() => { lines[base].ready = false; lines[base].busy = false; })
+    )).then(applyLineState);
+  }
+  [$('be06'), $('be4b')].forEach(chip => chip.addEventListener('click', () => {
+    if (chip.disabled) return;
+    activeBase = chip.dataset.base;
+    applyLineState();
+  }));
   pollStatus(); setInterval(pollStatus, 12000);
 })();
 </script>

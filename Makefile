@@ -54,3 +54,6 @@ demo-server:
 
 import-notes:
 	PYTHONPATH=. python scripts/import_notes.py $(NOTES)
+
+serve-4b:
+	./scripts/serve_4b_public.sh
