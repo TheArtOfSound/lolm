@@ -1,0 +1,16 @@
+{
+  "name": "lolm-edge",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-01",
+  "observability": { "enabled": true },
+  "kv_namespaces": [
+    { "binding": "MONITOR", "id": "b19b949038d04cbd895608ceacdc33d4" }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    "ORIGIN": "https://lolm.imagineqira.com",
+    "LINES": "demo:0.6B server,demo4b:4B lab line"
+  }
+}
