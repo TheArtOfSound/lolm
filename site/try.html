@@ -196,6 +196,7 @@
       addAct('think', '<b>Reading your question…</b>');
     } else if (event === 'segment_start'){
       if (data.segment === 1) addAct('write', '<b>Starting a draft</b>');
+      else if (draftBuf.trim()) draftBuf += '\n\n— segment ' + data.segment + ' —\n\n';
       workingLine = null;
     } else if (event === 'token'){
       if (data.channel === 'draft'){ draftBuf += data.token; tokenCount++; working().textContent = tokenCount; }
@@ -204,7 +205,11 @@
         $('answerText').textContent += data.token;
       }
     } else if (event === 'decision'){
-      const d = data.decision; const why = d.source === 'head' ? 'its trained controller called this' : d.source === 'budget' ? 'demo limit reached — kept writing instead' : 'its built-in instincts called this';
+      const d = data.decision;
+      const WHY = {head: 'its trained controller called this', budget: 'demo limit reached — kept writing instead',
+                   profile: 'it recognized a simple greeting', repetition: 'the draft stopped adding anything new',
+                   heuristic: 'its built-in instincts called this'};
+      const why = WHY[d.source] || WHY.heuristic;
       if (d.label === 'retrieve') addAct('notes', '<b>It noticed it wasn’t sure</b> — checking its notes', '(' + why + ')');
       else if (d.label === 'verify') addAct('check', '<b>Something felt off</b> — double-checking the draft', '(' + why + ')');
       else if (d.label === 'branch') addAct('fork', '<b>It felt stuck</b> — trying two directions', '(' + why + ')');
@@ -222,6 +227,7 @@
       const friendly =
         data.verdict === 'nfet_control_visible' ? 'During this run the AI <b>acted on its own uncertainty</b> — and its final answer is clearly different from a plain chatbot’s.' :
         data.verdict === 'nfet_finalize_visible' ? 'The AI <b>decided for itself when it was done</b> — and its answer differs from a plain chatbot’s.' :
+        data.verdict === 'social_direct_reply' ? 'Simple greeting — it noticed, skipped the machinery, and just answered. That restraint is also a decision.' :
         data.verdict === 'changed_but_controls_quiet' ? 'The AI <b>stayed confident the whole way</b> — no checks were needed this time. Its answer still differs from a plain chatbot’s.' :
         'This run didn’t clearly beat a plain chatbot. The receipt is honest — some runs are like that.';
       const bits = [];
@@ -234,6 +240,23 @@
       r.classList.add('on');
     } else if (event === 'run_done'){
       playing = false;
+      // if the stream was token-capped mid-sentence, show the trimmed server
+      // text (or cut back to the last finished sentence ourselves)
+      const served = data && data.result && data.result.response;
+      const shown = $('answerText').textContent;
+      if (served && served !== shown) $('answerText').textContent = served;
+      else {
+        const t = shown.trimEnd();
+        if (t && !'.!?…"\')]'.includes(t[t.length-1])){
+          const cut = Math.max(t.lastIndexOf('.'), t.lastIndexOf('!'), t.lastIndexOf('?'));
+          if (cut >= t.length * 0.5) $('answerText').textContent = t.slice(0, cut+1);
+        }
+      }
+      if (data && Array.isArray(data.provenance) && data.provenance.length){
+        const r = $('receipt');
+        r.innerHTML += '<div class="row">What it actually did: ' + data.provenance.join(' · ') + '</div>';
+        r.classList.add('on');
+      }
       if (draftBuf.trim()){ $('draftText').textContent = draftBuf.trim(); $('behind').style.display = 'block'; }
       pollStatus();
     } else if (event === 'error'){

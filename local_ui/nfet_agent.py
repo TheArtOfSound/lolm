@@ -44,6 +44,63 @@ from lolm.nfet_policy import (
 )
 
 
+GREETING_RE = re.compile(
+    r"^(hi+|hello+|hey+|yo|sup|howdy|hiya|good\s+(morning|afternoon|evening|day)|"
+    r"what'?s\s+up|how\s+are\s+you|how'?s\s+it\s+going|thanks?|thank\s+you|ok(ay)?|cool|nice)"
+    r"\b[\s!,.?😀-🙏]*$",
+    re.IGNORECASE,
+)
+
+
+def classify_command(command: str) -> str:
+    """Cheap command profile: social | question | task.
+
+    Social commands (greetings, thanks, one-word pleasantries) answer directly
+    without the full retrieve/verify machinery — running a three-segment
+    evidence loop on "Hello" is how agents end up lecturing people about
+    their own architecture.
+    """
+    c = command.strip()
+    if GREETING_RE.match(c):
+        return "social"
+    words = c.split()
+    if len(words) <= 4 and not any(ch in c for ch in "?") and len(c) < 30:
+        lowered = c.lower()
+        if any(w in lowered for w in ("hi", "hello", "hey", "thanks", "thank", "bye", "goodbye", "morning", "evening")):
+            return "social"
+    if c.endswith("?") and len(words) <= 16:
+        return "question"
+    return "task"
+
+
+def merge_segment(draft: str, new_text: str) -> tuple:
+    """Append a segment to the draft, trimming repetition.
+
+    Small models often re-emit the existing draft despite instructions.
+    Returns (text_to_append, was_pure_repetition). Pure repetition is a
+    stop signal — the model has nothing left to add.
+    """
+    d, n = draft.strip(), new_text.strip()
+    if not d or not n:
+        return n, False
+    dn = re.sub(r"\s+", " ", d.lower())
+    nn = re.sub(r"\s+", " ", n.lower())
+    if nn in dn:
+        return "", True
+    n_words = nn.split()
+    d_set = set(dn.split())
+    if n_words and sum(1 for w in n_words if w in d_set) / len(n_words) >= 0.9:
+        return "", True
+    # trim word-level overlap where the segment restarts from the draft's tail
+    dw, nw = d.split(), n.split()
+    k = min(len(dw), len(nw), 60)
+    while k >= 4:
+        if [w.lower() for w in dw[-k:]] == [w.lower() for w in nw[:k]]:
+            return " ".join(nw[k:]), False
+        k -= 1
+    return n, False
+
+
 class NFETAgentRequest(BaseModel):
     command: str
     reasoner: str = "local"          # "local" | "claude" (frontier voice, local monitor)
@@ -207,15 +264,32 @@ class NFETAgent:
     # ------------------------------------------------------------------
     # Context construction
     # ------------------------------------------------------------------
+    SELF_REFERENT = ("lolm", "nfet", "agent", "yourself", "who are you", "what are you",
+                     "this ai", "your notes", "your memory", "your goals", "workspace")
+
+    @classmethod
+    def _wants_identity(cls, command: str) -> bool:
+        lowered = command.lower()
+        return any(term in lowered for term in cls.SELF_REFERENT)
+
     def _initial_memory(self, command: str) -> List[Dict[str, Any]]:
+        """Context for the drafting engine — relevance-gated.
+
+        Identity and goals describe the workspace itself; injecting them into
+        every run drags small models off-topic (a bare greeting turns into a
+        lecture about the workspace). They are included only when the command
+        actually references the agent/workspace. Notes are keyword-gated by
+        the memory search already.
+        """
         memory = self.deps.memory
         hits: List[Dict[str, Any]] = []
-        identity = memory.read_identity().strip()
-        if identity:
-            hits.append({"kind": "identity", "text": identity[-1200:], "meta": {}})
-        goals = [g for g in memory.get_goals() if g.get("status", "active") == "active"]
-        for goal in sorted(goals, key=lambda g: int(g.get("priority", 3)), reverse=True)[:6]:
-            hits.append({"kind": "goal", "text": goal.get("title", ""), "meta": {"why": goal.get("why", "")}})
+        if self._wants_identity(command):
+            identity = memory.read_identity().strip()
+            if identity:
+                hits.append({"kind": "identity", "text": identity[-1200:], "meta": {}})
+            goals = [g for g in memory.get_goals() if g.get("status", "active") == "active"]
+            for goal in sorted(goals, key=lambda g: int(g.get("priority", 3)), reverse=True)[:6]:
+                hits.append({"kind": "goal", "text": goal.get("title", ""), "meta": {"why": goal.get("why", "")}})
         for note in memory.search_notes(command, limit=8):
             hits.append({"kind": "memory", "text": note.get("text", ""), "meta": {"tag": note.get("tag")}})
         return [h for h in hits if h.get("text")][:12]
@@ -234,9 +308,12 @@ class NFETAgent:
                           evidence: List[Dict[str, Any]]) -> List[Any]:
         ChatMessage = self.deps.ChatMessage
         system = (
-            "You are the drafting engine of the LOLM-NFET agent. Compose the working "
-            "draft of the answer, one segment at a time. Use evidence when given. "
-            "Never repeat the existing draft; continue it from where it stops."
+            "You are the drafting engine of an agent. Compose the working draft of the "
+            "answer to the COMMAND, one segment at a time. Stay strictly on the "
+            "command's topic; treat LOCAL MEMORY and EVIDENCE as optional background, "
+            "not as the subject. If the command is conversational (a greeting or small "
+            "talk), just respond naturally and briefly. Never repeat the existing "
+            "draft; continue it from where it stops."
         )
         user = f"""COMMAND:
 {command}
@@ -259,16 +336,34 @@ Continue the draft. Write the next segment only."""
         tail = re.sub(r"\s+", " ", draft).strip()[-240:]
         return f"{command} {tail}".strip()[:400]
 
+    def _scored_notes(self, command: str, limit: int = 4,
+                      min_matches: int = 2) -> List[Dict[str, Any]]:
+        """Relevance-scored fallback: notes sharing >=2 substantive words with
+        the command. Returns nothing for off-topic or conversational input."""
+        words = {w for w in re.split(r"\W+", command.lower()) if len(w) > 3}
+        if not words:
+            return []
+        scored = []
+        for note in self.deps.memory.recent_notes(limit=50):
+            text = (note.get("text") or "").lower()
+            matches = sum(1 for w in words if w in text)
+            if matches >= min(min_matches, len(words)):
+                scored.append((matches, note))
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+        return [note for _, note in scored[:limit]]
+
     def _do_retrieve(self, command: str, draft: str, req: NFETAgentRequest) -> List[Dict[str, Any]]:
         query = self._focus_query(command, draft)
         rows: List[Dict[str, Any]] = []
         # search_notes AND-matches every query token, so fall back from the
-        # focused query to the bare command to recent important notes.
+        # focused query to the bare command to scored token overlap. No blind
+        # recency fallback: off-topic notes hijack small models, and "found
+        # nothing relevant" is an honest, useful outcome.
         notes = self.deps.memory.search_notes(query, limit=6)
         if not notes:
             notes = self.deps.memory.search_notes(command, limit=6)
         if not notes:
-            notes = self.deps.memory.recent_notes(limit=4, min_importance=4)
+            notes = self._scored_notes(command)
         for note in notes:
             rows.append({"kind": "memory", "text": note.get("text", ""), "meta": {"tag": note.get("tag")}})
         if req.allow_web and self.deps.web_search is not None:
@@ -287,9 +382,9 @@ Continue the draft. Write the next segment only."""
                    req: NFETAgentRequest) -> Generator[Dict[str, Any], None, Dict[str, Any]]:
         ChatMessage = self.deps.ChatMessage
         system = (
-            "You are the verifier of the LOLM-NFET agent. Check the draft against the "
-            "command and evidence. Start your reply with 'VERDICT: ok' or "
-            "'VERDICT: revise', then list concrete problems and fixes."
+            "You are the verifier of an agent. Check the draft against the command "
+            "and evidence. Start your reply with 'VERDICT: ok' or 'VERDICT: revise', "
+            "then list concrete problems and fixes."
         )
         user = f"""COMMAND:
 {command}
@@ -331,15 +426,39 @@ DRAFT:
             "segment": candidates[best_idx],
         }
 
+    @staticmethod
+    def _trim_to_sentence(text: str) -> str:
+        """Cut a token-capped answer back to its last complete sentence."""
+        trimmed = text.rstrip()
+        if not trimmed or trimmed[-1] in ".!?…\"')]":
+            return trimmed
+        cut = max(trimmed.rfind("."), trimmed.rfind("!"), trimmed.rfind("?"))
+        if cut >= len(trimmed) * 0.5:
+            return trimmed[: cut + 1]
+        return trimmed
+
     def _do_finalize(self, command: str, draft: str, evidence: List[Dict[str, Any]],
-                     req: NFETAgentRequest) -> Generator[Dict[str, Any], None, SegmentResult]:
+                     req: NFETAgentRequest, profile: str = "task",
+                     ) -> Generator[Dict[str, Any], None, SegmentResult]:
         ChatMessage = self.deps.ChatMessage
-        system = (
-            "You are the finalizer of the LOLM-NFET agent. Turn the working draft into "
-            "the final answer. Sections: Result, What I used, What I verified, Limits, "
-            "Next action. Be concrete; do not claim actions that are not in evidence."
-        )
-        user = f"""COMMAND:
+        if profile == "social":
+            system = (
+                "You are a friendly assistant. Reply to the COMMAND naturally in one "
+                "or two short sentences. No sections, no meta commentary."
+            )
+            user = f"COMMAND:\n{command}"
+        else:
+            # The model writes ONLY the answer. What the agent did (notes used,
+            # checks run) is reported by the harness from the action log — a
+            # model-written provenance section can be confabulated; this cannot.
+            system = (
+                "You are the finalizer of an agent. Using the working draft and the "
+                "evidence, write the final answer to the COMMAND as clear, complete "
+                "prose. Write ONLY the answer itself — no section headers, no lists "
+                "of what you used or verified, no commentary about your process. "
+                "The system reports provenance separately."
+            )
+            user = f"""COMMAND:
 {command}
 
 {self._evidence_block('EVIDENCE', evidence)}
@@ -350,6 +469,12 @@ WORKING DRAFT:
             [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
             req, tokens=req.final_tokens, channel="final",
         )
+        if int(result.raw.get("tokens") or 0) >= req.final_tokens:
+            trimmed = self._trim_to_sentence(result.text)
+            if trimmed and trimmed != result.text:
+                result.text = trimmed
+                result.raw["response"] = trimmed
+                result.raw["truncation_trimmed"] = True
         return result
 
     def _generate_base(self, command: str, req: NFETAgentRequest) -> SegmentResult:
@@ -413,13 +538,33 @@ WORKING DRAFT:
         draft = ""
         ended_by = "segment_budget"
 
+        profile = classify_command(command)
         yield {"event": "run_start", "data": {
             "command": command, "reasoner": req.reasoner, "head_trained": head_trained,
             "memory_hits": len(memory_hits), "max_segments": req.max_segments,
-            "segment_tokens": req.segment_tokens,
+            "segment_tokens": req.segment_tokens, "profile": profile,
         }}
 
-        for seg_idx in range(req.max_segments):
+        if profile == "social":
+            # Greetings and small talk answer directly — running the full
+            # evidence loop on "Hello" is how agents end up lecturing people
+            # about their own architecture.
+            decision = ControlDecision(
+                CONTROL_FINALIZE, "finalize", "profile",
+                "conversational command — answering directly", {}, step=0,
+            )
+            entry = {"segment": 0, "decision": decision.to_dict(),
+                     "segment_tokens": 0, "telemetry_frames": 0,
+                     "action": {"kind": "finalize"}}
+            timeline.append(entry)
+            yield {"event": "decision", "data": entry}
+            yield {"event": "action", "data": {"segment": 0, **entry["action"]}}
+            ended_by = "social_direct"
+            segments_iter = []
+        else:
+            segments_iter = range(req.max_segments)
+
+        for seg_idx in segments_iter:
             yield {"event": "segment_start", "data": {"segment": seg_idx + 1}}
             segment = yield from self._collect_stream(
                 self._segment_messages(command, draft, memory_hits, evidence),
@@ -429,7 +574,26 @@ WORKING DRAFT:
             counters.tokens += int(segment.raw.get("tokens") or 0)
             policy.observe_all(segment.frames)
             all_frames.extend(segment.frames)
-            draft = (draft + "\n" + segment.text).strip() if draft else segment.text
+            fresh, repeated = merge_segment(draft, segment.text)
+            if repeated and seg_idx >= 1:
+                # The model re-emitted the draft: it has nothing left to add.
+                # That is a stop signal, not content.
+                decision = ControlDecision(
+                    CONTROL_FINALIZE, "finalize", "repetition",
+                    "the draft stopped adding new content — finishing", {},
+                    step=policy.frames_seen,
+                )
+                entry = {"segment": seg_idx + 1, "decision": decision.to_dict(),
+                         "segment_tokens": segment.raw.get("tokens"),
+                         "telemetry_frames": len(segment.frames),
+                         "action": {"kind": "finalize"}}
+                timeline.append(entry)
+                yield {"event": "decision", "data": entry}
+                yield {"event": "action", "data": {"segment": seg_idx + 1, **entry["action"]}}
+                ended_by = "repetition_stall"
+                break
+            if fresh:
+                draft = (draft + "\n" + fresh).strip() if draft else fresh
 
             decision = policy.decide(
                 control_logits=segment.last_control_logits, head_trained=head_trained,
@@ -466,7 +630,9 @@ WORKING DRAFT:
                 policy.observe_all(chosen.frames)
                 all_frames.extend(chosen.frames)
                 counters.tokens += int(chosen.raw.get("tokens") or 0)
-                draft = (draft + "\n" + chosen.text).strip()
+                fresh, _ = merge_segment(draft, chosen.text)
+                if fresh:
+                    draft = (draft + "\n" + fresh).strip() if draft else fresh
                 entry["action"] = {
                     "kind": "branch", "chosen": branch["chosen"],
                     "candidates": branch["candidates"],
@@ -485,28 +651,52 @@ WORKING DRAFT:
             if segment.hit_eos and decision.control == CONTROL_CONTINUE and seg_idx >= 1:
                 ended_by = "natural_eos"
                 break
-        else:
-            ended_by = "segment_budget"
+        # no for/else: ended_by defaults to segment_budget, break paths set
+        # their own, and an empty social iterator must keep social_direct
 
         yield {"event": "phase", "data": {"phase": "finalize", "ended_by": ended_by}}
-        final = yield from self._do_finalize(command, draft, evidence, req)
+        final = yield from self._do_finalize(command, draft, evidence, req, profile=profile)
         counters.tokens += int(final.raw.get("tokens") or 0)
+
+        # Provenance is assembled from the action log, never written by the
+        # model — an agent that cannot misreport what it did.
+        provenance: List[str] = []
+        notes_used = sum(int(t["action"].get("added") or 0) for t in timeline
+                         if t["action"]["kind"] == "retrieve")
+        if counters.retrieves and notes_used:
+            provenance.append(f"Checked local notes — used {notes_used}")
+        elif counters.retrieves:
+            provenance.append("Checked local notes — none were relevant, so none were used")
+        verdicts = [t["action"].get("verdict") for t in timeline if t["action"]["kind"] == "verify"]
+        if verdicts:
+            provenance.append("Self-checked the draft — " + ", ".join(v or "?" for v in verdicts))
+        if counters.branches:
+            provenance.append("Explored alternative drafts, kept the steadier one")
+        if ended_by == "nfet_finalize":
+            provenance.append("Decided on its own when to stop")
+        elif ended_by == "repetition_stall":
+            provenance.append("Stopped when the draft had nothing new to add")
+        elif ended_by == "social_direct":
+            provenance.append("Recognized a greeting — answered directly, skipped the machinery")
 
         # Base-mode comparison shot runs LAST: the proof only needs it at the
         # end, and running it first would delay time-to-first-token (and
         # disconnect detection) by a full silent generation.
         yield {"event": "phase", "data": {"phase": "base_comparison"}}
         base = self._generate_base(command, req)
-        proof = self._proof(base, final, memory_hits, evidence, timeline, head_trained, ended_by)
+        proof = self._proof(base, final, memory_hits, evidence, timeline, head_trained,
+                            ended_by, profile=profile)
 
         learning = {
             "type": "nfet_agent_run",
             "timestamp": started,
             "command": command,
             "reasoner": req.reasoner,
+            "profile": profile,
             "head_trained": head_trained,
             "counters": counters.to_dict(),
             "ended_by": ended_by,
+            "provenance": provenance,
             "timeline": timeline,
             "frames": [
                 {
@@ -532,6 +722,7 @@ WORKING DRAFT:
         result = {
             "command": command,
             "reasoner": req.reasoner,
+            "profile": profile,
             "head_trained": head_trained,
             "memory_used": memory_hits,
             "evidence": evidence,
@@ -541,6 +732,7 @@ WORKING DRAFT:
             "timeline": timeline,
             "counters": counters.to_dict(),
             "ended_by": ended_by,
+            "provenance": provenance,
             "proof": proof,
             "saved_learning_type": "nfet_agent_run",
         }
@@ -567,7 +759,7 @@ WORKING DRAFT:
     @staticmethod
     def _proof(base: SegmentResult, final: SegmentResult, memory_hits: List[Dict[str, Any]],
                evidence: List[Dict[str, Any]], timeline: List[Dict[str, Any]],
-               head_trained: bool, ended_by: str) -> Dict[str, Any]:
+               head_trained: bool, ended_by: str, profile: str = "task") -> Dict[str, Any]:
         base_text = base.text.strip()
         final_text = final.text.strip()
         base_words = set(base_text.lower().split())
@@ -589,7 +781,13 @@ WORKING DRAFT:
         )
         nfet_ended = ended_by == "nfet_finalize"
         changed = base_text != final_text
-        if changed and acted:
+        if profile == "social":
+            verdict = "social_direct_reply"
+            plain = (
+                "Simple conversational command — the agent recognized it and answered "
+                "directly instead of running the full machinery."
+            )
+        elif changed and acted:
             verdict = "nfet_control_visible"
             plain = (
                 "NFET control decisions changed the run: the agent retrieved, verified, "
@@ -607,6 +805,7 @@ WORKING DRAFT:
         return {
             "verdict": verdict,
             "plain": plain,
+            "profile": profile,
             "changed_text": changed,
             "word_similarity": round(similarity, 3),
             "control_counts": control_counts,

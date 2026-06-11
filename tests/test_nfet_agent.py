@@ -92,10 +92,12 @@ class FakeLoop:
 
     def __call__(self, req: Any) -> Iterator[Dict[str, Any]]:
         system = req.messages[0].content if req.messages else ""
-        self.calls.append({"system": system[:60], "user": req.messages[-1].content,
+        self.calls.append({"system": system[:200], "user": req.messages[-1].content,
                            "temperature": req.temperature, "use_graft": req.use_graft})
         if "normal local chatbot" in system:
             yield from self._plain(self.base_text)
+        elif "friendly assistant" in system:
+            yield from self._plain("Hi there! How can I help today?")
         elif "verifier" in system:
             yield from self._plain(self.verify_text)
         elif "finalizer" in system:
@@ -312,3 +314,151 @@ def test_run_collector_matches_stream(tmp_path):
     assert out1["ended_by"] == done["ended_by"]
     assert out1["counters"] == done["counters"]
     assert out1["proof"]["verdict"] == done["proof"]["verdict"]
+
+
+def test_strip_overlap_trims_repeated_segments(tmp_path):
+    sentence = "The gate decides whether the latent state surfaces."
+    loop = FakeLoop(segments=[
+        segment_spec([3.0] * 48, sentence),
+        # small models often re-write the draft instead of continuing it
+        segment_spec([3.0] * 48, sentence + " It matters at scale.", eos=True),
+    ])
+    agent, _ = make_agent(tmp_path, loop)
+    out = agent.run(NFETAgentRequest(command="explain the gate", max_segments=3))
+    assert out["draft"].count("The gate decides whether") == 1
+    assert "It matters at scale." in out["draft"]
+
+
+def test_merge_segment_overlap_and_repetition():
+    from local_ui.nfet_agent import merge_segment
+    # distinct continuation passes through untouched
+    fresh, rep = merge_segment("First part of the draft.", "Second part entirely new.")
+    assert fresh == "Second part entirely new." and rep is False
+    # head-overlap with the draft tail gets trimmed
+    fresh, rep = merge_segment("the gate decides what the surface stream may say",
+                               "the surface stream may say and the latent stream tracks order")
+    assert rep is False and fresh.startswith("and the latent stream")
+    # re-emitting the draft is flagged as pure repetition
+    fresh, rep = merge_segment("the gate decides per dimension what surfaces",
+                               "The gate decides per dimension what surfaces")
+    assert rep is True and fresh == ""
+
+
+def test_identity_gated_by_command(tmp_path):
+    loop = FakeLoop(segments=[segment_spec([3.0] * 48, "greeting segment", eos=True),
+                              segment_spec([3.0] * 48, "second", eos=True)])
+    agent, _ = make_agent(tmp_path, loop)
+    agent.deps.memory.append_identity_line("This workspace is the LOLM demo box")
+    out = agent.run(NFETAgentRequest(command="hello there friend", max_segments=2))
+    drafting = [c for c in loop.calls if "drafting engine" in c["system"]]
+    assert all("LOLM demo box" not in c["user"] for c in drafting)
+    assert not any(h["kind"] == "identity" for h in out["memory_used"])
+
+    loop2 = FakeLoop(segments=[segment_spec([3.0] * 48, "about segment", eos=True),
+                               segment_spec([3.0] * 48, "second", eos=True)])
+    agent2, _ = make_agent(tmp_path, loop2)
+    agent2.deps.memory.append_identity_line("This workspace is the LOLM demo box")
+    out2 = agent2.run(NFETAgentRequest(command="what are you, agent?", max_segments=2))
+    assert any(h["kind"] == "identity" for h in out2["memory_used"])
+
+
+def test_truncated_final_trimmed_to_sentence(tmp_path):
+    loop = FakeLoop(
+        segments=[segment_spec([3.0] * 48, "draft", eos=True),
+                  segment_spec([3.0] * 48, "more", eos=True)],
+        final_text="Result: complete sentence here. Limits: The",
+    )
+    agent, _ = make_agent(tmp_path, loop)
+    # FakeLoop's finalizer emits exactly 24 tokens; matching final_tokens
+    # makes the run look token-capped, which triggers the trim.
+    out = agent.run(NFETAgentRequest(command="explain lolm", max_segments=2, final_tokens=24))
+    assert out["result"]["response"] == "Result: complete sentence here."
+    assert out["result"]["truncation_trimmed"] is True
+
+
+
+def test_social_command_answers_directly(tmp_path):
+    loop = FakeLoop(segments=[segment_spec([3.0] * 48, "should never be drafted")])
+    agent, events = make_agent(tmp_path, loop)
+    out = agent.run(NFETAgentRequest(command="Hello"))
+
+    assert out["profile"] == "social"
+    assert out["ended_by"] == "social_direct"
+    assert out["counters"]["segments"] == 0
+    assert out["counters"]["retrieves"] == 0
+    # no drafting-engine call ever happened
+    assert not any("drafting engine" in c["system"] for c in loop.calls)
+    # the finalizer used the friendly style, not the sectioned task style
+    social_calls = [c for c in loop.calls if "friendly assistant" in c["system"]]
+    assert social_calls and "Hello" in social_calls[0]["user"]
+    assert out["result"]["response"].startswith("Hi there")
+    assert out["proof"]["verdict"] == "social_direct_reply"
+    assert any("Recognized a greeting" in p for p in out["provenance"])
+    # decision recorded with profile source for the timeline/UI
+    assert out["timeline"][0]["decision"]["source"] == "profile"
+
+
+def test_classify_command_profiles():
+    from local_ui.nfet_agent import classify_command
+    assert classify_command("Hello") == "social"
+    assert classify_command("hey!!") == "social"
+    assert classify_command("thanks") == "social"
+    assert classify_command("good morning") == "social"
+    assert classify_command("How does the gate work?") == "question"
+    assert classify_command("Write a plan to evaluate a 304M model") == "task"
+    assert classify_command("Explain dependency inversion in LOLM") == "task"
+
+
+def test_repetition_stall_finishes_early(tmp_path):
+    same = "the gate arbitrates surface versus latent per dimension"
+    loop = FakeLoop(segments=[
+        segment_spec([3.0] * 48, same),
+        segment_spec([3.0] * 48, same, eos=True),  # model re-emits the draft
+        segment_spec([3.0] * 48, "never reached"),
+    ])
+    agent, _ = make_agent(tmp_path, loop)
+    out = agent.run(NFETAgentRequest(command="explain the gate", max_segments=5))
+    assert out["ended_by"] == "repetition_stall"
+    assert out["counters"]["segments"] == 2
+    # draft holds exactly one copy, not two
+    assert out["draft"].lower().count("arbitrates surface") == 1
+    sources = [t["decision"]["source"] for t in out["timeline"]]
+    assert "repetition" in sources
+    assert any("nothing new to add" in p for p in out["provenance"])
+
+
+def test_provenance_is_assembled_not_generated(tmp_path):
+    loop = FakeLoop(segments=[
+        segment_spec([3.0] * 48, "steady opening segment"),
+        segment_spec([3.0] * 36 + [6.5] * 12, "uncertain segment needs evidence"),
+        segment_spec([0.8] * 48, "calm confident closing segment", drift=0.01),
+    ])
+    agent, _ = make_agent(tmp_path, loop)
+    out = agent.run(NFETAgentRequest(command="explain the lolm latent order model"))
+    # the finalizer was told to write ONLY the answer
+    finalizer_calls = [c for c in loop.calls if "finalizer" in c["system"]]
+    assert finalizer_calls
+    assert "ONLY the answer" in finalizer_calls[0]["system"]
+    assert "What I used" not in finalizer_calls[0]["system"]
+    # provenance reflects the real actions: one retrieve that found notes
+    assert any(p.startswith("Checked local notes — used") for p in out["provenance"])
+    assert any("Decided on its own when to stop" in p for p in out["provenance"])
+    # no verify ran, so provenance must not mention self-checking
+    assert not any("Self-checked" in p for p in out["provenance"])
+
+
+def test_irrelevant_notes_are_not_injected(tmp_path):
+    # memory holds only LOLM notes; the command is about cooking
+    loop = FakeLoop(segments=[
+        segment_spec([3.0] * 48, "first segment about pasta"),
+        segment_spec([3.0] * 36 + [6.5] * 12, "uncertain pasta segment"),
+        segment_spec([3.0] * 48, "closing pasta segment", eos=True),
+    ])
+    agent, _ = make_agent(tmp_path, loop)
+    out = agent.run(NFETAgentRequest(command="how long should fresh pasta boil"))
+    retrieves = [t for t in out["timeline"] if t["action"]["kind"] == "retrieve"]
+    assert retrieves and retrieves[0]["action"]["added"] == 0
+    # the LOLM note text never reached the drafting prompts
+    drafting_calls = [c for c in loop.calls if "drafting engine" in c["system"]]
+    assert not any("latent state tracking" in c["user"] for c in drafting_calls)
+    assert any("none were relevant" in p for p in out["provenance"])

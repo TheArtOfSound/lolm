@@ -99,8 +99,12 @@ def test_agent_routes_to_frontier_loop(tmp_path):
     out = agent.run(NFETAgentRequest(command="explain lolm", reasoner="claude", max_segments=2))
     assert out["reasoner"] == "claude"
     assert out["result"]["response"].startswith("Result: frontier answer")
-    # without local telemetry the policy stays in calibration -> continue
-    assert all(t["decision"]["label"] == "continue" for t in out["timeline"])
+    # without local telemetry the policy never fires control actions; the
+    # only non-continue allowed is the repetition stall (the fake frontier
+    # loop re-emits identical text, which the merge guard correctly stops)
+    labels = {(t["decision"]["label"], t["decision"]["source"]) for t in out["timeline"]}
+    assert labels <= {("continue", "calibrating"), ("continue", "heuristic"),
+                      ("continue", "cooldown"), ("finalize", "repetition")}
     assert events[0]["reasoner"] == "claude"
 
 
