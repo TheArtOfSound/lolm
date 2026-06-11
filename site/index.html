@@ -9,6 +9,9 @@
 <meta property="og:description" content="Five parallel streams, one fused representation. An agent that measures its uncertainty instead of guessing it. Patent pending — Qira LLC.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://lolm.imagineqira.com">
+<meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lolm.imagineqira.com/og-card.png">
 <style>
   :root{
     --bg:#07090d; --bg2:#0c1016; --panel:#11161f; --line:#1d2530;
@@ -328,6 +331,10 @@
 
   <div class="live-row">
     <input id="liveCommand" maxlength="300" placeholder="…or give it your own command and run it live">
+    <select id="backendSel" style="display:none;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:0 12px;font-size:13px;font-family:var(--mono)">
+      <option value="/api/demo">0.6B · server</option>
+      <option value="/api/demo4b">4B · lab line</option>
+    </select>
     <button class="btn primary" id="liveBtn" disabled>Run live</button>
   </div>
   <p class="demo-note" id="liveNote">checking the live backend…</p>
@@ -675,10 +682,11 @@
   async function runLive(command){
     if (playing) return;
     playing = true; $('speedRow').style.display = 'none';
-    resetTheater('live', command);
-    status('contacting the box…');
+    const base = $('backendSel').style.display !== 'none' ? $('backendSel').value : '/api/demo';
+    resetTheater('live' + (base === '/api/demo4b' ? ' · 4B' : ''), command);
+    status(base === '/api/demo4b' ? 'contacting the lab line…' : 'contacting the box…');
     try {
-      const resp = await fetch('/api/demo/run/stream', {
+      const resp = await fetch(base + '/run/stream', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({command}),
       });
@@ -744,6 +752,10 @@
       $('liveBtn').disabled = true;
       $('liveNote').textContent = 'live backend offline — replays of real recorded runs still work';
     });
+    // the 4B lab line appears only when its tunnel is up
+    fetch('/api/demo4b/status').then(r => r.json()).then(s => {
+      $('backendSel').style.display = (s.model_ready || s.busy) ? 'block' : 'none';
+    }).catch(() => { $('backendSel').style.display = 'none'; $('backendSel').value = '/api/demo'; });
   }
   pollStatus(); setInterval(pollStatus, 12000);
 
