@@ -51,3 +51,6 @@ demo-replays:
 
 demo-server:
 	PYTHONPATH=. python local_ui/server_public_demo.py
+
+import-notes:
+	PYTHONPATH=. python scripts/import_notes.py $(NOTES)

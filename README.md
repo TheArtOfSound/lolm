@@ -101,6 +101,18 @@ make nfet-smoke        # end-to-end agent run on Qwen3-0.6B
 make agent-ui          # full product stack: POST /api/agent/nfet/run
 ```
 
+### Run it on YOUR notes (5 minutes, fully private)
+
+```bash
+make import-notes NOTES=~/path/to/your/markdown-notes
+make agent-ui
+# ask it anything your notes can answer — when its uncertainty spikes,
+# it retrieves from *your* facts; every run shows what it actually used
+```
+
+The importer is heading-aware, frontmatter-aware, idempotent, and never
+sends a byte off your machine. JS clients: `npm install lolm-nfet-client`.
+
 Read [AGENT.md](AGENT.md) for the architecture and the self-improvement
 flywheel.
 
