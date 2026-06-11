@@ -125,6 +125,74 @@
         "verifies": 1,
         "branches": 0
       }
+    },
+    {
+      "id": "hello-4b",
+      "title": "Hello!",
+      "command": "Hello!",
+      "model": "4B",
+      "profile": "qwen3_4b_lab",
+      "recorded_at": "2026-06-11T02:02:20",
+      "seconds": 45.7,
+      "head_trained": true,
+      "ended_by": "social_direct",
+      "verdict": "social_direct_reply",
+      "control_counts": {
+        "finalize": 1
+      },
+      "counters": {
+        "segments": 0,
+        "tokens": 10,
+        "retrieves": 0,
+        "verifies": 0,
+        "branches": 0
+      }
+    },
+    {
+      "id": "gate-4b",
+      "title": "Explain the manifestation gate in LOLM and why it matters",
+      "command": "Explain the manifestation gate in LOLM and why it matters",
+      "model": "4B",
+      "profile": "qwen3_4b_lab",
+      "recorded_at": "2026-06-11T02:09:22",
+      "seconds": 421.9,
+      "head_trained": true,
+      "ended_by": "segment_budget",
+      "verdict": "nfet_control_visible",
+      "control_counts": {
+        "continue": 2,
+        "branch": 1
+      },
+      "counters": {
+        "segments": 3,
+        "tokens": 222,
+        "retrieves": 0,
+        "verifies": 0,
+        "branches": 1
+      }
+    },
+    {
+      "id": "dependency-inversion-4b",
+      "title": "What is dependency inversion in the LOLM architecture?",
+      "command": "What is dependency inversion in the LOLM architecture?",
+      "model": "4B",
+      "profile": "qwen3_4b_lab",
+      "recorded_at": "2026-06-11T02:15:20",
+      "seconds": 358.4,
+      "head_trained": true,
+      "ended_by": "segment_budget",
+      "verdict": "nfet_control_visible",
+      "control_counts": {
+        "branch": 1,
+        "continue": 1
+      },
+      "counters": {
+        "segments": 2,
+        "tokens": 194,
+        "retrieves": 0,
+        "verifies": 0,
+        "branches": 1
+      }
     }
   ]
 }

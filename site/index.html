@@ -317,9 +317,10 @@
 <section id="demo">
   <div class="sec-kicker">Live Demo</div>
   <h2>Watch it think.</h2>
-  <p class="sub">Real runs of the NFET agent on a 0.6B-parameter backbone with the
-  bootstrapped control head. Every decision badge you see was made from measured
-  telemetry — entropy, drift, gate, regime — not from a prompt.</p>
+  <p class="sub">Real runs of the NFET agent — recorded on both a 0.6B and a 4B backbone
+  with the outcome-trained control head. Same machinery, different brains: the 4B runs
+  show calmer telemetry and earlier confident finishes. Every decision badge you see was
+  made from measured telemetry — entropy, drift, gate, regime — not from a prompt.</p>
 
   <div class="demo-picker" id="replayPicker"></div>
 
@@ -723,7 +724,7 @@
     (idx.replays||[]).forEach(meta => {
       const b = document.createElement('button');
       b.className = 'replay-chip';
-      b.innerHTML = `<span class="rec">●</span>${meta.title}`;
+      b.innerHTML = `<span class="rec">●</span>${meta.title}${meta.model ? ` <span style="color:var(--latent);font-family:var(--mono);font-size:10px">${meta.model}</span>` : ''}`;
       b.title = `recorded ${meta.recorded_at} · ${meta.seconds}s · ${meta.verdict}`;
       b.addEventListener('click', () => playReplay(meta.id));
       picker.appendChild(b);
