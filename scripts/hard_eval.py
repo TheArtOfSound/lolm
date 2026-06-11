@@ -230,35 +230,74 @@ def run_in_process(cases: List[Case], profile: str, device: str, ckpt: str,
     return results
 
 
+def _wait_for_free(base: str, max_wait: float = 360.0) -> bool:
+    """Poll the demo gate until it is ready and not busy (single-flight aware)."""
+    import urllib.request
+    deadline = time.time() + max_wait
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(base.rstrip("/") + "/status", timeout=8) as r:
+                s = json.loads(r.read())
+            if s.get("model_ready") and not s.get("busy"):
+                return True
+        except Exception:
+            pass
+        time.sleep(6)
+    return False
+
+
 def run_live(cases: List[Case], url: str, pause: float) -> List[Result]:
     import urllib.request
 
     results = []
     for i, case in enumerate(cases):
+        if not _wait_for_free(url):
+            print(f"  [{i+1}/{len(cases)}] {case.cid} — gate stayed busy; skipping", flush=True)
+            results.append(score(case, {"error": "gate busy", "_seconds": 0.0}))
+            continue
         print(f"  [{i+1}/{len(cases)}] {case.cid} live...", flush=True)
         t0 = time.time()
         payload: Dict[str, Any] = {}
-        try:
-            req = urllib.request.Request(
-                url.rstrip("/") + "/run/stream",
-                data=json.dumps({"command": case.command}).encode(),
-                headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=420) as resp:
-                buf = b""
-                for raw in resp:
-                    buf += raw
-                    while b"\n\n" in buf:
-                        block, buf = buf.split(b"\n\n", 1)
-                        name = data = None
-                        for line in block.decode("utf-8", "replace").split("\n"):
-                            if line.startswith("event: "):
-                                name = line[7:]
-                            elif line.startswith("data: "):
-                                data = json.loads(line[6:])
-                        if name == "run_done":
-                            payload = data
-        except Exception as exc:
-            payload = {"error": str(exc)[:300]}
+        for attempt in range(4):  # re-queue past races with real visitors
+            try:
+                req = urllib.request.Request(
+                    url.rstrip("/") + "/run/stream",
+                    data=json.dumps({"command": case.command}).encode(),
+                    headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=420) as resp:
+                    buf = b""
+                    for raw in resp:
+                        buf += raw
+                        while b"\n\n" in buf:
+                            block, buf = buf.split(b"\n\n", 1)
+                            name = data = None
+                            for line in block.decode("utf-8", "replace").split("\n"):
+                                if line.startswith("event: "):
+                                    name = line[7:]
+                                elif line.startswith("data: "):
+                                    data = json.loads(line[6:])
+                            if name == "run_done":
+                                payload = data
+                break
+            except urllib.error.HTTPError as he:
+                body = ""
+                try:
+                    body = he.read().decode("utf-8", "replace")
+                except Exception:
+                    pass
+                if he.code == 429 and "rate limit" in body.lower():
+                    print(f"      rate-limited (4/hr/IP enforced) — stopping, this is correct gate behaviour", flush=True)
+                    payload = {"error": "rate_limited", "_rate_limited": True}
+                    break
+                if he.code == 429 and attempt < 3:
+                    print(f"      lost the slot to a live run (429); re-queueing...", flush=True)
+                    _wait_for_free(url)
+                    continue
+                payload = {"error": f"HTTP {he.code}"}
+                break
+            except Exception as exc:
+                payload = {"error": str(exc)[:300]}
+                break
         payload["_seconds"] = time.time() - t0
         results.append(score(case, payload))
         time.sleep(pause)
