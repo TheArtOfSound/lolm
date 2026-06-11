@@ -217,3 +217,14 @@ make agent-ui                                    # retrieval now hits YOUR facts
 
 Retrieval ranks by relevance x importance over the whole store; recency is a
 tiebreak, never a reason to inject something off-topic.
+
+## The 4B lab line
+
+The shared web box (2 vCPU, 7.6GB) can only hold the 0.6B backbone. The 4B
+graft runs from the lab Mac instead and is published through a reverse SSH
+tunnel: `make serve-4b` starts the demo server on `127.0.0.1:7867` (Qwen3-4B
+on MPS + the 2560-wide trained controller) and holds the tunnel open with
+auto-reconnect; nginx on the box exposes it as `/api/demo4b/`. The try page
+shows the "4B · lab line" chip only while the line is up — when the Mac
+sleeps, visitors fall back to the always-on 0.6B server line and the recorded
+4B replays. Same gate, same budgets, same receipts on both lines.
