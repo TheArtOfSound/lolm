@@ -31,6 +31,7 @@ import torch
 from lolm.nfet_controller_train import (
     build_dataset,
     load_log_sequences,
+    outcome_examples,
     save_controller_checkpoint,
     synth_scenarios,
     train_control_head,
@@ -109,6 +110,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--synthetic", type=int, default=0, help="number of synthetic scenario sequences")
     parser.add_argument("--log", type=str, default="", help="improvement_log.jsonl with real observable traces")
+    parser.add_argument("--outcomes", type=str, default="", help="improvement_log.jsonl to mine receipt-labeled decisions from (flywheel turn two)")
     parser.add_argument("--replay", type=str, default="", help="improvement log to replay through the model (full features)")
     parser.add_argument("--profile", type=str, default="qwen3_0_6b_smoke")
     parser.add_argument("--registry", type=str, default="configs/hf_models.yaml")
@@ -147,14 +149,19 @@ def main() -> None:
             log_sequences = load_log_sequences(Path(args.log))
             print(f"loaded {len(log_sequences)} telemetry sequences from {args.log}")
             sequences.extend(log_sequences)
-        if not sequences:
+        extras = []
+        if args.outcomes:
+            extras = outcome_examples(Path(args.outcomes))
+            print(f"mined {len(extras)} receipt-labeled decision rows from {args.outcomes}")
+        if not sequences and not extras:
             raise SystemExit("Nothing to train on: pass --synthetic N and/or --log PATH (or --replay).")
         graft = LOLMNFETGraft(d_model=args.d_model, latent_backend=args.latent_backend)  # type: ignore[arg-type]
         if args.checkpoint_in:
             ckpt = torch.load(args.checkpoint_in, map_location="cpu")
             graft.load_state_dict(ckpt["graft"])
         dataset = build_dataset(sequences, d_model=args.d_model,
-                                continue_keep_ratio=args.continue_keep_ratio, seed=args.seed)
+                                continue_keep_ratio=args.continue_keep_ratio, seed=args.seed,
+                                extra_examples=extras)
         zero_hidden = True
 
     metrics = train_control_head(

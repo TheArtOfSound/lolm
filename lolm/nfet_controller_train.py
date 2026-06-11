@@ -133,6 +133,83 @@ def load_log_sequences(path: Path) -> List[List[TelemetryFrame]]:
     return sequences
 
 
+def outcome_examples(path: Path, sustain: int = 4) -> List[Tuple[TelemetryFrame, int, float]]:
+    """(frame, target, weight) rows from run receipts — flywheel turn two.
+
+    Heuristic weak labels teach the head what the rules would do; outcome
+    labels teach it when the rules were *right*. Each policy decision in a
+    logged run is re-labeled by what actually happened:
+
+        retrieve that found nothing relevant -> continue (it wasted budget)
+        retrieve whose notes were used       -> retrieve
+        verify that came back 'revise'       -> verify (it caught something)
+        verify that came back 'ok'           -> continue, half weight
+        branch                               -> branch if the run showed
+                                                control value, else weak continue
+        finalize                             -> finalize (full weight when the
+                                                answer differed from base)
+
+    The labeled frames are the sustain-window tail of the decision's segment,
+    located via each timeline entry's ``telemetry_frames`` count. Decisions
+    forced by run state (budget, profile, repetition, cooldown, calibrating)
+    are skipped — the policy did not freely choose them.
+    """
+    examples: List[Tuple[TelemetryFrame, int, float]] = []
+    if not path.exists():
+        return examples
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") != "nfet_agent_run":
+            continue
+        raw_frames = event.get("frames")
+        timeline = event.get("timeline")
+        proof = event.get("proof") or {}
+        if not isinstance(raw_frames, list) or not isinstance(timeline, list):
+            continue
+        frames = [
+            TelemetryFrame(
+                logit_entropy=float(f.get("logit_entropy", 0.0)),
+                hidden_drift=float(f.get("hidden_drift", 0.0)),
+                gate_mean=float(f.get("gate_mean", 0.0)),
+                regime_entropy=float(f.get("regime_entropy", 0.0)),
+                step=int(f.get("step", i + 1)),
+            )
+            for i, f in enumerate(raw_frames)
+            if isinstance(f, dict)
+        ]
+        control_visible = str(proof.get("verdict", "")).startswith("nfet_")
+        changed = bool(proof.get("changed_text"))
+        cursor = 0
+        for entry in timeline:
+            n = int(entry.get("telemetry_frames") or 0)
+            seg_frames = frames[cursor:cursor + n]
+            cursor += n
+            decision = entry.get("decision") or {}
+            action = entry.get("action") or {}
+            if decision.get("source") in ("budget", "profile", "repetition",
+                                          "cooldown", "calibrating"):
+                continue
+            kind = action.get("kind")
+            if kind == "retrieve":
+                target, weight = ((1, 1.5) if int(action.get("added") or 0) > 0
+                                  else (0, 1.25))
+            elif kind == "verify":
+                target, weight = ((2, 1.5) if action.get("verdict") == "revise"
+                                  else (0, 0.5))
+            elif kind == "branch":
+                target, weight = ((3, 1.0) if control_visible else (0, 0.5))
+            elif kind == "finalize":
+                target, weight = (4, 1.25 if changed else 0.5)
+            else:
+                continue  # plain continues come from the heuristic labeler
+            for frame in seg_frames[-sustain:]:
+                examples.append((frame, target, weight))
+    return examples
+
+
 # ---------------------------------------------------------------------------
 # Dataset construction
 # ---------------------------------------------------------------------------
@@ -142,6 +219,7 @@ class ControlDataset:
     features: torch.Tensor      # (N, d_model + 4)
     labels: torch.Tensor        # (N,)
     class_counts: List[int]
+    weights: Optional[torch.Tensor] = None   # (N,) per-sample weights
 
 
 def build_dataset(
@@ -153,6 +231,7 @@ def build_dataset(
     skip_stateful_frames: bool = True,
     continue_keep_ratio: float = 0.05,
     seed: int = 0,
+    extra_examples: Optional[Sequence[Tuple[TelemetryFrame, int, float]]] = None,
 ) -> ControlDataset:
     """Frames + weak labels -> per-token training rows.
 
@@ -171,6 +250,7 @@ def build_dataset(
     rng = random.Random(seed)
     rows: List[torch.Tensor] = []
     labels: List[int] = []
+    sample_weights: List[float] = []
     offset = 0
     for frames in sequences:
         decisions = label_trace_decisions(frames, policy_config)
@@ -191,13 +271,23 @@ def build_dataset(
             ], dtype=torch.float32)
             rows.append(torch.cat([h.float(), obs]))
             labels.append(decision.control)
+            sample_weights.append(1.0)
         offset += len(frames)
+    for frame, target, weight in (extra_examples or []):
+        obs = torch.tensor([
+            frame.logit_entropy, frame.hidden_drift,
+            frame.gate_mean, frame.regime_entropy,
+        ], dtype=torch.float32)
+        rows.append(torch.cat([torch.zeros(d_model), obs]))
+        labels.append(int(target))
+        sample_weights.append(float(weight))
     if not rows:
         raise ValueError("No training rows produced — need longer traces or more sequences.")
     features = torch.stack(rows)
     label_tensor = torch.tensor(labels, dtype=torch.long)
     counts = [int((label_tensor == c).sum()) for c in range(N_CONTROLS)]
-    return ControlDataset(features=features, labels=label_tensor, class_counts=counts)
+    return ControlDataset(features=features, labels=label_tensor, class_counts=counts,
+                          weights=torch.tensor(sample_weights, dtype=torch.float32))
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +328,9 @@ def train_control_head(
     y_train = dataset.labels[train_idx].to(device)
     x_val = dataset.features[val_idx].to(device)
     y_val = dataset.labels[val_idx].to(device)
+    sample_w = (dataset.weights if dataset.weights is not None
+                else torch.ones(n))
+    w_train = sample_w[train_idx].to(device)
 
     counts = torch.tensor(dataset.class_counts, dtype=torch.float32).clamp_min(1)
     weights = (counts.sum() / (N_CONTROLS * counts)).clamp(0.1, 20.0).to(device)
@@ -252,7 +345,9 @@ def train_control_head(
         for start in range(0, x_train.size(0), batch_size):
             idx = order[start:start + batch_size]
             logits = head(x_train[idx])
-            loss = F.cross_entropy(logits, y_train[idx], weight=weights)
+            per_row = F.cross_entropy(logits, y_train[idx], weight=weights,
+                                      reduction="none")
+            loss = (per_row * w_train[idx]).mean()
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
