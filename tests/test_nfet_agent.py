@@ -462,3 +462,13 @@ def test_irrelevant_notes_are_not_injected(tmp_path):
     drafting_calls = [c for c in loop.calls if "drafting engine" in c["system"]]
     assert not any("latent state tracking" in c["user"] for c in drafting_calls)
     assert any("none were relevant" in p for p in out["provenance"])
+
+
+def test_question_profile_caps_segments(tmp_path):
+    loop = FakeLoop(segments=[
+        segment_spec([3.0] * 48, f"answer part {i}") for i in range(5)
+    ])
+    agent, _ = make_agent(tmp_path, loop)
+    out = agent.run(NFETAgentRequest(command="How does the gate work?", max_segments=5))
+    assert out["profile"] == "question"
+    assert out["counters"]["segments"] <= 2

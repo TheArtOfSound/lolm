@@ -539,9 +539,12 @@ WORKING DRAFT:
         ended_by = "segment_budget"
 
         profile = classify_command(command)
+        # Direct questions rarely need a long draft; tasks get the full budget.
+        effective_segments = (min(req.max_segments, 2) if profile == "question"
+                              else req.max_segments)
         yield {"event": "run_start", "data": {
             "command": command, "reasoner": req.reasoner, "head_trained": head_trained,
-            "memory_hits": len(memory_hits), "max_segments": req.max_segments,
+            "memory_hits": len(memory_hits), "max_segments": effective_segments,
             "segment_tokens": req.segment_tokens, "profile": profile,
         }}
 
@@ -562,7 +565,7 @@ WORKING DRAFT:
             ended_by = "social_direct"
             segments_iter = []
         else:
-            segments_iter = range(req.max_segments)
+            segments_iter = range(effective_segments)
 
         for seg_idx in segments_iter:
             yield {"event": "segment_start", "data": {"segment": seg_idx + 1}}

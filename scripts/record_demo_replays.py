@@ -19,22 +19,15 @@ from pathlib import Path
 
 from local_ui import server as workspace
 from local_ui.nfet_agent import AgentDeps, NFETAgent, NFETAgentRequest
+from scripts.seed_workspace_notes import seed as seed_notes
 
 COMMANDS = [
+    ("hello", "Hello!"),
     ("gate", "Explain the manifestation gate in LOLM and why it matters"),
     ("dependency-inversion", "What is dependency inversion in the LOLM architecture?"),
     ("eval-plan", "Write a short plan to evaluate a 304M language model against Pythia-410M"),
     ("entropy-retrieve", "Why should an agent retrieve evidence when its token entropy spikes?"),
     ("five-controls", "Summarize what the NFET controller's five actions do"),
-]
-
-SEED_NOTES = [
-    ("LOLM fuses five streams: surface decoder h, latent SSM z, regime layer r, persistent memory m, and a manifestation gate g that arbitrates surface vs latent per dimension.", "research", 5),
-    ("Dependency inversion: the latent SSM path is only ~29 percent of the fused representation, but forcing the gate to surface-only explodes perplexity from 34.47 to 485 million.", "research", 5),
-    ("LOLM-304M beats Pythia-410M on WikiText-103: eval PPL 68.4 vs 142.9 with 26 percent fewer parameters; late-position BPC 1.02 vs 1.23.", "research", 5),
-    ("The NFET controller maps telemetry (logit entropy, hidden drift, gate mean, regime entropy) to five controls: continue, retrieve, verify, branch, finalize.", "research", 5),
-    ("High sustained token entropy means the model is uncertain about continuations; retrieving evidence reduces uncertainty better than continuing to guess.", "research", 4),
-    ("Evaluation practice: match training data and tokenizer, report perplexity windows, late-position bits-per-character, and distinct-n generation diversity.", "research", 4),
 ]
 
 
@@ -57,10 +50,7 @@ def main() -> None:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    for text, tag, importance in SEED_NOTES:
-        existing = workspace.MEMORY.search_notes(text[:40], limit=1)
-        if not existing:
-            workspace.MEMORY.append_note(text, tag=tag, importance=importance)
+    seed_notes(workspace.MEMORY)
 
     print(f"loading {args.profile} on {args.device} (ckpt={args.ckpt})...", flush=True)
     t0 = time.time()
