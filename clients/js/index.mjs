@@ -169,6 +169,8 @@ const ENDED = {
   nfet_finalize: "it decided on its own that it was done",
   natural_eos: "it reached a natural stopping point",
   segment_budget: "it hit the length limit",
+  repetition_stall: "it stopped when the draft had nothing new to add",
+  social_direct: "it answered a greeting directly",
 };
 
 /**
@@ -182,9 +184,15 @@ export function friendly(ev) {
   if (event === "segment_start") return data.segment === 1 ? "Starting a draft" : null;
   if (event === "decision") {
     const d = data.decision || {};
-    const why = d.source === "head" ? "its trained controller called this"
-      : d.source === "budget" ? "limit reached — kept writing instead"
-      : "its built-in instincts called this";
+    const WHY = {
+      head: "its trained controller called this",
+      budget: "limit reached — kept writing instead",
+      profile: "it recognized a simple greeting",
+      repetition: "the draft stopped adding anything new",
+      heuristic: "its built-in instincts called this",
+    };
+    const why = WHY[d.source] || WHY.heuristic;
+    if (d.source === "profile") return `Simple greeting — answering directly (${why})`;
     if (d.label === "retrieve") return `It noticed it wasn't sure — checking its notes (${why})`;
     if (d.label === "verify") return `Something felt off — double-checking the draft (${why})`;
     if (d.label === "branch") return `It felt stuck — trying two directions (${why})`;
@@ -208,11 +216,17 @@ export function friendly(ev) {
     const v = data.verdict;
     if (v === "nfet_control_visible") return "It acted on its own uncertainty — and the answer clearly differs from a plain chatbot's.";
     if (v === "nfet_finalize_visible") return "It decided for itself when it was done — and the answer differs from a plain chatbot's.";
+    if (v === "social_direct_reply") return "Simple greeting — it noticed, skipped the machinery, and just answered.";
     if (v === "changed_but_controls_quiet") return "It stayed confident the whole way — no checks needed this time.";
     return "This run didn't clearly beat a plain chatbot — some runs are like that.";
   }
-  if (event === "run_done") return data.ended_by && ENDED[data.ended_by]
-    ? `Done — ${ENDED[data.ended_by]}.` : "Done.";
+  if (event === "run_done") {
+    const base = data.ended_by && ENDED[data.ended_by] ? `Done — ${ENDED[data.ended_by]}.` : "Done.";
+    if (Array.isArray(data.provenance) && data.provenance.length) {
+      return `${base} What it actually did: ${data.provenance.join(" · ")}`;
+    }
+    return base;
+  }
   if (event === "error") return `Hit a snag: ${(data && data.error) || "unknown"}`;
   return null;
 }

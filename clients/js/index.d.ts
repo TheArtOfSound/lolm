@@ -45,6 +45,8 @@ export interface ActionEvent {
 export interface ProofReceipt {
   verdict: string;
   plain: string;
+  /** "social" | "question" | "task" */
+  profile?: string;
   changed_text: boolean;
   word_similarity: number;
   control_counts: Record<string, number>;
@@ -59,6 +61,8 @@ export interface ProofReceipt {
 export interface RunResult {
   command: string;
   reasoner: string;
+  /** "social" | "question" | "task" */
+  profile?: string;
   head_trained: boolean;
   memory_used: Array<Record<string, any>>;
   evidence: Array<Record<string, any>>;
@@ -68,6 +72,8 @@ export interface RunResult {
   timeline: DecisionEntry[];
   counters: Record<string, number>;
   ended_by: string;
+  /** Harness-assembled account of what the agent actually did. */
+  provenance?: string[];
   proof: ProofReceipt;
 }
 
