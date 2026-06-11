@@ -177,6 +177,7 @@
     <a href="#results">Results</a>
     <a href="#agent">NFET Agent</a>
     <a href="#different">Why different</a>
+    <a href="#build">Use it</a>
     <a href="#cite">Cite</a>
   </span>
 </nav></div></header>
@@ -401,6 +402,44 @@
   GPT-class systems — the claim is the <b style="color:var(--text)">control mechanism</b>, and it is
   model-agnostic. The same graft rides on any open backbone (0.6B → 32B tested targets), and a hybrid mode
   lets the latent machinery monitor a frontier model while <em>it</em> does the writing.</p>
+</section>
+
+<section id="build">
+  <div class="sec-kicker">Use it</div>
+  <h2>What you can build with this.</h2>
+  <p class="sub">Everything below ships in the repo today — labels are honest about maturity.</p>
+
+  <div class="streams-grid">
+    <div class="stream s4">
+      <h3>A private assistant over YOUR notes</h3>
+      <div class="role">works today · fully local</div>
+      <p>Point the importer at a markdown folder or Obsidian vault. When the agent's
+      uncertainty spikes, it retrieves from <b>your</b> facts — ranked by relevance and
+      importance, never sent off your machine, with a receipt showing exactly what it used.
+      <code style="font-family:var(--mono);font-size:11.5px;display:block;margin-top:8px;color:var(--dim)">make import-notes NOTES=~/vault && make agent-ui</code></p>
+    </div>
+    <div class="stream s1">
+      <h3>Uncertainty telemetry for any open model</h3>
+      <div class="role">works today · model-agnostic</div>
+      <p>The graft rides any Hugging Face backbone (0.6B and 4B shipped; 32B targeted) and
+      streams per-token entropy, drift, gate balance, regime entropy and control logits over
+      a documented SSE protocol. <code style="font-family:var(--mono);font-size:11.5px">npm install lolm-nfet-client</code></p>
+    </div>
+    <div class="stream s2">
+      <h3>A latent co-processor for frontier agents</h3>
+      <div class="role">works today · MCP</div>
+      <p>The whole workspace speaks the Model Context Protocol — plug it into Claude Code or
+      Claude Desktop and a frontier agent gains local memory, the NFET control loop, and
+      telemetry tools it can call like any other tool.</p>
+    </div>
+    <div class="stream s5">
+      <h3>Big model writes, LOLM watches</h3>
+      <div class="role">built · bring an API key</div>
+      <p>Hybrid mode: a frontier model generates while the local latent machinery re-reads
+      every token for control telemetry — measured uncertainty steering frontier-quality prose.
+      The bridge ships in the repo; it activates with an Anthropic API key.</p>
+    </div>
+  </div>
 </section>
 
 <section id="cite">

@@ -45,6 +45,8 @@ def main() -> None:
     parser.add_argument("--segment-tokens", type=int, default=28)
     parser.add_argument("--final-tokens", type=int, default=96)
     parser.add_argument("--only", default="", help="comma-separated replay ids to re-record")
+    parser.add_argument("--id-suffix", default="", help="suffix for replay ids (e.g. -4b)")
+    parser.add_argument("--model-label", default="", help="model badge shown in pickers (e.g. 4B)")
     args = parser.parse_args()
 
     out_dir = Path(args.out)
@@ -89,9 +91,10 @@ def main() -> None:
         except json.JSONDecodeError:
             pass
 
-    for rid, command in COMMANDS:
-        if only and rid not in only:
+    for base_rid, command in COMMANDS:
+        if only and base_rid not in only:
             continue
+        rid = base_rid + args.id_suffix
         print(f"\n=== recording '{rid}': {command}", flush=True)
         started = time.time()
         req = NFETAgentRequest(
@@ -114,6 +117,8 @@ def main() -> None:
             "id": rid,
             "title": command,
             "command": command,
+            "model": args.model_label or None,
+            "profile": args.profile,
             "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "seconds": seconds,
             "head_trained": done.get("head_trained"),

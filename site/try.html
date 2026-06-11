@@ -322,8 +322,10 @@
     (idx.replays || []).forEach(meta => {
       const b = document.createElement('button');
       b.className = 'ex';
-      const title = FRIENDLY_TITLES[meta.id] || meta.title;
-      b.innerHTML = `${title}<small>▶ instant — a recorded real run</small>`;
+      const baseId = meta.id.replace(/-4b$/, '');
+      const title = FRIENDLY_TITLES[meta.id] || FRIENDLY_TITLES[baseId] || meta.title;
+      const badge = meta.model ? ` · ${meta.model} model` : '';
+      b.innerHTML = `${title}<small>▶ instant — a recorded real run${badge}</small>`;
       b.addEventListener('click', () => playReplay(meta.id, title));
       grid.appendChild(b);
     });
