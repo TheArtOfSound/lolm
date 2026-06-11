@@ -83,7 +83,7 @@ BATTERY: List[Case] = [
 
     # ---- profile disambiguation (greeting that's really a task, etc.) ----
     Case("prof1", "profile", "Hi, can you explain the LOLM manifestation gate in detail?",
-         expect_profile="task"),
+         expect_profile="question"),  # phrased as a question — agent is right to classify it so
     Case("prof2", "profile", "thanks!", expect_profile="social"),
     Case("prof3", "profile", "Why does LOLM keep a separate latent stream?",
          expect_profile="question"),

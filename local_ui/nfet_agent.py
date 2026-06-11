@@ -60,15 +60,17 @@ def classify_command(command: str) -> str:
     evidence loop on "Hello" is how agents end up lecturing people about
     their own architecture.
     """
+    # Question marks across scripts: ASCII, fullwidth CJK, Spanish, Arabic, Greek, Armenian.
+    QMARKS = "?？¿؟;՞"
     c = command.strip()
     if GREETING_RE.match(c):
         return "social"
     words = c.split()
-    if len(words) <= 4 and not any(ch in c for ch in "?") and len(c) < 30:
+    if len(words) <= 4 and not any(ch in c for ch in QMARKS) and len(c) < 30:
         lowered = c.lower()
         if any(w in lowered for w in ("hi", "hello", "hey", "thanks", "thank", "bye", "goodbye", "morning", "evening")):
             return "social"
-    if c.endswith("?") and len(words) <= 16:
+    if c.endswith(tuple(QMARKS)) and len(words) <= 16:
         return "question"
     return "task"
 

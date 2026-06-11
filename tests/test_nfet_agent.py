@@ -472,3 +472,14 @@ def test_question_profile_caps_segments(tmp_path):
     out = agent.run(NFETAgentRequest(command="How does the gate work?", max_segments=5))
     assert out["profile"] == "question"
     assert out["counters"]["segments"] <= 2
+
+
+def test_classify_command_question_marks_across_scripts():
+    from local_ui.nfet_agent import classify_command
+    # fullwidth CJK, Spanish, Arabic question marks must all read as questions
+    assert classify_command("LOLMモデルとは何ですか？") == "question"
+    assert classify_command("¿Qué es LOLM?") == "question"
+    assert classify_command("ما هو LOLM؟") == "question"
+    # greetings still social; statements still task
+    assert classify_command("Hello") == "social"
+    assert classify_command("produce code for a snake game") == "task"
