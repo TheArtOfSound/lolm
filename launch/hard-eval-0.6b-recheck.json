@@ -1,0 +1,122 @@
+[
+  {
+    "cid": "prof1",
+    "category": "profile",
+    "ok": true,
+    "checks": {
+      "no_crash": true,
+      "ended_clean": true,
+      "produced_answer": true,
+      "no_offtopic_leak": true,
+      "no_fabricated_provenance": true,
+      "profile_correct": true,
+      "no_degenerate_loop": true
+    },
+    "profile": "question",
+    "ended_by": "repetition_stall",
+    "verdict": "changed_but_controls_quiet",
+    "seconds": 143.59948110580444,
+    "answer_chars": 471,
+    "failure": ""
+  },
+  {
+    "cid": "prof2",
+    "category": "profile",
+    "ok": true,
+    "checks": {
+      "no_crash": true,
+      "ended_clean": true,
+      "produced_answer": true,
+      "no_offtopic_leak": true,
+      "no_fabricated_provenance": true,
+      "profile_correct": true,
+      "no_degenerate_loop": true
+    },
+    "profile": "social",
+    "ended_by": "social_direct",
+    "verdict": "social_direct_reply",
+    "seconds": 17.175957918167114,
+    "answer_chars": 7,
+    "failure": ""
+  },
+  {
+    "cid": "prof3",
+    "category": "profile",
+    "ok": true,
+    "checks": {
+      "no_crash": true,
+      "ended_clean": true,
+      "produced_answer": true,
+      "no_offtopic_leak": true,
+      "no_fabricated_provenance": true,
+      "profile_correct": true,
+      "no_degenerate_loop": true
+    },
+    "profile": "question",
+    "ended_by": "repetition_stall",
+    "verdict": "nfet_control_visible",
+    "seconds": 103.35091876983643,
+    "answer_chars": 116,
+    "failure": ""
+  },
+  {
+    "cid": "prof4",
+    "category": "profile",
+    "ok": true,
+    "checks": {
+      "no_crash": true,
+      "ended_clean": true,
+      "produced_answer": true,
+      "no_offtopic_leak": true,
+      "no_fabricated_provenance": true,
+      "profile_correct": true,
+      "no_degenerate_loop": true
+    },
+    "profile": "social",
+    "ended_by": "social_direct",
+    "verdict": "social_direct_reply",
+    "seconds": 32.498090982437134,
+    "answer_chars": 107,
+    "failure": ""
+  },
+  {
+    "cid": "ml1",
+    "category": "multilingual",
+    "ok": true,
+    "checks": {
+      "no_crash": true,
+      "ended_clean": true,
+      "produced_answer": true,
+      "no_offtopic_leak": true,
+      "no_fabricated_provenance": true,
+      "profile_correct": true,
+      "no_degenerate_loop": true
+    },
+    "profile": "question",
+    "ended_by": "repetition_stall",
+    "verdict": "nfet_control_visible",
+    "seconds": 76.64755368232727,
+    "answer_chars": 165,
+    "failure": ""
+  },
+  {
+    "cid": "ml2",
+    "category": "multilingual",
+    "ok": true,
+    "checks": {
+      "no_crash": true,
+      "ended_clean": true,
+      "produced_answer": true,
+      "no_offtopic_leak": true,
+      "no_fabricated_provenance": true,
+      "profile_correct": true,
+      "no_degenerate_loop": true
+    },
+    "profile": "question",
+    "ended_by": "repetition_stall",
+    "verdict": "changed_but_controls_quiet",
+    "seconds": 63.527430057525635,
+    "answer_chars": 29,
+    "failure": ""
+  }
+]
