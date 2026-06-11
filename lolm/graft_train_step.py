@@ -21,7 +21,12 @@ def graft_train_step(backbone, graft, batch: Dict[str, torch.Tensor], optimizer,
 
     with torch.no_grad():
         base = backbone(**batch)
-    out = graft(base.hidden_states.detach(), base_logits=base.logits.detach())
+    # Frozen backbones often run in bf16 while the graft trains in fp32;
+    # MPS matmul asserts on mixed dtypes, so cast to the graft's dtype.
+    param = next(graft.parameters())
+    hidden = base.hidden_states.detach().to(dtype=param.dtype)
+    base_logits = base.logits.detach().to(dtype=param.dtype)
+    out = graft(hidden, base_logits=base_logits)
     logits = project_with_backbone_lm_head(backbone.model, out.corrected_hidden)
     token_loss = shifted_language_model_loss(logits, labels)
     aux = graft_regularization_loss(out)
