@@ -10,6 +10,8 @@
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
 <meta property="og:url" content="https://lolm.imagineqira.com/try.html">
+<meta name="theme-color" content="#07090d">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2307090d'/%3E%3Cpath d='M5 7 Q20 7 26 16' stroke='%234ea1ff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 12 Q19 12 26 16' stroke='%23b07fff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 16 H26' stroke='%23ffb454' stroke-width='2.2'/%3E%3Cpath d='M5 20 Q19 20 26 16' stroke='%233fd6a0' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 25 Q20 25 26 16' stroke='%23ff6b81' stroke-width='2.2' fill='none'/%3E%3Ccircle cx='26' cy='16' r='2.6' fill='%23d7dde6'/%3E%3C/svg%3E">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://lolm.imagineqira.com/og-card.png">
@@ -196,6 +198,7 @@
 </footer>
 </div>
 
+<script src="/offline-engine.js"></script>
 <script>
 (function(){
   const $ = id => document.getElementById(id);
@@ -477,9 +480,55 @@
       }
     } catch(e){
       if (e.name === 'AbortError') addAct('done', '<b>Stopped.</b>');
-      else addAct('check', '<b>Stream lost:</b> ' + e.message);
+      else {
+        // Backend unreachable (offline, box down). Last resort: answer entirely
+        // in the visitor's own browser — no server, no quota.
+        addAct('check', '<b>Backend unreachable</b> — every server tier is down or you’re offline');
+        playing = false; setRunning(false); liveAbort = null;
+        offerOffline(command);
+        return;
+      }
     }
     playing = false; setRunning(false); liveAbort = null;
+  }
+
+  // ---- offline tier: in-browser model, no backend ----
+  let offlineAsked = false;
+  async function offerOffline(command){
+    const a = addAct('think',
+      '<b>Answer in your browser instead?</b> Runs a small model locally — no server needed. ' +
+      '<button id="goOffline" style="margin-left:6px;background:var(--purple);color:#120a1f;border:none;border-radius:7px;padding:3px 11px;font-size:12px;font-weight:700;cursor:pointer">answer offline</button>',
+      window.OfflineEngine && OfflineEngine.ready() ? '(model already loaded)' : '(one-time ~300 MB download, then works fully offline)');
+    const btn = document.getElementById('goOffline');
+    if (btn) btn.addEventListener('click', () => runOffline(command), { once: true });
+  }
+
+  async function runOffline(command){
+    if (playing) return; playing = true; setRunning(true);
+    const prog = addAct('write', '<b>Loading the in-browser model…</b>', '');
+    const progSpan = prog.querySelector('.why');
+    try {
+      $('answer').classList.add('on'); $('answerText').classList.remove('md'); $('answerText').textContent = '';
+      let acc = '';
+      const text = await OfflineEngine.answer(command, {
+        onProgress: (p) => { if (progSpan) progSpan.textContent = `(downloading ${p.file} — ${p.pct}%)`; },
+        onToken: (t) => { acc += t; $('answerText').textContent = acc; },
+        maxTokens: 256,
+      });
+      const finalText = (text || acc).trim();
+      $('answerText').classList.add('md');
+      $('answerText').innerHTML = mdToHtml(finalText);
+      addAct('done', '<b>Answered offline</b>, entirely in your browser', '(no NFET telemetry — that needs the backend graft; the answer is honest about it)');
+      const r = $('receipt');
+      r.innerHTML = '<b>Receipt</b> — answered by a small model running locally in your browser (' +
+        OfflineEngine.MODEL + '). No server, no quota, no network after the one-time download. ' +
+        'The LOLM control loop (measured uncertainty → retrieve/verify/branch) needs the backend, so this tier is answer-only.';
+      r.classList.add('on');
+      if (command) convo.push({q: lastQ || command, a: finalText});
+    } catch(e){
+      addAct('check', '<b>Offline engine failed:</b> ' + (e.message || e) + ' — try a replay, they always work.');
+    }
+    playing = false; setRunning(false);
   }
 
   function stopLive(){ if (liveAbort) liveAbort.abort(); }
@@ -551,6 +600,20 @@
     applyLineState();
   }));
   pollStatus(); setInterval(pollStatus, 12000);
+
+  // Resilience: register the service worker so the page + every replay work
+  // with zero network, and an offline indicator in the nav.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+  function showConnectivity(){
+    const el = document.querySelector('nav a.right');
+    if (el && !navigator.onLine) el.textContent = '○ offline · replays + browser model';
+    else if (el) el.textContent = 'the science →';
+  }
+  window.addEventListener('online', showConnectivity);
+  window.addEventListener('offline', showConnectivity);
+  showConnectivity();
 })();
 </script>
 </body>
