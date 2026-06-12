@@ -108,11 +108,17 @@ def test_agent_routes_to_frontier_loop(tmp_path):
     assert events[0]["reasoner"] == "claude"
 
 
-def test_agent_errors_cleanly_when_frontier_missing(tmp_path):
+def test_agent_falls_back_to_local_when_frontier_missing(tmp_path):
+    """Requesting a frontier reasoner with none configured must NOT crash — it
+    falls back to the local generation loop (resilience over strictness)."""
+    from tests.test_nfet_agent import FakeLoop, segment_spec
+    local = FakeLoop(segments=[segment_spec([3.0] * 16, "local fallback answer", eos=True)])
     deps = AgentDeps(
         memory=MemoryStore(tmp_path / "data"), ChatMessage=Msg, ChatRequest=Req,
-        generation_loop=lambda req: iter([]), append_event=lambda e: None,
+        generation_loop=local, append_event=lambda e: None,
+        # no frontier_loop configured
     )
     agent = NFETAgent(deps)
-    with pytest.raises(RuntimeError, match="no frontier loop"):
-        agent.run(NFETAgentRequest(command="x", reasoner="claude"))
+    out = agent.run(NFETAgentRequest(command="explain lolm", reasoner="claude", max_segments=1))
+    assert out.get("ended_by") is not None
+    assert out["result"]["response"].strip()
