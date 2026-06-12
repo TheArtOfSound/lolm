@@ -14,3 +14,4 @@ uvicorn[standard]>=0.30.0
 pydantic>=2.7.0
 requests>=2.32.0
 playwright>=1.40.0
+pynacl>=1.5.0

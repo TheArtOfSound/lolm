@@ -138,6 +138,9 @@
   <div class="activity" id="activity"></div>
   <div class="answer" id="answer"><div class="answer-label">final answer</div><span id="answerText"></span></div>
   <div class="friendly-receipt" id="receipt"></div>
+  <button id="sealBtn" style="display:none;margin-top:10px;background:var(--bg2);border:1px solid var(--line);color:var(--dim);border-radius:9px;font-family:var(--mono);font-size:12px;padding:8px 14px;cursor:pointer"
+          title="Seal this run into an encrypted QEV vault file (BRY-NFET-SX-VAULT-V2). Opens at secure.imagineqira.com.">⛨ Seal this run — encrypted vault</button>
+  <span id="sealNote" style="font-family:var(--mono);font-size:11px;color:var(--faint);margin-left:8px"></span>
   <details class="behind" id="behind" style="display:none">
     <summary>Behind the scenes — the working draft it wrote first</summary>
     <pre id="draftText"></pre>
@@ -273,6 +276,20 @@
           if (cut >= t.length * 0.5) $('answerText').textContent = t.slice(0, cut+1);
         }
       }
+      // layered receipt: contract honesty + the QEV seal action
+      if (data && data.receipt){
+        const rc = data.receipt, r = $('receipt');
+        if (rc.task_contract_passed === false){
+          r.innerHTML += '<div class="row" style="color:var(--amber)">Contract check: the answer missed what was explicitly asked (' +
+            (rc.reasons||[]).join(', ') + ') — telemetry alone is never success.</div>';
+        } else if (rc.task_contract_passed === true){
+          r.innerHTML += '<div class="row" style="color:var(--green)">Contract check: every explicit requirement in your prompt was met.</div>';
+        }
+        if ((rc.warnings||[]).length)
+          r.innerHTML += '<div class="row">⚠ ' + rc.warnings.join(' · ') + '</div>';
+        lastRunForSeal = true;
+        $('sealBtn').style.display = 'inline-block';
+      }
       if (data && Array.isArray(data.provenance) && data.provenance.length){
         const r = $('receipt');
         r.innerHTML += '<div class="row">What it actually did: ' + data.provenance.join(' · ') + '</div>';
@@ -303,6 +320,32 @@
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   let activeBase = '/api/demo';
+  let lastRunForSeal = false;
+
+  $('sealBtn').addEventListener('click', async () => {
+    if (!lastRunForSeal) return;
+    const pw = prompt('Choose a passphrase for this vault (min 8 characters).\nIt is used once to encrypt and is never stored — if you lose it, the vault cannot be opened.');
+    if (!pw) return;
+    if (pw.length < 8) { $('sealNote').textContent = 'passphrase too short (min 8)'; return; }
+    if (prompt('Type the same passphrase again to confirm:') !== pw){
+      $('sealNote').textContent = 'passphrases did not match'; return;
+    }
+    $('sealNote').textContent = 'sealing…';
+    try {
+      const resp = await fetch(activeBase + '/vault/seal', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({passphrase: pw})});
+      const out = await resp.json();
+      if (!resp.ok){ $('sealNote').textContent = 'seal failed: ' + (out.error||resp.status); return; }
+      const blob = new Blob([JSON.stringify(out.envelope, null, 2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'qira-agent-vault-' + out.envelope_id.slice(0,8) + '.vault.json';
+      a.click(); URL.revokeObjectURL(a.href);
+      $('sealNote').innerHTML = 'sealed · id ' + out.envelope_id.slice(0,12) +
+        ' · opens at <a href="https://secure.imagineqira.com/vault/" target="_blank" rel="noopener">secure.imagineqira.com</a>' +
+        ' · proves integrity &amp; custody, never factual correctness';
+    } catch(e){ $('sealNote').textContent = 'seal failed: ' + e.message; }
+  });
 
   async function runLive(q){
     if (playing) return; playing = true;

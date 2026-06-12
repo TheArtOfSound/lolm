@@ -750,6 +750,12 @@ WORKING DRAFT:
             f"Ended by: {ended_by}"
         )
 
+        # Layered honest receipt (qira.run.receipt.v1): prompt / control /
+        # answer-contract / evidence / vault / integrity evaluated
+        # independently — telemetry activity is never task success.
+        from lolm.run_receipt import build_receipt
+        receipt = build_receipt(command, final.text, timeline, ended_by, profile=profile)
+
         result = {
             "command": command,
             "reasoner": req.reasoner,
@@ -765,10 +771,12 @@ WORKING DRAFT:
             "ended_by": ended_by,
             "provenance": provenance,
             "proof": proof,
+            "receipt": receipt,
             "saved_learning_type": "nfet_agent_run",
         }
         self.last_run = result
         yield {"event": "proof", "data": proof}
+        yield {"event": "receipt", "data": receipt}
         yield {"event": "run_done", "data": result}
 
     def run(self, req: NFETAgentRequest) -> Dict[str, Any]:

@@ -63,6 +63,9 @@ register_demo_routes(
     model_ready_fn=lambda: STATE.backbone is not None,
 )
 
+from local_ui.vault_routes import register_vault_routes
+register_vault_routes(app, AGENT)
+
 
 def _load_model_background() -> None:
     ckpt = GRAFT_CKPT if GRAFT_CKPT and Path(GRAFT_CKPT).exists() else None

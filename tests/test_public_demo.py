@@ -164,3 +164,46 @@ def test_demo_stats_route(tmp_path):
     client = TestClient(app)
     stats = client.get("/api/demo/stats").json()
     assert stats["total_runs"] == 0  # no log configured in test app
+
+
+def test_vault_seal_and_verify_roundtrip(tmp_path):
+    from local_ui.vault_routes import register_vault_routes
+    app, _ = make_app(tmp_path)
+    client = TestClient(app)
+    # produce a run so last_run exists, then register vault routes on same app
+    run_resp = client.post("/api/demo/run/stream", json={"command": "explain lolm"})
+    assert run_resp.status_code == 200
+    # the agent instance lives inside make_app's closure — rebuild cleanly:
+    from tests.test_nfet_agent import FakeLoop, make_agent, segment_spec
+    agent, _ = make_agent(tmp_path / "v", FakeLoop(segments=[
+        segment_spec([3.0] * 28, "steady segment", eos=True)]))
+    out = agent.run(__import__("local_ui.nfet_agent", fromlist=["NFETAgentRequest"])
+                    .NFETAgentRequest(command="explain the gate", max_segments=1))
+    assert out.get("receipt", {}).get("receipt_schema") == "qira.run.receipt.v1"
+
+    from fastapi import FastAPI
+    vapp = FastAPI()
+    register_vault_routes(vapp, agent)
+    vclient = TestClient(vapp)
+
+    sealed = vclient.post("/api/demo/vault/seal", json={"passphrase": "a strong passphrase"})
+    assert sealed.status_code == 200, sealed.text
+    env = sealed.json()
+    assert env["envelope"]["schema"] == "BRY-NFET-SX-VAULT-V2"
+    assert env["envelope_id"]
+
+    verified = vclient.post("/api/demo/vault/verify",
+                            json={"passphrase": "a strong passphrase",
+                                  "envelope": env["envelope"]})
+    assert verified.status_code == 200, verified.text
+    v = verified.json()
+    assert v["integrity"]["aead_authenticated"] is True
+    assert v["integrity"]["payload_hash_match"] is True
+    assert v["payload"]["command"] == "explain the gate"
+    assert v["receipt"]["artifact_integrity_verified"] is True
+
+    wrong = vclient.post("/api/demo/vault/verify",
+                         json={"passphrase": "wrong wrong wrong",
+                               "envelope": env["envelope"]})
+    assert wrong.status_code == 400
+    assert wrong.json()["reason"] == "wrong_passphrase_or_tampered"

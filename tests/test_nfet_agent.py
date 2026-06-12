@@ -267,7 +267,7 @@ def test_run_events_protocol_order_and_content(tmp_path):
 
     assert names[0] == "run_start"
     assert "segment_start" in names and "decision" in names and "action" in names
-    assert names[-2:] == ["proof", "run_done"]
+    assert names[-3:] == ["proof", "receipt", "run_done"]
     # token streaming present, channel-tagged
     token_events = [e for e in events if e["event"] == "token"]
     assert token_events, "expected streamed tokens"

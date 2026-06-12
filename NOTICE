@@ -9,3 +9,9 @@ See the LICENSE file for the full license text.
 This project implements a novel hybrid Transformer-SSM language model
 architecture with discrete regime detection, persistent memory, and
 learned gating between surface and latent representations.
+
+Qira Agent Vault, QEV sealing, run receipts, and related schemas:
+Copyright (c) 2026 Qira LLC. All rights reserved.
+No commercial use, reproduction, hosting, redistribution, derivative product,
+or competing service use is authorized except under a written license signed
+by Qira LLC.
