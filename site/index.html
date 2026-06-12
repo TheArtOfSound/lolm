@@ -8,6 +8,7 @@
 <meta property="og:title" content="LOLM — Latent Order Language Model">
 <meta property="og:description" content="Five parallel streams, one fused representation. An agent that measures its uncertainty instead of guessing it. Patent pending — Qira LLC.">
 <meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2307090d'/%3E%3Cpath d='M5 7 Q20 7 26 16' stroke='%234ea1ff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 12 Q19 12 26 16' stroke='%23b07fff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 16 H26' stroke='%23ffb454' stroke-width='2.2'/%3E%3Cpath d='M5 20 Q19 20 26 16' stroke='%233fd6a0' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 25 Q20 25 26 16' stroke='%23ff6b81' stroke-width='2.2' fill='none'/%3E%3Ccircle cx='26' cy='16' r='2.6' fill='%23d7dde6'/%3E%3C/svg%3E">
 <meta property="og:url" content="https://lolm.imagineqira.com">
 <meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -50,6 +51,17 @@
   .btn.ghost:hover{border-color:var(--faint);text-decoration:none}
 
   #streams{display:block;width:100%;height:240px;margin:36px 0 0;border:1px solid var(--line);border-radius:14px;background:var(--bg2)}
+
+  /* dev install strip — terminal styling, no decoration */
+  .devstrip{margin:40px 0 0;border:1px solid var(--line);border-radius:14px;background:var(--bg2);overflow:hidden}
+  .devstrip .bar{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .devstrip .bar .d{width:10px;height:10px;border-radius:50%;background:var(--line)}
+  .devstrip .bar a{margin-left:auto;color:var(--dim)}
+  .devstrip pre{margin:0;padding:16px 18px;font-family:var(--mono);font-size:13px;line-height:1.75;color:var(--text);overflow-x:auto}
+  .devstrip .c{color:var(--faint)} .devstrip .p{color:var(--green)} .devstrip .s{color:var(--dim)}
+  .devstrip .copy{float:right;background:var(--panel);border:1px solid var(--line);color:var(--dim);border-radius:6px;font-family:var(--mono);font-size:11px;padding:3px 10px;cursor:pointer}
+  .devstrip .copy:hover{color:var(--text);border-color:var(--faint)}
+  @media (max-width:720px){ nav .links a.lowpri{display:none} }
 
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:44px 0 8px}
   .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
@@ -177,11 +189,12 @@
   <span class="links">
     <a href="try.html">Try it</a>
     <a href="#architecture">Architecture</a>
-    <a href="#results">Results</a>
-    <a href="#agent">NFET Agent</a>
-    <a href="#different">Why different</a>
-    <a href="#build">Use it</a>
-    <a href="#cite">Cite</a>
+    <a href="#results" class="lowpri">Results</a>
+    <a href="#agent">Agent</a>
+    <a href="#different" class="lowpri">Why different</a>
+    <a href="#build" class="lowpri">Use it</a>
+    <a href="https://www.npmjs.com/package/lolm-nfet-client" rel="noopener" target="_blank">npm</a>
+    <a href="#cite" class="lowpri">Cite</a>
   </span>
 </nav></div></header>
 
@@ -205,6 +218,23 @@
     <a class="btn ghost" href="#architecture">See the architecture</a>
   </div>
   <canvas id="streams" aria-hidden="true"></canvas>
+</div>
+
+<div class="devstrip">
+  <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span>
+    <span>lolm-nfet-client · v0.1.1 · MIT</span>
+    <a href="https://www.npmjs.com/package/lolm-nfet-client" rel="noopener" target="_blank">npmjs.com →</a>
+  </div>
+  <pre><button class="copy" data-copy="npm install lolm-nfet-client">copy</button><span class="p">$</span> npm install lolm-nfet-client
+
+<span class="c">// stream a live run — every token, decision and receipt</span>
+<span class="s">import</span> { runAgent, friendly } <span class="s">from</span> <span class="p">'lolm-nfet-client'</span>;
+
+<span class="s">const</span> run = <span class="s">await</span> runAgent({
+  command: <span class="p">'why is the sky blue?'</span>,
+  onEvent: ev =&gt; { <span class="s">const</span> line = friendly(ev); <span class="s">if</span> (line) console.log(line); },
+  onProof: p  =&gt; console.log(p.verdict),     <span class="c">// honest receipt, every run</span>
+});</pre>
 </div>
 
 <div class="stats">
@@ -473,7 +503,7 @@
 <footer>
   <div class="row">
     <div>© 2026 <b>Qira LLC</b> — Bryan Leonard &amp; Brandyn Leonard · Patent pending</div>
-    <div><a href="https://lolm-edge.bryanleonard237.workers.dev">system status</a> · <a href="https://imagineqira.com">imagineqira.com</a></div>
+    <div><a href="https://www.npmjs.com/package/lolm-nfet-client">npm: lolm-nfet-client v0.1.1</a> · <a href="https://lolm-edge.bryanleonard237.workers.dev">status</a> · <a href="https://imagineqira.com">imagineqira.com</a></div>
   </div>
 </footer>
 
@@ -536,6 +566,15 @@
   window.addEventListener('resize', resize);
   resize(); step();
 })();
+
+document.querySelectorAll('.devstrip .copy').forEach(btn => {
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(btn.dataset.copy).then(() => {
+      btn.textContent = 'copied';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1400);
+    });
+  });
+});
 
 /* ── demo theater ──────────────────────────────────────────────── */
 (function(){
