@@ -141,7 +141,7 @@ export default {
       let body;
       try { body = await request.json(); } catch { return json({ error: "bad json" }, 400); }
       const messages = Array.isArray(body.messages) ? body.messages : [];
-      const max_tokens = Math.min(Math.max(parseInt(body.max_tokens) || 512, 16), 4096);
+      const max_tokens = Math.min(Math.max(parseInt(body.max_tokens) || 512, 16), 8192);
       const model = body.model || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
       const t0 = Date.now();
       try {

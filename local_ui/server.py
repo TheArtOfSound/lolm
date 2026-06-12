@@ -64,6 +64,9 @@ class ChatRequest(BaseModel):
     top_p: float = 0.95
     use_graft: bool = True
     ablation_mode: str = "full"
+    telemeter: bool = True   # frontier reasoners skip the local graft re-read
+                             # when False (e.g. the final answer needs no control
+                             # telemetry — no decision follows it)
 
 
 class FeedbackRequest(BaseModel):

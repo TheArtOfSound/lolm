@@ -91,9 +91,15 @@ class WorkersAIReasonerLoop:
         state = self.state_fn()
         backbone = getattr(state, "backbone", None)
         graft = getattr(state, "graft", None)
-        try:
-            traces = telemetry_traces_from_text(backbone, graft, text)
-        except Exception:
+        # The final answer needs no control telemetry (no decision follows it),
+        # so the agent passes telemeter=False there — skipping the local 0.6B
+        # re-read over the longest text, which is the main per-run latency cost.
+        if getattr(req, "telemeter", True):
+            try:
+                traces = telemetry_traces_from_text(backbone, graft, text)
+            except Exception:
+                traces = []
+        else:
             traces = []
 
         yield {"event": "start", "data": {

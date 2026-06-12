@@ -193,13 +193,16 @@ class NFETAgent:
     def _collect_stream(self, messages: List[Any], req: NFETAgentRequest, *, tokens: int,
                         temperature: Optional[float] = None, use_graft: Optional[bool] = None,
                         channel: Optional[str] = None, segment: Optional[int] = None,
+                        telemeter: bool = True,
                         ) -> Generator[Dict[str, Any], None, SegmentResult]:
         """Drive one generation call; yield compact token events, return the result.
 
         When ``channel`` is None the call is silent (no token events) — used for
-        the base-mode comparison shot.
+        the base-mode comparison shot. ``telemeter=False`` tells a frontier
+        reasoner to skip the local graft re-read (the control loop only needs
+        telemetry on drafts, never on the final answer).
         """
-        chat_req = self.deps.ChatRequest(
+        chat_kwargs = dict(
             messages=messages,
             max_new_tokens=tokens,
             temperature=req.temperature if temperature is None else temperature,
@@ -207,6 +210,10 @@ class NFETAgent:
             use_graft=req.use_graft if use_graft is None else use_graft,
             ablation_mode=req.ablation_mode,
         )
+        try:
+            chat_req = self.deps.ChatRequest(**chat_kwargs, telemeter=telemeter)
+        except TypeError:
+            chat_req = self.deps.ChatRequest(**chat_kwargs)   # older/test ChatRequest
         text = ""
         frames: List[TelemetryFrame] = []
         last_logits: Optional[List[float]] = None
@@ -492,7 +499,7 @@ WORKING DRAFT:
 {draft}"""
         result = yield from self._collect_stream(
             [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
-            req, tokens=req.final_tokens, channel="final",
+            req, tokens=req.final_tokens, channel="final", telemeter=False,
         )
         if int(result.raw.get("tokens") or 0) >= req.final_tokens:
             trimmed = self._trim_to_sentence(result.text)
