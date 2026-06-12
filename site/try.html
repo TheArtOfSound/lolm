@@ -11,30 +11,38 @@
 <meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
 <meta property="og:url" content="https://lolm.imagineqira.com/try.html">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2307090d'/%3E%3Cpath d='M5 7 Q20 7 26 16' stroke='%234ea1ff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 12 Q19 12 26 16' stroke='%23b07fff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 16 H26' stroke='%23ffb454' stroke-width='2.2'/%3E%3Cpath d='M5 20 Q19 20 26 16' stroke='%233fd6a0' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 25 Q20 25 26 16' stroke='%23ff6b81' stroke-width='2.2' fill='none'/%3E%3Ccircle cx='26' cy='16' r='2.6' fill='%23d7dde6'/%3E%3C/svg%3E">
-<meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://lolm.imagineqira.com/og-card.png">
 <style>
   :root{
-    --bg:#07090d; --bg2:#0c1016; --panel:#11161f; --line:#1d2530;
-    --text:#d7dde6; --dim:#8b96a5; --faint:#5a6675;
-    --blue:#4ea1ff; --purple:#b07fff; --amber:#ffb454; --green:#3fd6a0; --pink:#ff6b81;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    /* shared design system with the LOLM landing page (one neutral slate ramp
+       + one brand accent; the five data colors only encode the five streams) */
+    --bg:#0a0e15; --bg2:#0e131d; --panel:#131a25; --panel-2:#19212e;
+    --line:#212a39; --line-2:#2d3849;
+    --t-hi:#eef2f8; --text:#c5cedb; --dim:#8a96a8; --faint:#5b6679;
+    --accent:#5b8def; --accent-2:#7c6cf0; --good:#3fcf9a;
+    /* data palette — agent activity dots / telemetry, not decoration */
+    --blue:#4f9bf2; --purple:#a98cf0; --amber:#e3a857; --green:#43cb9c; --pink:#ef7088;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:"Inter var","Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
-  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  html{overflow-x:hidden}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;
+       letter-spacing:-.003em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  h1,h2,h3{color:var(--t-hi);letter-spacing:-.02em}
+  a{color:var(--accent);text-decoration:none;transition:color .15s} a:hover{color:var(--t-hi)}
+  ::selection{background:rgba(91,141,239,.28)}
   .wrap{max-width:760px;margin:0 auto;padding:0 20px}
-  header{position:sticky;top:0;z-index:10;background:rgba(7,9,13,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  header{position:sticky;top:0;z-index:10;background:rgba(10,14,21,.78);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
   nav{display:flex;align-items:center;height:54px;gap:14px}
   .brand{font-family:var(--mono);font-weight:700;letter-spacing:.12em;font-size:14px;color:var(--text)}
-  .brand b{color:var(--blue)}
+  .brand b{color:var(--accent)}
   nav a.right{margin-left:auto;font-size:13px;color:var(--dim)}
 
   .hero{padding:54px 0 10px;text-align:center}
   h1{font-size:clamp(28px,6vw,44px);line-height:1.12;letter-spacing:-.015em}
-  h1 em{font-style:normal;background:linear-gradient(92deg,var(--blue),var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent}
+  h1 em{font-style:normal;background:linear-gradient(96deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
   .hero p{margin:16px auto 0;max-width:560px;color:var(--dim);font-size:16.5px}
   .honest{margin:22px auto 0;max-width:560px;font-size:13px;color:var(--faint);background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px 16px}
   .honest b{color:var(--dim)}
@@ -44,14 +52,14 @@
   .ex-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   @media (max-width:560px){ .ex-grid{grid-template-columns:1fr} }
   .ex{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer;text-align:left;color:var(--text);font-size:14.5px;font-family:var(--sans);transition:border-color .15s}
-  .ex:hover{border-color:var(--blue)}
+  .ex:hover{border-color:var(--accent)}
   .ex small{display:block;color:var(--faint);font-size:11.5px;margin-top:5px;font-family:var(--mono)}
   .ex small.live-tag{color:#caa45a}
 
   .ask{display:flex;gap:10px;margin:22px 0 6px}
   .ask input{flex:1;background:var(--bg2);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:14px 16px;font-size:15.5px}
-  .ask input:focus{outline:none;border-color:var(--blue)}
-  .ask button{background:var(--blue);color:#06121f;border:none;border-radius:12px;padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer}
+  .ask input:focus{outline:none;border-color:var(--accent)}
+  .ask button{background:var(--accent);color:#fff;border:none;border-radius:12px;padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer}
   .ask button[disabled]{opacity:.45;cursor:not-allowed}
   .ask button.stopping{background:var(--pink);color:#1a0509}
   .follow-row{display:none;justify-content:space-between;align-items:center;gap:10px;margin:-2px 0 10px;font-size:12px;color:var(--faint)}
@@ -61,7 +69,7 @@
   .backend-row{display:none;justify-content:center;gap:8px;margin:-2px 0 8px}
   .backend-row.on{display:flex}
   .be-chip{font-family:var(--mono);font-size:11.5px;border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:999px;padding:5px 13px;cursor:pointer}
-  .be-chip.active{border-color:var(--blue);color:var(--text)}
+  .be-chip.active{border-color:var(--accent);color:var(--t-hi)}
   .be-chip[disabled]{opacity:.4;cursor:not-allowed}
   .be-chip .lab{color:var(--purple)}
 
@@ -92,7 +100,7 @@
   #answerText.md ul,#answerText.md ol{margin:0 0 10px;padding-left:22px} #answerText.md li{margin:3px 0}
   #answerText.md code{font-family:var(--mono);font-size:.88em;background:var(--bg2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
   #answerText.md pre.md-code{font-family:var(--mono);font-size:12.5px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;margin:0 0 10px;white-space:pre}
-  #answerText.md strong{color:var(--text)} #answerText.md a{color:var(--blue)}
+  #answerText.md strong{color:var(--t-hi)} #answerText.md a{color:var(--accent)}
 
   .friendly-receipt{display:none;margin-top:16px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px 18px;font-size:13.5px;color:var(--dim)}
   .friendly-receipt.on{display:block}

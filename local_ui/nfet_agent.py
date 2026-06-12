@@ -480,16 +480,42 @@ DRAFT:
             )
             user = f"COMMAND:\n{command}"
         else:
-            # The model writes ONLY the answer. What the agent did (notes used,
-            # checks run) is reported by the harness from the action log — a
-            # model-written provenance section can be confabulated; this cannot.
-            system = (
-                "You are the finalizer of an agent. Using the working draft and the "
-                "evidence, write the final answer to the COMMAND as clear, complete "
-                "prose. Write ONLY the answer itself — no section headers, no lists "
-                "of what you used or verified, no commentary about your process. "
-                "The system reports provenance separately."
-            )
+            # When the COMMAND itself demands an exact format (sections, counts,
+            # "no intro"), the user's contract outranks our house style — the
+            # finalizer must obey it verbatim. Otherwise: prose only, because
+            # model-written provenance sections can be confabulated; the harness
+            # reports what actually happened from the action log.
+            from lolm.run_receipt import parse_contract
+            contract = parse_contract(command)
+            if contract.get("has_contract"):
+                demands = []
+                if contract.get("required_sections"):
+                    demands.append("produce EXACTLY these section headings, verbatim, in order: "
+                                   + ", ".join(contract["required_sections"]))
+                if contract.get("exact_hypotheses"):
+                    demands.append(f"give EXACTLY {contract['exact_hypotheses']} hypotheses — "
+                                   "no more, no fewer")
+                if contract.get("required_facts"):
+                    demands.append("mention every numbered fact from the COMMAND; "
+                                   "invent no entities, objects, or people not in the facts")
+                if contract.get("no_intro"):
+                    demands.append("no introduction, no preamble — start directly")
+                system = (
+                    "You are the finalizer of an agent. The COMMAND specifies an exact "
+                    "output format and it is binding. Follow it precisely: "
+                    + "; ".join(demands) +
+                    ". If the command's task is impossible or underdetermined, say so "
+                    "plainly inside the requested format rather than guessing."
+                )
+            else:
+                system = (
+                    "You are the finalizer of an agent. Using the working draft and the "
+                    "evidence, write the final answer to the COMMAND as clear, complete "
+                    "prose. Write ONLY the answer itself — no section headers, no lists "
+                    "of what you used or verified, no commentary about your process. "
+                    "The system reports provenance separately. If the task is impossible "
+                    "or underdetermined, say so plainly instead of guessing."
+                )
             user = f"""COMMAND:
 {command}
 

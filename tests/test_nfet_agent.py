@@ -92,7 +92,7 @@ class FakeLoop:
 
     def __call__(self, req: Any) -> Iterator[Dict[str, Any]]:
         system = req.messages[0].content if req.messages else ""
-        self.calls.append({"system": system[:200], "user": req.messages[-1].content,
+        self.calls.append({"system": system[:800], "user": req.messages[-1].content,
                            "temperature": req.temperature, "use_graft": req.use_graft})
         if "normal local chatbot" in system:
             yield from self._plain(self.base_text)
@@ -483,3 +483,35 @@ def test_classify_command_question_marks_across_scripts():
     # greetings still social; statements still task
     assert classify_command("Hello") == "social"
     assert classify_command("produce code for a snake game") == "task"
+
+
+def test_finalizer_obeys_explicit_format_contract(tmp_path):
+    """A command demanding exact sections must reach the finalizer as a binding
+    format contract — house prose style must not override the user."""
+    cmd = """Use exactly this format. No intro.
+
+FACTS:
+1. Keypad accepted valid code at 09:13:06.
+2. Door opened at 09:13:08.
+
+## Timeline
+## Conclusion
+
+Rules:
+- Mention all 2 facts.
+- Give exactly three hypotheses."""
+    loop = FakeLoop(segments=[segment_spec([3.0] * 24, "draft text", eos=True)])
+    agent, _ = make_agent(tmp_path, loop)
+    agent.run(NFETAgentRequest(command=cmd, max_segments=1))
+    finalizer_calls = [c for c in loop.calls if "finalizer" in c["system"]]
+    assert finalizer_calls, "finalizer never called"
+    sys_prompt = finalizer_calls[-1]["system"]
+    assert "EXACTLY these section headings" in sys_prompt
+    assert "EXACTLY 3 hypotheses" in sys_prompt
+    assert "no preamble" in sys_prompt or "start directly" in sys_prompt
+    # and a plain command keeps prose-only style
+    loop2 = FakeLoop(segments=[segment_spec([3.0] * 24, "draft", eos=True)])
+    agent2, _ = make_agent(tmp_path / "b", loop2)
+    agent2.run(NFETAgentRequest(command="explain how rainbows form for a curious adult", max_segments=1))
+    sys2 = [c for c in loop2.calls if "finalizer" in c["system"]][-1]["system"]
+    assert "no section headers" in sys2
