@@ -214,44 +214,76 @@ class NFETAgent:
             chat_req = self.deps.ChatRequest(**chat_kwargs, telemeter=telemeter)
         except TypeError:
             chat_req = self.deps.ChatRequest(**chat_kwargs)   # older/test ChatRequest
+
+        # Resilience: a frontier reasoner (Workers AI/Claude) can be down or out
+        # of quota. If it fails BEFORE producing any token, fall back to the
+        # local model rather than hard-failing the whole run. Order: configured
+        # reasoner first, then the local generation loop as a safety net.
+        loops: List[tuple] = []
+        if req.reasoner != "local" and self.deps.frontier_loop is not None:
+            loops.append(("frontier", self.deps.frontier_loop))
+        loops.append(("local", self.deps.generation_loop))
+
         text = ""
         frames: List[TelemetryFrame] = []
         last_logits: Optional[List[float]] = None
         token_count = 0
         final: Optional[Dict[str, Any]] = None
+        fell_back_from: Optional[str] = None
+        last_error: Optional[str] = None
         started = time.perf_counter()
-        for event in self._loop_for(req)(chat_req):
-            kind = event.get("event")
-            data = event.get("data", {})
-            if kind == "error":
-                raise RuntimeError(data.get("error", "generation failed"))
-            if kind == "token":
-                text += data.get("token", "")
-                token_count += 1
-                trace = data.get("trace") or {}
-                if trace.get("used_graft"):
-                    frames.append(TelemetryFrame.from_trace(trace, step=token_count))
-                    logits = trace.get("control_logits")
-                    if isinstance(logits, list) and logits:
-                        last_logits = [float(x) for x in logits]
-                if channel is not None:
-                    compact: Dict[str, Any] = {"token": data.get("token", ""), "channel": channel}
-                    if segment is not None:
-                        compact["segment"] = segment
+
+        for attempt_idx, (label, loop) in enumerate(loops):
+            text = ""; frames = []; last_logits = None; token_count = 0; final = None
+            produced = 0
+            errored = False
+            for event in loop(chat_req):
+                kind = event.get("event")
+                data = event.get("data", {})
+                if kind == "error":
+                    last_error = data.get("error", "generation failed")
+                    errored = True
+                    break
+                if kind == "token":
+                    text += data.get("token", "")
+                    token_count += 1
+                    produced += 1
+                    trace = data.get("trace") or {}
                     if trace.get("used_graft"):
-                        compact["nfet"] = {
-                            "entropy": trace.get("graft_entropy"),
-                            "drift": trace.get("hidden_drift"),
-                            "gate": trace.get("gate_mean"),
-                            "regime": trace.get("regime_entropy"),
-                            "control": trace.get("control"),
-                        }
-                    yield {"event": "token", "data": compact}
-            if kind == "done":
-                final = data
+                        frames.append(TelemetryFrame.from_trace(trace, step=token_count))
+                        logits = trace.get("control_logits")
+                        if isinstance(logits, list) and logits:
+                            last_logits = [float(x) for x in logits]
+                    if channel is not None:
+                        compact: Dict[str, Any] = {"token": data.get("token", ""), "channel": channel}
+                        if segment is not None:
+                            compact["segment"] = segment
+                        if trace.get("used_graft"):
+                            compact["nfet"] = {
+                                "entropy": trace.get("graft_entropy"),
+                                "drift": trace.get("hidden_drift"),
+                                "gate": trace.get("gate_mean"),
+                                "regime": trace.get("regime_entropy"),
+                                "control": trace.get("control"),
+                            }
+                        yield {"event": "token", "data": compact}
+                if kind == "done":
+                    final = data
+            if not errored and final is not None:
+                break  # this loop succeeded
+            # Only fall back when the failure was clean (no tokens emitted yet)
+            # and another loop remains; otherwise surface the error.
+            if produced == 0 and attempt_idx + 1 < len(loops):
+                fell_back_from = label
+                continue
+            raise RuntimeError(last_error or "generation failed")
+
         elapsed = max(time.perf_counter() - started, 1e-9)
         if final is None:
             final = {"response": text, "tokens": token_count}
+        if fell_back_from:
+            final["fell_back_from"] = fell_back_from
+            final["fallback_reason"] = last_error
         final["seconds"] = elapsed
         final["tok_per_sec"] = token_count / elapsed
         hit_eos = token_count < tokens

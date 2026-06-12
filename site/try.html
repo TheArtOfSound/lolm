@@ -333,6 +333,12 @@
       r.classList.add('on');
     } else if (event === 'run_done'){
       playing = false;
+      // honest signal when the frontier brain was unavailable (e.g. out of
+      // daily quota) and the run fell back to the small local model
+      if (data && data.result && data.result.fell_back_from === 'frontier'){
+        addAct('check', '<b>Frontier model unavailable</b> — answered with the small local model instead',
+               '(the 70B daily quota is used up; resets daily)');
+      }
       // settle on the best final text, then render markdown (the model emits
       // **bold**, lists, and code — rendering them is the difference between
       // looking like a real product and looking like raw model output)

@@ -148,7 +148,13 @@ export default {
         const r = await env.AI.run(model, { messages, max_tokens });
         return json({ text: (r && r.response) || "", model, ms: Date.now() - t0 });
       } catch (e) {
-        return json({ error: String(e).slice(0, 200), model }, 502);
+        const msg = String(e);
+        // Quota exhaustion (free-tier neuron cap) is expected and recoverable —
+        // signal it cleanly so the origin falls back to local instead of
+        // treating it as a server fault.
+        const quota = /neuron|allocation|4006|Paid plan|rate.?limit/i.test(msg);
+        return json({ error: msg.slice(0, 200), model, quota_exhausted: quota },
+                    quota ? 429 : 502);
       }
     }
 

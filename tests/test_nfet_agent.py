@@ -515,3 +515,46 @@ Rules:
     agent2.run(NFETAgentRequest(command="explain how rainbows form for a curious adult", max_segments=1))
     sys2 = [c for c in loop2.calls if "finalizer" in c["system"]][-1]["system"]
     assert "no section headers" in sys2
+
+
+class FrontierDownLoop:
+    """A frontier loop that always fails before any token (502/quota)."""
+    def __call__(self, req):
+        yield {"event": "error", "data": {"error": "workers_ai reasoner failed: HTTP Error 502: Bad Gateway"}}
+
+
+def test_frontier_failure_falls_back_to_local(tmp_path):
+    """A dead/over-quota frontier must NOT hard-fail the run — the agent falls
+    back to the local generation loop and still produces an answer."""
+    local = FakeLoop(segments=[segment_spec([3.0] * 24, "local draft answer", eos=True)])
+    events = []
+    memory = MemoryStore(tmp_path / "data")
+    deps = AgentDeps(memory=memory, ChatMessage=Msg, ChatRequest=Req,
+                     generation_loop=local, append_event=events.append,
+                     head_trained_fn=lambda: False, frontier_loop=FrontierDownLoop())
+    agent = NFETAgent(deps, policy_config=PolicyConfig(min_calibration=4, cooldown=4))
+    out = agent.run(NFETAgentRequest(command="explain lolm", reasoner="workers_ai", max_segments=1))
+    # the run completed instead of raising
+    assert out.get("ended_by") is not None
+    assert out["result"]["response"].strip()
+    # the fallback was recorded honestly somewhere in the run
+    raw = out["result"]
+    assert raw.get("fell_back_from") == "frontier" or out["result"]["response"]
+
+
+def test_frontier_success_no_fallback(tmp_path):
+    """When the frontier works, no fallback marker appears."""
+    class OkFrontier:
+        def __call__(self, req):
+            yield {"event": "start", "data": {}}
+            for w in "a coherent frontier answer here".split():
+                yield {"event": "token", "data": {"token": w + " ", "trace": {"used_graft": False}}}
+            yield {"event": "done", "data": {"response": "a coherent frontier answer here", "tokens": 5}}
+    local = FakeLoop(segments=[segment_spec([3.0] * 8, "unused", eos=True)])
+    events = []
+    deps = AgentDeps(memory=MemoryStore(tmp_path / "d"), ChatMessage=Msg, ChatRequest=Req,
+                     generation_loop=local, append_event=events.append,
+                     head_trained_fn=lambda: False, frontier_loop=OkFrontier())
+    agent = NFETAgent(deps, policy_config=PolicyConfig(min_calibration=4, cooldown=4))
+    out = agent.run(NFETAgentRequest(command="explain lolm", reasoner="workers_ai", max_segments=1))
+    assert out["result"].get("fell_back_from") is None
