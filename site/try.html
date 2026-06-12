@@ -248,7 +248,8 @@
       if (checks.retrieve) bits.push(checks.retrieve + '× checked notes');
       if (checks.verify) bits.push(checks.verify + '× double-checked');
       if (checks.branch) bits.push(checks.branch + '× explored paths');
-      bits.push((100 - Math.round((data.word_similarity||0)*100)) + '% different from the plain answer');
+      if (typeof data.word_similarity === 'number')
+        bits.push((100 - Math.round(data.word_similarity*100)) + '% different from the plain answer');
       if (ENDED[data.ended_by]) bits.push(ENDED[data.ended_by]);
       r.innerHTML = `<b>Receipt</b> — ${friendly}<div class="row">${bits.join(' · ')}</div>`;
       r.classList.add('on');

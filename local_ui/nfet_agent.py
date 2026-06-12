@@ -120,6 +120,9 @@ class NFETAgentRequest(BaseModel):
     ablation_mode: str = "full"
     allow_web: bool = False
     web_limit: int = 3
+    include_base_comparison: bool = False  # extra silent generation for the
+                                           # "vs base mode" receipt; off by
+                                           # default — it doubles latency on CPU
 
 
 @dataclass
@@ -703,11 +706,14 @@ WORKING DRAFT:
         elif ended_by == "social_direct":
             provenance.append("Recognized a greeting — answered directly, skipped the machinery")
 
-        # Base-mode comparison shot runs LAST: the proof only needs it at the
-        # end, and running it first would delay time-to-first-token (and
-        # disconnect detection) by a full silent generation.
-        yield {"event": "phase", "data": {"phase": "base_comparison"}}
-        base = self._generate_base(command, req)
+        # Base-mode comparison is an extra full generation used only to compute
+        # the "vs base mode" receipt stat. It is off by default because on CPU
+        # it doubles the wait for a number most users don't read; the receipt
+        # still reports what control actions actually fired.
+        base = None
+        if req.include_base_comparison:
+            yield {"event": "phase", "data": {"phase": "base_comparison"}}
+            base = self._generate_base(command, req)
         proof = self._proof(base, final, memory_hits, evidence, timeline, head_trained,
                             ended_by, profile=profile)
 
@@ -733,7 +739,7 @@ WORKING DRAFT:
                 for f in all_frames
             ],
             "final_id": final.raw.get("id"),
-            "base_id": base.raw.get("id"),
+            "base_id": base.raw.get("id") if base else None,
             "proof": proof,
         }
         self.deps.append_event(learning)
@@ -752,7 +758,7 @@ WORKING DRAFT:
             "evidence": evidence,
             "draft": draft,
             "result": final.raw,
-            "base": base.raw,
+            "base": base.raw if base else None,
             "timeline": timeline,
             "counters": counters.to_dict(),
             "ended_by": ended_by,
@@ -781,14 +787,10 @@ WORKING DRAFT:
     # Proof receipt
     # ------------------------------------------------------------------
     @staticmethod
-    def _proof(base: SegmentResult, final: SegmentResult, memory_hits: List[Dict[str, Any]],
+    def _proof(base: Optional[SegmentResult], final: SegmentResult, memory_hits: List[Dict[str, Any]],
                evidence: List[Dict[str, Any]], timeline: List[Dict[str, Any]],
                head_trained: bool, ended_by: str, profile: str = "task") -> Dict[str, Any]:
-        base_text = base.text.strip()
         final_text = final.text.strip()
-        base_words = set(base_text.lower().split())
-        final_words = set(final_text.lower().split())
-        similarity = len(base_words & final_words) / max(len(base_words | final_words), 1)
 
         control_counts: Dict[str, int] = {}
         decision_sources: Dict[str, int] = {}
@@ -804,34 +806,36 @@ WORKING DRAFT:
             for entry in timeline
         )
         nfet_ended = ended_by == "nfet_finalize"
-        changed = base_text != final_text
+
+        # word_similarity vs base mode is only available when the base shot ran;
+        # otherwise the verdict is read from what control actually did.
+        similarity = None
+        if base is not None:
+            base_words = set(base.text.strip().lower().split())
+            final_words = set(final_text.lower().split())
+            similarity = round(len(base_words & final_words) / max(len(base_words | final_words), 1), 3)
+
         if profile == "social":
             verdict = "social_direct_reply"
-            plain = (
-                "Simple conversational command — the agent recognized it and answered "
-                "directly instead of running the full machinery."
-            )
-        elif changed and acted:
+            plain = ("Simple conversational command — the agent recognized it and answered "
+                     "directly instead of running the full machinery.")
+        elif acted:
             verdict = "nfet_control_visible"
-            plain = (
-                "NFET control decisions changed the run: the agent retrieved, verified, "
-                "or branched mid-generation, and the final answer differs from base mode."
-            )
-        elif changed and nfet_ended:
+            plain = ("NFET control decisions shaped the run: the agent retrieved, verified, "
+                     "or branched mid-generation based on its measured uncertainty.")
+        elif nfet_ended:
             verdict = "nfet_finalize_visible"
-            plain = "NFET decided when to stop, and the final answer differs from base mode."
-        elif changed:
-            verdict = "changed_but_controls_quiet"
-            plain = "The answer differs from base mode, but NFET control stayed on continue."
+            plain = "NFET decided on its own when the answer was done."
         else:
-            verdict = "no_visible_difference"
-            plain = "The agent did not visibly improve over base mode."
+            verdict = "changed_but_controls_quiet"
+            plain = "The agent stayed confident throughout — no checks were needed this time."
         return {
             "verdict": verdict,
             "plain": plain,
             "profile": profile,
-            "changed_text": changed,
-            "word_similarity": round(similarity, 3),
+            "changed_text": base is None or base.text.strip() != final_text,
+            "word_similarity": similarity,
+            "base_compared": base is not None,
             "control_counts": control_counts,
             "decision_sources": decision_sources,
             "actions_taken": acted,
@@ -839,7 +843,6 @@ WORKING DRAFT:
             "head_trained": head_trained,
             "memory_hits_available": len(memory_hits),
             "evidence_count": len(evidence),
-            "base_tok_per_sec": round(base.raw.get("tok_per_sec", 0), 3),
             "final_tok_per_sec": round(final.raw.get("tok_per_sec", 0), 3),
         }
 

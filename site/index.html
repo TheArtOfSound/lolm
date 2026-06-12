@@ -644,7 +644,7 @@
         <div class="chips">
           <span class="chip">controls: ${counts||'—'}</span>
           <span class="chip">sources: ${sources||'—'}</span>
-          <span class="chip">vs base similarity: ${fmt(data.word_similarity,2)}</span>
+          ${typeof data.word_similarity === 'number' ? `<span class="chip">vs base similarity: ${fmt(data.word_similarity,2)}</span>` : ''}
           <span class="chip">ended by: ${data.ended_by||'—'}</span>
         </div>`;
       receipt.classList.add('on');
