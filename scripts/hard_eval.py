@@ -477,8 +477,12 @@ EPISTEMIC: List[Dict[str, Any]] = [
                  "hash. Does that prefix uniquely identify one specific 91-word paragraph? "
                  "Answer yes or no and justify with the math."),
      "scorer": lambda ans, rec: {
-         "says_no": bool(re.search(r"\bno\b", ans[:400], re.IGNORECASE)),
-         "quantifies_bits": bool(re.search(r"24[ -]?bits?|16[, ]?777[, ]?216|2\^24|collision", ans, re.IGNORECASE))}},
+         "denies_uniqueness": bool(re.search(
+             r"\bno\b|does not|doesn'?t|cannot|can'?t|not unique|many|multiple|collision|"
+             r"infinit|countless|ambiguous", ans[:500], re.IGNORECASE)),
+         "quantifies_bits": bool(re.search(
+             r"24[ -]?bits?|16[, ]?777[, ]?216|2\^24|16\.7\s*million|collision|pigeonhole",
+             ans, re.IGNORECASE))}},
     {"cid": "ep_truth", "category": "epistemic",
      "command": ("If an encrypted vault decrypts successfully and its SHA-256 hash matches, "
                  "does that prove the AI answer stored inside is factually true? Explain precisely."),
