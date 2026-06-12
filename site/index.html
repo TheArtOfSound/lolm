@@ -149,6 +149,13 @@
   .feed .seg-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
   .feed .seg-text{color:var(--dim);white-space:pre-wrap}
   .feed .seg-text.final-text{color:var(--text);background:rgba(63,214,160,.05);border:1px solid #1d3a31;border-radius:10px;padding:13px 16px}
+  .feed .seg-text.md{white-space:normal}
+  .feed .seg-text.md p{margin:0 0 9px} .feed .seg-text.md p:last-child{margin-bottom:0}
+  .feed .seg-text.md h3,.feed .seg-text.md h4,.feed .seg-text.md h5{font-size:14px;margin:12px 0 5px;color:var(--text)}
+  .feed .seg-text.md ul,.feed .seg-text.md ol{margin:0 0 9px;padding-left:20px} .feed .seg-text.md li{margin:2px 0}
+  .feed .seg-text.md code{font-family:var(--mono);font-size:.88em;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  .feed .seg-text.md pre.md-code{font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:11px 13px;overflow-x:auto;margin:0 0 9px;white-space:pre}
+  .feed .seg-text.md strong{color:var(--text)} .feed .seg-text.md a{color:var(--blue)}
   .decision-badge{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin:14px 0;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel)}
   .decision-badge .dlabel{font-family:var(--mono);font-weight:700;font-size:13.5px}
   .decision-badge .dsource{font-family:var(--mono);font-size:10.5px;border:1px solid var(--line);border-radius:4px;padding:1px 7px;color:var(--dim)}
@@ -502,8 +509,8 @@
 
 <footer>
   <div class="row">
-    <div>© 2026 <b>Qira LLC</b> — Bryan Leonard &amp; Brandyn Leonard · Patent pending</div>
-    <div><a href="https://www.npmjs.com/package/lolm-nfet-client">npm: lolm-nfet-client v0.1.1</a> · <a href="https://lolm-edge.bryanleonard237.workers.dev">status</a> · <a href="https://imagineqira.com">imagineqira.com</a></div>
+    <div>© 2026 <b>Qira LLC</b> · Bryan Leonard &amp; Brandyn Leonard · all rights reserved · patent pending</div>
+    <div><a href="https://www.npmjs.com/package/lolm-nfet-client">npm: lolm-nfet-client</a> · <a href="https://lolm-edge.bryanleonard237.workers.dev">status</a> · <a href="https://secure.imagineqira.com">vault</a> · <a href="https://imagineqira.com">imagineqira.com</a></div>
   </div>
 </footer>
 
@@ -583,6 +590,34 @@ document.querySelectorAll('.devstrip .copy').forEach(btn => {
   const spark = $('spark'), sctx = spark.getContext('2d');
   const CTRL_COLOR = {continue:'#8b96a5', retrieve:'#4ea1ff', verify:'#ffb454', branch:'#b07fff', finalize:'#3fd6a0'};
   let entropies = [], curSeg = null, sideCards = {}, playSpeed = 1, playing = false;
+
+  // XSS-safe markdown (escape first, add only our own tags)
+  function escHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function mdInline(t){ return escHtml(t)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+    .replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
+  function mdToHtml(src){
+    if (!src) return '';
+    const blocks = [];
+    src = src.replace(/```(\w*)\n?([\s\S]*?)```/g, (m, l, code) => { blocks.push('<pre class="md-code">' + escHtml(code.replace(/\n$/, '')) + '</pre>'); return ' ' + (blocks.length - 1) + ' '; });
+    let html = '', list = null;
+    const closeList = () => { if (list){ html += '</' + list + '>'; list = null; } };
+    for (const raw of src.split('\n')){
+      const ph = raw.match(/^ (\d+) $/);
+      if (ph){ closeList(); html += blocks[+ph[1]]; continue; }
+      const line = raw.trim();
+      if (!line){ closeList(); continue; }
+      let m;
+      if (m = line.match(/^(#{1,5})\s+(.+)$/)){ closeList(); const lv = Math.min(m[1].length + 2, 6); html += `<h${lv}>${mdInline(m[2])}</h${lv}>`; continue; }
+      if (m = line.match(/^[-*•]\s+(.+)$/)){ if (list !== 'ul'){ closeList(); html += '<ul>'; list = 'ul'; } html += '<li>' + mdInline(m[1]) + '</li>'; continue; }
+      if (m = line.match(/^\d+[.)]\s+(.+)$/)){ if (list !== 'ol'){ closeList(); html += '<ol>'; list = 'ol'; } html += '<li>' + mdInline(m[1]) + '</li>'; continue; }
+      closeList(); html += '<p>' + mdInline(line) + '</p>';
+    }
+    closeList();
+    return html;
+  }
 
   function resetTheater(mode, command){
     feed.innerHTML = ''; receipt.innerHTML = ''; receipt.classList.remove('on');
@@ -689,6 +724,9 @@ document.querySelectorAll('.devstrip .copy').forEach(btn => {
       receipt.classList.add('on');
     } else if (event === 'run_done'){
       status('run complete'); $('lamp').classList.remove('on'); playing = false;
+      // render the streamed final answer as markdown (bold, lists, code)
+      const fin = [...document.querySelectorAll('.seg-text.final-text')].pop();
+      if (fin && fin.textContent.trim()){ fin.classList.add('md'); fin.innerHTML = mdToHtml(fin.textContent); }
       feed.scrollTop = feed.scrollHeight;
     } else if (event === 'error'){
       status('error: ' + (data.error||'unknown')); $('lamp').classList.remove('on'); playing = false;

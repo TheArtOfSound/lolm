@@ -7,6 +7,8 @@
 <meta name="description" content="Ask a question and watch the AI notice its own uncertainty — checking notes, double-checking drafts, and deciding when it's done. No jargon, live, free.">
 <meta property="og:title" content="Try the LOLM Agent">
 <meta property="og:description" content="An AI that measures its own uncertainty and acts on it — watch it happen, live.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
 <meta property="og:url" content="https://lolm.imagineqira.com/try.html">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2307090d'/%3E%3Cpath d='M5 7 Q20 7 26 16' stroke='%234ea1ff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 12 Q19 12 26 16' stroke='%23b07fff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 16 H26' stroke='%23ffb454' stroke-width='2.2'/%3E%3Cpath d='M5 20 Q19 20 26 16' stroke='%233fd6a0' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 25 Q20 25 26 16' stroke='%23ff6b81' stroke-width='2.2' fill='none'/%3E%3Ccircle cx='26' cy='16' r='2.6' fill='%23d7dde6'/%3E%3C/svg%3E">
 <meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
@@ -80,6 +82,13 @@
   .answer{background:rgba(63,214,160,.05);border:1px solid #1d3a31;border-radius:4px 14px 14px 14px;padding:17px 20px;font-size:15.5px;color:var(--text);white-space:pre-wrap;margin-right:8%;display:none}
   .answer.on{display:block}
   .answer-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:8px}
+  #answerText.md{white-space:normal}
+  #answerText.md p{margin:0 0 10px} #answerText.md p:last-child{margin-bottom:0}
+  #answerText.md h3,#answerText.md h4,#answerText.md h5{font-size:15px;margin:14px 0 6px;color:var(--text)}
+  #answerText.md ul,#answerText.md ol{margin:0 0 10px;padding-left:22px} #answerText.md li{margin:3px 0}
+  #answerText.md code{font-family:var(--mono);font-size:.88em;background:var(--bg2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  #answerText.md pre.md-code{font-family:var(--mono);font-size:12.5px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;margin:0 0 10px;white-space:pre}
+  #answerText.md strong{color:var(--text)} #answerText.md a{color:var(--blue)}
 
   .friendly-receipt{display:none;margin-top:16px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px 18px;font-size:13.5px;color:var(--dim)}
   .friendly-receipt.on{display:block}
@@ -162,7 +171,13 @@
   <p style="text-align:center;margin-top:22px;font-size:13.5px"><a href="/#demo">Want the full instruments — entropy, drift, z-scores? Open the technical demo →</a></p>
 </div>
 
-<footer>© 2026 Qira LLC · <a href="https://imagineqira.com">imagineqira.com</a> · <a href="https://lolm-edge.bryanleonard237.workers.dev">status</a> · LOLM — patent pending</footer>
+<footer>
+  © 2026 <b>Qira LLC</b> · Bryan Leonard &amp; Brandyn Leonard · all rights reserved · patent pending<br>
+  <a href="https://www.npmjs.com/package/lolm-nfet-client">npm: lolm-nfet-client</a> ·
+  <a href="https://lolm-edge.bryanleonard237.workers.dev">status</a> ·
+  <a href="https://secure.imagineqira.com">vault</a> ·
+  <a href="https://imagineqira.com">imagineqira.com</a>
+</footer>
 </div>
 
 <script>
@@ -181,7 +196,42 @@
     "entropy-retrieve": "Why check notes when you're unsure?",
     "five-controls": "What five moves can the agent make?"
   };
-  let playing = false, draftBuf = '', tokenCount = 0, workingLine = null;
+  let playing = false, draftBuf = '', finalBuf = '', tokenCount = 0, workingLine = null;
+
+  // Minimal, XSS-safe markdown: every character of model/replay text is HTML-
+  // escaped first; only our own tags are added. Supports bold, italic, inline
+  // and fenced code, #-headings, -/1. lists, paragraphs, and http autolinks.
+  function escHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function mdInline(t){
+    return escHtml(t)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+      .replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  }
+  function mdToHtml(src){
+    if (!src) return '';
+    const blocks = [];
+    src = src.replace(/```(\w*)\n?([\s\S]*?)```/g, (m, lang, code) => {
+      blocks.push('<pre class="md-code">' + escHtml(code.replace(/\n$/, '')) + '</pre>');
+      return ' ' + (blocks.length - 1) + ' ';
+    });
+    let html = '', list = null;
+    const closeList = () => { if (list){ html += '</' + list + '>'; list = null; } };
+    for (const raw of src.split('\n')){
+      const ph = raw.match(/^ (\d+) $/);
+      if (ph){ closeList(); html += blocks[+ph[1]]; continue; }
+      const line = raw.trim();
+      if (!line){ closeList(); continue; }
+      let m;
+      if (m = line.match(/^(#{1,5})\s+(.+)$/)){ closeList(); const lv = Math.min(m[1].length + 2, 6); html += `<h${lv}>${mdInline(m[2])}</h${lv}>`; continue; }
+      if (m = line.match(/^[-*•]\s+(.+)$/)){ if (list !== 'ul'){ closeList(); html += '<ul>'; list = 'ul'; } html += '<li>' + mdInline(m[1]) + '</li>'; continue; }
+      if (m = line.match(/^\d+[.)]\s+(.+)$/)){ if (list !== 'ol'){ closeList(); html += '<ol>'; list = 'ol'; } html += '<li>' + mdInline(m[1]) + '</li>'; continue; }
+      closeList(); html += '<p>' + mdInline(line) + '</p>';
+    }
+    closeList();
+    return html;
+  }
 
   function addAct(cls, html, why){
     const div = document.createElement('div');
@@ -203,10 +253,11 @@
   function resetStage(q){
     $('stage').classList.add('on');
     $('qBubble').textContent = q;
-    $('activity').innerHTML = ''; $('answerText').textContent = '';
+    $('activity').innerHTML = ''; $('answerText').textContent = ''; $('answerText').classList.remove('md');
     $('answer').classList.remove('on'); $('receipt').classList.remove('on');
     $('receipt').innerHTML = ''; $('behind').style.display = 'none'; $('draftText').textContent = '';
-    draftBuf = ''; tokenCount = 0; workingLine = null;
+    $('sealBtn').style.display = 'none'; $('sealNote').textContent = '';
+    draftBuf = ''; finalBuf = ''; tokenCount = 0; workingLine = null;
     $('stage').scrollIntoView({behavior:'smooth', block:'start'});
   }
   const ENDED = {nfet_finalize:'it decided on its own that it was done',
@@ -225,7 +276,9 @@
       if (data.channel === 'draft'){ draftBuf += data.token; tokenCount++; working().textContent = tokenCount; }
       else if (data.channel === 'final'){
         $('answer').classList.add('on');
-        $('answerText').textContent += data.token;
+        finalBuf += data.token;
+        $('answerText').classList.remove('md');
+        $('answerText').textContent = finalBuf;   // stream plain, render md at the end
       }
     } else if (event === 'decision'){
       const d = data.decision;
@@ -264,17 +317,20 @@
       r.classList.add('on');
     } else if (event === 'run_done'){
       playing = false;
-      // if the stream was token-capped mid-sentence, show the trimmed server
-      // text (or cut back to the last finished sentence ourselves)
+      // settle on the best final text, then render markdown (the model emits
+      // **bold**, lists, and code — rendering them is the difference between
+      // looking like a real product and looking like raw model output)
       const served = data && data.result && data.result.response;
-      const shown = $('answerText').textContent;
-      if (served && served !== shown) $('answerText').textContent = served;
-      else {
-        const t = shown.trimEnd();
-        if (t && !'.!?…"\')]'.includes(t[t.length-1])){
-          const cut = Math.max(t.lastIndexOf('.'), t.lastIndexOf('!'), t.lastIndexOf('?'));
-          if (cut >= t.length * 0.5) $('answerText').textContent = t.slice(0, cut+1);
-        }
+      let finalText = (served && served.trim()) ? served : finalBuf;
+      const t = finalText.trimEnd();
+      if (t && !'.!?…"\')]'.includes(t[t.length-1])){
+        const cut = Math.max(t.lastIndexOf('.'), t.lastIndexOf('!'), t.lastIndexOf('?'));
+        if (cut >= t.length * 0.5) finalText = t.slice(0, cut+1);
+      }
+      if (finalText.trim()){
+        $('answer').classList.add('on');
+        $('answerText').classList.add('md');
+        $('answerText').innerHTML = mdToHtml(finalText);
       }
       // layered receipt: contract honesty + the QEV seal action
       if (data && data.receipt){
