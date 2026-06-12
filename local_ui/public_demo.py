@@ -46,14 +46,16 @@ def _int_env(name: str, default: int) -> int:
 class DemoLimits:
     def __init__(self) -> None:
         self.max_segments = _int_env("DEMO_MAX_SEGMENTS", 3)
-        self.segment_tokens = _int_env("DEMO_SEGMENT_TOKENS", 28)
-        self.final_tokens = _int_env("DEMO_FINAL_TOKENS", 140)
+        self.segment_tokens = _int_env("DEMO_SEGMENT_TOKENS", 80)
+        self.final_tokens = _int_env("DEMO_FINAL_TOKENS", 700)
         self.max_retrieves = _int_env("DEMO_MAX_RETRIEVES", 1)
         self.max_verifies = _int_env("DEMO_MAX_VERIFIES", 1)
         self.max_branches = _int_env("DEMO_MAX_BRANCHES", 1)
         self.branch_width = _int_env("DEMO_BRANCH_WIDTH", 2)
-        self.rate_per_hour = _int_env("DEMO_RATE_PER_HOUR", 4)
-        self.command_chars = _int_env("DEMO_COMMAND_CHARS", 300)
+        # Generous by default — the Workers AI brain generates on Cloudflare's
+        # GPUs, so the local box is not the bottleneck and limits can be light.
+        self.rate_per_hour = _int_env("DEMO_RATE_PER_HOUR", 60)
+        self.command_chars = _int_env("DEMO_COMMAND_CHARS", 600)
         self.reasoner = os.environ.get("DEMO_REASONER", "local")  # local | workers_ai | claude
 
     def to_dict(self) -> Dict[str, int]:

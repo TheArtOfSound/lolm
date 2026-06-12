@@ -53,6 +53,10 @@
   .ask input:focus{outline:none;border-color:var(--blue)}
   .ask button{background:var(--blue);color:#06121f;border:none;border-radius:12px;padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer}
   .ask button[disabled]{opacity:.45;cursor:not-allowed}
+  .ask button.stopping{background:var(--pink);color:#1a0509}
+  .follow-row{display:none;justify-content:space-between;align-items:center;gap:10px;margin:-2px 0 10px;font-size:12px;color:var(--faint)}
+  .follow-row button{background:none;border:1px solid var(--line);color:var(--dim);border-radius:7px;font-size:11.5px;padding:4px 10px;cursor:pointer;font-family:var(--mono)}
+  .follow-row button:hover{border-color:var(--faint);color:var(--text)}
   .ask-note{font-size:12px;color:var(--faint);text-align:center;min-height:16px;margin-bottom:10px}
   .backend-row{display:none;justify-content:center;gap:8px;margin:-2px 0 8px}
   .backend-row.on{display:flex}
@@ -133,11 +137,15 @@
 </div>
 
 <div class="ask">
-  <input id="q" maxlength="300" placeholder="…or ask your own question, run live">
+  <input id="q" maxlength="1000" placeholder="…or ask your own question, run live">
   <button id="go" disabled>Ask</button>
 </div>
+<div class="follow-row" id="followRow" style="display:none">
+  <span>conversation continues — ask a follow-up above, the model remembers the last turn</span>
+  <button id="newConvo">↺ new conversation</button>
+</div>
 <div class="backend-row" id="backendRow">
-  <button class="be-chip active" id="be06" data-base="/api/demo">0.6B · server</button>
+  <button class="be-chip active" id="be06" data-base="/api/demo">Llama 70B + LOLM</button>
   <button class="be-chip" id="be4b" data-base="/api/demo4b" disabled><span class="lab">4B · lab line</span></button>
 </div>
 <p class="ask-note" id="askNote">checking the live backend…</p>
@@ -331,6 +339,7 @@
         $('answer').classList.add('on');
         $('answerText').classList.add('md');
         $('answerText').innerHTML = mdToHtml(finalText);
+        if (lastQ) convo.push({q: lastQ, a: finalText});   // remember for follow-ups
       }
       // layered receipt: contract honesty + the QEV seal action
       if (data && data.receipt){
@@ -403,18 +412,38 @@
     } catch(e){ $('sealNote').textContent = 'seal failed: ' + e.message; }
   });
 
+  let convo = [];          // [{q, a}] for multi-turn follow-ups
+  let liveAbort = null;    // AbortController for the in-flight run
+  let lastQ = '';
+
+  function setRunning(on){
+    const b = $('go');
+    b.disabled = false;
+    b.textContent = on ? 'Stop' : 'Ask';
+    b.classList.toggle('stopping', on);
+  }
+
   async function runLive(q){
-    if (playing) return; playing = true;
+    if (playing) return;
+    playing = true; lastQ = q; setRunning(true);
     resetStage(q);
-    const label = activeBase === '/api/demo4b' ? 'the 4B lab model' : 'the live model';
-    addAct('think', `<b>Connecting to ${label}…</b>`, '(a real run takes a few minutes)');
+    // multi-turn: give the model the prior turn as compact context
+    let command = q;
+    if (convo.length){
+      const last = convo[convo.length - 1];
+      command = q + '\n\n[Follow-up. Earlier you were asked: "' + last.q.slice(0,160) +
+                '" and you answered: "' + last.a.slice(0,500) + '". Continue that thread.]';
+    }
+    addAct('think', '<b>Connecting to Llama 70B…</b>', '(it answers in a few seconds)');
+    liveAbort = new AbortController();
     try {
       const resp = await fetch(activeBase + '/run/stream', {method:'POST',
-        headers:{'Content-Type':'application/json'}, body: JSON.stringify({command:q})});
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({command}),
+        signal: liveAbort.signal});
       if (!resp.ok){
         const err = await resp.json().catch(() => ({error:'HTTP ' + resp.status}));
         addAct('check', '<b>Couldn’t start:</b> ' + (err.error || resp.status));
-        playing = false; return;
+        playing = false; setRunning(false); return;
       }
       const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = '';
       while (true){
@@ -432,12 +461,25 @@
           if (name) handle({event:name, data});
         }
       }
-    } catch(e){ addAct('check', '<b>Stream lost:</b> ' + e.message); }
-    playing = false;
+    } catch(e){
+      if (e.name === 'AbortError') addAct('done', '<b>Stopped.</b>');
+      else addAct('check', '<b>Stream lost:</b> ' + e.message);
+    }
+    playing = false; setRunning(false); liveAbort = null;
   }
 
-  $('go').addEventListener('click', () => { const q = $('q').value.trim(); if (q) runLive(q); });
+  function stopLive(){ if (liveAbort) liveAbort.abort(); }
+
+  $('go').addEventListener('click', () => {
+    if (playing){ stopLive(); return; }
+    const q = $('q').value.trim();
+    if (q){ runLive(q); $('q').value = ''; $('followRow').style.display = 'flex'; }
+  });
   $('q').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
+  $('newConvo').addEventListener('click', () => {
+    convo = []; $('followRow').style.display = 'none';
+    $('q').placeholder = '…ask your own question, run live';
+  });
 
   fetch('replays/index.json').then(r => r.json()).then(idx => {
     const grid = $('exGrid');
@@ -459,13 +501,14 @@
   }).catch(() => {});
 
   const lines = {
-    '/api/demo':   {ready: false, busy: false, label: '0.6B · server',
-                    note: 'a 70B model answers in ~15 seconds · a few runs per hour per visitor'},
+    '/api/demo':   {ready: false, busy: false, label: 'Llama 70B + LOLM',
+                    note: 'Llama 70B writes, the LOLM graft measures its uncertainty and drives the control loop · answers in seconds'},
     '/api/demo4b': {ready: false, busy: false, label: '4B · lab line',
                     note: 'the 4B runs on our lab machine over a tunnel — self-hosted, ~3–5 minutes per run'},
   };
 
   function applyLineState(){
+    if (playing) return;   // never fight the Stop button mid-run
     const cur = lines[activeBase];
     const b = $('go'), n = $('askNote');
     // 4B chip appears only when the lab line is actually up
