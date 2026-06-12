@@ -4,8 +4,10 @@
       "id": "hello",
       "title": "Hello!",
       "command": "Hello!",
-      "recorded_at": "2026-06-10T21:01:40",
-      "seconds": 62.6,
+      "model": "70B",
+      "profile": "qwen3_0_6b_smoke",
+      "recorded_at": "2026-06-11T18:30:58",
+      "seconds": 3.8,
       "head_trained": true,
       "ended_by": "social_direct",
       "verdict": "social_direct_reply",
@@ -14,184 +16,125 @@
       },
       "counters": {
         "segments": 0,
-        "tokens": 10,
+        "tokens": 16,
         "retrieves": 0,
         "verifies": 0,
         "branches": 0
       }
     },
     {
-      "id": "gate",
-      "title": "Explain the manifestation gate in LOLM and why it matters",
-      "command": "Explain the manifestation gate in LOLM and why it matters",
-      "recorded_at": "2026-06-10T21:07:45",
-      "seconds": 365.6,
-      "head_trained": true,
-      "ended_by": "repetition_stall",
-      "verdict": "nfet_control_visible",
-      "control_counts": {
-        "retrieve": 1,
-        "finalize": 1
-      },
-      "counters": {
-        "segments": 2,
-        "tokens": 152,
-        "retrieves": 1,
-        "verifies": 0,
-        "branches": 0
-      }
-    },
-    {
-      "id": "dependency-inversion",
-      "title": "What is dependency inversion in the LOLM architecture?",
-      "command": "What is dependency inversion in the LOLM architecture?",
-      "recorded_at": "2026-06-10T21:14:04",
-      "seconds": 378.7,
-      "head_trained": true,
-      "ended_by": "repetition_stall",
-      "verdict": "nfet_control_visible",
-      "control_counts": {
-        "branch": 1,
-        "finalize": 1
-      },
-      "counters": {
-        "segments": 2,
-        "tokens": 126,
-        "retrieves": 0,
-        "verifies": 0,
-        "branches": 1
-      }
-    },
-    {
-      "id": "eval-plan",
-      "title": "Write a short plan to evaluate a 304M language model against Pythia-410M",
-      "command": "Write a short plan to evaluate a 304M language model against Pythia-410M",
-      "recorded_at": "2026-06-10T21:15:12",
-      "seconds": 67.8,
-      "head_trained": true,
-      "ended_by": "repetition_stall",
-      "verdict": "nfet_control_visible",
-      "control_counts": {
-        "continue": 1,
-        "retrieve": 1,
-        "finalize": 1
-      },
-      "counters": {
-        "segments": 3,
-        "tokens": 135,
-        "retrieves": 1,
-        "verifies": 0,
-        "branches": 0
-      }
-    },
-    {
-      "id": "entropy-retrieve",
-      "title": "Why should an agent retrieve evidence when its token entropy spikes?",
-      "command": "Why should an agent retrieve evidence when its token entropy spikes?",
-      "recorded_at": "2026-06-10T21:16:11",
-      "seconds": 59.6,
-      "head_trained": true,
-      "ended_by": "repetition_stall",
-      "verdict": "nfet_control_visible",
-      "control_counts": {
-        "verify": 1,
-        "finalize": 1
-      },
-      "counters": {
-        "segments": 2,
-        "tokens": 84,
-        "retrieves": 0,
-        "verifies": 1,
-        "branches": 0
-      }
-    },
-    {
-      "id": "five-controls",
-      "title": "Summarize what the NFET controller's five actions do",
-      "command": "Summarize what the NFET controller's five actions do",
-      "recorded_at": "2026-06-10T21:17:10",
-      "seconds": 59.2,
-      "head_trained": true,
-      "ended_by": "repetition_stall",
-      "verdict": "nfet_control_visible",
-      "control_counts": {
-        "verify": 1,
-        "finalize": 1
-      },
-      "counters": {
-        "segments": 2,
-        "tokens": 90,
-        "retrieves": 0,
-        "verifies": 1,
-        "branches": 0
-      }
-    },
-    {
-      "id": "hello-4b",
-      "title": "Hello!",
-      "command": "Hello!",
-      "model": "4B",
-      "profile": "qwen3_4b_lab",
-      "recorded_at": "2026-06-11T02:02:20",
-      "seconds": 45.7,
-      "head_trained": true,
-      "ended_by": "social_direct",
-      "verdict": "social_direct_reply",
-      "control_counts": {
-        "finalize": 1
-      },
-      "counters": {
-        "segments": 0,
-        "tokens": 10,
-        "retrieves": 0,
-        "verifies": 0,
-        "branches": 0
-      }
-    },
-    {
-      "id": "gate-4b",
-      "title": "Explain the manifestation gate in LOLM and why it matters",
-      "command": "Explain the manifestation gate in LOLM and why it matters",
-      "model": "4B",
-      "profile": "qwen3_4b_lab",
-      "recorded_at": "2026-06-11T02:09:22",
-      "seconds": 421.9,
+      "id": "used-car",
+      "title": "What should I look for when buying a used car?",
+      "command": "What should I look for when buying a used car?",
+      "model": "70B",
+      "profile": "qwen3_0_6b_smoke",
+      "recorded_at": "2026-06-11T18:31:12",
+      "seconds": 14.0,
       "head_trained": true,
       "ended_by": "segment_budget",
       "verdict": "nfet_control_visible",
       "control_counts": {
-        "continue": 2,
-        "branch": 1
-      },
-      "counters": {
-        "segments": 3,
-        "tokens": 222,
-        "retrieves": 0,
-        "verifies": 0,
-        "branches": 1
-      }
-    },
-    {
-      "id": "dependency-inversion-4b",
-      "title": "What is dependency inversion in the LOLM architecture?",
-      "command": "What is dependency inversion in the LOLM architecture?",
-      "model": "4B",
-      "profile": "qwen3_4b_lab",
-      "recorded_at": "2026-06-11T02:15:20",
-      "seconds": 358.4,
-      "head_trained": true,
-      "ended_by": "segment_budget",
-      "verdict": "nfet_control_visible",
-      "control_counts": {
-        "branch": 1,
+        "retrieve": 1,
         "continue": 1
       },
       "counters": {
         "segments": 2,
-        "tokens": 194,
-        "retrieves": 0,
+        "tokens": 476,
+        "retrieves": 1,
+        "verifies": 0,
+        "branches": 0
+      }
+    },
+    {
+      "id": "credit-score",
+      "title": "How does a credit score actually work?",
+      "command": "How does a credit score actually work?",
+      "model": "70B",
+      "profile": "qwen3_0_6b_smoke",
+      "recorded_at": "2026-06-11T18:31:29",
+      "seconds": 17.0,
+      "head_trained": true,
+      "ended_by": "segment_budget",
+      "verdict": "nfet_control_visible",
+      "control_counts": {
+        "retrieve": 1,
+        "continue": 1
+      },
+      "counters": {
+        "segments": 2,
+        "tokens": 442,
+        "retrieves": 1,
+        "verifies": 0,
+        "branches": 0
+      }
+    },
+    {
+      "id": "start-running",
+      "title": "Give me a simple 3-step plan to start running",
+      "command": "Give me a simple 3-step plan to start running",
+      "model": "70B",
+      "profile": "qwen3_0_6b_smoke",
+      "recorded_at": "2026-06-11T18:31:50",
+      "seconds": 20.4,
+      "head_trained": true,
+      "ended_by": "segment_budget",
+      "verdict": "nfet_control_visible",
+      "control_counts": {
+        "branch": 1,
+        "retrieve": 1
+      },
+      "counters": {
+        "segments": 2,
+        "tokens": 520,
+        "retrieves": 1,
         "verifies": 0,
         "branches": 1
+      }
+    },
+    {
+      "id": "trustworthy-ai",
+      "title": "What makes an AI agent trustworthy?",
+      "command": "What makes an AI agent trustworthy?",
+      "model": "70B",
+      "profile": "qwen3_0_6b_smoke",
+      "recorded_at": "2026-06-11T18:32:03",
+      "seconds": 12.9,
+      "head_trained": true,
+      "ended_by": "segment_budget",
+      "verdict": "nfet_control_visible",
+      "control_counts": {
+        "continue": 1,
+        "retrieve": 1
+      },
+      "counters": {
+        "segments": 2,
+        "tokens": 380,
+        "retrieves": 1,
+        "verifies": 0,
+        "branches": 0
+      }
+    },
+    {
+      "id": "sky-blue",
+      "title": "Why is the sky blue?",
+      "command": "Why is the sky blue?",
+      "model": "70B",
+      "profile": "qwen3_0_6b_smoke",
+      "recorded_at": "2026-06-11T18:32:11",
+      "seconds": 8.6,
+      "head_trained": true,
+      "ended_by": "segment_budget",
+      "verdict": "nfet_control_visible",
+      "control_counts": {
+        "retrieve": 1,
+        "continue": 1
+      },
+      "counters": {
+        "segments": 2,
+        "tokens": 270,
+        "retrieves": 1,
+        "verifies": 0,
+        "branches": 0
       }
     }
   ]

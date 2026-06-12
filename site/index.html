@@ -320,10 +320,10 @@
 <section id="demo">
   <div class="sec-kicker">Live Demo</div>
   <h2>Watch it think.</h2>
-  <p class="sub">Real runs of the NFET agent — recorded on both a 0.6B and a 4B backbone
-  with the outcome-trained control head. Same machinery, different brains: the 4B runs
-  show calmer telemetry and earlier confident finishes. Every decision badge you see was
-  made from measured telemetry — entropy, drift, gate, regime — not from a prompt.</p>
+  <p class="sub">Real runs: a <b>70B model (Llama 3.3) writes the answer</b> while LOLM reads its
+  uncertainty token by token and decides when to check notes, verify, or stop. Every decision
+  badge you see was made from measured telemetry — entropy, drift, gate, regime — not from a prompt.
+  Tap a recorded run, or type your own below.</p>
 
   <p id="liveStats" style="display:none;font-family:var(--mono);font-size:12px;color:var(--faint);margin:-14px 0 18px"></p>
 
@@ -332,7 +332,7 @@
   <div class="live-row">
     <input id="liveCommand" maxlength="300" placeholder="…or give it your own command and run it live">
     <select id="backendSel" style="display:none;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:0 12px;font-size:13px;font-family:var(--mono)">
-      <option value="/api/demo">0.6B · server</option>
+      <option value="/api/demo">70B · Workers AI</option>
       <option value="/api/demo4b">4B · lab line</option>
     </select>
     <button class="btn primary" id="liveBtn" disabled>Run live</button>
