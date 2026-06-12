@@ -6,6 +6,7 @@
   "kv_namespaces": [
     { "binding": "MONITOR", "id": "b19b949038d04cbd895608ceacdc33d4" }
   ],
+  "ai": { "binding": "AI" },
   "triggers": {
     "crons": ["*/5 * * * *"]
   },

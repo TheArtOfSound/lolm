@@ -23,11 +23,11 @@ from scripts.seed_workspace_notes import seed as seed_notes
 
 COMMANDS = [
     ("hello", "Hello!"),
-    ("gate", "Explain the manifestation gate in LOLM and why it matters"),
-    ("dependency-inversion", "What is dependency inversion in the LOLM architecture?"),
-    ("eval-plan", "Write a short plan to evaluate a 304M language model against Pythia-410M"),
-    ("entropy-retrieve", "Why should an agent retrieve evidence when its token entropy spikes?"),
-    ("five-controls", "Summarize what the NFET controller's five actions do"),
+    ("used-car", "What should I look for when buying a used car?"),
+    ("credit-score", "How does a credit score actually work?"),
+    ("start-running", "Give me a simple 3-step plan to start running"),
+    ("trustworthy-ai", "What makes an AI agent trustworthy?"),
+    ("sky-blue", "Why is the sky blue?"),
 ]
 
 
@@ -47,6 +47,7 @@ def main() -> None:
     parser.add_argument("--only", default="", help="comma-separated replay ids to re-record")
     parser.add_argument("--id-suffix", default="", help="suffix for replay ids (e.g. -4b)")
     parser.add_argument("--model-label", default="", help="model badge shown in pickers (e.g. 4B)")
+    parser.add_argument("--reasoner", default="local", help="local | workers_ai (frontier writes, graft telemeters)")
     args = parser.parse_args()
 
     out_dir = Path(args.out)
@@ -73,6 +74,12 @@ def main() -> None:
             raise
     print(f"loaded in {time.time() - t0:.1f}s head_trained={info.get('head_trained')}", flush=True)
 
+    frontier = None
+    if args.reasoner != "local":
+        from local_ui.workers_ai_reasoner import WorkersAIReasonerLoop
+        frontier = WorkersAIReasonerLoop(state_fn=lambda: workspace.STATE)
+        print(f"frontier reasoner: {args.reasoner} (available={frontier.available()})", flush=True)
+
     agent = NFETAgent(AgentDeps(
         memory=workspace.MEMORY,
         ChatMessage=workspace.ChatMessage,
@@ -80,6 +87,7 @@ def main() -> None:
         generation_loop=workspace.generation_loop,
         append_event=workspace.append_improvement_event,
         head_trained_fn=lambda: workspace.STATE.head_trained,
+        frontier_loop=frontier,
     ))
 
     only = {s.strip() for s in args.only.split(",") if s.strip()}
@@ -99,6 +107,7 @@ def main() -> None:
         started = time.time()
         req = NFETAgentRequest(
             command=command,
+            reasoner=args.reasoner,
             max_segments=args.segments,
             segment_tokens=args.segment_tokens,
             final_tokens=args.final_tokens,

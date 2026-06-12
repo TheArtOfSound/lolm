@@ -180,11 +180,12 @@ class NFETAgent:
     # Generation plumbing
     # ------------------------------------------------------------------
     def _loop_for(self, req: NFETAgentRequest) -> Callable[[Any], Iterator[Dict[str, Any]]]:
-        if req.reasoner == "claude":
+        # Any non-"local" reasoner (claude, workers_ai) routes to the configured
+        # frontier loop: a strong model writes, the local graft telemeters it.
+        if req.reasoner != "local":
             if self.deps.frontier_loop is None:
                 raise RuntimeError(
-                    "reasoner='claude' requested but no frontier loop is configured "
-                    "(install the anthropic SDK and set ANTHROPIC_API_KEY)"
+                    f"reasoner={req.reasoner!r} requested but no frontier loop is configured"
                 )
             return self.deps.frontier_loop
         return self.deps.generation_loop

@@ -23,6 +23,7 @@ from pathlib import Path
 
 from local_ui.nfet_agent import AgentDeps, NFETAgent, register_nfet_agent_routes
 from local_ui.public_demo import register_demo_routes
+from local_ui.workers_ai_reasoner import WorkersAIReasonerLoop
 from local_ui.server import (
     ROOT,
     STATE,
@@ -41,6 +42,11 @@ DEVICE = os.environ.get("DEMO_DEVICE", "cpu")
 GRAFT_CKPT = os.environ.get("DEMO_GRAFT_CKPT", "runs/nfet_controller/bootstrap_qwen06b.pt")
 REPLAYS_DIR = Path(os.environ.get("DEMO_REPLAYS_DIR", str(ROOT / "site" / "replays")))
 
+# Optional frontier brain: a strong model (Llama 70B via Cloudflare Workers AI)
+# writes, the local graft telemeters it. Activated when WORKERS_AI_URL/SECRET
+# are set; otherwise the demo runs the local model directly.
+FRONTIER = WorkersAIReasonerLoop(state_fn=lambda: STATE)
+
 AGENT = NFETAgent(AgentDeps(
     memory=MEMORY,
     ChatMessage=ChatMessage,
@@ -48,6 +54,7 @@ AGENT = NFETAgent(AgentDeps(
     generation_loop=generation_loop,
     append_event=append_improvement_event,
     head_trained_fn=lambda: STATE.head_trained,
+    frontier_loop=FRONTIER,
 ))
 
 register_nfet_agent_routes(app, AGENT)

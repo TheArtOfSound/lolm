@@ -128,6 +128,28 @@ export default {
       status: s, headers: { "content-type": "application/json", "access-control-allow-origin": "*" },
     });
 
+    // AI answer endpoint — Llama 70B via the Workers AI binding, so the
+    // credential stays inside Cloudflare. Protected by a shared secret the
+    // origin box holds; the public never calls this directly.
+    if (p === "/ai/generate" && request.method === "POST") {
+      const auth = request.headers.get("authorization") || "";
+      if (!env.AI_SECRET || auth !== `Bearer ${env.AI_SECRET}`) {
+        return json({ error: "unauthorized" }, 401);
+      }
+      let body;
+      try { body = await request.json(); } catch { return json({ error: "bad json" }, 400); }
+      const messages = Array.isArray(body.messages) ? body.messages : [];
+      const max_tokens = Math.min(Math.max(parseInt(body.max_tokens) || 256, 16), 1024);
+      const model = body.model || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+      const t0 = Date.now();
+      try {
+        const r = await env.AI.run(model, { messages, max_tokens });
+        return json({ text: (r && r.response) || "", model, ms: Date.now() - t0 });
+      } catch (e) {
+        return json({ error: String(e).slice(0, 200), model }, 502);
+      }
+    }
+
     if (p === "/health" || p === "/uptime") return json(await readHealth(env));
     if (p === "/check" && request.method === "POST") return json(await recordSample(env, Date.now()));
     if (p.startsWith("/replays/")) return cachedReplay(request, env, ctx, p);

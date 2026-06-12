@@ -745,9 +745,9 @@
     fetch('/api/demo/status').then(r => r.json()).then(s => {
       const btn = $('liveBtn'), note = $('liveNote');
       if (!s.model_ready){ btn.disabled = true; note.textContent = 'live backend is loading the model — replays are instant meanwhile'; }
-      else if (s.busy){ btn.disabled = true; note.textContent = 'another live run is in progress on the shared 2-vCPU box — replays are instant'; }
+      else if (s.busy){ btn.disabled = true; note.textContent = 'another live run is in progress — replays are instant while you wait'; }
       else { btn.disabled = false; note.textContent =
-        `live runs execute the real 0.6B model + control head on a shared 2-vCPU box — expect ~1–2 minutes · ${s.limits.rate_per_hour} runs/hour per visitor`; }
+        `live runs: Llama 70B writes, LOLM measures its uncertainty and controls — usually under 15 seconds · ${s.limits.rate_per_hour} runs/hour per visitor`; }
     }).catch(() => {
       $('liveBtn').disabled = true;
       $('liveNote').textContent = 'live backend offline — replays of real recorded runs still work';

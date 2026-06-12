@@ -54,6 +54,7 @@ class DemoLimits:
         self.branch_width = _int_env("DEMO_BRANCH_WIDTH", 2)
         self.rate_per_hour = _int_env("DEMO_RATE_PER_HOUR", 4)
         self.command_chars = _int_env("DEMO_COMMAND_CHARS", 300)
+        self.reasoner = os.environ.get("DEMO_REASONER", "local")  # local | workers_ai | claude
 
     def to_dict(self) -> Dict[str, int]:
         return dict(self.__dict__)
@@ -129,7 +130,7 @@ def client_ip(request: Any) -> str:
 def clamp_request(command: str, limits: DemoLimits) -> NFETAgentRequest:
     return NFETAgentRequest(
         command=command.strip()[: limits.command_chars],
-        reasoner="local",
+        reasoner=limits.reasoner,
         max_segments=limits.max_segments,
         segment_tokens=limits.segment_tokens,
         final_tokens=limits.final_tokens,
