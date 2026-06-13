@@ -52,6 +52,15 @@ USE_EXACTLY_RE = re.compile(r"use exactly(?: this format)?[:.]?\s*(.+)", re.IGNO
 N_HYPOTHESES_RE = re.compile(r"\b(?:exactly\s+)?(\d+|one|two|three|four|five)\s+hypothes[ei]s", re.IGNORECASE)
 FACT_LINE_RE = re.compile(r"^\s*(\d+)\.\s+(.+?)\s*$", re.MULTILINE)
 NO_INTRO_RE = re.compile(r"\bno intro\b", re.IGNORECASE)
+# Word-count contracts: "700-word", "exactly 500 words", "at least 300 words",
+# "under 150 words". The audit flagged that these were silently ignored, so an
+# answer could be 5x too long and still 'pass'.
+WORD_COUNT_RE = re.compile(
+    r"\b(at least|at most|no more than|no fewer than|under|over|more than|fewer than|"
+    r"exactly|about|around|roughly|up to)?\s*(\d{2,5})[-\s]?words?\b", re.IGNORECASE)
+_WC_MIN = {"at least", "no fewer than", "over", "more than"}
+_WC_MAX = {"at most", "no more than", "under", "fewer than", "up to"}
+_WC_EXACT = {"exactly"}
 WORD_NUMS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
 DEFAULT_INVENTION_PROBES = ("window", "vent", "tunnel", "hidden door", "trapdoor", "secret passage")
 
@@ -89,6 +98,14 @@ def parse_contract(command: str) -> Dict[str, Any]:
 
     if NO_INTRO_RE.search(command):
         contract["no_intro"] = True
+
+    wc = WORD_COUNT_RE.search(command)
+    if wc:
+        qual = (wc.group(1) or "").lower().strip()
+        count = int(wc.group(2))
+        kind = ("min" if qual in _WC_MIN else "max" if qual in _WC_MAX
+                else "exact" if qual in _WC_EXACT else "target")
+        contract["word_limit"] = {"kind": kind, "count": count}
 
     contract["has_contract"] = any(k for k in contract if k != "has_contract")
     return contract
@@ -163,6 +180,25 @@ def check_contract(answer: str, contract: Dict[str, Any]) -> Dict[str, Any]:
         first = answer.strip().splitlines()[0].lower() if answer.strip() else ""
         if re.match(r"(sure|okay|certainly|here is|here's|let me|great question)", first):
             reasons.append("audit_contract_failed")
+
+    wl = contract.get("word_limit")
+    if wl:
+        words = len(answer.split())
+        n = wl["count"]
+        kind = wl["kind"]
+        # Generous tolerance — models rarely hit an exact count, and a false
+        # "too long/short" is itself a dishonest receipt. We flag only clear misses.
+        ok = True
+        if kind == "min":
+            ok = words >= n * 0.9
+        elif kind == "max":
+            ok = words <= n * 1.1
+        elif kind == "exact":
+            ok = n * 0.8 <= words <= n * 1.2
+        else:  # target
+            ok = n * 0.6 <= words <= n * 1.5
+        if not ok:
+            reasons.append("length_requirement_failed")
 
     if _max_ngram_repeat(answer) >= 3:
         reasons.append("duplicate_generation_detected")

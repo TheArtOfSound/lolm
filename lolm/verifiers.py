@@ -230,6 +230,36 @@ def verify_percentages(text: str, rel_tol: float = 0.01, abs_tol: float = 0.5) -
     return checks
 
 
+# Exact time-unit conversions only — months/years are ambiguous (28-31 days,
+# 365/366) so we never strict-check them; a false "wrong" is itself dishonest.
+_UNIT_HOURS = {"minute": 1.0 / 60.0, "hour": 1.0, "day": 24.0, "week": 168.0}
+_DURATION_RE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(minutes?|hours?|days?|weeks?)\s*(?:=|==|is|equals|amounts? to)\s*"
+    r"(\d+(?:\.\d+)?)\s*(minutes?|hours?|days?|weeks?)\b",
+    re.IGNORECASE)
+
+
+def verify_durations(text: str, rel_tol: float = 0.001) -> List[Dict[str, Any]]:
+    """Check stated unit conversions: '3 weeks = 21 days', '2 hours is 120 minutes'."""
+    checks: List[Dict[str, Any]] = []
+    for m in _DURATION_RE.finditer(text):
+        lv, lu = _to_number(m.group(1)), m.group(2).rstrip("s").lower()
+        rv, ru = _to_number(m.group(3)), m.group(4).rstrip("s").lower()
+        if lv is None or rv is None or lu not in _UNIT_HOURS or ru not in _UNIT_HOURS:
+            continue
+        left_h = lv * _UNIT_HOURS[lu]
+        right_h = rv * _UNIT_HOURS[ru]
+        tol = max(1e-6, abs(left_h) * rel_tol)
+        checks.append({
+            "kind": "duration",
+            "claim": re.sub(r"\s+", " ", m.group(0)).strip(),
+            "computed": round(rv * _UNIT_HOURS[ru] / _UNIT_HOURS[ru], 4),  # right side in its own unit
+            "expected": round(left_h / _UNIT_HOURS[ru], 4),               # left side converted to right unit
+            "ok": abs(left_h - right_h) <= tol,
+        })
+    return checks
+
+
 def run_text_verifiers(text: str) -> Dict[str, Any]:
     """Run every deterministic check over an answer and summarize.
 
@@ -241,7 +271,8 @@ def run_text_verifiers(text: str) -> Dict[str, Any]:
       "labels": ["math_check_failed"] | [],
     }
     """
-    checks = verify_arithmetic(text or "") + verify_percentages(text or "")
+    checks = (verify_arithmetic(text or "") + verify_percentages(text or "")
+              + verify_durations(text or ""))
     failed = [c for c in checks if not c["ok"]]
     if not checks:
         passed: Optional[bool] = None
