@@ -29,6 +29,8 @@ import hashlib
 import re
 from typing import Any, Dict, List, Optional
 
+from lolm.verifiers import run_text_verifiers
+
 # Named failure modes tracked across the product (from the handoff brief).
 FAILURE_MODES = (
     "evidence_not_ingested", "meta_reasoning_loop", "evidence_coverage_failure",
@@ -36,6 +38,9 @@ FAILURE_MODES = (
     "duplicate_generation_detected", "unsupported_hypothesis_added",
     "prompt_truncation_suspected", "audit_contract_failed",
     "nfet_activity_observed_but_task_failed",
+    # Added per the multi-surface audit + biggest-complaints memo: a proof layer
+    # has to be able to return RED, not just flattering language.
+    "math_check_failed", "empty_answer", "ended_by_budget_not_confidence",
 )
 
 
@@ -222,8 +227,32 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
     if fallback_used:
         warnings.append("fallback_active_quality_may_be_reduced")
 
+    # Deterministic verifiers: re-derive the arithmetic stated in the answer. A
+    # wrong total is a first-class RED verdict — no amount of telemetry, control
+    # activity, or vault sealing makes a bad number right. This is the sharpest
+    # gap every audit named (the "$3,300 vs $1,650" budget error).
+    vres = run_text_verifiers(answer)
+    math_failed = vres["passed"] is False
+    answer_empty = not (answer or "").strip()
+
+    reasons = list(answer_layer["reasons"])
+    if math_failed:
+        reasons.append("math_check_failed")
+        warnings.append("math_check_failed")
+    if answer_empty:
+        warnings.append("empty_answer")
+
     task_passed = answer_layer["passed"]
-    if task_passed is False and control_observed:
+    # Verdict precedence is NEGATIVE-FIRST: the receipt surfaces the worst honest
+    # truth about the run, never the most flattering. Empty output and a wrong
+    # number outrank any control-activity verdict.
+    if answer_empty:
+        verdict = "empty_answer"
+    elif math_failed and control_observed:
+        verdict = "nfet_activity_observed_but_math_failed"
+    elif math_failed:
+        verdict = "math_check_failed"
+    elif task_passed is False and control_observed:
         verdict = "nfet_activity_observed_but_task_failed"
     elif task_passed is False:
         verdict = "task_contract_failed"
@@ -234,16 +263,47 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
     else:
         verdict = "control_visible" if control_observed else "no_control_visible"
 
+    # Red / yellow / green. GREEN is reserved for a real, checkable contract that
+    # actually passed on a clean (non-budget, non-fallback) finish. Instrumentation
+    # -only, budget-ended, and fallback runs are YELLOW — visible activity is not a
+    # quality win. Failures are RED. No dramatic green on vibes.
+    RED = {"empty_answer", "math_check_failed", "nfet_activity_observed_but_math_failed",
+           "task_contract_failed", "nfet_activity_observed_but_task_failed"}
+    if verdict in RED:
+        status_color = "red"
+    elif task_passed is True and ended_by != "segment_budget" and not fallback_used:
+        status_color = "green"
+    else:
+        status_color = "yellow"
+
+    # Run-mode strip — fallback disclosure must be impossible to miss (audit #10).
+    if fallback_used:
+        run_mode = "FALLBACK_MODEL"
+    elif model_used and re.search(r"llama|70b|claude|groq|cerebras|together|openrouter|gpt",
+                                  str(model_used), re.IGNORECASE):
+        run_mode = "LIVE_NFET_FRONTIER"
+    else:
+        run_mode = "LOCAL_MONITOR"
+
+    # The receipt states its own ceiling: a live run runs no controlled A/B, so it
+    # NEVER proves the answer beat a baseline. This blocks proof inflation.
+    quality_claim = "unproven_vs_baseline"
+
     return {
         "receipt_schema": "qira.run.receipt.v1",
         "verdict": verdict,
+        "status_color": status_color,
+        "run_mode": run_mode,
+        "quality_claim": quality_claim,
         "control_observed": control_observed,
         "task_contract_passed": task_passed,
+        "math_checks": {"checked": vres["checked"], "failed": vres["failed"],
+                        "passed": vres["passed"]},
         "model_used": model_used,
         "fallback_used": fallback_used,
         "quality_warning": quality_warning,
         "artifact_integrity_verified": None,   # set by verify
-        "reasons": answer_layer["reasons"],
+        "reasons": reasons,
         "warnings": warnings,
         "layers": {
             "model": model_layer,
@@ -261,12 +321,20 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
             },
             "answer": {k: v for k, v in answer_layer.items() if k != "evidence"},
             "evidence": answer_layer["evidence"] or {"verdict": "no_facts_provided"},
+            "verifiers": {
+                "verdict": ("math_check_failed" if math_failed
+                            else "no_math_to_check" if vres["checked"] == 0
+                            else "math_ok"),
+                "checked": vres["checked"], "failed": vres["failed"],
+                "checks": vres["checks"],
+            },
             "vault": {"verdict": "not_sealed"},
             "integrity": {"verdict": "not_verified"},
         },
         "limits": (
-            "AEAD/hash verification proves artifact integrity and custody only; "
-            "it never proves the answer is factually correct."
+            "AEAD/hash verification proves artifact integrity and custody only; it "
+            "never proves the answer is factually correct. A live receipt runs no "
+            "baseline A/B, so quality stays unproven_vs_baseline."
         ),
     }
 

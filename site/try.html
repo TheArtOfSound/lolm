@@ -141,11 +141,14 @@
 <div class="hero">
   <h1>An AI that <em>knows when it's unsure</em> — and does something about it.</h1>
   <p>Most chatbots just keep talking. This one measures its own uncertainty while it writes.
-  When the signal spikes, it stops to check its notes or re-read its draft. When it's confident,
-  it wraps up. You watch every decision happen.</p>
+  When the signal spikes it can stop to check its notes or re-read its draft; when it's confident
+  it just wraps up — and on easy questions it stays out of the way. You watch every decision happen,
+  and the receipt is honest about the checks it didn't need.</p>
   <div class="honest">A <b>70-billion-parameter model (Llama 3.3)</b> writes the answers — so they're
-  genuinely useful — while LOLM reads its uncertainty token by token and decides when to check notes,
-  verify, or stop. The big model is the voice; the <b>measured self-control is the point</b>.</div>
+  genuinely useful — while LOLM's local graft reads its uncertainty per token and decides, at each
+  segment, when to check notes, verify, or stop. The big model is the voice; the <b>measured
+  self-control, and an honest receipt of what it did, is the point</b>. It doesn't prove the answer
+  is "better" — it proves the controller acted on uncertainty this run, with the raw trace visible.</div>
 </div>
 
 <div class="examples">
@@ -283,7 +286,7 @@
     $('qBubble').textContent = q;
     $('activity').innerHTML = ''; $('answerText').textContent = ''; $('answerText').classList.remove('md');
     $('answer').classList.remove('on'); $('receipt').classList.remove('on');
-    $('receipt').innerHTML = ''; $('behind').style.display = 'none'; $('draftText').textContent = '';
+    $('receipt').innerHTML = ''; $('receipt').style.borderLeft = ''; $('behind').style.display = 'none'; $('draftText').textContent = '';
     $('sealBtn').style.display = 'none'; $('sealNote').textContent = '';
     draftBuf = ''; finalBuf = ''; tokenCount = 0; workingLine = null; lastConfidence = null;
     const _leg = document.getElementById('confLegend'); if (_leg){ _leg.classList.remove('on'); _leg.innerHTML = ''; }
@@ -363,16 +366,16 @@
       const r = $('receipt');
       const checks = data.control_counts || {};
       const friendly =
-        data.verdict === 'nfet_control_visible' ? 'During this run the AI <b>acted on its own uncertainty</b> — and its final answer is clearly different from a plain chatbot’s.' :
-        data.verdict === 'nfet_finalize_visible' ? 'The AI <b>decided for itself when it was done</b> — and its answer differs from a plain chatbot’s.' :
+        data.verdict === 'nfet_control_visible' ? 'During this run the AI <b>acted on its own measured uncertainty</b> — it retrieved, verified, or branched mid-answer.' :
+        data.verdict === 'nfet_finalize_visible' ? 'The AI <b>decided for itself when it was done</b>, from its own telemetry.' :
         data.verdict === 'social_direct_reply' ? 'Simple greeting — it noticed, skipped the machinery, and just answered. That restraint is also a decision.' :
-        data.verdict === 'changed_but_controls_quiet' ? 'The AI <b>stayed confident the whole way</b> — no checks were needed this time. Its answer still differs from a plain chatbot’s.' :
-        'This run didn’t clearly beat a plain chatbot. The receipt is honest — some runs are like that.';
+        data.verdict === 'changed_but_controls_quiet' ? 'The AI <b>stayed confident the whole way</b> — no checks were needed this time.' :
+        'No control actions fired this run. The receipt is honest — many runs are like that.';
       const bits = [];
       if (checks.retrieve) bits.push(checks.retrieve + '× checked notes');
       if (checks.verify) bits.push(checks.verify + '× double-checked');
       if (checks.branch) bits.push(checks.branch + '× explored paths');
-      if (typeof data.word_similarity === 'number')
+      if (data.base_compared && typeof data.word_similarity === 'number')
         bits.push((100 - Math.round(data.word_similarity*100)) + '% different from the plain answer');
       if (ENDED[data.ended_by]) bits.push(ENDED[data.ended_by]);
       r.innerHTML = `<b>Receipt</b> — ${friendly}<div class="row">${bits.join(' · ')}</div>`;
@@ -419,12 +422,31 @@
       // layered receipt: contract honesty + the QEV seal action
       if (data && data.receipt){
         const rc = data.receipt, r = $('receipt');
+        // Run-mode strip + red/yellow/green accent — fallback and quality must be
+        // impossible to miss (multi-surface audit #10; complaints #6/#8/#10).
+        const accent = rc.status_color === 'red' ? '#ff6b6b' : rc.status_color === 'green' ? 'var(--green)' : '#e0a106';
+        r.style.borderLeft = '3px solid ' + accent;
+        if (rc.run_mode){
+          const modeLabel = rc.run_mode === 'FALLBACK_MODEL' ? '⚠ FALLBACK MODEL — not the 70B; quality may be reduced'
+            : rc.run_mode === 'LIVE_NFET_FRONTIER' ? '70B writes · LOLM monitors'
+            : 'local monitor model';
+          r.innerHTML += '<div class="row"><b>Run mode:</b> ' + modeLabel + '</div>';
+        }
+        if (rc.math_checks && rc.math_checks.checked){
+          if (rc.math_checks.failed)
+            r.innerHTML += '<div class="row" style="color:#ff6b6b"><b>✗ Math check failed</b> — a figure in the answer does not add up. A wrong number is a wrong answer, telemetry or not.</div>';
+          else
+            r.innerHTML += '<div class="row" style="color:var(--green)">✓ Math check: ' + rc.math_checks.checked + ' calculation(s) verified correct.</div>';
+        }
         if (rc.task_contract_passed === false){
           r.innerHTML += '<div class="row" style="color:var(--amber)">Contract check: the answer missed what was explicitly asked (' +
             (rc.reasons||[]).join(', ') + ') — telemetry alone is never success.</div>';
         } else if (rc.task_contract_passed === true){
           r.innerHTML += '<div class="row" style="color:var(--green)">Contract check: every explicit requirement in your prompt was met.</div>';
         }
+        if (rc.quality_warning)
+          r.innerHTML += '<div class="row" style="color:#ff6b6b">' + rc.quality_warning + '</div>';
+        r.innerHTML += '<div class="row" style="opacity:.7">Proves what the controller did — not that the answer beat a baseline (quality vs baseline: unproven).</div>';
         if ((rc.warnings||[]).length)
           r.innerHTML += '<div class="row">⚠ ' + rc.warnings.join(' · ') + '</div>';
         lastRunForSeal = true;

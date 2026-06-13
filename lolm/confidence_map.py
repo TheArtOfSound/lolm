@@ -75,7 +75,12 @@ def confidence_spans(backbone: Any, graft: Any, text: str,
     var = sum((e - mu) ** 2 for e in body) / max(len(body) - 1, 1)
     sd = var ** 0.5
     if sd < 1e-6:
-        return {"spans": [], "mean_entropy": round(mu, 4), "n_tokens": n, "available": True}
+        # Perfectly flat entropy: we ran the graft re-read but the signal has no
+        # relative structure to localize. That is "could not localize", NOT
+        # "confident everywhere" — report it honestly so the UI never paints a
+        # flat/unmeasurable run as a clean confident one.
+        return {"spans": [], "mean_entropy": round(mu, 4), "n_tokens": n,
+                "available": False, "reason": "flat_signal_no_localizable_spans"}
 
     # mark uncertain tokens (skip the warm-up), merge adjacent (1-token gaps ok)
     flags = [False if i < skip else (ent[i] - mu) / sd >= z_threshold for i in range(n)]

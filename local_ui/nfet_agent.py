@@ -439,11 +439,19 @@ Continue the draft. Write the next segment only."""
             rows.append({"kind": "memory", "text": note.get("text", ""), "meta": {"tag": note.get("tag")}})
         # Shared cloud brain: pull memories every user anywhere has accumulated.
         # Tagged distinctly and carrying provenance (score, uses) for verifiability.
+        # Relevance-gated like local notes: a semantic recall can surface an
+        # embedding-similar but topically-unrelated memory (the audit's bat&ball
+        # vs "TPU v4 43% faster" case). Require at least one shared content word
+        # so the receipt's evidence_count reflects USED-able evidence, not noise.
         brain = getattr(self.deps, "cloud_brain", None)
         if brain is not None and brain.available():
+            q_words = {w for w in re.split(r"\W+", (query or command).lower()) if len(w) > 3}
             for hit in brain.recall(query or command, limit=4):
+                text = hit.get("text", "")
+                if q_words and not (q_words & {w for w in re.split(r"\W+", text.lower()) if len(w) > 3}):
+                    continue  # off-topic recall — don't inject as "evidence"
                 rows.append({
-                    "kind": "cloud", "text": hit.get("text", ""),
+                    "kind": "cloud", "text": text,
                     "meta": {"kind": hit.get("kind"), "score": round(hit.get("score", 0), 2),
                              "uses": hit.get("uses"), "source": "cloud-brain"},
                 })
