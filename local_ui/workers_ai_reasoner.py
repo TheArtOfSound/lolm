@@ -88,6 +88,11 @@ class WorkersAIReasonerLoop:
             yield {"event": "error", "data": {"error": f"workers_ai reasoner failed: {exc}"[:400]}}
             return
 
+        # The worker cascades across independent 70B providers; surface which
+        # one actually answered (groq / cerebras / workers-ai / ...) honestly.
+        provider = result.get("provider") or "workers-ai"
+        model_label = f"{provider}:{(result.get('model') or self.model).split('/')[-1]}"
+
         state = self.state_fn()
         backbone = getattr(state, "backbone", None)
         graft = getattr(state, "graft", None)
@@ -103,7 +108,7 @@ class WorkersAIReasonerLoop:
             traces = []
 
         yield {"event": "start", "data": {
-            "profile": f"workers_ai:{self.model.split('/')[-1]}",
+            "profile": model_label,
             "use_graft": bool(traces),
             "latent_backend": "monitor" if traces else None,
             "reasoner": "workers_ai",
@@ -134,7 +139,7 @@ class WorkersAIReasonerLoop:
             "id": f"wai-{int(time.time() * 1000)}",
             "response": text,
             "tokens": n_tokens,
-            "profile": f"workers_ai:{self.model.split('/')[-1]}",
+            "profile": model_label,
             "reasoner": "workers_ai",
             "use_graft": bool(traces),
             "seconds": elapsed,

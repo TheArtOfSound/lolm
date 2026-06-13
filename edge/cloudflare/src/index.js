@@ -205,6 +205,80 @@ async function brainStats(env) {
   };
 }
 
+// ---- multi-provider 70B cascade -------------------------------------------
+// Each entry is an independent Llama-3.3-70B source. Workers AI runs on the CF
+// account (no key); the rest are OpenAI-compatible and activate only when their
+// key secret exists. Adding any free key (Groq is fastest) keeps 70B alive even
+// when Cloudflare's neuron quota is exhausted.
+function providerChain(env) {
+  const chain = [{ name: "workers-ai", kind: "cf" }];
+  if (env.GROQ_API_KEY) chain.push({
+    name: "groq", kind: "openai", key: env.GROQ_API_KEY,
+    url: "https://api.groq.com/openai/v1/chat/completions", model: "llama-3.3-70b-versatile" });
+  if (env.CEREBRAS_API_KEY) chain.push({
+    name: "cerebras", kind: "openai", key: env.CEREBRAS_API_KEY,
+    url: "https://api.cerebras.ai/v1/chat/completions", model: "llama-3.3-70b" });
+  if (env.TOGETHER_API_KEY) chain.push({
+    name: "together", kind: "openai", key: env.TOGETHER_API_KEY,
+    url: "https://api.together.xyz/v1/chat/completions",
+    model: "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" });
+  if (env.OPENROUTER_API_KEY) chain.push({
+    name: "openrouter", kind: "openai", key: env.OPENROUTER_API_KEY,
+    url: "https://openrouter.ai/api/v1/chat/completions",
+    model: "meta-llama/llama-3.3-70b-instruct:free" });
+  return chain;
+}
+
+async function callOpenAICompatible(provider, messages, max_tokens) {
+  const r = await fetch(provider.url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json",
+               "Authorization": `Bearer ${provider.key}` },
+    body: JSON.stringify({ model: provider.model, messages, max_tokens, stream: false }),
+    signal: AbortSignal.timeout(45000),
+  });
+  if (!r.ok) {
+    const body = await r.text();
+    const quota = r.status === 429 || /quota|rate.?limit|insufficient|exceeded/i.test(body);
+    throw Object.assign(new Error(`${provider.name} ${r.status}: ${body.slice(0, 120)}`), { quota });
+  }
+  const j = await r.json();
+  return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "";
+}
+
+async function generate70B(env, messages, max_tokens, modelOverride) {
+  const chain = providerChain(env);
+  const tried = [];
+  let lastQuota = false;
+  for (const provider of chain) {
+    const t0 = Date.now();
+    try {
+      let text;
+      if (provider.kind === "cf") {
+        const r = await env.AI.run(modelOverride || "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                                   { messages, max_tokens });
+        text = (r && r.response) || "";
+      } else {
+        text = await callOpenAICompatible(provider, messages, max_tokens);
+      }
+      if (text && text.trim()) {
+        return { text, model: provider.model || "llama-3.3-70b", provider: provider.name,
+                 ms: Date.now() - t0, tried_providers: tried };
+      }
+      tried.push({ provider: provider.name, error: "empty" });
+    } catch (e) {
+      const msg = String(e.message || e);
+      const quota = e.quota || /neuron|allocation|4006|Paid plan|quota|rate.?limit/i.test(msg);
+      lastQuota = quota;
+      tried.push({ provider: provider.name, error: msg.slice(0, 100), quota });
+      // continue to the next independent provider
+    }
+  }
+  return { error: "all 70B providers unavailable", tried_providers: tried,
+           quota_exhausted: lastQuota,
+           hint: "add a free GROQ_API_KEY (or CEREBRAS/TOGETHER/OPENROUTER) as a worker secret" };
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -240,9 +314,11 @@ export default {
       return json({ error: "unknown brain route" }, 404);
     }
 
-    // AI answer endpoint — Llama 70B via the Workers AI binding, so the
-    // credential stays inside Cloudflare. Protected by a shared secret the
-    // origin box holds; the public never calls this directly.
+    // AI answer endpoint — Llama-70B via a CASCADE of INDEPENDENT providers, so
+    // one account's quota dying never takes 70B down. Order: Cloudflare Workers
+    // AI (on-account, no key) → Groq → Cerebras → Together → OpenRouter (each a
+    // separate free account, enabled only when its key secret is set). All keys
+    // stay in Cloudflare; the origin box just calls this one endpoint.
     if (p === "/ai/generate" && request.method === "POST") {
       const auth = request.headers.get("authorization") || "";
       if (!env.AI_SECRET || auth !== `Bearer ${env.AI_SECRET}`) {
@@ -252,20 +328,9 @@ export default {
       try { body = await request.json(); } catch { return json({ error: "bad json" }, 400); }
       const messages = Array.isArray(body.messages) ? body.messages : [];
       const max_tokens = Math.min(Math.max(parseInt(body.max_tokens) || 512, 16), 8192);
-      const model = body.model || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-      const t0 = Date.now();
-      try {
-        const r = await env.AI.run(model, { messages, max_tokens });
-        return json({ text: (r && r.response) || "", model, ms: Date.now() - t0 });
-      } catch (e) {
-        const msg = String(e);
-        // Quota exhaustion (free-tier neuron cap) is expected and recoverable —
-        // signal it cleanly so the origin falls back to local instead of
-        // treating it as a server fault.
-        const quota = /neuron|allocation|4006|Paid plan|rate.?limit/i.test(msg);
-        return json({ error: msg.slice(0, 200), model, quota_exhausted: quota },
-                    quota ? 429 : 502);
-      }
+      const result = await generate70B(env, messages, max_tokens, body.model);
+      if (result.text) return json(result);
+      return json(result, result.quota_exhausted ? 429 : 502);
     }
 
     if (p === "/health" || p === "/uptime") return json(await readHealth(env));
