@@ -438,6 +438,14 @@
           else
             r.innerHTML += '<div class="row" style="color:var(--green)">✓ Math check: ' + rc.math_checks.checked + ' calculation(s) verified correct.</div>';
         }
+        if (rc.termination && rc.termination.demote){
+          r.innerHTML += '<div class="row" style="color:#e0a106">⚠ Ended on <b>' + rc.termination.category +
+            '</b> — not a clean finish, so this run is demoted (a budget/timeout/stall stop is not a confident result).</div>';
+        }
+        const crit = rc.layers && rc.layers.critique;
+        if (crit && crit.overclaim){
+          r.innerHTML += '<div class="row" style="color:#ff6b6b"><b>✗ Overclaim</b> — the prompt was underdetermined, but the answer asserted a definite result instead of saying the evidence is insufficient.</div>';
+        }
         if (rc.task_contract_passed === false){
           r.innerHTML += '<div class="row" style="color:var(--amber)">Contract check: the answer missed what was explicitly asked (' +
             (rc.reasons||[]).join(', ') + ') — telemetry alone is never success.</div>';

@@ -322,12 +322,30 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
     # actually passed on a clean (non-budget, non-fallback) finish. Instrumentation
     # -only, budget-ended, and fallback runs are YELLOW — visible activity is not a
     # quality win. Failures are RED. No dramatic green on vibes.
+    # Termination taxonomy (complaint #6): a budget/timeout/stall stop is NOT a
+    # confident finish and must never read like one. Only a clean controller/
+    # natural finish is eligible for green; everything else is demoted.
+    TERMINATION = {
+        "nfet_finalize":   ("controller_finish", True),
+        "audit_verified":  ("controller_finish", True),
+        "natural_eos":     ("model_finished", True),
+        "social_direct":   ("direct_reply", True),
+        "repetition_stall":("stalled", False),
+        "segment_budget":  ("budget_limit", False),
+        "user_stop":       ("user_stop", False),
+        "timeout":         ("timeout", False),
+        "error":           ("error", False),
+    }
+    term_cat, term_clean = TERMINATION.get(ended_by, ("unknown", False))
+    termination = {"ended_by": ended_by, "category": term_cat,
+                   "clean_finish": term_clean, "demote": not term_clean}
+
     RED = {"empty_answer", "math_check_failed", "nfet_activity_observed_but_math_failed",
            "task_contract_failed", "nfet_activity_observed_but_task_failed",
            "answer_overclaimed_underdetermined"}
     if verdict in RED:
         status_color = "red"
-    elif task_passed is True and ended_by != "segment_budget" and not fallback_used:
+    elif task_passed is True and term_clean and not fallback_used:
         status_color = "green"
     else:
         status_color = "yellow"
@@ -350,6 +368,7 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
         "verdict": verdict,
         "status_color": status_color,
         "run_mode": run_mode,
+        "termination": termination,
         "quality_claim": quality_claim,
         "control_observed": control_observed,
         "task_contract_passed": task_passed,
