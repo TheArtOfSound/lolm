@@ -159,6 +159,7 @@
   <button class="be-chip" id="be4b" data-base="/api/demo4b" disabled><span class="lab">4B · lab line</span></button>
 </div>
 <p class="ask-note" id="askNote">checking the live backend…</p>
+<p class="ask-note" id="brainStat" style="display:none;color:var(--purple)"></p>
 
 <div class="stage" id="stage">
   <div class="q-bubble" id="qBubble"></div>
@@ -429,9 +430,28 @@
     } catch(e){ $('sealNote').textContent = 'seal failed: ' + e.message; }
   });
 
-  let convo = [];          // [{q, a}] for multi-turn follow-ups
+  let convo = [];          // [{q, a}] kept only for the local "new conversation" UI
   let liveAbort = null;    // AbortController for the in-flight run
   let lastQ = '';
+  // Server-side conversation: a session id the cloud brain keys on, so the full
+  // thread persists across requests and page reloads (not just the last turn).
+  function sessionId(){
+    let s = sessionStorage.getItem('lolm-session');
+    if (!s){ s = 'web-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+             sessionStorage.setItem('lolm-session', s); }
+    return s;
+  }
+  // Verifiable shared-brain growth (public, no secret). Anyone can confirm the
+  // numbers at /brain/stats — the agent's accumulating memory in the open.
+  function showBrain(){
+    fetch('https://lolm-edge.bryanleonard237.workers.dev/brain/stats')
+      .then(r => r.json()).then(s => {
+        if (!s || s.memories == null) return;
+        const el = document.getElementById('brainStat');
+        el.textContent = `⊕ shared brain: ${s.memories} memories · ${s.total_recalls} recalls · ${s.sessions} conversations · ${s.conversation_turns} turns — verifiable at /brain/stats`;
+        el.style.display = 'block';
+      }).catch(() => {});
+  }
 
   function setRunning(on){
     const b = $('go');
@@ -444,18 +464,14 @@
     if (playing) return;
     playing = true; lastQ = q; setRunning(true);
     resetStage(q);
-    // multi-turn: give the model the prior turn as compact context
-    let command = q;
-    if (convo.length){
-      const last = convo[convo.length - 1];
-      command = q + '\n\n[Follow-up. Earlier you were asked: "' + last.q.slice(0,160) +
-                '" and you answered: "' + last.a.slice(0,500) + '". Continue that thread.]';
-    }
+    // The server loads the full prior thread from the shared cloud brain via the
+    // session id — no need to re-send history from the client.
     addAct('think', '<b>Connecting to Llama 70B…</b>', '(it answers in a few seconds)');
     liveAbort = new AbortController();
     try {
       const resp = await fetch(activeBase + '/run/stream', {method:'POST',
-        headers:{'Content-Type':'application/json'}, body: JSON.stringify({command}),
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({command: q, session_id: sessionId()}),
         signal: liveAbort.signal});
       if (!resp.ok){
         const err = await resp.json().catch(() => ({error:'HTTP ' + resp.status}));
@@ -540,7 +556,7 @@
   });
   $('q').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
   $('newConvo').addEventListener('click', () => {
-    convo = []; $('followRow').style.display = 'none';
+    convo = []; sessionStorage.removeItem('lolm-session'); $('followRow').style.display = 'none';
     $('q').placeholder = '…ask your own question, run live';
   });
 
@@ -600,6 +616,7 @@
     applyLineState();
   }));
   pollStatus(); setInterval(pollStatus, 12000);
+  showBrain(); setInterval(showBrain, 30000);
 
   // Resilience: register the service worker so the page + every replay work
   // with zero network, and an offline indicator in the nav.

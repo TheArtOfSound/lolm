@@ -12,7 +12,8 @@
  * but their failure degrades gracefully in the page, not here.
  */
 
-const CACHE = "lolm-nfet-v1";
+const CACHE = "lolm-nfet-v2";   // bump on any shell/asset change so returning
+                                // visitors get the update (activate clears old)
 const SHELL = [
   "/", "/index.html", "/try.html", "/og-card.png",
   "/manifest.webmanifest", "/replays/index.json",
@@ -50,15 +51,26 @@ self.addEventListener("fetch", (event) => {
   // failure (offline banner / replays / in-browser engine).
   if (url.pathname.startsWith("/api/")) return;
 
-  // Static + replays: cache-first, then network, updating the cache in the
-  // background (stale-while-revalidate) so offline always has the last good copy.
+  const isHTML = event.request.mode === "navigate" ||
+                 (event.request.headers.get("accept") || "").includes("text/html");
+
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
+    if (isHTML) {
+      // Network-first for pages: always fresh when online, cached when offline.
+      try {
+        const resp = await fetch(event.request);
+        if (resp && resp.ok) cache.put(event.request, resp.clone());
+        return resp;
+      } catch (e) {
+        return (await cache.match(event.request)) || (await cache.match("/try.html"))
+            || (await cache.match("/index.html"));
+      }
+    }
+    // Static + replays: cache-first with background revalidate.
     const cached = await cache.match(event.request);
     const network = fetch(event.request).then((resp) => {
-      if (resp && resp.ok && url.origin === self.location.origin) {
-        cache.put(event.request, resp.clone());
-      }
+      if (resp && resp.ok && url.origin === self.location.origin) cache.put(event.request, resp.clone());
       return resp;
     }).catch(() => null);
     return cached || (await network) || cache.match("/index.html");
