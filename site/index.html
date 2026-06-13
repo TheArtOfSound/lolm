@@ -365,6 +365,45 @@
   <b>Model Context Protocol</b>, so it plugs into any modern agent stack.</p>
 </section>
 
+<section id="variants">
+  <div class="sec-kicker">Contribution, isolated</div>
+  <h2>What each layer actually adds.</h2>
+  <p class="sub">The fair question a reviewer asks: is the intelligence the big model, the telemetry, or the control? Here is what changes — and what does not — at each layer. We name what we have <b>not</b> measured rather than imply it.</p>
+  <div style="overflow-x:auto;margin-top:8px">
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+    <thead><tr style="text-align:left;color:var(--faint);font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em">
+      <th style="padding:11px 12px;border-bottom:1px solid var(--line)">Variant</th>
+      <th style="padding:11px 12px;border-bottom:1px solid var(--line)">What it adds</th>
+      <th style="padding:11px 12px;border-bottom:1px solid var(--line)">Changes the answer?</th>
+      <th style="padding:11px 12px;border-bottom:1px solid var(--line)">What's proven</th>
+    </tr></thead>
+    <tbody style="color:var(--dim)">
+      <tr><td style="padding:11px 12px;border-bottom:1px solid var(--line)"><b style="color:var(--text)">70B only</b></td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">the frontier voice</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line);color:var(--faint)">baseline</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">the capability is the frontier model's, not ours</td></tr>
+      <tr><td style="padding:11px 12px;border-bottom:1px solid var(--line)"><b style="color:var(--text)">70B + passive telemetry</b></td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">per-token uncertainty + confidence spans</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line);color:var(--faint)">No — observer only</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">the telemetry is real, measured per token</td></tr>
+      <tr><td style="padding:11px 12px;border-bottom:1px solid var(--line)"><b style="color:var(--text)">70B + NFET control</b></td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">retrieve / verify / branch / audit decisions</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line);color:var(--text)">Yes — the run's <i>path</i> (segment-level), not the 70B's per-token sampling</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">control fires &amp; is consumed; quality-vs-baseline: <b style="color:#e0a106">unproven</b></td></tr>
+      <tr><td style="padding:11px 12px;border-bottom:1px solid var(--line)"><b style="color:var(--text)">4B only</b></td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">a small local model</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line);color:var(--faint)">baseline</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">weak / inconsistent on hard reasoning (stated plainly)</td></tr>
+      <tr><td style="padding:11px 12px"><b style="color:var(--text)">4B + NFET</b></td>
+          <td style="padding:11px 12px">inline graft (rewrites token logits) + control</td>
+          <td style="padding:11px 12px;color:var(--green)">Yes — per token <i>and</i> path</td>
+          <td style="padding:11px 12px">the graft measurably changes local generation; retrieval grounding helps; quality lift: <b style="color:#e0a106">unproven</b></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="sub" style="margin-top:22px">Grounded in the real test battery (<code>artifacts/lolm-real-tests</code>): controller invocation <b>100%</b> of NFET runs, control actions fired in a <b>minority</b>, and the one clear win was <b>retrieval grounding</b>. None of this proves the answer beat a baseline — it proves the controller <i>acted on measured uncertainty</i>, and the raw trace is sealed and inspectable.</p>
+</section>
+
 <section id="demo">
   <div class="sec-kicker">Live Demo</div>
   <h2>Watch it think.</h2>
