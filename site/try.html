@@ -103,6 +103,13 @@
   #answerText.md code{font-family:var(--mono);font-size:.88em;background:var(--bg2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
   #answerText.md pre.md-code{font-family:var(--mono);font-size:12.5px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;margin:0 0 10px;white-space:pre}
   #answerText.md strong{color:var(--t-hi)} #answerText.md a{color:var(--accent)}
+  /* measured low-confidence spans — the unique LOLM signal, from the graft */
+  mark.lolm-unsure{background:linear-gradient(transparent 60%, rgba(227,168,87,.34) 60%);
+    color:inherit;border-bottom:1.5px dashed var(--amber);cursor:help;border-radius:2px;padding:0 1px}
+  .conf-legend{display:none;margin-top:12px;font-size:12.5px;color:var(--faint);
+    border-top:1px dashed var(--line);padding-top:10px}
+  .conf-legend.on{display:block} .conf-legend b{color:var(--amber)}
+  .conf-legend .spans{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-top:4px}
 
   .friendly-receipt{display:none;margin-top:16px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px 18px;font-size:13.5px;color:var(--dim)}
   .friendly-receipt.on{display:block}
@@ -164,7 +171,8 @@
 <div class="stage" id="stage">
   <div class="q-bubble" id="qBubble"></div>
   <div class="activity" id="activity"></div>
-  <div class="answer" id="answer"><div class="answer-label">final answer</div><span id="answerText"></span></div>
+  <div class="answer" id="answer"><div class="answer-label">final answer</div><span id="answerText"></span>
+    <div class="conf-legend" id="confLegend"></div></div>
   <div class="friendly-receipt" id="receipt"></div>
   <button id="sealBtn" style="display:none;margin-top:10px;background:var(--bg2);border:1px solid var(--line);color:var(--dim);border-radius:9px;font-family:var(--mono);font-size:12px;padding:8px 14px;cursor:pointer"
           title="Seal this run into an encrypted QEV vault file (BRY-NFET-SX-VAULT-V2). Opens at secure.imagineqira.com.">⛨ Seal this run — encrypted vault</button>
@@ -277,12 +285,43 @@
     $('answer').classList.remove('on'); $('receipt').classList.remove('on');
     $('receipt').innerHTML = ''; $('behind').style.display = 'none'; $('draftText').textContent = '';
     $('sealBtn').style.display = 'none'; $('sealNote').textContent = '';
-    draftBuf = ''; finalBuf = ''; tokenCount = 0; workingLine = null;
+    draftBuf = ''; finalBuf = ''; tokenCount = 0; workingLine = null; lastConfidence = null;
+    const _leg = document.getElementById('confLegend'); if (_leg){ _leg.classList.remove('on'); _leg.innerHTML = ''; }
     $('stage').scrollIntoView({behavior:'smooth', block:'start'});
   }
   const ENDED = {nfet_finalize:'it decided on its own that it was done',
                  natural_eos:'it reached a natural stopping point',
                  segment_budget:'it hit the demo length limit'};
+
+  let lastConfidence = null;   // {spans:[{text,score}], mean_entropy, n_tokens}
+
+  // Wrap the measured low-confidence fragments in the rendered answer. Operates
+  // on text nodes only (never inside tags), so it is safe over the markdown DOM.
+  function markUnsure(container, spans){
+    if (!spans || !spans.length) return 0;
+    const frags = [...new Set(spans.map(s => (s.text||'').trim()).filter(t => t.length >= 3))]
+      .sort((a, b) => b.length - a.length);
+    let marked = 0;
+    for (const frag of frags){
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())){
+        if (node.parentElement && node.parentElement.classList.contains('lolm-unsure')) continue;
+        const idx = node.nodeValue.indexOf(frag);
+        if (idx < 0) continue;
+        const after = node.splitText(idx);
+        after.splitText(frag.length);
+        const m = document.createElement('mark');
+        m.className = 'lolm-unsure';
+        m.title = 'LOLM measured high uncertainty here (from its own per-token signals)';
+        m.textContent = after.nodeValue;
+        after.replaceWith(m);
+        marked++;
+        break;
+      }
+    }
+    return marked;
+  }
 
   function handle(ev){
     const {event, data} = ev;
@@ -316,7 +355,10 @@
       else if (data.kind === 'branch') addAct('fork', `Kept the <b>steadier</b> of ${ (data.candidates||[]).length || 2 } drafts`);
     } else if (event === 'phase'){
       if (data.phase === 'finalize') addAct('done', '<b>Writing the final answer…</b>');
+      if (data.phase === 'measuring_confidence') addAct('check', '<b>Measuring its own confidence</b> across the answer', '(re-reading it through the LOLM graft — no other model can do this)');
       if (data.phase === 'base_comparison') addAct('think', 'Comparing against a plain chatbot answer <span class="why">(for the receipt)</span>');
+    } else if (event === 'confidence_map'){
+      lastConfidence = data;   // applied after the answer renders, in run_done
     } else if (event === 'proof'){
       const r = $('receipt');
       const checks = data.control_counts || {};
@@ -357,6 +399,21 @@
         $('answer').classList.add('on');
         $('answerText').classList.add('md');
         $('answerText').innerHTML = mdToHtml(finalText);
+        // the unique part: highlight the spans LOLM measured as least confident
+        const conf = lastConfidence || (data.result && data.result.confidence);
+        if (conf && conf.spans && conf.spans.length){
+          const n = markUnsure($('answerText'), conf.spans);
+          if (n){
+            const leg = $('confLegend');
+            leg.innerHTML = '<b>⚠ measured low-confidence</b> — the highlighted spans are where LOLM '
+              + 'measured the most uncertainty <i>in its own generation</i>, by re-reading the answer '
+              + 'through its 5-stream graft (surface · latent · gate · regime). No plain chatbot can '
+              + 'show you this — it has no such signal.<div class="spans">'
+              + conf.spans.slice(0,5).map(s => `«${(s.text||'').slice(0,40)}» z=${s.score}`).join('  ·  ')
+              + '</div>';
+            leg.classList.add('on');
+          }
+        }
         if (lastQ) convo.push({q: lastQ, a: finalText});   // remember for follow-ups
       }
       // layered receipt: contract honesty + the QEV seal action

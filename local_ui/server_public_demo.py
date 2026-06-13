@@ -63,6 +63,12 @@ BRAIN = CloudBrain(
     secret=os.environ.get("BRAIN_SECRET") or os.environ.get("WORKERS_AI_SECRET", ""),
 )
 
+def _confidence(text: str):
+    """Measured per-token confidence over the answer via the loaded graft —
+    the unique LOLM capability. No-ops if no local model is loaded."""
+    from lolm.confidence_map import confidence_spans
+    return confidence_spans(STATE.backbone, STATE.graft, text)
+
 AGENT = NFETAgent(AgentDeps(
     memory=MEMORY,
     ChatMessage=ChatMessage,
@@ -72,6 +78,7 @@ AGENT = NFETAgent(AgentDeps(
     head_trained_fn=lambda: STATE.head_trained,
     frontier_loop=FRONTIER,
     cloud_brain=BRAIN,
+    confidence_fn=_confidence,
 ))
 
 register_nfet_agent_routes(app, AGENT)

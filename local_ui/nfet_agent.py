@@ -169,6 +169,8 @@ class AgentDeps:
     fetch_url: Optional[Callable[..., Dict[str, Any]]] = None
     frontier_loop: Optional[Callable[[Any], Iterator[Dict[str, Any]]]] = None
     cloud_brain: Optional[Any] = None   # CloudBrain client (shared D1 memory)
+    confidence_fn: Optional[Callable[[str], Dict[str, Any]]] = None  # measured
+                                        # per-token uncertainty over the answer
 
 
 class NFETAgent:
@@ -778,6 +780,21 @@ WORKING DRAFT:
         final = yield from self._do_finalize(command, draft, evidence, req, profile=profile)
         counters.tokens += int(final.raw.get("tokens") or 0)
 
+        # The thing no other agent can show: re-read the finished answer through
+        # the LOLM graft and mark the exact spans the model measured as least
+        # confident — from its own internals, not a prompted self-report.
+        confidence: Dict[str, Any] = {}
+        cfn = getattr(self.deps, "confidence_fn", None)
+        answer_text = (final.raw.get("response") or final.text or "").strip()
+        if cfn is not None and profile != "social" and len(answer_text) > 40:
+            yield {"event": "phase", "data": {"phase": "measuring_confidence"}}
+            try:
+                confidence = cfn(answer_text) or {}
+            except Exception:
+                confidence = {}
+            if confidence.get("spans"):
+                yield {"event": "confidence_map", "data": confidence}
+
         # Provenance is assembled from the action log, never written by the
         # model — an agent that cannot misreport what it did.
         provenance: List[str] = []
@@ -880,6 +897,7 @@ WORKING DRAFT:
             "provenance": provenance,
             "proof": proof,
             "receipt": receipt,
+            "confidence": confidence,
             "saved_learning_type": "nfet_agent_run",
         }
         self.last_run = result
