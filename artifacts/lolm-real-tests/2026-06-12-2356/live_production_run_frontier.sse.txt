@@ -1,0 +1,690 @@
+event: run_start
+data: {"command": "A bat and a ball cost $1.10 total. The bat costs $1.00 more than the ball. How much is the ball? Show the one-line check.", "reasoner": "workers_ai", "head_trained": true, "memory_hits": 0, "max_segments": 2, "segment_tokens": 160, "profile": "task"}
+
+event: segment_start
+data: {"segment": 1}
+
+event: token
+data: {"token": "Let", "channel": "draft", "segment": 1, "nfet": {"entropy": 7.0782, "drift": 0.0, "gate": 0.4985, "regime": 1.1527, "control": null}}
+
+event: token
+data: {"token": "'s", "channel": "draft", "segment": 1, "nfet": {"entropy": 2.4969, "drift": 18.586164, "gate": 0.5011, "regime": 2.3991, "control": null}}
+
+event: token
+data: {"token": " denote", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.9518, "drift": 6.168657, "gate": 0.4992, "regime": 0.6337, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 1, "nfet": {"entropy": 5.8022, "drift": 3.583072, "gate": 0.4995, "regime": 1.0141, "control": null}}
+
+event: token
+data: {"token": " cost", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.3789, "drift": 9.892239, "gate": 0.5006, "regime": 1.4284, "control": null}}
+
+event: token
+data: {"token": " of", "channel": "draft", "segment": 1, "nfet": {"entropy": 3.8111, "drift": 9.956236, "gate": 0.5, "regime": 1.4094, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 1, "nfet": {"entropy": 6.8021, "drift": 2.823573, "gate": 0.4997, "regime": 1.5051, "control": null}}
+
+event: token
+data: {"token": " ball", "channel": "draft", "segment": 1, "nfet": {"entropy": 4.0505, "drift": 12.990449, "gate": 0.4998, "regime": 2.3325, "control": null}}
+
+event: token
+data: {"token": " as", "channel": "draft", "segment": 1, "nfet": {"entropy": 2.2176, "drift": 11.449977, "gate": 0.5014, "regime": 0.9053, "control": null}}
+
+event: token
+data: {"token": " x", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.695, "drift": 6.259825, "gate": 0.5026, "regime": 1.6178, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 1, "nfet": {"entropy": 2.7474, "drift": 14.718271, "gate": 0.4997, "regime": 1.7394, "control": null}}
+
+event: token
+data: {"token": " Since", "channel": "draft", "segment": 1, "nfet": {"entropy": 2.2542, "drift": 8.686262, "gate": 0.4993, "regime": 2.0019, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 1, "nfet": {"entropy": 3.3972, "drift": 4.786367, "gate": 0.4986, "regime": 1.7878, "control": null}}
+
+event: token
+data: {"token": " bat", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.239, "drift": 11.371625, "gate": 0.5005, "regime": 0.1463, "control": null}}
+
+event: token
+data: {"token": " costs", "channel": "draft", "segment": 1, "nfet": {"entropy": 2.0983, "drift": 11.271209, "gate": 0.5006, "regime": 1.8526, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.9321, "drift": 6.781876, "gate": 0.501, "regime": 0.9016, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.6881, "drift": 5.857932, "gate": 0.5017, "regime": 0.9597, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.3233, "drift": 8.412711, "gate": 0.4999, "regime": 0.345, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.3653, "drift": 6.803704, "gate": 0.4985, "regime": 0.735, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.2198, "drift": 3.018079, "gate": 0.5024, "regime": 0.2012, "control": null}}
+
+event: token
+data: {"token": " more", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.7095, "drift": 3.756739, "gate": 0.5029, "regime": 0.2451, "control": null}}
+
+event: token
+data: {"token": " than", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.1678, "drift": 5.68892, "gate": 0.5003, "regime": 0.8286, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.2031, "drift": 8.064993, "gate": 0.4999, "regime": 0.0418, "control": null}}
+
+event: token
+data: {"token": " ball", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.1491, "drift": 8.412225, "gate": 0.4995, "regime": 2.1576, "control": null}}
+
+event: token
+data: {"token": ",", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.3518, "drift": 9.672644, "gate": 0.4987, "regime": 1.3748, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.6873, "drift": 7.648648, "gate": 0.5008, "regime": 2.0932, "control": null}}
+
+event: token
+data: {"token": " cost", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.2518, "drift": 7.825323, "gate": 0.5004, "regime": 1.3548, "control": null}}
+
+event: token
+data: {"token": " of", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0526, "drift": 6.823252, "gate": 0.4988, "regime": 1.8615, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.3427, "drift": 4.943946, "gate": 0.4995, "regime": 1.6773, "control": null}}
+
+event: token
+data: {"token": " bat", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.5191, "drift": 8.046306, "gate": 0.4997, "regime": 0.6068, "control": null}}
+
+event: token
+data: {"token": " can", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0406, "drift": 7.112274, "gate": 0.501, "regime": 1.9372, "control": null}}
+
+event: token
+data: {"token": " be", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.6152, "drift": 5.202022, "gate": 0.4997, "regime": 2.1992, "control": null}}
+
+event: token
+data: {"token": " expressed", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.117, "drift": 5.867688, "gate": 0.5013, "regime": 1.5434, "control": null}}
+
+event: token
+data: {"token": " as", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.4062, "drift": 6.270781, "gate": 0.4993, "regime": 0.1749, "control": null}}
+
+event: token
+data: {"token": " x", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0313, "drift": 7.658574, "gate": 0.5001, "regime": 2.239, "control": null}}
+
+event: token
+data: {"token": " +", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.3319, "drift": 7.52788, "gate": 0.4985, "regime": 1.4016, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.003, "drift": 11.482948, "gate": 0.4998, "regime": 1.6557, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0082, "drift": 7.079272, "gate": 0.5016, "regime": 1.9956, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.2248, "drift": 10.58382, "gate": 0.4996, "regime": 1.9374, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0026, "drift": 9.500761, "gate": 0.5005, "regime": 1.8202, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.171, "drift": 3.754336, "gate": 0.5025, "regime": 1.4107, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 1, "nfet": {"entropy": 2.0038, "drift": 12.221473, "gate": 0.4992, "regime": 1.1886, "control": null}}
+
+event: token
+data: {"token": " The", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.56, "drift": 17.704676, "gate": 0.4995, "regime": 1.2968, "control": null}}
+
+event: token
+data: {"token": " total", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.3606, "drift": 4.26086, "gate": 0.5, "regime": 0.6132, "control": null}}
+
+event: token
+data: {"token": " cost", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.7384, "drift": 6.328087, "gate": 0.5004, "regime": 0.0258, "control": null}}
+
+event: token
+data: {"token": " of", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.8264, "drift": 7.962538, "gate": 0.4982, "regime": 1.521, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.6157, "drift": 4.216531, "gate": 0.4991, "regime": 0.2292, "control": null}}
+
+event: token
+data: {"token": " bat", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.1036, "drift": 9.852139, "gate": 0.5024, "regime": 1.2998, "control": null}}
+
+event: token
+data: {"token": " and", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.3674, "drift": 6.132814, "gate": 0.5003, "regime": 1.8981, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0555, "drift": 1.386078, "gate": 0.4997, "regime": 1.0303, "control": null}}
+
+event: token
+data: {"token": " ball", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.9122, "drift": 7.595648, "gate": 0.4988, "regime": 1.8042, "control": null}}
+
+event: token
+data: {"token": " together", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.5395, "drift": 2.313295, "gate": 0.5007, "regime": 1.8795, "control": null}}
+
+event: token
+data: {"token": " is", "channel": "draft", "segment": 1, "nfet": {"entropy": 2.0063, "drift": 6.363113, "gate": 0.4984, "regime": 1.2982, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.7214, "drift": 11.196705, "gate": 0.5, "regime": 2.4206, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.5179, "drift": 5.457095, "gate": 0.5007, "regime": 1.6285, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.7097, "drift": 6.734288, "gate": 0.4978, "regime": 1.3228, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.3681, "drift": 6.089734, "gate": 0.4995, "regime": 1.1063, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.936, "drift": 4.00197, "gate": 0.502, "regime": 1.7664, "control": null}}
+
+event: token
+data: {"token": ",", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.4699, "drift": 5.942135, "gate": 0.4988, "regime": 0.1466, "control": null}}
+
+event: token
+data: {"token": " so", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.3099, "drift": 4.840211, "gate": 0.499, "regime": 1.162, "control": null}}
+
+event: token
+data: {"token": " we", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.468, "drift": 8.074052, "gate": 0.4985, "regime": 1.7645, "control": null}}
+
+event: token
+data: {"token": " can", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.9623, "drift": 2.915778, "gate": 0.4996, "regime": 0.2609, "control": null}}
+
+event: token
+data: {"token": " write", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.7191, "drift": 8.790177, "gate": 0.4989, "regime": 2.1444, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0486, "drift": 8.212627, "gate": 0.4988, "regime": 2.2166, "control": null}}
+
+event: token
+data: {"token": " equation", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.7907, "drift": 8.380983, "gate": 0.4991, "regime": 1.7761, "control": null}}
+
+event: token
+data: {"token": ":", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.7627, "drift": 5.710737, "gate": 0.498, "regime": 1.7247, "control": null}}
+
+event: token
+data: {"token": " x", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0484, "drift": 11.028337, "gate": 0.4985, "regime": 1.6275, "control": null}}
+
+event: token
+data: {"token": " +", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.3944, "drift": 11.157295, "gate": 0.4972, "regime": 1.5822, "control": null}}
+
+event: token
+data: {"token": " (", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.009, "drift": 27.686209, "gate": 0.4998, "regime": 1.7175, "control": null}}
+
+event: token
+data: {"token": "x", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0036, "drift": 15.39957, "gate": 0.5005, "regime": 2.2799, "control": null}}
+
+event: token
+data: {"token": " +", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.7022, "drift": 7.882593, "gate": 0.4989, "regime": 1.4703, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.001, "drift": 13.058366, "gate": 0.499, "regime": 0.0588, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0413, "drift": 7.034689, "gate": 0.5007, "regime": 1.297, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0004, "drift": 9.270521, "gate": 0.4991, "regime": 1.0966, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0005, "drift": 6.445019, "gate": 0.5, "regime": 1.9332, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0035, "drift": 4.831594, "gate": 0.5001, "regime": 1.0034, "control": null}}
+
+event: token
+data: {"token": ")", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.216, "drift": 5.176996, "gate": 0.4996, "regime": 1.7086, "control": null}}
+
+event: token
+data: {"token": " =", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.1095, "drift": 8.466866, "gate": 0.4983, "regime": 0.753, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.003, "drift": 12.900932, "gate": 0.5008, "regime": 0.5169, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.004, "drift": 5.764058, "gate": 0.5009, "regime": 1.2346, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0036, "drift": 4.806485, "gate": 0.4988, "regime": 2.3244, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.0009, "drift": 4.865838, "gate": 0.5004, "regime": 1.5689, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 1, "nfet": {"entropy": 0.4069, "drift": 4.359529, "gate": 0.5004, "regime": 0.3544, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 1, "nfet": {"entropy": 1.9583, "drift": 13.030174, "gate": 0.4991, "regime": 1.932, "control": null}}
+
+event: decision
+data: {"segment": 1, "decision": {"control": 1, "label": "retrieve", "source": "head", "reason": "trained head confident (p=0.57)", "zscores": {"entropy": -0.353, "drift": -0.273, "gate": -0.009, "regime": 0.294}, "head_probs": [0.2847, 0.5723, 0.1393, 0.0035, 0.0003], "step": 84}, "segment_tokens": 84, "segment_mean_entropy": 1.0919, "telemetry_frames": 84}
+
+event: action
+data: {"segment": 1, "kind": "retrieve", "added": 2, "evidence": [{"kind": "memory", "text": "On Google TPU v4, LOLM converges up to 43 percent faster than a matched baseline in early training; the baseline catches up around step 15-20K.", "meta": {"tag": "research"}}, {"kind": "cloud", "text": "On 'A bat and a ball cost $1.10 total. The bat costs $1.00 more than the ball. How m': The ball costs $0.05, as shown by the one-line check: $0.05 + ($0.05 + $1.00) = $1.10.", "meta": {"kind": "learning", "score": 9, "uses": 0, "source": "cloud-brain"}}]}
+
+event: segment_start
+data: {"segment": 2}
+
+event: token
+data: {"token": "S", "channel": "draft", "segment": 2, "nfet": {"entropy": 9.1845, "drift": 0.0, "gate": 0.4985, "regime": 0.2959, "control": null}}
+
+event: token
+data: {"token": "impl", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.2932, "drift": 11.293396, "gate": 0.4989, "regime": 0.7218, "control": null}}
+
+event: token
+data: {"token": "ifying", "channel": "draft", "segment": 2, "nfet": {"entropy": 4.4257, "drift": 11.214752, "gate": 0.4985, "regime": 0.9828, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.1251, "drift": 2.924545, "gate": 0.4975, "regime": 0.7677, "control": null}}
+
+event: token
+data: {"token": " equation", "channel": "draft", "segment": 2, "nfet": {"entropy": 3.2331, "drift": 6.975248, "gate": 0.5008, "regime": 1.1226, "control": null}}
+
+event: token
+data: {"token": ",", "channel": "draft", "segment": 2, "nfet": {"entropy": 3.2388, "drift": 4.216979, "gate": 0.4994, "regime": 1.0009, "control": null}}
+
+event: token
+data: {"token": " we", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.5098, "drift": 6.528365, "gate": 0.5001, "regime": 2.0345, "control": null}}
+
+event: token
+data: {"token": " combine", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.2437, "drift": 7.177407, "gate": 0.4994, "regime": 1.4243, "control": null}}
+
+event: token
+data: {"token": " like", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.012, "drift": 4.173172, "gate": 0.4985, "regime": 2.3543, "control": null}}
+
+event: token
+data: {"token": " terms", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.342, "drift": 6.873456, "gate": 0.4996, "regime": 1.7174, "control": null}}
+
+event: token
+data: {"token": " to", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.7625, "drift": 5.364497, "gate": 0.4989, "regime": 1.8, "control": null}}
+
+event: token
+data: {"token": " get", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.9431, "drift": 3.816507, "gate": 0.5006, "regime": 0.5471, "control": null}}
+
+event: token
+data: {"token": " ", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.7114, "drift": 4.631487, "gate": 0.5, "regime": 2.1741, "control": null}}
+
+event: token
+data: {"token": "2", "channel": "draft", "segment": 2, "nfet": {"entropy": 3.7637, "drift": 7.70757, "gate": 0.5016, "regime": 1.2418, "control": null}}
+
+event: token
+data: {"token": "x", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.7956, "drift": 1.788691, "gate": 0.5011, "regime": 1.0778, "control": null}}
+
+event: token
+data: {"token": " +", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.7703, "drift": 6.334385, "gate": 0.4995, "regime": 1.6395, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 2, "nfet": {"entropy": 3.076, "drift": 6.160922, "gate": 0.501, "regime": 1.8884, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.6274, "drift": 4.616569, "gate": 0.5023, "regime": 1.5223, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.9496, "drift": 8.693056, "gate": 0.4994, "regime": 1.2592, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.9899, "drift": 6.970826, "gate": 0.5012, "regime": 1.8537, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.7579, "drift": 1.155172, "gate": 0.5002, "regime": 1.6037, "control": null}}
+
+event: token
+data: {"token": " =", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.0871, "drift": 5.050723, "gate": 0.4987, "regime": 1.2099, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.1872, "drift": 5.377584, "gate": 0.5013, "regime": 2.2256, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.1467, "drift": 3.203295, "gate": 0.4995, "regime": 1.0865, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.8265, "drift": 5.675017, "gate": 0.4985, "regime": 1.8591, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.4799, "drift": 4.769215, "gate": 0.4998, "regime": 2.0734, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.0718, "drift": 1.910486, "gate": 0.5008, "regime": 2.1898, "control": null}}
+
+event: token
+data: {"token": ",", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.9201, "drift": 6.791318, "gate": 0.5005, "regime": 1.452, "control": null}}
+
+event: token
+data: {"token": " and", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.7722, "drift": 2.403531, "gate": 0.4992, "regime": 1.7687, "control": null}}
+
+event: token
+data: {"token": " then", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.3821, "drift": 1.001563, "gate": 0.4992, "regime": 0.0022, "control": null}}
+
+event: token
+data: {"token": " subtract", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.2615, "drift": 4.739819, "gate": 0.4999, "regime": 1.7418, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.6066, "drift": 7.371071, "gate": 0.501, "regime": 2.179, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0381, "drift": 4.836485, "gate": 0.5019, "regime": 2.1647, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.457, "drift": 5.469855, "gate": 0.4996, "regime": 0.2013, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.011, "drift": 4.250288, "gate": 0.5, "regime": 1.2841, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.7271, "drift": 3.328477, "gate": 0.5022, "regime": 1.1353, "control": null}}
+
+event: token
+data: {"token": " from", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.1475, "drift": 5.558426, "gate": 0.5004, "regime": 1.1159, "control": null}}
+
+event: token
+data: {"token": " both", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0046, "drift": 5.978694, "gate": 0.4996, "regime": 1.3092, "control": null}}
+
+event: token
+data: {"token": " sides", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.8982, "drift": 8.537276, "gate": 0.5005, "regime": 2.1497, "control": null}}
+
+event: token
+data: {"token": " to", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.6309, "drift": 6.877453, "gate": 0.4995, "regime": 1.2267, "control": null}}
+
+event: token
+data: {"token": " solve", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0615, "drift": 5.905706, "gate": 0.5001, "regime": 1.8971, "control": null}}
+
+event: token
+data: {"token": " for", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.194, "drift": 4.070505, "gate": 0.4999, "regime": 0.827, "control": null}}
+
+event: token
+data: {"token": " x", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.1394, "drift": 7.131584, "gate": 0.5022, "regime": 0.8841, "control": null}}
+
+event: token
+data: {"token": ",", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.7634, "drift": 8.33979, "gate": 0.4995, "regime": 0.2377, "control": null}}
+
+event: token
+data: {"token": " yielding", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.0782, "drift": 4.534642, "gate": 0.4995, "regime": 1.1654, "control": null}}
+
+event: token
+data: {"token": " ", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.068, "drift": 6.251451, "gate": 0.4998, "regime": 0.8531, "control": null}}
+
+event: token
+data: {"token": "2", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0142, "drift": 8.017229, "gate": 0.4999, "regime": 1.8306, "control": null}}
+
+event: token
+data: {"token": "x", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0805, "drift": 4.275728, "gate": 0.4999, "regime": 2.0387, "control": null}}
+
+event: token
+data: {"token": " =", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.6326, "drift": 5.999307, "gate": 0.4993, "regime": 0.0264, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.077, "drift": 10.822636, "gate": 0.5016, "regime": 1.4542, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0009, "drift": 8.602816, "gate": 0.5005, "regime": 2.3455, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0067, "drift": 7.966237, "gate": 0.4999, "regime": 0.7167, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0042, "drift": 6.387367, "gate": 0.4985, "regime": 0.886, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.7641, "drift": 5.056767, "gate": 0.502, "regime": 0.0387, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.7528, "drift": 12.439305, "gate": 0.4987, "regime": 0.0599, "control": null}}
+
+event: token
+data: {"token": " Div", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0147, "drift": 15.321802, "gate": 0.4999, "regime": 0.9925, "control": null}}
+
+event: token
+data: {"token": "iding", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.114, "drift": 14.033835, "gate": 0.4988, "regime": 0.5448, "control": null}}
+
+event: token
+data: {"token": " both", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0061, "drift": 7.006345, "gate": 0.4982, "regime": 0.2323, "control": null}}
+
+event: token
+data: {"token": " sides", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.2597, "drift": 6.451875, "gate": 0.4994, "regime": 1.5618, "control": null}}
+
+event: token
+data: {"token": " by", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0561, "drift": 5.419567, "gate": 0.4994, "regime": 1.0742, "control": null}}
+
+event: token
+data: {"token": " ", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0143, "drift": 6.844101, "gate": 0.4992, "regime": 2.5622, "control": null}}
+
+event: token
+data: {"token": "2", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.0377, "drift": 7.60018, "gate": 0.4995, "regime": 1.5328, "control": null}}
+
+event: token
+data: {"token": " gives", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.5029, "drift": 8.169729, "gate": 0.5003, "regime": 1.2056, "control": null}}
+
+event: token
+data: {"token": " x", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0741, "drift": 9.136772, "gate": 0.5016, "regime": 1.528, "control": null}}
+
+event: token
+data: {"token": " =", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.3974, "drift": 8.660099, "gate": 0.5, "regime": 1.5122, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0064, "drift": 9.786264, "gate": 0.5004, "regime": 0.3095, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0013, "drift": 6.930977, "gate": 0.5028, "regime": 1.7871, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0117, "drift": 6.360882, "gate": 0.4989, "regime": 0.3051, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0016, "drift": 5.720454, "gate": 0.4999, "regime": 0.7363, "control": null}}
+
+event: token
+data: {"token": "5", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.926, "drift": 9.157268, "gate": 0.5006, "regime": 0.2467, "control": null}}
+
+event: token
+data: {"token": ",", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.995, "drift": 6.239623, "gate": 0.4988, "regime": 1.9088, "control": null}}
+
+event: token
+data: {"token": " which", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.7023, "drift": 4.719196, "gate": 0.4985, "regime": 1.2345, "control": null}}
+
+event: token
+data: {"token": " is", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.046, "drift": 5.92182, "gate": 0.5012, "regime": 0.878, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.8877, "drift": 6.687482, "gate": 0.499, "regime": 1.8828, "control": null}}
+
+event: token
+data: {"token": " cost", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.9982, "drift": 9.295911, "gate": 0.5014, "regime": 1.1292, "control": null}}
+
+event: token
+data: {"token": " of", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.6995, "drift": 8.648872, "gate": 0.4992, "regime": 1.7373, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 2, "nfet": {"entropy": 5.6506, "drift": 4.340677, "gate": 0.4993, "regime": 2.1138, "control": null}}
+
+event: token
+data: {"token": " ball", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.8269, "drift": 13.281184, "gate": 0.5014, "regime": 1.4164, "control": null}}
+
+event: token
+data: {"token": ",", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.9668, "drift": 14.544106, "gate": 0.4992, "regime": 2.3836, "control": null}}
+
+event: token
+data: {"token": " and", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.6645, "drift": 3.374304, "gate": 0.4978, "regime": 0.8105, "control": null}}
+
+event: token
+data: {"token": " we", "channel": "draft", "segment": 2, "nfet": {"entropy": 3.677, "drift": 6.805307, "gate": 0.4997, "regime": 1.9364, "control": null}}
+
+event: token
+data: {"token": " can", "channel": "draft", "segment": 2, "nfet": {"entropy": 3.6461, "drift": 2.405403, "gate": 0.499, "regime": 1.6758, "control": null}}
+
+event: token
+data: {"token": " verify", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.6359, "drift": 7.00493, "gate": 0.5002, "regime": 1.844, "control": null}}
+
+event: token
+data: {"token": " this", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.3389, "drift": 4.094862, "gate": 0.5003, "regime": 0.5035, "control": null}}
+
+event: token
+data: {"token": " solution", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.9551, "drift": 2.674225, "gate": 0.5013, "regime": 0.4218, "control": null}}
+
+event: token
+data: {"token": " with", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.1903, "drift": 8.828686, "gate": 0.5004, "regime": 0.4459, "control": null}}
+
+event: token
+data: {"token": " the", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.6066, "drift": 4.775319, "gate": 0.5, "regime": 1.1652, "control": null}}
+
+event: token
+data: {"token": " one", "channel": "draft", "segment": 2, "nfet": {"entropy": 3.7082, "drift": 8.123709, "gate": 0.5021, "regime": 0.834, "control": null}}
+
+event: token
+data: {"token": "-line", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.4445, "drift": 7.014175, "gate": 0.4988, "regime": 1.7248, "control": null}}
+
+event: token
+data: {"token": " check", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.796, "drift": 5.890167, "gate": 0.4991, "regime": 1.4972, "control": null}}
+
+event: token
+data: {"token": ":", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.1146, "drift": 8.853068, "gate": 0.4983, "regime": 2.0353, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.1609, "drift": 9.261436, "gate": 0.4997, "regime": 1.2546, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0066, "drift": 5.2664, "gate": 0.4997, "regime": 0.7034, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.4755, "drift": 5.353759, "gate": 0.4974, "regime": 1.129, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.1478, "drift": 2.849411, "gate": 0.4982, "regime": 1.376, "control": null}}
+
+event: token
+data: {"token": "5", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.8169, "drift": 5.654614, "gate": 0.4979, "regime": 1.6889, "control": null}}
+
+event: token
+data: {"token": " +", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.2011, "drift": 6.394637, "gate": 0.4995, "regime": 1.9011, "control": null}}
+
+event: token
+data: {"token": " ($", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.2165, "drift": 7.762041, "gate": 0.5007, "regime": 2.1038, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0144, "drift": 4.389706, "gate": 0.501, "regime": 0.9608, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.9258, "drift": 5.386373, "gate": 0.4972, "regime": 1.418, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.8463, "drift": 2.874519, "gate": 0.4988, "regime": 1.9694, "control": null}}
+
+event: token
+data: {"token": "5", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.7063, "drift": 4.285298, "gate": 0.5008, "regime": 1.0632, "control": null}}
+
+event: token
+data: {"token": " +", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.3524, "drift": 6.808576, "gate": 0.4993, "regime": 1.7873, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.55, "drift": 8.769361, "gate": 0.499, "regime": 1.4045, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0332, "drift": 4.683266, "gate": 0.4994, "regime": 1.3997, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.6677, "drift": 5.860043, "gate": 0.4985, "regime": 1.5982, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0474, "drift": 4.375376, "gate": 0.5012, "regime": 1.4178, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.1375, "drift": 3.734891, "gate": 0.4981, "regime": 0.9522, "control": null}}
+
+event: token
+data: {"token": ")", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.2102, "drift": 4.832583, "gate": 0.4999, "regime": 0.8548, "control": null}}
+
+event: token
+data: {"token": " =", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.2342, "drift": 5.933885, "gate": 0.4982, "regime": 1.2261, "control": null}}
+
+event: token
+data: {"token": " $", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.7001, "drift": 10.366203, "gate": 0.5002, "regime": 2.2994, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0024, "drift": 5.396517, "gate": 0.5001, "regime": 1.6712, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.1823, "drift": 5.650795, "gate": 0.4989, "regime": 1.0481, "control": null}}
+
+event: token
+data: {"token": "1", "channel": "draft", "segment": 2, "nfet": {"entropy": 0.0044, "drift": 4.64822, "gate": 0.5019, "regime": 0.593, "control": null}}
+
+event: token
+data: {"token": "0", "channel": "draft", "segment": 2, "nfet": {"entropy": 1.2306, "drift": 5.886315, "gate": 0.5003, "regime": 1.9987, "control": null}}
+
+event: token
+data: {"token": ".", "channel": "draft", "segment": 2, "nfet": {"entropy": 2.5969, "drift": 11.258535, "gate": 0.4999, "regime": 1.0098, "control": null}}
+
+event: decision
+data: {"segment": 2, "decision": {"control": 0, "label": "continue", "source": "budget", "reason": "retrieve budget exhausted; continuing (was: trained head confident (p=0.56))", "zscores": {"entropy": -0.062, "drift": -0.25, "gate": 0.019, "regime": -0.29}, "head_probs": [0.2174, 0.5587, 0.1792, 0.0446, 0.0], "step": 116}, "segment_tokens": 116, "segment_mean_entropy": 1.2801, "telemetry_frames": 116}
+
+event: action
+data: {"segment": 2, "kind": "continue"}
+
+event: phase
+data: {"phase": "finalize", "ended_by": "natural_eos"}
+
+event: token
+data: {"token": "The ", "channel": "final"}
+
+event: token
+data: {"token": "ball ", "channel": "final"}
+
+event: token
+data: {"token": "costs ", "channel": "final"}
+
+event: token
+data: {"token": "$0.05, ", "channel": "final"}
+
+event: token
+data: {"token": "as ", "channel": "final"}
+
+event: token
+data: {"token": "shown ", "channel": "final"}
+
+event: token
+data: {"token": "by ", "channel": "final"}
+
+event: token
+data: {"token": "the ", "channel": "final"}
+
+event: token
+data: {"token": "one-line ", "channel": "final"}
+
+event: token
+data: {"token": "check: ", "channel": "final"}
+
+event: token
+data: {"token": "$0.05 ", "channel": "final"}
+
+event: token
+data: {"token": "+ ", "channel": "final"}
+
+event: token
+data: {"token": "($0.05 ", "channel": "final"}
+
+event: token
+data: {"token": "+ ", "channel": "final"}
+
+event: token
+data: {"token": "$1.00) ", "channel": "final"}
+
+event: token
+data: {"token": "= ", "channel": "final"}
+
+event: token
+data: {"token": "$1.10. ", "channel": "final"}
+
+event: phase
+data: {"phase": "measuring_confidence"}
+
+event: confidence_map
+data: {"spans": [{"start": 33, "end": 53, "score": 2.07, "text": "the one-line check:"}], "mean_entropy": 1.8596, "n_tokens": 42, "available": true}
+
+event: proof
+data: {"verdict": "nfet_control_visible", "plain": "NFET control decisions shaped the run: the agent retrieved, verified, or branched mid-generation based on its measured uncertainty.", "profile": "task", "changed_text": true, "word_similarity": null, "base_compared": false, "control_counts": {"retrieve": 1, "continue": 1}, "decision_sources": {"head": 1, "budget": 1}, "actions_taken": true, "ended_by": "natural_eos", "head_trained": true, "memory_hits_available": 0, "evidence_count": 2, "final_tok_per_sec": 16.878}
+
+event: receipt
+data: {"receipt_schema": "qira.run.receipt.v1", "verdict": "control_visible", "control_observed": true, "task_contract_passed": null, "artifact_integrity_verified": null, "reasons": [], "warnings": [], "layers": {"prompt": {"verdict": "prompt_received", "chars": 121, "token_estimate": 30, "sha256": "ba5813e6715610aafd5271f183ca62d8a094b1a88e5e07548f09245bc00bc646"}, "control": {"verdict": "control_visible", "actions": ["retrieve", "continue"], "ended_by": "natural_eos", "profile": "task"}, "answer": {"verdict": "no_explicit_contract", "passed": null, "reasons": []}, "evidence": {"verdict": "no_facts_provided"}, "vault": {"verdict": "not_sealed"}, "integrity": {"verdict": "not_verified"}}, "limits": "AEAD/hash verification proves artifact integrity and custody only; it never proves the answer is factually correct."}
+
+event: run_done
+data: {"command": "A bat and a ball cost $1.10 total. The bat costs $1.00 more than the ball. How much is the ball? Show the one-line check.", "reasoner": "workers_ai", "profile": "task", "head_trained": true, "memory_used": [], "evidence": [{"kind": "memory", "text": "On Google TPU v4, LOLM converges up to 43 percent faster than a matched baseline in early training; the baseline catches up around step 15-20K.", "meta": {"tag": "research"}}, {"kind": "cloud", "text": "On 'A bat and a ball cost $1.10 total. The bat costs $1.00 more than the ball. How m': The ball costs $0.05, as shown by the one-line check: $0.05 + ($0.05 + $1.00) = $1.10.", "meta": {"kind": "learning", "score": 9, "uses": 0, "source": "cloud-brain"}}], "draft": "Let's denote the cost of the ball as x. Since the bat costs $1.00 more than the ball, the cost of the bat can be expressed as x + $1.00. The total cost of the bat and the ball together is $1.10, so we can write the equation: x + (x + $1.00) = $1.10.\nSimplifying the equation, we combine like terms to get 2x + $1.00 = $1.10, and then subtract $1.00 from both sides to solve for x, yielding 2x = $0.10. Dividing both sides by 2 gives x = $0.05, which is the cost of the ball, and we can verify this solution with the one-line check: $0.05 + ($0.05 + $1.00) = $1.10.", "result": {"id": "wai-1781333869306", "response": "The ball costs $0.05, as shown by the one-line check: $0.05 + ($0.05 + $1.00) = $1.10.", "tokens": 17, "profile": "workers_ai:llama-3.3-70b-instruct-fp8-fast", "reasoner": "workers_ai", "use_graft": false, "seconds": 1.0072527541778982, "tok_per_sec": 16.8775909814961, "edge_ms": 964, "summary": {"avg_gate": null, "avg_surface_share": null, "avg_latent_share": null, "avg_regime_entropy": null, "last_control": null}}, "base": null, "timeline": [{"segment": 1, "decision": {"control": 1, "label": "retrieve", "source": "head", "reason": "trained head confident (p=0.57)", "zscores": {"entropy": -0.353, "drift": -0.273, "gate": -0.009, "regime": 0.294}, "head_probs": [0.2847, 0.5723, 0.1393, 0.0035, 0.0003], "step": 84}, "segment_tokens": 84, "segment_mean_entropy": 1.0919, "telemetry_frames": 84, "action": {"kind": "retrieve", "added": 2, "evidence": [{"kind": "memory", "text": "On Google TPU v4, LOLM converges up to 43 percent faster than a matched baseline in early training; the baseline catches up around step 15-20K.", "meta": {"tag": "research"}}, {"kind": "cloud", "text": "On 'A bat and a ball cost $1.10 total. The bat costs $1.00 more than the ball. How m': The ball costs $0.05, as shown by the one-line check: $0.05 + ($0.05 + $1.00) = $1.10.", "meta": {"kind": "learning", "score": 9, "uses": 0, "source": "cloud-brain"}}]}}, {"segment": 2, "decision": {"control": 0, "label": "continue", "source": "budget", "reason": "retrieve budget exhausted; continuing (was: trained head confident (p=0.56))", "zscores": {"entropy": -0.062, "drift": -0.25, "gate": 0.019, "regime": -0.29}, "head_probs": [0.2174, 0.5587, 0.1792, 0.0446, 0.0], "step": 116}, "segment_tokens": 116, "segment_mean_entropy": 1.2801, "telemetry_frames": 116, "action": {"kind": "continue"}}], "counters": {"segments": 2, "tokens": 217, "retrieves": 1, "verifies": 0, "branches": 0}, "ended_by": "natural_eos", "provenance": ["Checked local notes — used 2"], "proof": {"verdict": "nfet_control_visible", "plain": "NFET control decisions shaped the run: the agent retrieved, verified, or branched mid-generation based on its measured uncertainty.", "profile": "task", "changed_text": true, "word_similarity": null, "base_compared": false, "control_counts": {"retrieve": 1, "continue": 1}, "decision_sources": {"head": 1, "budget": 1}, "actions_taken": true, "ended_by": "natural_eos", "head_trained": true, "memory_hits_available": 0, "evidence_count": 2, "final_tok_per_sec": 16.878}, "receipt": {"receipt_schema": "qira.run.receipt.v1", "verdict": "control_visible", "control_observed": true, "task_contract_passed": null, "artifact_integrity_verified": null, "reasons": [], "warnings": [], "layers": {"prompt": {"verdict": "prompt_received", "chars": 121, "token_estimate": 30, "sha256": "ba5813e6715610aafd5271f183ca62d8a094b1a88e5e07548f09245bc00bc646"}, "control": {"verdict": "control_visible", "actions": ["retrieve", "continue"], "ended_by": "natural_eos", "profile": "task"}, "answer": {"verdict": "no_explicit_contract", "passed": null, "reasons": []}, "evidence": {"verdict": "no_facts_provided"}, "vault": {"verdict": "not_sealed"}, "integrity": {"verdict": "not_verified"}}, "limits": "AEAD/hash verification proves artifact integrity and custody only; it never proves the answer is factually correct."}, "confidence": {"spans": [{"start": 33, "end": 53, "score": 2.07, "text": "the one-line check:"}], "mean_entropy": 1.8596, "n_tokens": 42, "available": true}, "saved_learning_type": "nfet_agent_run"}
+

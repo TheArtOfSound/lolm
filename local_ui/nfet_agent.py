@@ -879,7 +879,15 @@ WORKING DRAFT:
         # answer-contract / evidence / vault / integrity evaluated
         # independently — telemetry activity is never task success.
         from lolm.run_receipt import build_receipt
-        receipt = build_receipt(command, final.text, timeline, ended_by, profile=profile)
+        receipt = build_receipt(
+            command, final.text, timeline, ended_by, profile=profile,
+            model_info={
+                "model_requested": req.reasoner,
+                "model_used": final.raw.get("profile") or req.reasoner,
+                "fallback_used": bool(final.raw.get("fell_back_from")),
+                "fallback_reason": final.raw.get("fallback_reason"),
+            },
+        )
 
         result = {
             "command": command,

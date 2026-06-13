@@ -1,0 +1,52 @@
+{
+  "label_counts": {
+    "formal_reasoning_failed": 6,
+    "converse_fallacy_detected": 3,
+    "invalid_inverse_detected": 1,
+    "task_contract_failed": 1,
+    "required_facts_missing": 2,
+    "length_requirement_failed": 2,
+    "required_sections_missing": 2
+  },
+  "controller_invocation_rate": "18/18",
+  "control_consumed_runs": 3,
+  "control_action_runs": 2,
+  "per_test_pass": {
+    "T0": {
+      "baseline": "n/a",
+      "nfet": "n/a"
+    },
+    "T1": {
+      "baseline": "n/a",
+      "nfet": "n/a"
+    },
+    "T2": {
+      "baseline": "1/2",
+      "nfet": "1/2"
+    },
+    "T3": {
+      "baseline": "n/a",
+      "nfet": "1/2"
+    },
+    "T4": {
+      "baseline": "0/2",
+      "nfet": "0/2"
+    },
+    "T5": {
+      "baseline": "n/a",
+      "nfet": "0/2"
+    },
+    "T7": {
+      "baseline": "n/a",
+      "nfet": "0/2"
+    },
+    "T8": {
+      "baseline": "n/a",
+      "nfet": "2/2"
+    },
+    "T9": {
+      "baseline": "0/2",
+      "nfet": "0/2"
+    }
+  }
+}

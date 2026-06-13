@@ -173,14 +173,39 @@ def check_contract(answer: str, contract: Dict[str, Any]) -> Dict[str, Any]:
 # -- the layered receipt ----------------------------------------------------------
 
 def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
-                  ended_by: str, profile: str = "task") -> Dict[str, Any]:
-    """Assemble the six-layer receipt for a completed run.
+                  ended_by: str, profile: str = "task",
+                  model_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Assemble the layered receipt for a completed run.
 
     vault/integrity layers start as not_sealed/not_verified; sealing and
     verification update them. Every layer is independent by design.
+
+    ``model_info`` (model_requested / model_used / fallback_used /
+    fallback_reason) makes the receipt disclose when a requested frontier
+    model was actually served by a fallback — so "this was a 70B answer" can
+    never be implied when it wasn't. Telemetry is never proof of model.
     """
     control_actions = [t.get("action", {}).get("kind") for t in timeline]
     control_observed = any(k in ("retrieve", "verify", "branch") for k in control_actions)
+
+    mi = model_info or {}
+    model_requested = mi.get("model_requested")
+    model_used = mi.get("model_used")
+    fallback_used = bool(mi.get("fallback_used"))
+    fallback_reason = mi.get("fallback_reason")
+    quality_warning = (
+        f"Fallback Mode: the requested model ({model_requested}) was unavailable "
+        f"({fallback_reason}); this answer was produced by {model_used} and quality "
+        "may be reduced. This was not a frontier-model result."
+    ) if fallback_used else None
+    model_layer = {
+        "verdict": "fallback_served" if fallback_used else "requested_model_served",
+        "model_requested": model_requested,
+        "model_used": model_used,
+        "fallback_used": fallback_used,
+        "fallback_reason": fallback_reason,
+        "quality_warning": quality_warning,
+    }
 
     contract = parse_contract(command)
     if contract["has_contract"]:
@@ -194,6 +219,8 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
         # A budget stop is not a confident finish — the brief asks for yellow,
         # not green, here.
         warnings.append("ended_by_budget_not_confidence")
+    if fallback_used:
+        warnings.append("fallback_active_quality_may_be_reduced")
 
     task_passed = answer_layer["passed"]
     if task_passed is False and control_observed:
@@ -212,10 +239,14 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
         "verdict": verdict,
         "control_observed": control_observed,
         "task_contract_passed": task_passed,
+        "model_used": model_used,
+        "fallback_used": fallback_used,
+        "quality_warning": quality_warning,
         "artifact_integrity_verified": None,   # set by verify
         "reasons": answer_layer["reasons"],
         "warnings": warnings,
         "layers": {
+            "model": model_layer,
             "prompt": {
                 "verdict": "prompt_received",
                 "chars": len(command),

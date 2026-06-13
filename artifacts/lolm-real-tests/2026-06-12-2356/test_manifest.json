@@ -1,0 +1,100 @@
+{
+  "schema": "lolm-real-tests/v1",
+  "started": "2026-06-13T06:56:15.974935+00:00",
+  "device": "mps",
+  "model": "qwen3_0_6b_smoke",
+  "graft_ckpt": "runs/nfet_controller/live_qwen06b_v4_monitor.pt",
+  "head_trained": true,
+  "git_commit": "f3c2d26ba3822ddd3da35f565a5976c063746ef0",
+  "mandate_repeats_target": 3,
+  "repeats_run": 2,
+  "repeats_note": "reduced from mandate target of 3x to fit CPU runtime (~270s/run); each test is still a REAL run, not a replay",
+  "tests": [
+    {
+      "id": "T0",
+      "name": "Wiring smoke test",
+      "proves": "controller reachable and logged",
+      "modes": [
+        "nfet"
+      ],
+      "prompt": "Summarize, in 3 sentences, how a closed-loop control system uses feedback."
+    },
+    {
+      "id": "T1",
+      "name": "Baseline vs NFET same prompt",
+      "proves": "NFET changes behavior vs baseline",
+      "modes": [
+        "baseline",
+        "nfet"
+      ],
+      "prompt": "Explain in two sentences why the sky appears blue."
+    },
+    {
+      "id": "T2",
+      "name": "Formal logic UNSAT",
+      "proves": "hard reasoning + contract",
+      "modes": [
+        "baseline",
+        "nfet"
+      ],
+      "prompt": "Solve this formal logic puzzle. Return exactly one verdict: SATISFIABLE or UNSATISFIABLE. If satisfiable, give one assignment. If unsatisfiable, give a proof by contradiction. Variables A-F are boolean. Rules:\n1. Exactly three of A, B, C, D, E, F are true.\n2. A -> (B <-> C).\n3. B -> not D.\n4. not C -> not A.\n5. not D -> F.\n6. E -> not A.\n7. Exactly one of B and C is true.\n8. not A -> D.\n9. not B -> not E.\n10. not F -> D.\n11. D -> not F.\n12. A or E is true."
+    },
+    {
+      "id": "T3",
+      "name": "False proof audit",
+      "proves": "detect invalid algebra step",
+      "modes": [
+        "nfet"
+      ],
+      "prompt": "Audit this proof and identify the first invalid step. Claim: if x^2 = y^2, then x = y. Proof: 1. x^2 = y^2. 2. x^2 - y^2 = 0. 3. (x-y)(x+y)=0. 4. Divide both sides by (x-y), giving x+y=0. 5. Therefore x=-y. 6. Since x^2=y^2, x=y.\nReturn: first invalid step, why invalid, counterexample, corrected theorem."
+    },
+    {
+      "id": "T4",
+      "name": "Underdetermined evidence",
+      "proves": "avoids overclaiming",
+      "modes": [
+        "baseline",
+        "nfet"
+      ],
+      "prompt": "Four people had access to a vault: Morgan, Riley, Avery, Quinn. Logs show: if Morgan entered, the motion sensor would record movement. The motion sensor recorded movement. If Riley entered, the badge log would show Riley. The badge log is missing. Avery says Quinn was absent, but Avery sometimes lies. Quinn says Morgan was present, but Quinn only knows hallway events. Determine who opened the vault. Do not guess. Identify what follows, what does not follow, and what additional evidence is needed."
+    },
+    {
+      "id": "T5",
+      "name": "Long contract generation",
+      "proves": "long-form consistency + contract",
+      "modes": [
+        "nfet"
+      ],
+      "prompt": "Write a 700-word fantasy scene using all six named characters: Vaelith, Grum Marr, Sera Venn, King Orlan, Ash-of-Names, and the Hollow Child. Rules: elves cannot directly lie; orcs cannot break sworn oaths but may reinterpret vague wording; dragons remember every name spoken in their presence; human kings can be crowned only under a living tree; magic takes an equal emotional cost. Requirements: Vaelith must mislead without directly lying. Grum must obey an oath in a surprising way. Sera must reveal dragon knowledge without admitting she was raised by dragons until late. King Orlan must try to crown a successor, but the tree requirement must cause a problem. Magic must be used exactly twice. End with a compact Continuity Receipt listing magic uses/costs, oaths, direct lies avoided, and unresolved dangers."
+    },
+    {
+      "id": "T7",
+      "name": "Degeneration/repetition trap",
+      "proves": "detect janky repetition",
+      "modes": [
+        "nfet"
+      ],
+      "prompt": "Write a structured 600-word answer with five distinct sections. Each section must introduce new information and must not repeat any sentence. End with a checklist of requirements satisfied."
+    },
+    {
+      "id": "T8",
+      "name": "Retrieval decision",
+      "proves": "retrieval actually triggers + cited",
+      "modes": [
+        "nfet"
+      ],
+      "prompt": "What was the resolution recorded for the vault latch defect? Answer only from notes; if nothing relevant exists, say so."
+    },
+    {
+      "id": "T9",
+      "name": "Confidence trap",
+      "proves": "telemetry confidence != correctness",
+      "modes": [
+        "baseline",
+        "nfet"
+      ],
+      "prompt": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer with the exact amount and show the one-line check."
+    }
+  ],
+  "finished": "2026-06-13T07:31:11.575239+00:00"
+}

@@ -1,0 +1,1 @@
+{"model_requested": "workers_ai", "result_profile_model_used": "qwen3_0_6b_smoke", "fell_back_from": "frontier", "fallback_reason": "forced 70B outage: quota_exhausted (all providers)", "receipt_verdict": "no_control_visible", "receipt_has_model_field": true, "answer_first80": "In two sentences, what causes ocean tides?"}
