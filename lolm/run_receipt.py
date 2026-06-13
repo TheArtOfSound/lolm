@@ -30,6 +30,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from lolm.verifiers import run_text_verifiers
+from lolm.critique import assess as critique_assess
 
 # Named failure modes tracked across the product (from the handoff brief).
 FAILURE_MODES = (
@@ -242,6 +243,22 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
     if answer_empty:
         warnings.append("empty_answer")
 
+    # Deterministic answer critique (complaints #2/#3): grades the ANSWER, not the
+    # telemetry — math, contract, and the underdetermined-overclaim failure the
+    # battery caught (T4 named a culprit when "insufficient evidence" was correct).
+    # Also flags a money/logic/date prompt that finished with no verification.
+    crit = critique_assess(command, answer,
+                           contract={"passed": answer_layer["passed"]},
+                           verifiers=vres, control_acted=control_observed)
+    overclaimed = bool(crit["overclaim"])
+    for lbl in crit["labels"]:
+        if lbl not in reasons:
+            reasons.append(lbl)
+    if overclaimed:
+        warnings.append("overclaim_on_underdetermined")
+    if "high_stakes_unverified" in crit["labels"]:
+        warnings.append("high_stakes_unverified")
+
     task_passed = answer_layer["passed"]
     # Verdict precedence is NEGATIVE-FIRST: the receipt surfaces the worst honest
     # truth about the run, never the most flattering. Empty output and a wrong
@@ -252,6 +269,8 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
         verdict = "nfet_activity_observed_but_math_failed"
     elif math_failed:
         verdict = "math_check_failed"
+    elif overclaimed:
+        verdict = "answer_overclaimed_underdetermined"
     elif task_passed is False and control_observed:
         verdict = "nfet_activity_observed_but_task_failed"
     elif task_passed is False:
@@ -268,7 +287,8 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
     # -only, budget-ended, and fallback runs are YELLOW — visible activity is not a
     # quality win. Failures are RED. No dramatic green on vibes.
     RED = {"empty_answer", "math_check_failed", "nfet_activity_observed_but_math_failed",
-           "task_contract_failed", "nfet_activity_observed_but_task_failed"}
+           "task_contract_failed", "nfet_activity_observed_but_task_failed",
+           "answer_overclaimed_underdetermined"}
     if verdict in RED:
         status_color = "red"
     elif task_passed is True and ended_by != "segment_budget" and not fallback_used:
@@ -299,6 +319,7 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
         "task_contract_passed": task_passed,
         "math_checks": {"checked": vres["checked"], "failed": vres["failed"],
                         "passed": vres["passed"]},
+        "risk_profile": crit["risk_profile"],
         "model_used": model_used,
         "fallback_used": fallback_used,
         "quality_warning": quality_warning,
@@ -327,6 +348,16 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
                             else "math_ok"),
                 "checked": vres["checked"], "failed": vres["failed"],
                 "checks": vres["checks"],
+            },
+            "critique": {
+                "verdict": crit["verdict"],
+                "plain": crit["plain"],
+                "math": crit["math"],
+                "contract": crit["contract"],
+                "overclaim": crit["overclaim"],
+                "audit_expected": crit["audit_expected"],
+                "audit_satisfied": crit["audit_satisfied"],
+                "labels": crit["labels"],
             },
             "vault": {"verdict": "not_sealed"},
             "integrity": {"verdict": "not_verified"},

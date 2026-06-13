@@ -784,6 +784,38 @@ WORKING DRAFT:
         # no for/else: ended_by defaults to segment_budget, break paths set
         # their own, and an empty social iterator must keep social_direct
 
+        # Audit mode (complaint #2: "the controller is not aggressive enough on hard
+        # reasoning"). On high-stakes prompts — money, formal logic, dates,
+        # explicitly underdetermined questions — the controller must not finish
+        # confidently without a check. If no verify fired while drafting and the
+        # prompt warrants scrutiny, force ONE verification pass and feed any
+        # critique into the finalizer. This is the difference between an
+        # uncertainty-aware agent and a fancy chatbot that just stops.
+        from lolm.critique import should_audit
+        if (profile != "social" and should_audit(command)
+                and counters.verifies < req.max_verifies and draft.strip()):
+            counters.verifies += 1
+            yield {"event": "phase", "data": {"phase": "audit_verify",
+                   "reason": "high-stakes prompt — forced verification (audit mode)"}}
+            verdict = yield from self._do_verify(command, draft, evidence, req)
+            entry = {
+                "segment": counters.segments + 1,
+                "decision": {"label": "verify", "source": "audit", "control": CONTROL_VERIFY,
+                             "reason": "audit mode: high-stakes prompt forced a verification pass",
+                             "zscores": {}, "head_probs": None, "step": policy.frames_seen},
+                "action": {"kind": "verify", "verdict": verdict["verdict"], "forced": True},
+            }
+            timeline.append(entry)
+            yield {"event": "decision", "data": entry}
+            yield {"event": "action", "data": {"segment": entry["segment"], **entry["action"]}}
+            if verdict["verdict"] == "revise":
+                evidence.append({
+                    "kind": "verifier_note",
+                    "text": f"A forced audit pass flagged the draft: {verdict['notes'][:600]}",
+                })
+            if ended_by == "segment_budget":
+                ended_by = "audit_verified"
+
         yield {"event": "phase", "data": {"phase": "finalize", "ended_by": ended_by}}
         final = yield from self._do_finalize(command, draft, evidence, req, profile=profile)
         counters.tokens += int(final.raw.get("tokens") or 0)
