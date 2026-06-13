@@ -122,6 +122,89 @@ a{color:#4ea1ff}.m{font:12px ui-monospace,monospace;color:#5a6675}</style></head
 </body></html>`;
 }
 
+// ---- cloud brain: shared memory + conversation sessions on D1 --------------
+async function sha256hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function brainTurn(env, body) {
+  const { session_id, role, content } = body;
+  if (!session_id || !role || !content) return { error: "session_id, role, content required" };
+  const now = Date.now();
+  await env.BRAIN.prepare(
+    "INSERT INTO sessions (id, created_at, last_at, turn_count) VALUES (?1, ?2, ?2, 1) " +
+    "ON CONFLICT(id) DO UPDATE SET last_at=?2, turn_count=turn_count+1"
+  ).bind(session_id, now).run();
+  await env.BRAIN.prepare(
+    "INSERT INTO turns (session_id, role, content, ts) VALUES (?, ?, ?, ?)"
+  ).bind(session_id, String(role).slice(0, 16), String(content).slice(0, 20000), now).run();
+  return { ok: true, ts: now };
+}
+
+async function brainSession(env, id, limit = 40) {
+  const rows = await env.BRAIN.prepare(
+    "SELECT role, content, ts FROM turns WHERE session_id=? ORDER BY ts ASC LIMIT ?"
+  ).bind(id, Math.min(limit, 200)).all();
+  return { session_id: id, turns: rows.results || [] };
+}
+
+async function brainRemember(env, body) {
+  const text = String(body.text || "").trim();
+  if (text.length < 8) return { error: "text too short" };
+  const id = await sha256hex(text);
+  const now = Date.now();
+  await env.BRAIN.prepare(
+    "INSERT INTO memory (id, text, kind, importance, source_session, ts, uses) " +
+    "VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0) ON CONFLICT(id) DO UPDATE SET " +
+    "importance=MAX(importance, ?4), ts=?6"
+  ).bind(id, text.slice(0, 4000), String(body.kind || "learning").slice(0, 24),
+         Math.max(1, Math.min(5, parseInt(body.importance) || 3)),
+         (body.source_session || null), now).run();
+  return { ok: true, id };
+}
+
+async function brainRecall(env, q, limit = 6) {
+  // Keyword overlap × importance, no neurons needed. Distinctive query words
+  // (len>3) matched against memory text; ranked, and recall bumps `uses` so
+  // the brain learns which memories actually help.
+  const words = [...new Set((q || "").toLowerCase().match(/[a-z0-9]{4,}/g) || [])].slice(0, 12);
+  if (!words.length) return { results: [], query_words: [] };
+  const like = words.map(() => "text LIKE ?").join(" OR ");
+  const binds = words.map((w) => `%${w}%`);
+  const rows = await env.BRAIN.prepare(
+    `SELECT id, text, kind, importance, source_session, ts, uses FROM memory WHERE ${like} LIMIT 60`
+  ).bind(...binds).all();
+  const scored = (rows.results || []).map((r) => {
+    const t = r.text.toLowerCase();
+    const matches = words.filter((w) => t.includes(w)).length;
+    return { ...r, score: matches * (1 + 0.15 * (r.importance - 3)), matches };
+  }).filter((r) => r.matches >= Math.min(2, words.length))
+    .sort((a, b) => b.score - a.score).slice(0, Math.min(limit, 20));
+  if (scored.length) {
+    const ids = scored.map((r) => `'${r.id}'`).join(",");
+    await env.BRAIN.prepare(`UPDATE memory SET uses=uses+1 WHERE id IN (${ids})`).run().catch(() => {});
+  }
+  return { results: scored, query_words: words };
+}
+
+async function brainStats(env) {
+  const m = await env.BRAIN.prepare("SELECT COUNT(*) n, COALESCE(SUM(uses),0) uses FROM memory").first();
+  const s = await env.BRAIN.prepare("SELECT COUNT(*) n FROM sessions").first();
+  const t = await env.BRAIN.prepare("SELECT COUNT(*) n FROM turns").first();
+  const top = await env.BRAIN.prepare(
+    "SELECT text, kind, importance, uses FROM memory ORDER BY uses DESC, importance DESC LIMIT 8"
+  ).all();
+  const byKind = await env.BRAIN.prepare(
+    "SELECT kind, COUNT(*) n FROM memory GROUP BY kind"
+  ).all();
+  return {
+    memories: m?.n || 0, total_recalls: m?.uses || 0,
+    sessions: s?.n || 0, conversation_turns: t?.n || 0,
+    by_kind: byKind.results || [], most_used: top.results || [],
+  };
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -129,6 +212,33 @@ export default {
     const json = (obj, s = 200) => new Response(JSON.stringify(obj, null, 2), {
       status: s, headers: { "content-type": "application/json", "access-control-allow-origin": "*" },
     });
+    const authed = () => {
+      const a = request.headers.get("authorization") || "";
+      return env.AI_SECRET && a === `Bearer ${env.AI_SECRET}`;
+    };
+
+    // Cloud brain. Writes/reads of conversation + memory require the shared
+    // secret (the origin box holds it). /brain/stats is public read-only so the
+    // growing memory is verifiable by anyone.
+    if (p === "/brain/stats") return json(await brainStats(env));
+    if (p.startsWith("/brain/")) {
+      if (!authed()) return json({ error: "unauthorized" }, 401);
+      try {
+        if (p === "/brain/turn" && request.method === "POST")
+          return json(await brainTurn(env, await request.json()));
+        if (p === "/brain/session")
+          return json(await brainSession(env, url.searchParams.get("id"),
+                                         parseInt(url.searchParams.get("limit")) || 40));
+        if (p === "/brain/remember" && request.method === "POST")
+          return json(await brainRemember(env, await request.json()));
+        if (p === "/brain/recall")
+          return json(await brainRecall(env, url.searchParams.get("q"),
+                                        parseInt(url.searchParams.get("limit")) || 6));
+      } catch (e) {
+        return json({ error: String(e).slice(0, 200) }, 500);
+      }
+      return json({ error: "unknown brain route" }, 404);
+    }
 
     // AI answer endpoint — Llama 70B via the Workers AI binding, so the
     // credential stays inside Cloudflare. Protected by a shared secret the

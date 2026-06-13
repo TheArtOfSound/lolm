@@ -21,6 +21,7 @@ import threading
 import time
 from pathlib import Path
 
+from local_ui.cloud_brain import CloudBrain
 from local_ui.nfet_agent import AgentDeps, NFETAgent, register_nfet_agent_routes
 from local_ui.public_demo import register_demo_routes
 from local_ui.workers_ai_reasoner import WorkersAIReasonerLoop
@@ -47,6 +48,21 @@ REPLAYS_DIR = Path(os.environ.get("DEMO_REPLAYS_DIR", str(ROOT / "site" / "repla
 # are set; otherwise the demo runs the local model directly.
 FRONTIER = WorkersAIReasonerLoop(state_fn=lambda: STATE)
 
+# Shared cloud brain (Cloudflare D1): persistent memory + long-form sessions,
+# accumulating across every user anywhere. Reuses the Workers-AI worker URL/
+# secret unless BRAIN_URL/BRAIN_SECRET are set. No-ops gracefully if unset.
+def _brain_base() -> str:
+    u = os.environ.get("BRAIN_URL")
+    if u:
+        return u
+    wa = os.environ.get("WORKERS_AI_URL", "")
+    return wa.rsplit("/ai/generate", 1)[0] if wa else ""
+
+BRAIN = CloudBrain(
+    base_url=_brain_base(),
+    secret=os.environ.get("BRAIN_SECRET") or os.environ.get("WORKERS_AI_SECRET", ""),
+)
+
 AGENT = NFETAgent(AgentDeps(
     memory=MEMORY,
     ChatMessage=ChatMessage,
@@ -55,6 +71,7 @@ AGENT = NFETAgent(AgentDeps(
     append_event=append_improvement_event,
     head_trained_fn=lambda: STATE.head_trained,
     frontier_loop=FRONTIER,
+    cloud_brain=BRAIN,
 ))
 
 register_nfet_agent_routes(app, AGENT)

@@ -558,3 +558,52 @@ def test_frontier_success_no_fallback(tmp_path):
     agent = NFETAgent(deps, policy_config=PolicyConfig(min_calibration=4, cooldown=4))
     out = agent.run(NFETAgentRequest(command="explain lolm", reasoner="workers_ai", max_segments=1))
     assert out["result"].get("fell_back_from") is None
+
+
+class FakeBrain:
+    """In-memory stand-in for the cloud brain."""
+    def __init__(self):
+        self.mem = []
+        self.turns = {}
+        self.remembered = []
+    def available(self): return True
+    def recall(self, query, limit=6):
+        w = set(query.lower().split())
+        return [m for m in self.mem if w & set(m["text"].lower().split())][:limit]
+    def remember(self, text, kind="learning", importance=3, source_session=None):
+        self.remembered.append({"text": text, "kind": kind}); return True
+    def add_turn(self, sid, role, content):
+        self.turns.setdefault(sid, []).append({"role": role, "content": content}); return True
+    def session_turns(self, sid, limit=40):
+        return self.turns.get(sid, [])[-limit:]
+
+
+def test_cloud_brain_recall_session_and_learning(tmp_path):
+    brain = FakeBrain()
+    brain.mem.append({"text": "the manifestation gate arbitrates surface versus latent streams",
+                      "kind": "fact", "score": 3.0, "uses": 2})
+    # prior conversation turn so the agent continues the thread
+    brain.add_turn("s1", "user", "what is a gate?")
+    brain.add_turn("s1", "assistant", "a gate arbitrates two streams")
+    loop = FakeLoop(segments=[
+        segment_spec([3.0] * 36 + [6.5] * 12, "uncertain segment"),
+        segment_spec([0.8] * 40, "calm close", drift=0.01)],
+        final_text="The manifestation gate is a per-dimension sigmoid that arbitrates between the "
+                   "surface decoder and the latent SSM stream, deciding feature by feature which "
+                   "path speaks; removing it collapses the model entirely.")
+    memory = MemoryStore(tmp_path / "data")
+    deps = AgentDeps(memory=memory, ChatMessage=Msg, ChatRequest=Req,
+                     generation_loop=loop, append_event=lambda e: None,
+                     head_trained_fn=lambda: False, cloud_brain=brain)
+    agent = NFETAgent(deps, policy_config=PolicyConfig(min_calibration=12, sustain=4, cooldown=16))
+    out = agent.run(NFETAgentRequest(command="explain the manifestation gate", session_id="s1",
+                                     max_segments=6))
+    # 1. cloud memory was injected as evidence when retrieve fired
+    if out["counters"]["retrieves"]:
+        assert any(e.get("kind") == "cloud" for e in out["evidence"])
+    # 2. prior session history reached the drafting prompt (long conversation)
+    drafting = [c for c in loop.calls if "drafting engine" in c["system"]]
+    assert any("CONVERSATION SO FAR" in c["user"] for c in drafting)
+    # 3. the run contributed turns + a learning back to the shared brain
+    assert {"role": "user", "content": "explain the manifestation gate"} in brain.turns["s1"]
+    assert brain.remembered  # a distilled learning was stored

@@ -13,6 +13,9 @@
     { "binding": "MEMORY_INDEX", "index_name": "lolm-memory" }
   ],
   "ai": { "binding": "AI" },
+  "d1_databases": [
+    { "binding": "BRAIN", "database_name": "lolm-brain", "database_id": "eacc0d29-f471-4038-aba6-d5ef2f465942" }
+  ],
   "triggers": {
     "crons": ["*/5 * * * *"]
   },

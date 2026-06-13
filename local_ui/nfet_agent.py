@@ -120,6 +120,8 @@ class NFETAgentRequest(BaseModel):
     ablation_mode: str = "full"
     allow_web: bool = False
     web_limit: int = 3
+    session_id: Optional[str] = None       # long-form conversation key; prior
+                                           # turns load from the cloud brain
     include_base_comparison: bool = False  # extra silent generation for the
                                            # "vs base mode" receipt; off by
                                            # default — it doubles latency on CPU
@@ -166,6 +168,7 @@ class AgentDeps:
     web_search: Optional[Callable[..., Dict[str, Any]]] = None
     fetch_url: Optional[Callable[..., Dict[str, Any]]] = None
     frontier_loop: Optional[Callable[[Any], Iterator[Dict[str, Any]]]] = None
+    cloud_brain: Optional[Any] = None   # CloudBrain client (shared D1 memory)
 
 
 class NFETAgent:
@@ -360,7 +363,9 @@ class NFETAgent:
             "talk), just respond naturally and briefly. Never repeat the existing "
             "draft; continue it from where it stops."
         )
-        user = f"""COMMAND:
+        convo = getattr(self, "_convo_context", "")
+        convo_block = f"CONVERSATION SO FAR (continue this thread):\n{convo}\n\n" if convo else ""
+        user = f"""{convo_block}COMMAND:
 {command}
 
 {self._evidence_block('LOCAL MEMORY', memory_hits)}
@@ -430,6 +435,16 @@ Continue the draft. Write the next segment only."""
         notes = self._rank_notes(notes, command)
         for note in notes:
             rows.append({"kind": "memory", "text": note.get("text", ""), "meta": {"tag": note.get("tag")}})
+        # Shared cloud brain: pull memories every user anywhere has accumulated.
+        # Tagged distinctly and carrying provenance (score, uses) for verifiability.
+        brain = getattr(self.deps, "cloud_brain", None)
+        if brain is not None and brain.available():
+            for hit in brain.recall(query or command, limit=4):
+                rows.append({
+                    "kind": "cloud", "text": hit.get("text", ""),
+                    "meta": {"kind": hit.get("kind"), "score": round(hit.get("score", 0), 2),
+                             "uses": hit.get("uses"), "source": "cloud-brain"},
+                })
         if req.allow_web and self.deps.web_search is not None:
             try:
                 results = self.deps.web_search(query, limit=req.web_limit)
@@ -616,6 +631,18 @@ WORKING DRAFT:
         if not command:
             yield {"event": "error", "data": {"error": "empty command"}}
             return
+
+        # Long-form conversation: load prior turns of this session from the
+        # shared cloud brain so the agent continues the thread instead of
+        # answering each prompt cold. Stored as a context the generators inject.
+        self._convo_context = ""
+        brain = getattr(self.deps, "cloud_brain", None)
+        sid = getattr(req, "session_id", None)
+        if brain is not None and sid and brain.available():
+            turns = brain.session_turns(sid, limit=12)
+            if turns:
+                hist = "\n".join(f"{t['role']}: {t['content'][:600]}" for t in turns[-10:])
+                self._convo_context = hist
 
         started = time.time()
         head_trained = bool(self.deps.head_trained_fn())
@@ -814,6 +841,22 @@ WORKING DRAFT:
             f"Controls: {proof['control_counts']} (source: {proof['decision_sources']})\n\n"
             f"Ended by: {ended_by}"
         )
+
+        # Contribute to the shared cloud brain: store the conversation turns
+        # (long-form memory) and a one-line distilled learning anyone can reuse.
+        brain = getattr(self.deps, "cloud_brain", None)
+        if brain is not None and brain.available():
+            sid = getattr(req, "session_id", None)
+            answer = (final.raw.get("response") or final.text or "").strip()
+            if sid and answer:
+                brain.add_turn(sid, "user", command)
+                brain.add_turn(sid, "assistant", answer[:8000])
+            # A durable fact only when the run actually answered something
+            # substantive — never store junk or the agent's own scaffolding.
+            if answer and len(answer) > 80 and profile != "social" and ended_by != "repetition_stall":
+                lead = re.split(r"(?<=[.!?])\s", answer)[0][:300]
+                brain.remember(f"On '{command[:80]}': {lead}", kind="learning",
+                               importance=3, source_session=sid)
 
         # Layered honest receipt (qira.run.receipt.v1): prompt / control /
         # answer-contract / evidence / vault / integrity evaluated
