@@ -452,6 +452,12 @@
         } else if (rc.task_contract_passed === true){
           r.innerHTML += '<div class="row" style="color:var(--green)">Contract check: every explicit requirement in your prompt was met.</div>';
         }
+        const rt = rc.layers && rc.layers.retrieval;
+        if (rt && rt.retrieved){
+          let msg = 'Retrieval: <b>' + rt.used + ' of ' + rt.retrieved + '</b> note(s) actually used in the answer';
+          if (rt.decorative) msg += ' · ' + rt.decorative + ' retrieved but unused (decorative)';
+          r.innerHTML += '<div class="row" style="color:' + (rt.used ? 'var(--green)' : 'var(--amber)') + '">' + msg + '.</div>';
+        }
         if (rc.quality_warning)
           r.innerHTML += '<div class="row" style="color:#ff6b6b">' + rc.quality_warning + '</div>';
         r.innerHTML += '<div class="row" style="opacity:.7">Proves what the controller did — not that the answer beat a baseline (quality vs baseline: unproven).</div>';

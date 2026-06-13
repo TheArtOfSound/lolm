@@ -216,7 +216,8 @@ def check_contract(answer: str, contract: Dict[str, Any]) -> Dict[str, Any]:
 
 def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
                   ended_by: str, profile: str = "task",
-                  model_info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                  model_info: Optional[Dict[str, Any]] = None,
+                  retrieval: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Assemble the layered receipt for a completed run.
 
     vault/integrity layers start as not_sealed/not_verified; sealing and
@@ -397,6 +398,13 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
             },
             "answer": {k: v for k, v in answer_layer.items() if k != "evidence"},
             "evidence": answer_layer["evidence"] or {"verdict": "no_facts_provided"},
+            "retrieval": ({"verdict": "no_retrieval", "retrieved": 0} if not retrieval else {
+                "verdict": "retrieval_used" if retrieval.get("used") else "retrieval_decorative",
+                "retrieved": retrieval.get("retrieved", 0),
+                "used": retrieval.get("used", 0),
+                "decorative": retrieval.get("decorative", 0),
+                "items": retrieval.get("items", []),
+            }),
             "verifiers": {
                 "verdict": ("math_check_failed" if math_failed
                             else "no_math_to_check" if vres["checked"] == 0

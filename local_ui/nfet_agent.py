@@ -465,7 +465,11 @@ Continue the draft. Write the next segment only."""
                     })
             except Exception as exc:
                 rows.append({"kind": "web_error", "text": str(exc)[:200]})
-        return [r for r in rows if r.get("text")]
+        from lolm.retrieval_report import evidence_id
+        rows = [r for r in rows if r.get("text")]
+        for i, r in enumerate(rows):
+            r["id"] = evidence_id(r, i)
+        return rows
 
     def _do_verify(self, command: str, draft: str, evidence: List[Dict[str, Any]],
                    req: NFETAgentRequest) -> Generator[Dict[str, Any], None, Dict[str, Any]]:
@@ -835,6 +839,19 @@ WORKING DRAFT:
             if confidence.get("spans"):
                 yield {"event": "confidence_map", "data": confidence}
 
+        # Retrieval transparency (#5): bind each retrieved note to the exact
+        # answer sentences it supports, and report retrieved-vs-used so decorative
+        # notes are visible. "Evidence count" is not "evidence used."
+        retrieval: Dict[str, Any] = {}
+        if evidence:
+            from lolm.retrieval_report import retrieval_support
+            try:
+                retrieval = retrieval_support(evidence, answer_text)
+            except Exception:
+                retrieval = {}
+            if retrieval:
+                yield {"event": "retrieval_report", "data": retrieval}
+
         # Provenance is assembled from the action log, never written by the
         # model — an agent that cannot misreport what it did.
         provenance: List[str] = []
@@ -927,6 +944,7 @@ WORKING DRAFT:
                 "fallback_used": bool(final.raw.get("fell_back_from")),
                 "fallback_reason": final.raw.get("fallback_reason"),
             },
+            retrieval=retrieval,
         )
 
         result = {
@@ -946,6 +964,7 @@ WORKING DRAFT:
             "proof": proof,
             "receipt": receipt,
             "confidence": confidence,
+            "retrieval": retrieval,
             "saved_learning_type": "nfet_agent_run",
         }
         self.last_run = result
