@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Dict, Generator, Iterator, List, Optional
 
 from pydantic import BaseModel
@@ -965,6 +965,8 @@ WORKING DRAFT:
             "receipt": receipt,
             "confidence": confidence,
             "retrieval": retrieval,
+            "controller_config": asdict(policy.cfg),
+            "frames": learning["frames"],
             "saved_learning_type": "nfet_agent_run",
         }
         self.last_run = result

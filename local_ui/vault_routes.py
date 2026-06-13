@@ -14,6 +14,7 @@ small per-IP rate limit independent of the run gate.
 
 from __future__ import annotations
 
+import hashlib
 import threading
 import time
 from collections import defaultdict, deque
@@ -23,7 +24,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from lolm.qev_vault import VaultError, envelope_id, seal, unseal
+from lolm.qev_vault import VaultError, canonical_json, envelope_id, seal, unseal
 from lolm.run_receipt import mark_sealed, mark_verified
 
 SEALS_PER_HOUR = 6
@@ -46,20 +47,52 @@ def _client_ip(request: Request) -> str:
 
 
 def _run_to_payload(run: Dict[str, Any]) -> Dict[str, Any]:
-    """Compact, self-contained vault payload for an agent run."""
-    return {
+    """Full sealed run bundle — RAW TRACES, not a summary (complaint #9).
+
+    The audit's sharpest vault risk: "a cryptographic wrapper can make weak
+    evidence feel official" — sealing a pretty receipt proves a receipt existed,
+    not that the run happened as claimed. So the envelope must carry the raw
+    material to reproduce the run: the prompt, the model + run-mode, the
+    controller thresholds, EVERY retrieved note, the per-token telemetry stream,
+    the draft, the baseline (if any), the measured confidence spans, and the
+    verifier/critique results — plus a hash over the raw content so a tampered
+    answer/draft/trace is detectable independent of the envelope's own AEAD.
+    """
+    receipt = run.get("receipt") or {}
+    result = run.get("result") or {}
+    answer = result.get("response")
+    bundle = {
         "kind": "lolm_nfet_agent_run",
+        "bundle_schema": "qira.run.bundle.v2",
         "command": run.get("command"),
-        "answer": (run.get("result") or {}).get("response"),
-        "profile": run.get("profile"),
+        "answer": answer,
+        "model": {
+            "requested": run.get("reasoner"),
+            "used": receipt.get("model_used") or result.get("profile"),
+            "run_mode": receipt.get("run_mode"),
+            "fallback_used": receipt.get("fallback_used"),
+        },
+        "controller_config": run.get("controller_config"),   # thresholds in force
+        "evidence": run.get("evidence"),                      # every retrieved note (raw)
+        "retrieval": run.get("retrieval"),                    # note->sentence binding
+        "draft": run.get("draft"),                            # working draft pre-finalize
+        "timeline": run.get("timeline"),                      # decision/action stream
+        "frames": run.get("frames"),                          # per-token telemetry (raw)
+        "confidence": run.get("confidence"),                  # measured low-confidence spans
+        "base": run.get("base"),                              # baseline output, if a base shot ran
+        "counters": run.get("counters"),
         "ended_by": run.get("ended_by"),
         "provenance": run.get("provenance"),
-        "timeline": run.get("timeline"),
-        "counters": run.get("counters"),
         "proof": run.get("proof"),
-        "receipt": run.get("receipt"),
-        "reasoner": run.get("reasoner"),
+        "receipt": receipt,                                   # verifier + critique results
     }
+    raw = canonical_json({
+        "command": bundle["command"], "answer": answer, "draft": bundle["draft"],
+        "timeline": bundle["timeline"], "evidence": bundle["evidence"],
+        "frames": bundle["frames"],
+    })
+    bundle["bundle_sha256"] = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    return bundle
 
 
 def register_vault_routes(app: Any, agent: Any) -> None:
