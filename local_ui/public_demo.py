@@ -45,19 +45,19 @@ def _int_env(name: str, default: int) -> int:
 
 class DemoLimits:
     def __init__(self) -> None:
-        # With a strong frontier writer, 2 draft segments + finalize is plenty;
-        # each extra segment adds a worker call + a local telemetry re-read.
-        self.max_segments = _int_env("DEMO_MAX_SEGMENTS", 2)
-        self.segment_tokens = _int_env("DEMO_SEGMENT_TOKENS", 160)
-        self.final_tokens = _int_env("DEMO_FINAL_TOKENS", 1200)
-        self.max_retrieves = _int_env("DEMO_MAX_RETRIEVES", 1)
-        self.max_verifies = _int_env("DEMO_MAX_VERIFIES", 1)
-        self.max_branches = _int_env("DEMO_MAX_BRANCHES", 1)
-        self.branch_width = _int_env("DEMO_BRANCH_WIDTH", 2)
-        # Generous by default — the Workers AI brain generates on Cloudflare's
-        # GPUs, so the local box is not the bottleneck and limits can be light.
-        self.rate_per_hour = _int_env("DEMO_RATE_PER_HOUR", 60)
-        self.command_chars = _int_env("DEMO_COMMAND_CHARS", 8000)
+        # Budgets are deliberately GENEROUS: the frontier writer runs on the
+        # provider's GPUs, so a clipped answer is worse than a few extra calls.
+        # A truncated final answer reads as a worse model — never let the budget,
+        # rather than the controller, decide when an answer is done.
+        self.max_segments = _int_env("DEMO_MAX_SEGMENTS", 8)
+        self.segment_tokens = _int_env("DEMO_SEGMENT_TOKENS", 300)
+        self.final_tokens = _int_env("DEMO_FINAL_TOKENS", 4000)
+        self.max_retrieves = _int_env("DEMO_MAX_RETRIEVES", 5)
+        self.max_verifies = _int_env("DEMO_MAX_VERIFIES", 4)
+        self.max_branches = _int_env("DEMO_MAX_BRANCHES", 3)
+        self.branch_width = _int_env("DEMO_BRANCH_WIDTH", 3)
+        self.rate_per_hour = _int_env("DEMO_RATE_PER_HOUR", 240)
+        self.command_chars = _int_env("DEMO_COMMAND_CHARS", 32000)
         self.reasoner = os.environ.get("DEMO_REASONER", "local")  # local | workers_ai | claude
 
     def to_dict(self) -> Dict[str, int]:
