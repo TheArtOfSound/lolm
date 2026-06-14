@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Qira LLC. All rights reserved.
 """Tests for the frontier-backed planner (fake chat_fn, no model)."""
 
-from local_ui.operator_planner import FrontierPlanner, extract_plan
+from local_ui.operator_planner import FrontierPlanner, extract_plan, normalize_plan
 
 
 def test_extract_plan_plain_json():
@@ -23,6 +23,27 @@ def test_extract_plan_trailing_prose_after_object():
 def test_extract_plan_garbage_is_empty():
     assert extract_plan("no json here at all") == {}
     assert extract_plan("") == {}
+
+
+def test_normalize_flattened_action_into_tool_name():
+    # The exact shape Llama-70B produced live: {"action":"web_read","url":...}.
+    p = normalize_plan({"action": "web_read", "url": "https://x.com", "reason": "r"})
+    assert p["action"] == "tool" and p["tool"] == "web_read"
+    assert p["args"] == {"url": "https://x.com"}
+
+
+def test_normalize_strips_placeholder_braces_and_hoisted_arg():
+    # Live shape: "tool":"shell_read{cmd}" with cmd hoisted.
+    p = normalize_plan({"action": "tool", "tool": "shell_read{cmd}",
+                        "cmd": "df -h /", "reason": "disk"})
+    assert p["tool"] == "shell_read" and p["args"] == {"cmd": "df -h /"}
+
+
+def test_planner_repairs_flattened_reply_end_to_end():
+    planner = FrontierPlanner(lambda msgs: '{"action":"run_python","code":"print(1)"}')
+    plan = planner("compute", [])
+    assert plan["action"] == "tool" and plan["tool"] == "run_python"
+    assert plan["args"] == {"code": "print(1)"}
 
 
 def test_planner_returns_valid_tool_plan():

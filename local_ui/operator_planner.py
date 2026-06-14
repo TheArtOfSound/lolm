@@ -21,22 +21,58 @@ from typing import Any, Callable, Dict, List
 ChatFn = Callable[[List[Dict[str, str]]], str]
 
 TOOL_SPEC = (
-    "You are the PLANNER for an autonomous operator. Each turn choose ONE next "
-    "step toward the GOAL using only these tools:\n"
-    "  web_read{url}     fetch a public web page's text (research, read-only)\n"
-    "  run_python{code}  run Python in an isolated sandbox (dev; stdout/stderr)\n"
-    "  shell_read{cmd}   a READ-ONLY shell command (ops; ls/cat/df/dig/"
-    "systemctl status/...)\n\n"
-    "Reply with ONE JSON object and nothing else:\n"
-    '  {"action":"tool","tool":"<name>","args":{...},"reason":"why",'
-    '"risk_profiles":["financial"|"legal"|"medical"|"quantitative"|...]}\n'
-    "or, when the goal is achieved:\n"
-    '  {"action":"finish","answer":"<final answer>"}\n\n'
-    "Rules: never invent tools; prefer read-only steps; if the goal needs money/"
-    "sending/deleting/deploying you may PROPOSE it (it will be hard-gated to a "
-    "human) and must say so in reason. Set risk_profiles when the step touches "
-    "money, law, medicine, or exact quantities."
+    "You are the PLANNER for an autonomous operator. Output ONE JSON object and "
+    "nothing else.\n\n"
+    "Tools — use the name EXACTLY as written, with no braces:\n"
+    '  web_read     args {"url": "https://..."}   fetch a public web page (read-only)\n'
+    '  run_python   args {"code": "..."}           run Python in a sandbox\n'
+    '  shell_read   args {"cmd": "df -h /"}        ONE read-only shell command\n\n'
+    "To take a step, copy this shape exactly:\n"
+    '  {"action": "tool", "tool": "shell_read", "args": {"cmd": "free -m"}, '
+    '"reason": "check memory"}\n'
+    "When the goal is fully answered:\n"
+    '  {"action": "finish", "answer": "<the answer>"}\n\n'
+    'Rules: "tool" is EXACTLY web_read, run_python, or shell_read — never add '
+    "{cmd}/{url}/{code} braces. Prefer read-only steps. shell_read runs ONE "
+    "command with no pipes or redirects. Add \"risk_profiles\":[...] (e.g. "
+    '"financial","legal","medical","quantitative") when the step touches those. '
+    "Money/sending/deleting/deploying will be hard-gated to a human."
 )
+
+_TOOL_NAMES = {"web_read", "run_python", "shell_read"}
+
+
+def normalize_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
+    """Coerce the model's common schema variants into the canonical shape.
+
+    Real 70B replies flatten ``{"action":"web_read",...}`` or echo the spec's
+    placeholder as ``"tool":"shell_read{cmd}"``. Rather than reject a basically-
+    correct plan, repair these deterministically — the gate still decides what
+    runs, so lenient parsing here costs no safety.
+    """
+    if not isinstance(plan, dict):
+        return {}
+    action = plan.get("action")
+    # Model put the tool name in "action".
+    if action in _TOOL_NAMES:
+        plan = {"action": "tool", "tool": action,
+                "args": plan.get("args") or {},
+                "reason": plan.get("reason", ""),
+                "risk_profiles": plan.get("risk_profiles"),
+                "url": plan.get("url"), "cmd": plan.get("cmd"), "code": plan.get("code")}
+        action = "tool"
+    if action == "tool":
+        tool = re.sub(r"\{.*?\}", "", str(plan.get("tool", ""))).strip()
+        plan["tool"] = tool
+        args = plan.get("args")
+        if not isinstance(args, dict):
+            args = {}
+        # Some replies hoist the single arg to the top level.
+        for k in ("url", "cmd", "code"):
+            if k not in args and plan.get(k):
+                args[k] = plan[k]
+        plan["args"] = args
+    return plan
 
 
 def extract_plan(text: str) -> Dict[str, Any]:
@@ -82,8 +118,10 @@ class FrontierPlanner:
                                  {"role": "user", "content": user}])
         except Exception as exc:
             return {"action": "finish", "answer": f"planner error: {exc}"[:300]}
-        plan = extract_plan(text or "")
-        if not plan or plan.get("action") not in ("tool", "finish"):
-            # No valid plan -> treat the reply as a final answer, never guess a tool.
-            return {"action": "finish", "answer": (text or "").strip()[:2000]}
-        return plan
+        plan = normalize_plan(extract_plan(text or ""))
+        if plan.get("action") == "tool" and plan.get("tool") in _TOOL_NAMES:
+            return plan
+        if plan.get("action") == "finish":
+            return plan
+        # No usable plan -> treat the reply as a final answer, never guess a tool.
+        return {"action": "finish", "answer": (text or "").strip()[:2000]}
