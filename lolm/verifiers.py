@@ -239,10 +239,22 @@ _DURATION_RE = re.compile(
     re.IGNORECASE)
 
 
+# A duration "N unit = M unit" immediately preceded by an arithmetic operator is
+# the TAIL of a calculation ("10 hours/week * 3 weeks = 30 hours" — already
+# checked by verify_arithmetic), NOT a claim that the two units are equal.
+# Re-reading it as a weeks->hours conversion produces a false "math failed",
+# which is itself a dishonest receipt — exactly what these verifiers must avoid.
+_ARITH_BEFORE = re.compile(
+    r"(?:[*×·+/÷]|\b(?:x|times|plus|minus|multiplied\s+by|divided\s+by))\s*$",
+    re.IGNORECASE)
+
+
 def verify_durations(text: str, rel_tol: float = 0.001) -> List[Dict[str, Any]]:
     """Check stated unit conversions: '3 weeks = 21 days', '2 hours is 120 minutes'."""
     checks: List[Dict[str, Any]] = []
     for m in _DURATION_RE.finditer(text):
+        if _ARITH_BEFORE.search(text[:m.start(1)]):
+            continue  # tail of an arithmetic chain, not a unit-conversion claim
         lv, lu = _to_number(m.group(1)), m.group(2).rstrip("s").lower()
         rv, ru = _to_number(m.group(3)), m.group(4).rstrip("s").lower()
         if lv is None or rv is None or lu not in _UNIT_HOURS or ru not in _UNIT_HOURS:

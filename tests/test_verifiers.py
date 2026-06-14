@@ -119,3 +119,25 @@ def test_run_text_verifiers_summary():
 
     ok = run_text_verifiers("3 x 10 x $55 = $1,650 and 20% of 50 = 10.")
     assert ok["checked"] == 2 and ok["failed"] == 0 and ok["passed"] is True
+
+
+def test_duration_not_confused_by_arithmetic_tail():
+    # The live-run false positive: "10 hours/week * 3 weeks = 30 hours" is a
+    # multiplication, NOT a weeks->hours conversion. verify_durations must not
+    # grab "3 weeks = 30 hours" and fail it as 3*168 != 30.
+    from lolm.verifiers import verify_durations
+    assert verify_durations("10 hours/week * 3 weeks = 30 hours") == []
+    # The full correct answer the 70B actually wrote must come back clean.
+    answer = ("10 hours/week * 3 weeks = 30 hours. Then 30 hours * $55/hour = "
+              "$1650. Total extra cost is $1650.")
+    out = run_text_verifiers(answer)
+    assert out["failed"] == 0 and out["passed"] is True, out
+
+
+def test_real_duration_conversion_still_checked():
+    # A genuine standalone conversion is still verified — right and wrong.
+    from lolm.verifiers import verify_durations
+    good = verify_durations("3 weeks = 21 days")
+    assert good and good[0]["ok"] is True
+    bad = verify_durations("2 hours is 200 minutes")
+    assert bad and bad[0]["ok"] is False
