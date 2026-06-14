@@ -97,6 +97,15 @@ register_demo_routes(
 from local_ui.vault_routes import register_vault_routes
 register_vault_routes(app, AGENT)
 
+# NFET control surface: public read-only decision math + deterministic
+# system-state answers; loopback/token-guarded autonomy tick + state.
+from local_ui.control_routes import register_control_routes
+register_control_routes(
+    app, agent_id="lolm-demo",
+    live_stats_fn=lambda: (BRAIN.stats() if BRAIN.available() else {}),
+    goals_fn=lambda st: MEMORY.get_goals(),
+)
+
 
 # ── Autonomous operator (Phase 3): a gated tool-runtime over the dev / ops /
 # research verticals, driven by the same calibrated uncertainty as the agent.
