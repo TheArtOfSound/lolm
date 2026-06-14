@@ -250,28 +250,38 @@ async function generate70B(env, messages, max_tokens, modelOverride) {
   const chain = providerChain(env);
   const tried = [];
   let lastQuota = false;
-  for (const provider of chain) {
-    const t0 = Date.now();
-    try {
-      let text;
-      if (provider.kind === "cf") {
-        const r = await env.AI.run(modelOverride || "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-                                   { messages, max_tokens });
-        text = (r && r.response) || "";
-      } else {
-        text = await callOpenAICompatible(provider, messages, max_tokens);
+  // Two passes. A simultaneous transient failure across every free tier (burst
+  // rate-limiting) usually clears within ~a second, so if the whole chain
+  // fails, back off briefly and try once more before giving up. Independent
+  // providers + a retry pass means 70B essentially never goes dark for a single
+  // request unless every account is truly exhausted at once.
+  for (let pass = 0; pass < 2; pass++) {
+    if (pass > 0) await new Promise((r) => setTimeout(r, 600));
+    for (const provider of chain) {
+      const t0 = Date.now();
+      try {
+        let text;
+        if (provider.kind === "cf") {
+          const r = await env.AI.run(modelOverride || "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+                                     { messages, max_tokens });
+          text = (r && r.response) || "";
+          // Workers AI sometimes reports failure in-band instead of throwing.
+          if (!text.trim() && r && r.error) throw new Error(`workers-ai: ${r.error}`);
+        } else {
+          text = await callOpenAICompatible(provider, messages, max_tokens);
+        }
+        if (text && text.trim()) {
+          return { text, model: provider.model || "llama-3.3-70b", provider: provider.name,
+                   ms: Date.now() - t0, tried_providers: tried, retried: pass > 0 };
+        }
+        tried.push({ provider: provider.name, error: "empty", pass });
+      } catch (e) {
+        const msg = String(e.message || e);
+        const quota = e.quota || /neuron|allocation|4006|Paid plan|quota|rate.?limit/i.test(msg);
+        lastQuota = quota;
+        tried.push({ provider: provider.name, error: msg.slice(0, 100), quota, pass });
+        // continue to the next independent provider
       }
-      if (text && text.trim()) {
-        return { text, model: provider.model || "llama-3.3-70b", provider: provider.name,
-                 ms: Date.now() - t0, tried_providers: tried };
-      }
-      tried.push({ provider: provider.name, error: "empty" });
-    } catch (e) {
-      const msg = String(e.message || e);
-      const quota = e.quota || /neuron|allocation|4006|Paid plan|quota|rate.?limit/i.test(msg);
-      lastQuota = quota;
-      tried.push({ provider: provider.name, error: msg.slice(0, 100), quota });
-      // continue to the next independent provider
     }
   }
   return { error: "all 70B providers unavailable", tried_providers: tried,
