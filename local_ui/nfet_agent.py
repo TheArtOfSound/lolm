@@ -171,6 +171,7 @@ class AgentDeps:
     cloud_brain: Optional[Any] = None   # CloudBrain client (shared D1 memory)
     flywheel: Optional[Any] = None      # AutonomyFlywheel: (uncertainty, verified
                                         # outcome) log → calibrated autonomy bars
+    autonomy_level_fn: Optional[Callable[[], str]] = None  # system's honest level
     confidence_fn: Optional[Callable[[str], Dict[str, Any]]] = None  # measured
                                         # per-token uncertainty over the answer
 
@@ -1045,8 +1046,9 @@ WORKING DRAFT:
             spans_rcpt = [{"text": s.get("text"), "z": s.get("score"),
                            "signal": "graft_entropy", "crossedActionThreshold": bool(ctl_actions)}
                           for s in (confidence.get("spans") or [])]
-            level = compute_autonomy_level({"receipts": True, "controller_actions": True,
-                                            "memory_goal_ticks": True})
+            level_fn = getattr(self.deps, "autonomy_level_fn", None)
+            level = level_fn() if level_fn else compute_autonomy_level(
+                {"receipts": True, "controller_actions": True, "memory_goal_ticks": True})
             crcpt = build_control_receipt(
                 dpacket, memory_snapshot=getattr(self, "_brain_snapshot", None) or {"verdict": "no_snapshot"},
                 writer_model=str(final.raw.get("profile") or req.reasoner),

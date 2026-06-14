@@ -88,7 +88,7 @@ def _state_dir() -> Path:
 
 
 def load_agent_state(agent_id: str, base_dir: Optional[Path] = None) -> AgentState:
-    path = (base_dir or _state_dir()) / f"{agent_id}.json"
+    path = (Path(base_dir) if base_dir else _state_dir()) / f"{agent_id}.json"
     try:
         data = json.loads(path.read_text())
         known = {f for f in AgentState.__dataclass_fields__}
@@ -99,7 +99,7 @@ def load_agent_state(agent_id: str, base_dir: Optional[Path] = None) -> AgentSta
 
 
 def persist_agent_state(state: AgentState, base_dir: Optional[Path] = None) -> None:
-    d = base_dir or _state_dir()
+    d = Path(base_dir) if base_dir else _state_dir()
     d.mkdir(parents=True, exist_ok=True)
     (d / f"{state.agentId}.json").write_text(json.dumps(state.to_dict(), indent=2))
 

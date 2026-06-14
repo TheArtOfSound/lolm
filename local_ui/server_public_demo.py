@@ -75,6 +75,24 @@ def _confidence(text: str):
 from lolm.flywheel import AutonomyFlywheel
 FLYWHEEL = AutonomyFlywheel(ROOT / "runs" / "autonomy_flywheel.jsonl")
 
+from lolm.autonomy import AutonomyGate
+from lolm.agent.agent_state import compute_autonomy_level as _compute_level
+
+
+def _gate_factory():
+    """An autonomy gate using the live flywheel's calibrator (re-fit as outcomes
+    accumulate). Safe read/reversible tools only; money/delete hard-gated."""
+    return AutonomyGate(FLYWHEEL.calibrator())
+
+
+def _system_level() -> str:
+    """The system's honest autonomy level — L5 because the gated tool executor
+    and the bounded persistent loop are wired in (see /api/agent/run)."""
+    return _compute_level({"receipts": True, "controller_actions": True,
+                           "memory_goal_ticks": True, "tools": True,
+                           "bounded_persistent": True})
+
+
 AGENT = NFETAgent(AgentDeps(
     memory=MEMORY,
     ChatMessage=ChatMessage,
@@ -86,6 +104,7 @@ AGENT = NFETAgent(AgentDeps(
     cloud_brain=BRAIN,
     confidence_fn=_confidence,
     flywheel=FLYWHEEL,
+    autonomy_level_fn=_system_level,
 ))
 
 register_nfet_agent_routes(app, AGENT)
@@ -104,6 +123,8 @@ register_control_routes(
     app, agent_id="lolm-demo",
     live_stats_fn=lambda: (BRAIN.stats() if BRAIN.available() else {}),
     goals_fn=lambda st: MEMORY.get_goals(),
+    gate_factory=_gate_factory,
+    recall_fn=lambda q: (BRAIN.recall(q) if BRAIN.available() else []),
 )
 
 
