@@ -132,6 +132,12 @@ def test_duration_not_confused_by_arithmetic_tail():
               "$1650. Total extra cost is $1650.")
     out = run_text_verifiers(answer)
     assert out["failed"] == 0 and out["passed"] is True, out
+    # Second live false-positive: "3 weeks is 10 hours/week" — a RATE, not a
+    # claim that 3 weeks == 10 hours. Must not redden the receipt.
+    rate = ("the total extra hours worked in 3 weeks is 10 hours/week * 3 weeks "
+            "= 30 hours. The total extra cost is 30 * 55 = $1650.")
+    out2 = run_text_verifiers(rate)
+    assert out2["failed"] == 0 and out2["passed"] is True, out2
 
 
 def test_real_duration_conversion_still_checked():

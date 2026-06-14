@@ -255,6 +255,12 @@ def verify_durations(text: str, rel_tol: float = 0.001) -> List[Dict[str, Any]]:
     for m in _DURATION_RE.finditer(text):
         if _ARITH_BEFORE.search(text[:m.start(1)]):
             continue  # tail of an arithmetic chain, not a unit-conversion claim
+        # A rate ("10 hours/week") or a continued calculation right after the
+        # match is prose, not a flat conversion: "3 weeks is 10 hours/week" does
+        # NOT claim 3 weeks == 10 hours. Skip when a rate slash or operator follows.
+        after = text[m.end():m.end() + 3]
+        if after[:1] == "/" or after.lstrip()[:1] in ("*", "×", "·", "+"):
+            continue
         lv, lu = _to_number(m.group(1)), m.group(2).rstrip("s").lower()
         rv, ru = _to_number(m.group(3)), m.group(4).rstrip("s").lower()
         if lv is None or rv is None or lu not in _UNIT_HOURS or ru not in _UNIT_HOURS:
@@ -283,8 +289,14 @@ def run_text_verifiers(text: str) -> Dict[str, Any]:
       "labels": ["math_check_failed"] | [],
     }
     """
-    checks = (verify_arithmetic(text or "") + verify_percentages(text or "")
-              + verify_durations(text or ""))
+    # verify_durations is intentionally NOT in the live aggregate. It twice
+    # false-positived on CORRECT 70B answers — reading "10 hours/week * 3 weeks
+    # = 30 hours" and "3 weeks is 10 hours/week" as failed weeks->hours
+    # conversions. A false "math failed" is itself a dishonest receipt (see the
+    # module docstring), so duration-conversion checking stays gated out of the
+    # receipt path until it is validated false-positive-free on the eval corpus.
+    # Arithmetic + percentage catch the real money-math errors (the $3,300 bug).
+    checks = verify_arithmetic(text or "") + verify_percentages(text or "")
     failed = [c for c in checks if not c["ok"]]
     if not checks:
         passed: Optional[bool] = None
