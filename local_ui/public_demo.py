@@ -67,6 +67,7 @@ class DemoLimits:
 class DemoRunRequest(BaseModel):
     command: str
     session_id: Optional[str] = None   # opt-in long-form conversation key
+    sources: Optional[str] = None      # BYO grounding text — answer only from this
 
 
 class DemoGate:
@@ -133,11 +134,14 @@ def client_ip(request: Any) -> str:
 
 
 def clamp_request(command: str, limits: DemoLimits,
-                  session_id: Optional[str] = None) -> NFETAgentRequest:
+                  session_id: Optional[str] = None,
+                  sources: Optional[str] = None) -> NFETAgentRequest:
     # accept a sanitized session id (opaque token only) for long conversations
     sid = None
     if session_id and isinstance(session_id, str):
         sid = "".join(c for c in session_id if c.isalnum() or c in "-_")[:64] or None
+    # BYO grounding text: pasted by the user, capped to keep the demo bounded.
+    src = sources.strip()[:24000] if (sources and isinstance(sources, str) and sources.strip()) else None
     return NFETAgentRequest(
         command=command.strip()[: limits.command_chars],
         reasoner=limits.reasoner,
@@ -150,6 +154,7 @@ def clamp_request(command: str, limits: DemoLimits,
         branch_width=limits.branch_width,
         allow_web=False,
         session_id=sid,
+        sources=src,
     )
 
 
@@ -303,7 +308,8 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
             )
         gate.record(ip)
         gate.runs_started += 1
-        agent_req = clamp_request(req.command, limits, getattr(req, "session_id", None))
+        agent_req = clamp_request(req.command, limits, getattr(req, "session_id", None),
+                                  getattr(req, "sources", None))
         started = time.time()
 
         def events() -> Iterator[str]:

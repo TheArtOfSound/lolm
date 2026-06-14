@@ -163,6 +163,20 @@
   <div class="ex-grid" id="exGrid"></div>
 </div>
 
+<style>
+.source-box{margin:18px 0 8px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);overflow:hidden}
+.source-box>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--text);list-style:none;display:flex;align-items:center;gap:8px}
+.source-box>summary span{color:var(--dim);font-weight:400}
+.source-box>summary::-webkit-details-marker{display:none}
+.source-box[open]>summary{border-bottom:1px solid var(--line)}
+.source-box textarea{width:100%;box-sizing:border-box;border:none;background:transparent;color:var(--text);padding:12px 15px;font:14px/1.55 inherit;resize:vertical;min-height:104px;outline:none}
+.source-box textarea::placeholder{color:var(--faint)}
+.source-on #q::placeholder{color:var(--memory)}
+</style>
+<details class="source-box" id="sourceBox">
+  <summary>📄 Ground it in your own text <span>— paste notes, a doc, an email thread (optional)</span></summary>
+  <textarea id="sources" placeholder="Paste your notes, a contract, docs, an email thread… LOLM answers ONLY from this, cites the exact passage it used, and tells you plainly when the answer isn't in here — instead of making one up."></textarea>
+</details>
 <div class="ask">
   <input id="q" placeholder="…or ask your own question, run live">
   <button id="go" disabled>Ask</button>
@@ -337,6 +351,10 @@
     const {event, data} = ev;
     if (event === 'run_start'){
       addAct('think', '<b>Reading your question…</b>');
+    } else if (event === 'grounded'){
+      const g = data || {};
+      if (g.refused) addAct('check', 'Your sources <b>don’t contain</b> that — so it said so, instead of inventing an answer.');
+      else if (g.answered_from_sources) addAct('notes', `Answered <b>only from your sources</b> — ${g.sources_count} passage${g.sources_count===1?'':'s'}, with the exact passage cited.`);
     } else if (event === 'segment_start'){
       if (data.segment === 1) addAct('write', '<b>Starting a draft</b>');
       else if (draftBuf.trim()) draftBuf += '\n\n— segment ' + data.segment + ' —\n\n';
@@ -593,7 +611,8 @@
     try {
       const resp = await fetch(activeBase + '/run/stream', {method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({command: q, session_id: sessionId()}),
+        body: JSON.stringify({command: q, session_id: sessionId(),
+          sources: (($('sources') && $('sources').value.trim()) || undefined)}),
         signal: liveAbort.signal});
       if (!resp.ok){
         const err = await resp.json().catch(() => ({error:'HTTP ' + resp.status}));

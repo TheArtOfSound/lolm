@@ -122,6 +122,10 @@ class NFETAgentRequest(BaseModel):
     web_limit: int = 3
     session_id: Optional[str] = None       # long-form conversation key; prior
                                            # turns load from the cloud brain
+    sources: Optional[str] = None          # BYO grounding: when set, the agent
+                                           # answers ONLY from this text, cites
+                                           # the passage, and refuses when the
+                                           # answer is not present (anti-hallucination)
     include_base_comparison: bool = False  # extra silent generation for the
                                            # "vs base mode" receipt; off by
                                            # default — it doubles latency on CPU
@@ -353,9 +357,21 @@ class NFETAgent:
             return f"{label}: none"
         out = [f"{label}:"]
         for row in rows:
+            tag = row.get("id") or row.get("kind", "item")
             url = f" url={row.get('url')}" if row.get("url") else ""
-            out.append(f"[{row.get('kind', 'item')}{url}] {row.get('text', '')}")
+            out.append(f"[{tag}{url}] {row.get('text', '')}")
         return "\n".join(out)[:limit]
+
+    @staticmethod
+    def _chunk_sources(text: str, max_passages: int = 16, max_chars: int = 700) -> List[Dict[str, Any]]:
+        """Split BYO source text into cited passages S1, S2, … for grounding."""
+        paras = [p.strip() for p in re.split(r"\n\s*\n", (text or "").strip()) if p.strip()]
+        if len(paras) < 2:   # no paragraph breaks — fall back to sentence-ish chunks
+            paras = [s.strip() for s in re.split(r"(?<=[.!?])\s+", (text or "").strip()) if s.strip()]
+        rows: List[Dict[str, Any]] = []
+        for i, p in enumerate(paras[:max_passages], 1):
+            rows.append({"kind": "source", "id": f"S{i}", "text": p[:max_chars]})
+        return rows
 
     def _segment_messages(self, command: str, draft: str, memory_hits: List[Dict[str, Any]],
                           evidence: List[Dict[str, Any]]) -> List[Any]:
@@ -537,7 +553,23 @@ DRAFT:
                      req: NFETAgentRequest, profile: str = "task",
                      ) -> Generator[Dict[str, Any], None, SegmentResult]:
         ChatMessage = self.deps.ChatMessage
-        if profile == "social":
+        grounded = bool((getattr(req, "sources", None) or "").strip())
+        if grounded and profile != "social":
+            # BYO-sources mode — the reason people come: an AI that answers ONLY
+            # from your material, cites it, and admits when the answer isn't there
+            # instead of inventing one.
+            system = (
+                "You are the finalizer of a SOURCE-GROUNDED agent. Answer the COMMAND "
+                "using ONLY the SOURCES below — no outside knowledge, no assumptions, "
+                "no filling gaps. Quote the exact sentence(s) from the sources that "
+                "support your answer. If the answer is not contained in the SOURCES, "
+                "reply with exactly: \"That's not in your sources.\" and nothing else. "
+                "Never guess; a wrong grounded answer is worse than admitting it isn't there."
+            )
+            user = (f"COMMAND:\n{command}\n\n"
+                    + self._evidence_block('SOURCES', evidence)
+                    + f"\n\nWORKING DRAFT:\n{draft}")
+        elif profile == "social":
             system = (
                 "You are a friendly assistant. Reply to the COMMAND naturally in one "
                 "or two short sentences. No sections, no meta commentary."
@@ -678,6 +710,11 @@ WORKING DRAFT:
         policy = NFETControlPolicy(self.policy_config)
         memory_hits = self._initial_memory(command)
         evidence: List[Dict[str, Any]] = []
+        # BYO-sources grounding: chunk the user's material into cited passages so
+        # the drafter, the finalizer, and the citation report all ground in it.
+        grounded = bool((getattr(req, "sources", None) or "").strip())
+        if grounded:
+            evidence.extend(self._chunk_sources(req.sources))
         counters = RunCounters()
         timeline: List[Dict[str, Any]] = []
         all_frames: List[TelemetryFrame] = []
@@ -845,6 +882,20 @@ WORKING DRAFT:
         confidence: Dict[str, Any] = {}
         cfn = getattr(self.deps, "confidence_fn", None)
         answer_text = (final.raw.get("response") or final.text or "").strip()
+
+        # BYO-sources verdict — the reason people came: did it answer FROM your
+        # material, or honestly admit the answer wasn't there?
+        grounded_result: Dict[str, Any] = {}
+        if grounded:
+            refused = "not in your sources" in answer_text.lower()
+            grounded_result = {
+                "mode": "byo_sources",
+                "sources_count": sum(1 for e in evidence if e.get("kind") == "source"),
+                "refused": refused,
+                "answered_from_sources": bool(answer_text) and not refused,
+            }
+            yield {"event": "grounded", "data": grounded_result}
+
         if cfn is not None and profile != "social" and len(answer_text) > 40:
             yield {"event": "phase", "data": {"phase": "measuring_confidence"}}
             try:
@@ -1094,6 +1145,7 @@ WORKING DRAFT:
             "receipt": receipt,
             "confidence": confidence,
             "retrieval": retrieval,
+            "grounded": grounded_result,
             "autonomy": autonomy,
             "control": control,
             "controller_config": asdict(policy.cfg),
