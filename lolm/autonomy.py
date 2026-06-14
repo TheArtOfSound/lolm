@@ -137,7 +137,7 @@ _ACTION_TIER: Dict[str, str] = {
     "answer": "read", "advise": "read", "deliver": "read",
     "read": "read", "search": "read", "retrieve": "read", "lookup": "read",
     "draft": "reversible", "write_file": "reversible", "scratch": "reversible",
-    "edit": "reversible", "branch": "reversible", "run_code": "reversible",
+    "edit": "reversible", "branch": "reversible", "run_code": "reversible", "run_code": "reversible",
     "post": "external", "comment": "external", "api_call": "external",
     "publish": "external", "schedule": "external",
     "send": "irreversible", "email": "irreversible", "payment": "irreversible",

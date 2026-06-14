@@ -98,6 +98,63 @@ from local_ui.vault_routes import register_vault_routes
 register_vault_routes(app, AGENT)
 
 
+# ── Autonomous operator (Phase 3): a gated tool-runtime over the dev / ops /
+# research verticals, driven by the same calibrated uncertainty as the agent.
+# Disabled unless OPERATOR_SECRET is set, and loopback-only (nginx never forwards
+# /api/operator/). The planner only PROPOSES tool calls; the gate + Operator
+# decide what runs and hard-gate money/send/delete/deploy to a human. ───────────
+from local_ui.operator import Operator
+from local_ui.operator_loop import OperatorAgent
+from local_ui.operator_planner import FrontierPlanner
+from local_ui.operator_routes import register_operator_routes
+from lolm.autonomy import AutonomyGate
+from lolm.calibration import aggregate_uncertainty
+
+
+def _operator_chat(messages):
+    """Drive the frontier reasoner (local fallback) for ONE planner turn → text."""
+    msgs = [ChatMessage(role=m["role"], content=m["content"]) for m in messages]
+    kwargs = dict(messages=msgs, max_new_tokens=320, temperature=0.3,
+                  top_p=0.9, use_graft=False)
+    try:
+        req = ChatRequest(**kwargs, telemeter=False)
+    except TypeError:
+        req = ChatRequest(**kwargs)
+    loop = FRONTIER if FRONTIER.available() else generation_loop
+    text = ""
+    for ev in loop(req):
+        if ev.get("event") == "done":
+            text = ev.get("data", {}).get("response") or text
+        elif ev.get("event") == "error":
+            raise RuntimeError(ev.get("data", {}).get("error", "planner failed"))
+    return text
+
+
+def _operator_uncertainty(text: str) -> float:
+    """Measured uncertainty for a planner step — re-read its reasoning via the graft."""
+    from local_ui.claude_reasoner import telemetry_traces_from_text
+    traces = telemetry_traces_from_text(STATE.backbone, STATE.graft, text or "")
+    frames = [{"graft_entropy": t.get("graft_entropy", 0.0),
+               "hidden_drift": t.get("hidden_drift", 0.0)} for t in traces]
+    return aggregate_uncertainty(frames)
+
+
+def _build_operator_agent() -> OperatorAgent:
+    return OperatorAgent(
+        operator=Operator(AutonomyGate(FLYWHEEL.calibrator())),
+        planner=FrontierPlanner(_operator_chat),
+        flywheel=FLYWHEEL,
+        uncertainty_fn=_operator_uncertainty,
+        max_steps=8,
+    )
+
+
+register_operator_routes(
+    app, build_agent=_build_operator_agent, flywheel=FLYWHEEL,
+    model_ready_fn=lambda: STATE.backbone is not None,
+)
+
+
 def _load_model_background() -> None:
     ckpt = GRAFT_CKPT if GRAFT_CKPT and Path(GRAFT_CKPT).exists() else None
     started = time.time()
