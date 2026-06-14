@@ -129,6 +129,43 @@ def make_agent(tmp_path, loop: FakeLoop, head_trained: bool = False,
     return NFETAgent(deps, policy_config=cfg), events
 
 
+def test_nfet_control_core_is_wired_into_the_run(tmp_path):
+    # Proof the prompt-time NFET control core runs on a real loop: the run must
+    # produce a decision packet (with field energy / thresholds / weights), a
+    # hashed control receipt that claims NFET control with the fields to back it,
+    # and pass the truth validator.
+    loop = FakeLoop([
+        segment_spec([3.5] * 20, "uncertain drafting about the tradeoffs here"),
+        segment_spec([1.0] * 20, "a calmer closing segment"),
+    ])
+    agent, _ = make_agent(tmp_path, loop)
+    out = agent.run(NFETAgentRequest(command="Explain the tradeoffs carefully.",
+                                     reasoner="local", max_segments=3, segment_tokens=20,
+                                     final_tokens=24, max_retrieves=2))
+    control = out.get("control")
+    assert control, "prompt-time run must produce a control block"
+    nfet = control["decision"]["nfet"]
+    assert "fieldEnergy" in nfet and nfet["thresholds"] and nfet["weights"]["fusion"]
+    r = control["receipt"]
+    assert len(r["receiptHash"]) == 64
+    assert r["controllerClaim"]["nfetControlled"] is True
+    assert control["validation"]["ok"] is True, control["validation"]
+    assert out["receipt"]["control"]["receiptHash"] == r["receiptHash"]
+
+
+def test_control_receipt_hash_chains_across_runs(tmp_path):
+    loop = FakeLoop([segment_spec([2.0] * 16, "draft one")])
+    agent, _ = make_agent(tmp_path, loop)
+    a = agent.run(NFETAgentRequest(command="First question here?", reasoner="local",
+                                   max_segments=2, segment_tokens=16, final_tokens=20))
+    loop.segments = [segment_spec([2.0] * 16, "draft two")]
+    b = agent.run(NFETAgentRequest(command="Second question here?", reasoner="local",
+                                   max_segments=2, segment_tokens=16, final_tokens=20))
+    ha, hb = a["control"]["receipt"]["receiptHash"], b["control"]["receipt"]["receiptHash"]
+    assert hb != ha
+    assert b["control"]["receipt"]["previousReceiptHash"] == ha
+
+
 def test_entropy_spike_drives_retrieve_then_finalize(tmp_path):
     loop = FakeLoop(segments=[
         segment_spec([3.0] * 48, "steady opening segment"),

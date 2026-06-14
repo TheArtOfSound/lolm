@@ -660,6 +660,18 @@ WORKING DRAFT:
                 hist = "\n".join(f"{t['role']}: {t['content'][:600]}" for t in turns[-10:])
                 self._convo_context = hist
 
+        # Snapshot-lock the run-start memory stats (trust fix #1): the receipt must
+        # report the stats AS OF run start, labelled "shared demo memory", so it can
+        # never be confused with the live header stats that drift during a session.
+        self._brain_snapshot = {"verdict": "no_snapshot"}
+        if brain is not None and brain.available():
+            try:
+                from lolm.control.memory_snapshot import snapshot_stats
+                self._brain_snapshot = snapshot_stats(brain.stats() or {}, scope="shared_demo",
+                                                      raw_stats_url="/api/demo/brain/stats")
+            except Exception:
+                self._brain_snapshot = {"verdict": "no_snapshot"}
+
         started = time.time()
         head_trained = bool(self.deps.head_trained_fn())
         policy = NFETControlPolicy(self.policy_config)
@@ -985,6 +997,83 @@ WORKING DRAFT:
         except Exception:
             autonomy = {}
 
+        # ── NFET control core (lolm.control): the run's MEASURED signals run the
+        # controller's decision math and a hash-chained, VALIDATED control receipt
+        # records it. NFET as control, not branding — the decision packet carries
+        # the signals/field-energy/thresholds/weights, the actions array records
+        # only what the timeline ACTUALLY executed, and the validator forbids the
+        # rendered receipt from claiming an action that did not happen.
+        control: Dict[str, Any] = {}
+        try:
+            from lolm.control import decide as nfet_decide, build_control_receipt
+            from lolm.control.receipt import receipt_hash
+            from lolm.control.receipt_validator import validate_receipt_claims
+            from lolm.control.signals import ControlSignals
+            from lolm.agent.agent_state import compute_autonomy_level
+
+            ents = [float(f.logit_entropy) for f in all_frames]
+            drifts = [float(f.hidden_drift) for f in all_frames]
+            ent_norm = min(1.0, (sum(ents) / len(ents)) / 4.0) if ents else 0.0
+            drift_norm = min(1.0, (sum(drifts) / len(drifts)) * 6.0) if drifts else 0.0
+            n_tok = confidence.get("n_tokens") or 0
+            span_den = (len(confidence.get("spans") or []) / n_tok) if n_tok else 0.0
+            rps = receipt.get("risk_profile") or []
+            math_failed = bool((receipt.get("math_checks") or {}).get("failed"))
+            contra = 1.0 if math_failed else (0.5 if ("formal_logic" in rps or "quantitative" in rps) else 0.0)
+            ver_need = 1.0 if ended_by == "audit_verified" else (0.6 if rps else ent_norm)
+            sig = ControlSignals.from_dict({
+                "surfaceUncertainty": ent_norm, "latentUncertainty": ent_norm,
+                "entropy": ent_norm, "entropySource": "graft_proxy",
+                "drift": drift_norm, "driftSource": "graft_proxy",
+                "contradictionRisk": contra,
+                "memoryRelevance": float((retrieval or {}).get("relevanceMax") or 0.0),
+                "verificationNeed": ver_need, "lowConfidenceSpanDensity": span_den,
+                "memoryPressure": 1.0 if counters.retrieves else 0.0,
+                "safetyRisk": 0.0,
+            })
+            dpacket = nfet_decide(sig, input_type="user_prompt",
+                                  run_id=str(final.raw.get("id") or f"run-{int(started)}"))
+            # Reality, not the packet's hypothetical: the control actions the
+            # timeline actually executed. The receipt's actionCount counts THESE.
+            ctl_actions = []
+            for t in timeline:
+                k = (t.get("action") or {}).get("kind")
+                if k in ("retrieve", "verify", "branch"):
+                    ctl_actions.append({"type": k, "triggered": True, "allowed": True,
+                                        "executed": True,
+                                        "resultSummary": (t.get("action") or {}).get("verdict")})
+            spans_rcpt = [{"text": s.get("text"), "z": s.get("score"),
+                           "signal": "graft_entropy", "crossedActionThreshold": bool(ctl_actions)}
+                          for s in (confidence.get("spans") or [])]
+            level = compute_autonomy_level({"receipts": True, "controller_actions": True,
+                                            "memory_goal_ticks": True})
+            crcpt = build_control_receipt(
+                dpacket, memory_snapshot=getattr(self, "_brain_snapshot", None) or {"verdict": "no_snapshot"},
+                writer_model=str(final.raw.get("profile") or req.reasoner),
+                autonomy_level=level, input_type="user_prompt", trigger_reason="user prompt",
+                actions=ctl_actions or None, low_confidence_spans=spans_rcpt,
+                answer_quality={"status": "ungraded", "baselineCompared": base is not None,
+                                "baselineResult": (proof.get("word_similarity") if base else None)},
+                previous_receipt_hash=getattr(self, "_last_control_hash", None))
+            # controllerClaim reflects REALITY (what executed), then re-hash.
+            crcpt["controllerClaim"]["actionTriggered"] = bool(ctl_actions)
+            crcpt["controllerClaim"]["actionCount"] = len(ctl_actions)
+            crcpt["receiptHash"] = receipt_hash(crcpt)
+            self._last_control_hash = crcpt["receiptHash"]
+            val = validate_receipt_claims(crcpt, (receipt.get("plain") or "")
+                                          + " " + " ".join(provenance))
+            control = {"autonomyLevel": level, "decision": dpacket.to_dict(),
+                       "receipt": dict(crcpt), "validation": val}
+            receipt["control"] = {"receiptHash": crcpt["receiptHash"],
+                                  "autonomyLevel": level,
+                                  "selectedAction": dpacket.selectedAction,
+                                  "actionTriggered": bool(ctl_actions),
+                                  "fieldEnergy": dpacket.fieldEnergy,
+                                  "validation_ok": val["ok"]}
+            yield {"event": "control", "data": control}
+        except Exception:
+            control = {}
+
         result = {
             "command": command,
             "reasoner": req.reasoner,
@@ -1004,6 +1093,7 @@ WORKING DRAFT:
             "confidence": confidence,
             "retrieval": retrieval,
             "autonomy": autonomy,
+            "control": control,
             "controller_config": asdict(policy.cfg),
             "frames": learning["frames"],
             "saved_learning_type": "nfet_agent_run",
@@ -1071,7 +1161,10 @@ WORKING DRAFT:
             plain = "NFET decided on its own when the answer was done."
         else:
             verdict = "changed_but_controls_quiet"
-            plain = "The agent stayed confident throughout — no checks were needed this time."
+            plain = ("No control action crossed its threshold this run — the controller "
+                     "measured the signals and the event-field energy stayed below the "
+                     "action bar, so it answered directly. Any low-confidence spans were "
+                     "detected but none crossed the action threshold.")
         return {
             "verdict": verdict,
             "plain": plain,
