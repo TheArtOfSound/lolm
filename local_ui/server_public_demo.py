@@ -166,6 +166,28 @@ register_operator_routes(
 )
 
 
+@app.get("/api/demo/operator")
+def public_operator_status():
+    """Public, READ-ONLY view of the operator's earned autonomy — no secret, no
+    tool execution. nginx forwards /api/demo/, so the showcase page can render
+    the live flywheel + the per-tier bars the track record currently supports.
+    The acting endpoint (/api/operator/run) stays loopback + token gated."""
+    from lolm.autonomy import RISK_TIERS, HARD_HUMAN_GATE
+    bars = {}
+    for tier, alpha in RISK_TIERS.items():
+        st = FLYWHEEL.selective_bar(alpha)
+        bars[tier] = {"allowed_error": alpha, "feasible": bool(st.feasible),
+                      "coverage": round(st.coverage, 3)}
+    return {
+        "flywheel": FLYWHEEL.stats(),
+        "tiers": RISK_TIERS,
+        "bars": bars,
+        "hard_gated": sorted(HARD_HUMAN_GATE),
+        "note": "read-only; the agent acts only on loopback with a token, and "
+                "money/send/delete/deploy are hard-gated to a human regardless of confidence",
+    }
+
+
 def _load_model_background() -> None:
     ckpt = GRAFT_CKPT if GRAFT_CKPT and Path(GRAFT_CKPT).exists() else None
     started = time.time()
