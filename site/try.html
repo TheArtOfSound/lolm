@@ -19,12 +19,12 @@
   :root{
     /* shared design system with the LOLM landing page (one neutral slate ramp
        + one brand accent; the five data colors only encode the five streams) */
-    --bg:#0a0e15; --bg2:#0e131d; --panel:#131a25; --panel-2:#19212e;
-    --line:#212a39; --line-2:#2d3849;
-    --t-hi:#eef2f8; --text:#c5cedb; --dim:#8a96a8; --faint:#5b6679;
-    --accent:#5b8def; --accent-2:#7c6cf0; --good:#3fcf9a;
+    --bg:#ffffff; --bg2:#f6f7f9; --panel:#ffffff; --panel-2:#f1f3f6;
+    --line:#e6e8ec; --line-2:#cdd2da;
+    --t-hi:#0a0c10; --text:#2a323c; --dim:#525c69; --faint:#8a94a2;
+    --accent:#f43f5e; --accent-2:#6366f1; --good:#0f9d6b;
     /* data palette — agent activity dots / telemetry, not decoration */
-    --blue:#4f9bf2; --purple:#a98cf0; --amber:#e3a857; --green:#43cb9c; --pink:#ef7088;
+    --blue:#2563eb; --purple:#7c3aed; --amber:#b8730a; --green:#0f9d6b; --pink:#e11d6b;
     --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
     --sans:"Inter var","Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
   }
@@ -34,9 +34,9 @@
        letter-spacing:-.003em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
   h1,h2,h3{color:var(--t-hi);letter-spacing:-.02em}
   a{color:var(--accent);text-decoration:none;transition:color .15s} a:hover{color:var(--t-hi)}
-  ::selection{background:rgba(91,141,239,.28)}
+  ::selection{background:rgba(244,63,94,.16)}
   .wrap{max-width:760px;margin:0 auto;padding:0 20px}
-  header{position:sticky;top:0;z-index:10;background:rgba(10,14,21,.78);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
   nav{display:flex;align-items:center;height:54px;gap:14px}
   .brand{font-family:var(--mono);font-weight:700;letter-spacing:.12em;font-size:14px;color:var(--text)}
   .brand b{color:var(--accent)}
@@ -56,14 +56,14 @@
   .ex{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer;text-align:left;color:var(--text);font-size:14.5px;font-family:var(--sans);transition:border-color .15s}
   .ex:hover{border-color:var(--accent)}
   .ex small{display:block;color:var(--faint);font-size:11.5px;margin-top:5px;font-family:var(--mono)}
-  .ex small.live-tag{color:#caa45a}
+  .ex small.live-tag{color:#b8730a}
 
   .ask{display:flex;gap:10px;margin:22px 0 6px}
   .ask input{flex:1;background:var(--bg2);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:14px 16px;font-size:15.5px}
   .ask input:focus{outline:none;border-color:var(--accent)}
   .ask button{background:var(--accent);color:#fff;border:none;border-radius:12px;padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer}
   .ask button[disabled]{opacity:.45;cursor:not-allowed}
-  .ask button.stopping{background:var(--pink);color:#1a0509}
+  .ask button.stopping{background:var(--pink);color:#fff}
   .follow-row{display:none;justify-content:space-between;align-items:center;gap:10px;margin:-2px 0 10px;font-size:12px;color:var(--faint)}
   .follow-row button{background:none;border:1px solid var(--line);color:var(--dim);border-radius:7px;font-size:11.5px;padding:4px 10px;cursor:pointer;font-family:var(--mono)}
   .follow-row button:hover{border-color:var(--faint);color:var(--text)}
@@ -93,7 +93,7 @@
   .working{font-family:var(--mono);font-size:11.5px;color:var(--faint);padding-left:19px}
   .working .tick{display:inline-block;min-width:34px;color:var(--dim)}
 
-  .answer{background:rgba(63,214,160,.05);border:1px solid #1d3a31;border-radius:4px 14px 14px 14px;padding:17px 20px;font-size:15.5px;color:var(--text);white-space:pre-wrap;margin-right:8%;display:none}
+  .answer{background:rgba(15,157,107,.06);border:1px solid rgba(15,157,107,.28);border-radius:4px 14px 14px 14px;padding:17px 20px;font-size:15.5px;color:var(--text);white-space:pre-wrap;margin-right:8%;display:none}
   .answer.on{display:block}
   .answer-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:8px}
   #answerText.md{white-space:normal}
@@ -424,7 +424,7 @@
         const rc = data.receipt, r = $('receipt');
         // Run-mode strip + red/yellow/green accent — fallback and quality must be
         // impossible to miss (multi-surface audit #10; complaints #6/#8/#10).
-        const accent = rc.status_color === 'red' ? '#ff6b6b' : rc.status_color === 'green' ? 'var(--green)' : '#e0a106';
+        const accent = rc.status_color === 'red' ? '#d62828' : rc.status_color === 'green' ? 'var(--green)' : '#e0a106';
         r.style.borderLeft = '3px solid ' + accent;
         if (rc.run_mode){
           const modeLabel = rc.run_mode === 'FALLBACK_MODEL' ? '⚠ FALLBACK MODEL — not the 70B; quality may be reduced'
@@ -445,7 +445,7 @@
             line = '✓ <b>Confident enough to act on its own</b> — measured confidence <b>'+P+'%</b> clears the <b>'+BAR+'%</b> bar for a '+tierName+' action.'; }
           else if (au.mode === 'gather'){ color='var(--amber)';
             line = '<b>Would gather more first</b> — confidence <b>'+P+'%</b> sits just under the <b>'+BAR+'%</b> bar for a '+tierName+' action, so it verifies before acting.'; }
-          else { color = hard ? '#ff6b6b' : '#e0a106';
+          else { color = hard ? '#d62828' : '#e0a106';
             line = hard
               ? '🔒 <b>Hands it to you (hard-gated)</b> — money, sending, and deleting always need a human, even at '+P+'% confidence. The agent prepares it and previews the outcome; you approve.'
               : '⚠ <b>Would escalate to a human</b> — measured confidence <b>'+P+'%</b> is below the <b>'+BAR+'%</b> bar for a '+tierName+' action.'; }
@@ -455,7 +455,7 @@
         }
         if (rc.math_checks && rc.math_checks.checked){
           if (rc.math_checks.failed)
-            r.innerHTML += '<div class="row" style="color:#ff6b6b"><b>✗ Math check failed</b> — a figure in the answer does not add up. A wrong number is a wrong answer, telemetry or not.</div>';
+            r.innerHTML += '<div class="row" style="color:#d62828"><b>✗ Math check failed</b> — a figure in the answer does not add up. A wrong number is a wrong answer, telemetry or not.</div>';
           else
             r.innerHTML += '<div class="row" style="color:var(--green)">✓ Math check: ' + rc.math_checks.checked + ' calculation(s) verified correct.</div>';
         }
@@ -465,7 +465,7 @@
         }
         const crit = rc.layers && rc.layers.critique;
         if (crit && crit.overclaim){
-          r.innerHTML += '<div class="row" style="color:#ff6b6b"><b>✗ Overclaim</b> — the prompt was underdetermined, but the answer asserted a definite result instead of saying the evidence is insufficient.</div>';
+          r.innerHTML += '<div class="row" style="color:#d62828"><b>✗ Overclaim</b> — the prompt was underdetermined, but the answer asserted a definite result instead of saying the evidence is insufficient.</div>';
         }
         if (rc.task_contract_passed === false){
           r.innerHTML += '<div class="row" style="color:var(--amber)">Contract check: the answer missed what was explicitly asked (' +
@@ -480,7 +480,7 @@
           r.innerHTML += '<div class="row" style="color:' + (rt.used ? 'var(--green)' : 'var(--amber)') + '">' + msg + '.</div>';
         }
         if (rc.quality_warning)
-          r.innerHTML += '<div class="row" style="color:#ff6b6b">' + rc.quality_warning + '</div>';
+          r.innerHTML += '<div class="row" style="color:#d62828">' + rc.quality_warning + '</div>';
         r.innerHTML += '<div class="row" style="opacity:.7">Proves what the controller did — not that the answer beat a baseline (quality vs baseline: unproven).</div>';
         if ((rc.warnings||[]).length)
           r.innerHTML += '<div class="row">⚠ ' + rc.warnings.join(' · ') + '</div>';
@@ -627,7 +627,7 @@
   async function offerOffline(command){
     const a = addAct('think',
       '<b>Answer in your browser instead?</b> Runs a small model locally — no server needed. ' +
-      '<button id="goOffline" style="margin-left:6px;background:var(--purple);color:#120a1f;border:none;border-radius:7px;padding:3px 11px;font-size:12px;font-weight:700;cursor:pointer">answer offline</button>',
+      '<button id="goOffline" style="margin-left:6px;background:var(--purple);color:#fff;border:none;border-radius:7px;padding:3px 11px;font-size:12px;font-weight:700;cursor:pointer">answer offline</button>',
       window.OfflineEngine && OfflineEngine.ready() ? '(model already loaded)' : '(one-time ~300 MB download, then works fully offline)');
     const btn = document.getElementById('goOffline');
     if (btn) btn.addEventListener('click', () => runOffline(command), { once: true });
