@@ -103,7 +103,7 @@ def register_control_routes(app: Any, *, agent_id: str = "lolm-demo",
             return JSONResponse({"error": "unauthorized"}, status_code=401)
         return load_agent_state(agent_id).to_dict()
 
-    @app.get("/api/agent/level")
+    @app.get("/api/demo/agent/level")
     async def agent_level(request: Request):
         # Public, read-only: the system's HONEST autonomy level + the tools it can
         # run on its own (safe/read-reversible only; money/delete stay human-gated).
