@@ -1105,8 +1105,11 @@ WORKING DRAFT:
                            "signal": "graft_entropy", "crossedActionThreshold": bool(ctl_actions)}
                           for s in (confidence.get("spans") or [])]
             level_fn = getattr(self.deps, "autonomy_level_fn", None)
+            # A reactive prompt run operates at L2 (controller actions + receipts).
+            # Between-prompt ticks / tools / persistence are other surfaces; this
+            # receipt must not claim a higher level than the run actually reached.
             level = level_fn() if level_fn else compute_autonomy_level(
-                {"receipts": True, "controller_actions": True, "memory_goal_ticks": True})
+                {"receipts": True, "controller_actions": True})
             crcpt = build_control_receipt(
                 dpacket, memory_snapshot=getattr(self, "_brain_snapshot", None) or {"verdict": "no_snapshot"},
                 writer_model=str(final.raw.get("profile") or req.reasoner),

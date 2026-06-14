@@ -86,11 +86,14 @@ def _gate_factory():
 
 
 def _system_level() -> str:
-    """The system's honest autonomy level — L5 because the gated tool executor
-    and the bounded persistent loop are wired in (see /api/agent/run)."""
-    return _compute_level({"receipts": True, "controller_actions": True,
-                           "memory_goal_ticks": True, "tools": True,
-                           "bounded_persistent": True})
+    """Honest level of THIS reactive demo surface: L2 — real controller actions
+    (retrieve / verify / branch) with auditable receipts, during a run. The L3-L5
+    control loop (between-prompt ticks, gated tools, bounded persistence) is
+    implemented and tested in the operator surface + code, but it is NOT this
+    surface's live mode, so a reactive answer's receipt must not claim it — and
+    this matches what /api/demo/agent/level reports. Never claim a higher level
+    than the run actually operated at."""
+    return _compute_level({"receipts": True, "controller_actions": True})
 
 
 AGENT = NFETAgent(AgentDeps(
