@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LOLM — Latent Order Language Model · Qira</title>
-<meta name="description" content="LOLM is an uncertainty-control layer for AI answers. A 70B model writes while LOLM measures how sure it actually is and decides to verify, retrieve, branch, use a tool, or refuse — with an auditable receipt for every run and bounded, uncertainty-gated autonomy.">
-<meta property="og:title" content="LOLM — the AI that knows when it doesn't know">
+<meta name="description" content="Paste your notes or a doc and LOLM answers only from your material, cites the exact passage, and says when the answer isn't there instead of making one up. A 70B writer kept honest by a local uncertainty-control layer — with an auditable receipt for every answer.">
+<meta property="og:title" content="LOLM — AI that won't make things up about your stuff">
 <meta property="og:description" content="A 70B writes; LOLM measures its own uncertainty and decides whether to verify, retrieve, act, or refuse. Every decision gets an auditable receipt. Patent pending — Qira LLC.">
 <meta property="og:type" content="website">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2307090d'/%3E%3Cpath d='M5 7 Q20 7 26 16' stroke='%234ea1ff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 12 Q19 12 26 16' stroke='%23b07fff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 16 H26' stroke='%23ffb454' stroke-width='2.2'/%3E%3Cpath d='M5 20 Q19 20 26 16' stroke='%233fd6a0' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 25 Q20 25 26 16' stroke='%23ff6b81' stroke-width='2.2' fill='none'/%3E%3Ccircle cx='26' cy='16' r='2.6' fill='%23d7dde6'/%3E%3C/svg%3E">
@@ -17,7 +17,7 @@
 <meta property="og:site_name" content="LOLM · Qira">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://lolm.imagineqira.com/og-card.png">
-<meta name="twitter:title" content="LOLM — the AI that knows when it doesn't know">
+<meta name="twitter:title" content="LOLM — AI that won't make things up about your stuff">
 <meta name="twitter:description" content="A 70B writes; LOLM measures its own uncertainty and decides to verify, retrieve, act, or refuse — with an auditable receipt for every run.">
 <link rel="canonical" href="https://lolm.imagineqira.com/">
 <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
@@ -264,21 +264,22 @@
 
 <div class="hero">
   <div class="kicker">Qira Research · Patent Pending</div>
-  <h1>The AI that knows<br><span class="grad">when it doesn't know.</span></h1>
-  <p class="lead">LOLM is an <b>uncertainty-control layer</b> for AI answers. A 70-billion-parameter
-  model writes; LOLM measures — token by token — how sure it actually is, and the controller
-  decides whether to continue, check its notes, verify, branch, use a tool, idle, or refuse.
-  <b>Every decision gets a receipt you can audit.</b></p>
+  <h1>AI that won't make<br><span class="grad">things up about your stuff.</span></h1>
+  <p class="lead">Paste your notes, a doc, an email thread — LOLM answers <b>only from your
+  material</b>, cites the exact passage it used, and tells you plainly when the answer
+  <b>isn't in there</b>, instead of inventing one. A 70B model writes; a local
+  uncertainty-control layer keeps it honest and hands you an <b>auditable receipt</b> for
+  every answer. The AI that knows when it doesn't know.</p>
   <div class="badges">
-    <span class="badge">Llama-3.3-70B writer</span>
-    <span class="badge"><i>measured</i> uncertainty, not prompted</span>
-    <span class="badge">uncertainty-gated autonomy</span>
+    <span class="badge">answers from <i>your</i> sources</span>
+    <span class="badge">cites the passage</span>
+    <span class="badge">says “not in here” honestly</span>
     <span class="badge">a receipt for every run</span>
     <span class="badge">patent pending</span>
   </div>
   <div class="cta">
-    <a class="btn primary" href="try.html">▶ Try it live — no jargon</a>
-    <a class="btn ghost" href="#autonomy">See what it can do on its own</a>
+    <a class="btn primary" href="try.html">▶ Try it — paste your own text</a>
+    <a class="btn ghost" href="#build">Add the trust layer to your app →</a>
   </div>
   <canvas id="streams" aria-hidden="true"></canvas>
 </div>
