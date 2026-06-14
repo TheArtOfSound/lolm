@@ -401,7 +401,7 @@
       <tr><td style="padding:11px 12px;border-bottom:1px solid var(--line)"><b style="color:var(--text)">70B + NFET control</b></td>
           <td style="padding:11px 12px;border-bottom:1px solid var(--line)">retrieve / verify / branch / audit decisions</td>
           <td style="padding:11px 12px;border-bottom:1px solid var(--line);color:var(--text)">Yes — the run's <i>path</i> (segment-level), not the 70B's per-token sampling</td>
-          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">control fires &amp; is consumed; quality-vs-baseline: <b style="color:#e0a106">unproven</b></td></tr>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">control fires &amp; is consumed; gated retrieval <b style="color:#2fb170">proven</b> to lift answer correctness 0&nbsp;&rarr;&nbsp;7/8 on facts the writer can't otherwise know, with no regression on knowns; broader reasoning-quality lift <b style="color:#e0a106">still open</b></td></tr>
       <tr><td style="padding:11px 12px;border-bottom:1px solid var(--line)"><b style="color:var(--text)">4B only</b></td>
           <td style="padding:11px 12px;border-bottom:1px solid var(--line)">a small local model</td>
           <td style="padding:11px 12px;border-bottom:1px solid var(--line);color:var(--faint)">baseline</td>
@@ -409,7 +409,7 @@
       <tr><td style="padding:11px 12px"><b style="color:var(--text)">4B + NFET</b></td>
           <td style="padding:11px 12px">inline graft (rewrites token logits) + control</td>
           <td style="padding:11px 12px;color:var(--green)">Yes — per token <i>and</i> path</td>
-          <td style="padding:11px 12px">the graft measurably changes local generation; retrieval grounding helps; quality lift: <b style="color:#e0a106">unproven</b></td></tr>
+          <td style="padding:11px 12px">the graft measurably changes local generation; gated retrieval <b style="color:#2fb170">proven</b> to lift correctness (baseline&nbsp;0 &rarr; up to 88% on unknowable facts, no regression on knowns); broader quality lift <b style="color:#e0a106">still open</b></td></tr>
     </tbody>
   </table>
   </div>

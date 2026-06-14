@@ -1,0 +1,73 @@
+{
+  "summary": {
+    "needs_eager_correct": 0.875,
+    "needs_eager_retrieve_rate": 0.875,
+    "knows_eager_correct": 1.0,
+    "knows_eager_retrieve_rate": 0.5,
+    "selective": false
+  },
+  "needs": [
+    {
+      "q": "Zerelium reactor",
+      "correct": true,
+      "retr": 3
+    },
+    {
+      "q": "Vandar-9 satellite",
+      "correct": true,
+      "retr": 1
+    },
+    {
+      "q": "Quorrin alloy",
+      "correct": true,
+      "retr": 1
+    },
+    {
+      "q": "Brixton-7 cipher",
+      "correct": false,
+      "retr": 0
+    },
+    {
+      "q": "Mellow protocol",
+      "correct": true,
+      "retr": 2
+    },
+    {
+      "q": "Helbar dataset",
+      "correct": true,
+      "retr": 2
+    },
+    {
+      "q": "Yuki framework",
+      "correct": true,
+      "retr": 2
+    },
+    {
+      "q": "Orsa-12 turbine",
+      "correct": true,
+      "retr": 1
+    }
+  ],
+  "knows": [
+    {
+      "q": "How many sides does a triangle",
+      "correct": true,
+      "retr": 1
+    },
+    {
+      "q": "What is the boiling point of w",
+      "correct": true,
+      "retr": 0
+    },
+    {
+      "q": "How many days are in a week? A",
+      "correct": true,
+      "retr": 3
+    },
+    {
+      "q": "What is 12 times 12? Answer wi",
+      "correct": true,
+      "retr": 0
+    }
+  ]
+}
