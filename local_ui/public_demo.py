@@ -237,6 +237,39 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
             "replays": len(load_replay_index(replays_dir).get("replays", [])),
         }
 
+    @app.get("/api/demo/agent/level")
+    def demo_agent_level():
+        # Honest capabilities of THIS public, reactive demo surface. The L3-L5
+        # control loop (ticks, gated tools, bounded persistence) is implemented
+        # and tested in the operator surface + code — it is NOT this surface's
+        # live mode, so this endpoint reports L2 and says so plainly.
+        from lolm.agent.agent_state import compute_autonomy_level
+        caps = {
+            "receipts": True,             # every run emits a layered + control receipt
+            "controller_actions": True,   # retrieve/verify/branch fire and are consumed
+            "memory_goal_ticks": False,   # persistent tick loop runs in the operator, not here
+            "tools": False,               # gated tools are loopback-only (operator)
+            "bounded_persistent": False,  # bounded persistent loop is not the public mode
+        }
+        return {
+            "surface": "public_demo",
+            "level": compute_autonomy_level(caps),
+            "capabilities": caps,
+            "levels": {
+                "L0_REACTIVE_ONLY": "answers prompts only",
+                "L1_RECEIPT_MONITORED": "answers with uncertainty receipts",
+                "L2_CONTROLLER_ACTIONS": "controller verifies/retrieves/branches during a run",
+                "L3_MEMORY_GOAL_TICKS": "runs memory + goal ticks between prompts",
+                "L4_TOOL_USING_AUTONOMY": "uses gated, outcome-verified tools in ticks",
+                "L5_BOUNDED_PERSISTENT_AGENT": "maintains goals/memory/verification/scheduling/tools under budget + safety",
+            },
+            "note": ("This public demo runs at L2 — real controller actions with honest "
+                     "receipts. The L3–L5 control loop (ticks, gated tools, bounded "
+                     "persistence, hard human-gate) is implemented and tested in the "
+                     "operator surface and the code, not in this reactive demo. This "
+                     "endpoint reports the real level of THIS surface, never a higher one."),
+        }
+
     @app.get("/api/demo/replays")
     def demo_replays():
         return load_replay_index(replays_dir)
