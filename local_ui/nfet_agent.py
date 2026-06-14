@@ -566,9 +566,11 @@ DRAFT:
                 "reply with exactly: \"That's not in your sources.\" and nothing else. "
                 "Never guess; a wrong grounded answer is worse than admitting it isn't there."
             )
+            # Deliberately NOT feeding the working draft here: the draft is not
+            # source-constrained, so echoing it makes the finalizer hedge instead
+            # of cleanly refusing. Answer purely from COMMAND + SOURCES.
             user = (f"COMMAND:\n{command}\n\n"
-                    + self._evidence_block('SOURCES', evidence)
-                    + f"\n\nWORKING DRAFT:\n{draft}")
+                    + self._evidence_block('SOURCES', evidence))
         elif profile == "social":
             system = (
                 "You are a friendly assistant. Reply to the COMMAND naturally in one "
@@ -887,7 +889,12 @@ WORKING DRAFT:
         # material, or honestly admit the answer wasn't there?
         grounded_result: Dict[str, Any] = {}
         if grounded:
-            refused = "not in your sources" in answer_text.lower()
+            al = answer_text.lower()
+            refused = any(p in al for p in (
+                "not in your sources", "isn't in your sources", "is not in your sources",
+                "not contained in", "not in the sources", "sources do not",
+                "sources don't", "not provided in the source", "not mentioned in the source",
+            ))
             grounded_result = {
                 "mode": "byo_sources",
                 "sources_count": sum(1 for e in evidence if e.get("kind") == "source"),
