@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# AI crawlers welcome — this is a public research demo.
+User-agent: GPTBot
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+
+Sitemap: https://lolm.imagineqira.com/sitemap.xml
