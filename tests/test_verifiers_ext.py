@@ -25,9 +25,16 @@ def test_duration_ignores_ambiguous_months():
     assert verify_durations("3 months = 90 days") == []
 
 
-def test_durations_flow_into_run_text_verifiers():
+def test_durations_gated_out_of_run_text_verifiers():
+    # verify_durations is intentionally NOT in the live receipt aggregate — it
+    # twice false-positived on CORRECT 70B answers (reading arithmetic tails and
+    # unit rates as failed conversions). The function still catches a genuine
+    # bare conversion error directly, but it must NOT redden the live receipt
+    # until validated false-positive-free on the eval corpus.
+    assert verify_durations("Timeline: 3 weeks = 20 days.")[0]["ok"] is False
     out = run_text_verifiers("Timeline: 3 weeks = 20 days.")
-    assert out["failed"] == 1 and out["labels"] == ["math_check_failed"]
+    assert out["failed"] == 0 and out["labels"] == []
+    assert out["passed"] is None  # nothing checkable in the live aggregate
 
 
 def test_word_count_contract_parsed():
