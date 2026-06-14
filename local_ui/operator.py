@@ -26,15 +26,42 @@ determined adversary, and says so rather than pretending otherwise.
 
 from __future__ import annotations
 
+import ipaddress
 import shlex
+import socket
 import subprocess
 import sys
 import tempfile
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 from lolm.autonomy import ACT, AutonomyGate
+
+
+def _is_public_host(host: str) -> bool:
+    """SSRF guard: True only if every resolved address is a public IP.
+
+    Blocks loopback / private / link-local / reserved / multicast — including
+    the cloud metadata endpoint 169.254.169.254 — so an agent (or a prompt
+    trying to steer it) can never make web_read reach internal services.
+    """
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except Exception:
+        return False
+    for info in infos:
+        try:
+            addr = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False
+        if (addr.is_private or addr.is_loopback or addr.is_link_local
+                or addr.is_reserved or addr.is_multicast or addr.is_unspecified):
+            return False
+    return True
 
 
 @dataclass
@@ -82,6 +109,8 @@ class WebReadTool(Tool):
         url = str(args.get("url", ""))
         if not url.startswith(("http://", "https://")):
             return Observation(False, "only http(s) URLs are allowed")
+        if not _is_public_host(urlparse(url).hostname or ""):
+            return Observation(False, "refused: non-public / internal address (SSRF guard)")
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "qira-operator/1.0"})
             with urllib.request.urlopen(req, timeout=15) as r:

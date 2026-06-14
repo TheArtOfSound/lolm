@@ -60,6 +60,17 @@ def test_web_read_rejects_non_http_scheme_without_network():
     assert rec.executed and rec.outcome == "failed"
 
 
+def test_web_read_ssrf_guard_blocks_internal_targets():
+    op = Operator(_confident_gate())
+    # Cloud metadata endpoint + loopback + private range must all be refused
+    # before any network call — a prompt cannot steer the agent into the VPC.
+    for url in ("http://169.254.169.254/latest/meta-data/",
+                "http://localhost:7866/admin",
+                "http://127.0.0.1/", "http://10.0.0.5/"):
+        rec = op.attempt("web_read", {"url": url}, uncertainty=0.1)
+        assert rec.outcome == "failed" and "SSRF" in rec.observation["detail"], url
+
+
 def test_hard_gated_tool_never_executes_even_when_certain():
     class DeployTool(Tool):
         name = "deploy"

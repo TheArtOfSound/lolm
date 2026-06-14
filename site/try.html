@@ -432,6 +432,27 @@
             : 'local monitor model';
           r.innerHTML += '<div class="row"><b>Run mode:</b> ' + modeLabel + '</div>';
         }
+        // The autonomy gate — the thing no other agent shows: from its MEASURED
+        // uncertainty + the action's risk, would it act on its own, gather more,
+        // or hand to a human? A calibrated number, not a feeling.
+        const au = rc.autonomy || (data && data.autonomy);
+        if (au && au.mode){
+          const P = Math.round((au.p_correct||0)*100), BAR = Math.round((au.bar||0)*100);
+          const tierName = {read:'read-only', reversible:'reversible', external:'outward-facing', irreversible:'irreversible / money'}[au.tier] || au.tier;
+          const hard = (au.reason||'').includes('hard-gated');
+          let line, color;
+          if (au.mode === 'act'){ color='var(--green)';
+            line = '✓ <b>Confident enough to act on its own</b> — measured confidence <b>'+P+'%</b> clears the <b>'+BAR+'%</b> bar for a '+tierName+' action.'; }
+          else if (au.mode === 'gather'){ color='var(--amber)';
+            line = '<b>Would gather more first</b> — confidence <b>'+P+'%</b> sits just under the <b>'+BAR+'%</b> bar for a '+tierName+' action, so it verifies before acting.'; }
+          else { color = hard ? '#ff6b6b' : '#e0a106';
+            line = hard
+              ? '🔒 <b>Hands it to you (hard-gated)</b> — money, sending, and deleting always need a human, even at '+P+'% confidence. The agent prepares it and previews the outcome; you approve.'
+              : '⚠ <b>Would escalate to a human</b> — measured confidence <b>'+P+'%</b> is below the <b>'+BAR+'%</b> bar for a '+tierName+' action.'; }
+          const cal = au.calibrated ? 'calibrated on '+au.flywheel_n+' verified run(s)'
+            : 'conservative prior — earning its calibration ('+au.flywheel_n+' run(s) logged so far)';
+          r.innerHTML += '<div class="row" style="color:'+color+'"><b>Autonomy gate:</b> '+line+' <span style="opacity:.7">('+cal+')</span></div>';
+        }
         if (rc.math_checks && rc.math_checks.checked){
           if (rc.math_checks.failed)
             r.innerHTML += '<div class="row" style="color:#ff6b6b"><b>✗ Math check failed</b> — a figure in the answer does not add up. A wrong number is a wrong answer, telemetry or not.</div>';
