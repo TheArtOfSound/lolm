@@ -565,11 +565,12 @@
   // Verifiable shared-brain growth (public, no secret). Anyone can confirm the
   // numbers at /brain/stats — the agent's accumulating memory in the open.
   function showBrain(){
-    fetch('https://lolm-edge.bryanleonard237.workers.dev/brain/stats')
+    fetch('/brain/stats')
       .then(r => r.json()).then(s => {
         if (!s || s.memories == null) return;
         const el = document.getElementById('brainStat');
-        el.textContent = `⊕ shared brain: ${s.memories} memories · ${s.total_recalls} recalls · ${s.sessions} conversations · ${s.conversation_turns} turns — verifiable at /brain/stats`;
+        const n = x => Number(x).toLocaleString();
+        el.innerHTML = `⊕ shared brain: ${n(s.memories)} memories · ${n(s.total_recalls)} recalls · ${n(s.sessions)} conversations · ${n(s.conversation_turns)} turns — <a href="/brain/stats" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">verify at /brain/stats</a>`;
         el.style.display = 'block';
       }).catch(() => {});
   }
