@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LOLM — Latent Order Language Model · Qira</title>
-<meta name="description" content="LOLM is a hybrid Transformer-SSM architecture that separates surface token prediction from latent state tracking — with an agent controlled by its own latent dynamics.">
-<meta property="og:title" content="LOLM — Latent Order Language Model">
-<meta property="og:description" content="Five parallel streams, one fused representation. An agent that measures its uncertainty instead of guessing it. Patent pending — Qira LLC.">
+<meta name="description" content="LOLM is an uncertainty-control layer for AI answers. A 70B model writes while LOLM measures how sure it actually is and decides to verify, retrieve, branch, use a tool, or refuse — with an auditable receipt for every run and bounded, uncertainty-gated autonomy.">
+<meta property="og:title" content="LOLM — the AI that knows when it doesn't know">
+<meta property="og:description" content="A 70B writes; LOLM measures its own uncertainty and decides whether to verify, retrieve, act, or refuse. Every decision gets an auditable receipt. Patent pending — Qira LLC.">
 <meta property="og:type" content="website">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2307090d'/%3E%3Cpath d='M5 7 Q20 7 26 16' stroke='%234ea1ff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 12 Q19 12 26 16' stroke='%23b07fff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 16 H26' stroke='%23ffb454' stroke-width='2.2'/%3E%3Cpath d='M5 20 Q19 20 26 16' stroke='%233fd6a0' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 25 Q20 25 26 16' stroke='%23ff6b81' stroke-width='2.2' fill='none'/%3E%3Ccircle cx='26' cy='16' r='2.6' fill='%23d7dde6'/%3E%3C/svg%3E">
 <meta property="og:url" content="https://lolm.imagineqira.com">
@@ -136,6 +136,20 @@
   footer{margin-top:80px;border-top:1px solid var(--line);padding:36px 0 48px;color:var(--faint);font-size:13.5px}
   footer .row{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:baseline}
   @media (max-width:640px){ .hero{padding-top:56px} section{padding-top:48px} }
+  @media (max-width:560px){
+    .wrap{padding:0 16px}
+    .hero{padding:46px 0 16px} h1{font-size:clamp(29px,8.5vw,40px)} .hero p.lead{font-size:16px}
+    section{padding:38px 0 4px}
+    nav{gap:12px} nav .links{gap:13px;font-size:13px} nav .links a.mob-hide{display:none}
+    .badges{gap:8px} .badge{font-size:11px;padding:4px 11px}
+    .cta{gap:10px} .cta .btn{flex:1 1 auto;text-align:center}
+    th,td{padding:9px 10px;font-size:13px}
+    /* wide comparison table → horizontal scroll with a sticky row-label column */
+    #different table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    #different th,#different td{min-width:132px}
+    #different th:first-child,#different td:first-child{min-width:144px;position:sticky;left:0;background:var(--bg)}
+    .callout{padding:22px 20px} .stream{padding:18px 18px}
+  }
 
   /* ── live demo theater ─────────────────────────────────────────── */
   .demo-picker{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 14px}
@@ -211,9 +225,9 @@
   <span class="brand">LO<b>LM</b></span>
   <span class="links">
     <a href="try.html">Try it</a>
-    <a href="#architecture">Architecture</a>
-    <a href="#results" class="lowpri">Results</a>
-    <a href="#agent">Agent</a>
+    <a href="#autonomy">Autonomy</a>
+    <a href="#architecture" class="mob-hide">How it works</a>
+    <a href="#agent" class="mob-hide">Control</a>
     <a href="/operator.html">Operator</a>
     <a href="#different" class="lowpri">Why different</a>
     <a href="#build" class="lowpri">Use it</a>
@@ -226,20 +240,21 @@
 
 <div class="hero">
   <div class="kicker">Qira Research · Patent Pending</div>
-  <h1>Language modeling<br><span class="grad">beyond the surface.</span></h1>
-  <p class="lead">LOLM — the <b>Latent Order Language Model</b> — is a hybrid Transformer-SSM
-  architecture that separates surface token prediction from latent state tracking.
-  Five parallel streams, one learned fusion, and an agent that acts on its own
-  measured internal dynamics.</p>
+  <h1>The AI that knows<br><span class="grad">when it doesn't know.</span></h1>
+  <p class="lead">LOLM is an <b>uncertainty-control layer</b> for AI answers. A 70-billion-parameter
+  model writes; LOLM measures — token by token — how sure it actually is, and the controller
+  decides whether to continue, check its notes, verify, branch, use a tool, idle, or refuse.
+  <b>Every decision gets a receipt you can audit.</b></p>
   <div class="badges">
-    <span class="badge">trained on <i>FineWeb-Edu</i></span>
-    <span class="badge">H200 · TPU v4 validated</span>
-    <span class="badge">64/64 regimes alive</span>
-    <span class="badge">provisional patent <i>64002166</i></span>
+    <span class="badge">Llama-3.3-70B writer</span>
+    <span class="badge"><i>measured</i> uncertainty, not prompted</span>
+    <span class="badge">uncertainty-gated autonomy</span>
+    <span class="badge">a receipt for every run</span>
+    <span class="badge">patent pending</span>
   </div>
   <div class="cta">
-    <a class="btn primary" href="try.html">▶ Try the agent — no jargon</a>
-    <a class="btn ghost" href="#architecture">See the architecture</a>
+    <a class="btn primary" href="try.html">▶ Try it live — no jargon</a>
+    <a class="btn ghost" href="#autonomy">See what it can do on its own</a>
   </div>
   <canvas id="streams" aria-hidden="true"></canvas>
 </div>
@@ -261,8 +276,6 @@
 });</pre>
 </div>
 
-<p class="sub" style="margin:40px 0 4px">Trained on FineWeb-Edu and measured against parameter-matched baselines on real hardware — NVIDIA&nbsp;H200 and Google&nbsp;TPU&nbsp;v4. <a href="#results">See the measured numbers&nbsp;↓</a></p>
-
 <section id="architecture">
   <div class="sec-kicker">Architecture</div>
   <h2>Five streams. One fused representation.</h2>
@@ -281,55 +294,27 @@
   </div>
 
   <div class="callout">
-    <div class="big">34.47 → 485,000,000 PPL</div>
-    <p><b>Dependency inversion.</b> The latent SSM path carries only ~29% of the fused
-    representation — yet forcing the gate to surface-only makes perplexity explode by a
-    factor of fourteen million. The minority path becomes load-bearing at scale: the
-    surface decoder <b>cannot function</b> without the latent order beneath it.</p>
+    <div class="big">The order beneath the words is load-bearing.</div>
+    <p><b>Why this matters for you, not just the math.</b> The latent core carries a minority of
+    the representation — yet remove it and the fluent surface collapses. That latent signal is
+    exactly what the controller reads to tell when the model is on solid ground and when it isn't.
+    It's the difference between an AI that <i>sounds</i> sure and one that can <i>measure</i> whether
+    it should be.</p>
   </div>
 </section>
 
-<section id="results">
-  <div class="sec-kicker">Results</div>
-  <h2>Measured, matched, cross-hardware.</h2>
-  <p class="sub">Identical data, batch size, and comparable parameter count for every baseline.
-  Trained on FineWeb-Edu; validated independently on NVIDIA H200 and Google TPU v4.</p>
-
-  <details class="resd"><summary>Show the measured numbers — perplexity, ablations, cross-hardware</summary>
-  <div class="tables">
-    <div class="tbl">
-      <h3>LOLM-1.57B vs matched decoder-only</h3>
-      <table>
-        <tr><th>Metric</th><th>LOLM</th><th>Baseline</th></tr>
-        <tr><td>Parameters</td><td>1.57B</td><td>~1.57B</td></tr>
-        <tr><td>PPL @ step ~24K</td><td><span class="win">33.2</span></td><td>39.1</td></tr>
-        <tr><td>Gate equilibrium</td><td>0.72 (learned)</td><td>—</td></tr>
-        <tr><td>Regimes alive</td><td><span class="win">64 / 64</span></td><td>—</td></tr>
-      </table>
-    </div>
-    <div class="tbl">
-      <h3>LOLM-304M vs Pythia-410M</h3>
-      <table>
-        <tr><th>Metric</th><th>LOLM</th><th>Pythia</th></tr>
-        <tr><td>Parameters</td><td><span class="win">304M</span></td><td>410M</td></tr>
-        <tr><td>Eval PPL (WikiText-103)</td><td><span class="win">68.4</span></td><td>142.9</td></tr>
-        <tr><td>Late-position BPC</td><td><span class="win">1.02</span></td><td>1.23</td></tr>
-        <tr><td>Distinct-2 generation</td><td><span class="win">0.687</span></td><td>0.607</td></tr>
-      </table>
-    </div>
-    <div class="tbl">
-      <h3>Component ablation (304M, inference-time)</h3>
-      <table>
-        <tr><th>Configuration</th><th>PPL</th><th>Δ</th></tr>
-        <tr><td>Full LOLM</td><td><span class="win">59.2</span></td><td>—</td></tr>
-        <tr><td>No regime layer</td><td>123.7</td><td>+109%</td></tr>
-        <tr><td>No SSM path</td><td>500.0</td><td>+744%</td></tr>
-        <tr><td>No gate</td><td>595.4</td><td>+905%</td></tr>
-        <tr><td>Decoder only</td><td>2,198.6</td><td>+3,612%</td></tr>
-      </table>
-      <p class="note">Every stream earns its place — remove one and the whole degrades.</p>
-    </div>
-  </div></details>
+<section id="evidence">
+  <div class="sec-kicker">Evidence</div>
+  <h2>Every claim here is a mechanism you can check.</h2>
+  <p class="sub">Nothing on this page is an adjective. The control decisions, the receipts, the
+  math checks and the confidence map are all things you can reproduce in the live demo or read in
+  the code. The architecture is validated independently on NVIDIA&nbsp;H200 and Google&nbsp;TPU&nbsp;v4
+  against parameter-matched baselines — the full benchmark numbers and ablations live in the code and
+  the proof pack, kept off this page on purpose.</p>
+  <div class="cta">
+    <a class="btn ghost" href="https://github.com/TheArtOfSound/lolm" target="_blank" rel="noopener">Read the code →</a>
+    <a class="btn ghost" href="#different">What it does that others don't ↓</a>
+  </div>
 </section>
 
 <section id="agent">
@@ -366,6 +351,30 @@
   A frontier mode lets a large reasoner generate while LOLM's latent machinery monitors
   and controls — and the whole workspace speaks the open
   <b>Model Context Protocol</b>, so it plugs into any modern agent stack.</p>
+</section>
+
+<section id="autonomy">
+  <div class="sec-kicker">Autonomy, bounded</div>
+  <h2>It can act on its own — and it earns the right.</h2>
+  <p class="sub">The same measured uncertainty that drives the controller also gates real action.
+  LOLM acts autonomously only when its <b>calibrated</b> probability of being correct clears a
+  risk-tiered bar — generous for read-only, near-zero for anything that touches money — and every
+  action's outcome is verified before the receipt may say it happened.</p>
+
+  <div class="streams-grid">
+    <div class="stream s1"><h3>Five honest levels</h3><div class="role">L1 → L5</div>
+      <p>From receipt-monitored answers to a bounded persistent agent that maintains goals, memory,
+      verification, scheduling and tools. The system reports its <b>real</b> current level — never a
+      higher one. It's live at <a href="/api/demo/agent/level" target="_blank" rel="noopener">/api/demo/agent/level</a>.</p></div>
+    <div class="stream s2"><h3>Gated tools, verified outcomes</h3><div class="role">read · reversible only</div>
+      <p>It runs read and reversible tools on its own — each gated by measured uncertainty and its
+      outcome independently checked. Money, sending, deletion and deploys are <b>hard-gated to a
+      human</b>, no matter how confident it is. That ceiling is in the math, not a policy doc.</p></div>
+    <div class="stream s3"><h3>Bold where cheap, humble where not</h3><div class="role">the safety asymmetry</div>
+      <p>It acts where a mistake is recoverable and escalates where it isn't. A missing uncertainty
+      signal is a reason to ask, never a license to act — and it stops itself at a budget, a safety
+      limit, or when nothing more is worth doing.</p></div>
+  </div>
 </section>
 
 <section id="variants">
