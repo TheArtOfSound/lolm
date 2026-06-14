@@ -134,6 +134,7 @@ def classify_action_risk(action_kind: str, risk_profiles: Optional[List[str]] = 
 
 
 _ACTION_TIER: Dict[str, str] = {
+    "answer": "read", "advise": "read", "deliver": "read",
     "read": "read", "search": "read", "retrieve": "read", "lookup": "read",
     "draft": "reversible", "write_file": "reversible", "scratch": "reversible",
     "edit": "reversible", "branch": "reversible",

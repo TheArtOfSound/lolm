@@ -69,6 +69,12 @@ def _confidence(text: str):
     from lolm.confidence_map import confidence_spans
     return confidence_spans(STATE.backbone, STATE.graft, text)
 
+# The autonomy flywheel: every run's (measured uncertainty, verified outcome)
+# pair persists here; the calibrator + selective-risk bars are fit on it so the
+# agent earns its autonomy from its own track record. Durable across restarts.
+from lolm.flywheel import AutonomyFlywheel
+FLYWHEEL = AutonomyFlywheel(ROOT / "runs" / "autonomy_flywheel.jsonl")
+
 AGENT = NFETAgent(AgentDeps(
     memory=MEMORY,
     ChatMessage=ChatMessage,
@@ -79,6 +85,7 @@ AGENT = NFETAgent(AgentDeps(
     frontier_loop=FRONTIER,
     cloud_brain=BRAIN,
     confidence_fn=_confidence,
+    flywheel=FLYWHEEL,
 ))
 
 register_nfet_agent_routes(app, AGENT)

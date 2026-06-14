@@ -169,6 +169,8 @@ class AgentDeps:
     fetch_url: Optional[Callable[..., Dict[str, Any]]] = None
     frontier_loop: Optional[Callable[[Any], Iterator[Dict[str, Any]]]] = None
     cloud_brain: Optional[Any] = None   # CloudBrain client (shared D1 memory)
+    flywheel: Optional[Any] = None      # AutonomyFlywheel: (uncertainty, verified
+                                        # outcome) log → calibrated autonomy bars
     confidence_fn: Optional[Callable[[str], Dict[str, Any]]] = None  # measured
                                         # per-token uncertainty over the answer
 
@@ -947,6 +949,42 @@ WORKING DRAFT:
             retrieval=retrieval,
         )
 
+        # Uncertainty-gated autonomy (lolm.autonomy): from the run's MEASURED
+        # uncertainty + the prompt's risk, decide whether the agent could act on
+        # this answer on its own, gather more, or escalate — a calibrated number
+        # gated on the flywheel's verified track record, not a feeling. Advisory
+        # until the Phase-3 action runtime consumes it; recorded now (only when
+        # there is an objective correctness signal) so the flywheel turns.
+        autonomy: Dict[str, Any] = {}
+        fw = getattr(self.deps, "flywheel", None)
+        try:
+            from lolm.autonomy import AutonomyGate
+            from lolm.calibration import aggregate_uncertainty
+            frames_t = [{"graft_entropy": f.logit_entropy, "hidden_drift": f.hidden_drift}
+                        for f in all_frames]
+            n_tok = confidence.get("n_tokens") or 0
+            span_frac = (len(confidence.get("spans") or []) / n_tok) if n_tok else None
+            uncertainty = aggregate_uncertainty(frames_t, low_conf_span_fraction=span_frac)
+            no_tel = len(all_frames) == 0
+            gate = AutonomyGate(fw.calibrator() if fw is not None else None)
+            risk_profiles = receipt.get("risk_profile") or []
+            decision = gate.gate_action(uncertainty, "answer", risk_profiles,
+                                        no_telemetry=no_tel)
+            outcome = receipt.get("task_contract_passed")
+            if outcome is None:
+                mc = receipt.get("math_checks") or {}
+                outcome = mc.get("passed") if mc.get("checked") else None
+            recorded = (fw is not None and outcome is not None and not no_tel
+                        and bool(fw.record(uncertainty, outcome,
+                                           meta={"profile": profile, "tier": decision.tier})))
+            autonomy = {**decision.to_dict(),
+                        "flywheel_n": fw.count if fw is not None else 0,
+                        "outcome_recorded": recorded}
+            receipt["autonomy"] = autonomy
+            yield {"event": "autonomy", "data": autonomy}
+        except Exception:
+            autonomy = {}
+
         result = {
             "command": command,
             "reasoner": req.reasoner,
@@ -965,6 +1003,7 @@ WORKING DRAFT:
             "receipt": receipt,
             "confidence": confidence,
             "retrieval": retrieval,
+            "autonomy": autonomy,
             "controller_config": asdict(policy.cfg),
             "frames": learning["frames"],
             "saved_learning_type": "nfet_agent_run",
