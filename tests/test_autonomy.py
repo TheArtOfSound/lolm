@@ -111,6 +111,17 @@ def test_no_telemetry_is_not_consent():
     assert gate.decide(0.0, "read", no_telemetry=True).mode == ACT
 
 
+def test_uncalibrated_read_tier_explores_but_not_riskier():
+    gate = AutonomyGate(calibrator=None)  # no flywheel / no track record yet
+    # Read-only exploration IS allowed — it's harmless and builds calibration.
+    assert gate.decide(0.2, "read").mode == ACT
+    # ...but anything reversible-or-worse still waits for a track record.
+    assert gate.decide(0.2, "reversible").mode == ESCALATE
+    assert gate.decide(0.2, "irreversible").mode == ESCALATE
+    # No telemetry is still not consent, even for a read.
+    assert gate.decide(0.2, "read", no_telemetry=True).mode == ESCALATE
+
+
 def test_uncalibrated_prior_is_conservative():
     gate = AutonomyGate(calibrator=None)  # no flywheel yet
     d = gate.decide(uncertainty=0.0, tier="irreversible")

@@ -120,14 +120,25 @@ def _operator_chat(messages):
         req = ChatRequest(**kwargs, telemeter=False)
     except TypeError:
         req = ChatRequest(**kwargs)
-    loop = FRONTIER if FRONTIER.available() else generation_loop
-    text = ""
-    for ev in loop(req):
-        if ev.get("event") == "done":
-            text = ev.get("data", {}).get("response") or text
-        elif ev.get("event") == "error":
-            raise RuntimeError(ev.get("data", {}).get("error", "planner failed"))
-    return text
+    def _drive(loop) -> str:
+        text = ""
+        for ev in loop(req):
+            if ev.get("event") == "done":
+                text = ev.get("data", {}).get("response") or text
+            elif ev.get("event") == "error":
+                raise RuntimeError(ev.get("data", {}).get("error", "planner failed"))
+        return text
+    # Prefer the 70B planner; fall back to the local model on any runtime failure
+    # (quota/502/timeout) so the operator keeps planning instead of dying — the
+    # same resilience the agent loop has.
+    if FRONTIER.available():
+        try:
+            t = _drive(FRONTIER)
+            if t.strip():
+                return t
+        except Exception:
+            pass
+    return _drive(generation_loop)
 
 
 def _operator_uncertainty(text: str) -> float:

@@ -183,6 +183,18 @@ class AutonomyGate:
                 f"calibrated P(correct)={p:.3f} ≥ bar {bar:.3f} for a {tier} "
                 f"action{note}",
             )
+        # Cold-start exploration: an UNCALIBRATED agent has no track record, yet
+        # it can only earn one by acting. READ-tier actions are read-only and
+        # harmless if wrong, so it may take them to build the verified history
+        # that calibrates it — and nothing riskier. Once calibrated, this path
+        # is gone and the bar alone decides. (Telemetry is still required.)
+        if not calibrated and tier == "read" and not no_telemetry:
+            return AutonomyDecision(
+                ACT, tier, p, bar, margin, uncertainty, calibrated,
+                "uncalibrated read-tier exploration — a read-only action is safe "
+                "to take and builds the verified track record that calibrates "
+                "autonomy for everything riskier",
+            )
         recoverable = tier in ("read", "reversible", "external")
         if recoverable and margin >= -self.gather_margin:
             return AutonomyDecision(
