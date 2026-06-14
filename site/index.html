@@ -17,15 +17,15 @@
 <meta name="twitter:image" content="https://lolm.imagineqira.com/og-card.png">
 <style>
   :root{
-    /* neutral slate ramp — one cohesive scale, darkest page to brightest heading */
-    --bg:#0a0e15; --bg2:#0e131d; --panel:#131a25; --panel-2:#19212e;
-    --line:#212a39; --line-2:#2d3849;
-    --t-hi:#eef2f8; --text:#c5cedb; --dim:#8a96a8; --faint:#5b6679;
-    /* one confident brand accent (indigo-blue) — distinct from the data blue */
-    --accent:#5b8def; --accent-2:#7c6cf0; --accent-ink:#070d18; --good:#3fcf9a;
+    /* light neutral ramp — unified with imagineqira.com (white canvas, near-black ink) */
+    --bg:#ffffff; --bg2:#f6f7f9; --panel:#ffffff; --panel-2:#f1f3f6;
+    --line:#e6e8ec; --line-2:#cdd2da;
+    --t-hi:#0a0c10; --text:#2a323c; --dim:#525c69; --faint:#8a94a2;
+    /* one confident brand accent (rose) — matches imagineqira.com */
+    --accent:#f43f5e; --accent-2:#6366f1; --accent-ink:#ffffff; --good:#0f9d6b;
     /* data palette — used ONLY where the five streams ARE the data (diagram,
-       equation, stream cards, controls, canvas). Never as page decoration. */
-    --surface:#4f9bf2; --latent:#a98cf0; --regime:#e3a857; --memory:#43cb9c; --gate:#ef7088;
+       equation, stream cards, controls, canvas). Darkened for contrast on white. */
+    --surface:#2563eb; --latent:#7c3aed; --regime:#b8730a; --memory:#0f9d6b; --gate:#e11d6b;
     --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
     --sans:"Inter var","Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
   }
@@ -36,9 +36,9 @@
   h1,h2,h3,h4{color:var(--t-hi);font-weight:680;letter-spacing:-.02em}
   a{color:var(--accent);text-decoration:none;transition:color .15s}
   a:hover{color:var(--t-hi);text-decoration:none}
-  ::selection{background:rgba(91,141,239,.28)}
+  ::selection{background:rgba(244,63,94,.16)}
   .wrap{max-width:1060px;margin:0 auto;padding:0 24px}
-  header{position:sticky;top:0;z-index:10;background:rgba(10,14,21,.78);backdrop-filter:blur(12px) saturate(140%);border-bottom:1px solid var(--line)}
+  header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.82);backdrop-filter:blur(12px) saturate(140%);border-bottom:1px solid var(--line)}
   nav{display:flex;align-items:center;gap:22px;height:58px}
   .brand{font-family:var(--mono);font-weight:700;letter-spacing:.12em;color:var(--text);font-size:15px}
   .brand b{color:var(--accent)}
@@ -55,7 +55,7 @@
   .badge i{font-style:normal;color:var(--good)}
   .cta{display:flex;gap:14px;margin-top:30px;flex-wrap:wrap}
   .btn{display:inline-block;padding:11px 20px;border-radius:10px;font-size:14.5px;font-weight:600;border:1px solid var(--line);transition:all .15s}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 6px 20px -8px var(--accent)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 8px 22px -10px var(--accent)}
   .btn.primary:hover{filter:brightness(1.08);transform:translateY(-1px);text-decoration:none;color:#fff}
   .btn.ghost{color:var(--text);background:var(--panel)}
   .btn.ghost:hover{border-color:var(--line-2);background:var(--panel-2);text-decoration:none}
@@ -96,7 +96,7 @@
   .stream.s3{border-top-color:var(--regime)} .stream.s4{border-top-color:var(--memory)}
   .stream.s5{border-top-color:var(--gate)}
 
-  .callout{background:linear-gradient(180deg,rgba(176,127,255,.08),rgba(78,161,255,.04));border:1px solid #2a3040;border-radius:16px;padding:30px 32px;margin-top:36px}
+  .callout{background:linear-gradient(180deg,rgba(99,102,241,.06),rgba(244,63,94,.035));border:1px solid var(--line-2);border-radius:16px;padding:30px 32px;margin-top:36px}
   .callout .big{font-family:var(--mono);font-size:clamp(22px,4vw,34px);font-weight:700;color:var(--latent)}
   .callout p{color:var(--dim);margin-top:10px;max-width:760px}
   .callout b{color:var(--text)}
@@ -109,6 +109,12 @@
   .tables{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px}
   .tbl h3{font-size:15px;margin-bottom:8px}
   .tbl .note{font-size:12.5px;color:var(--faint);margin-top:-18px}
+  details.resd{margin-top:6px}
+  details.resd>summary{cursor:pointer;color:var(--accent);font-family:var(--mono);font-size:13px;list-style:none;padding:6px 0;user-select:none}
+  details.resd>summary::-webkit-details-marker{display:none}
+  details.resd>summary::before{content:"▸ "}
+  details.resd[open]>summary::before{content:"▾ "}
+  details.resd[open]>summary{margin-bottom:18px}
 
   .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:26px 0}
   .ctrl{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
@@ -158,7 +164,7 @@
   .feed .seg{margin-bottom:14px}
   .feed .seg-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
   .feed .seg-text{color:var(--dim);white-space:pre-wrap}
-  .feed .seg-text.final-text{color:var(--text);background:rgba(63,214,160,.05);border:1px solid #1d3a31;border-radius:10px;padding:13px 16px}
+  .feed .seg-text.final-text{color:var(--text);background:rgba(15,157,107,.06);border:1px solid rgba(15,157,107,.28);border-radius:10px;padding:13px 16px}
   .feed .seg-text.md{white-space:normal}
   .feed .seg-text.md p{margin:0 0 9px} .feed .seg-text.md p:last-child{margin-bottom:0}
   .feed .seg-text.md h3,.feed .seg-text.md h4,.feed .seg-text.md h5{font-size:14px;margin:12px 0 5px;color:var(--text)}
@@ -188,7 +194,7 @@
   .gauge .gv{font-family:var(--mono);font-size:16px;color:var(--text)}
   .gauge .gl{font-size:10.5px;color:var(--faint);margin-top:2px}
   .status-line{font-size:12px;color:var(--faint);font-family:var(--mono);min-height:18px}
-  .receipt{margin:14px 18px 18px;border:1px solid #1d3a31;background:rgba(63,214,160,.04);border-radius:12px;padding:15px 18px;display:none}
+  .receipt{margin:14px 18px 18px;border:1px solid var(--line);background:var(--bg2);border-radius:12px;padding:15px 18px;display:none}
   .receipt.on{display:block}
   .receipt .verdict{font-family:var(--mono);font-weight:700;color:var(--memory);font-size:14px}
   .receipt .plain{font-size:13px;color:var(--dim);margin:6px 0 10px}
@@ -225,7 +231,7 @@
   Five parallel streams, one learned fusion, and an agent that acts on its own
   measured internal dynamics.</p>
   <div class="badges">
-    <span class="badge">trained to <i>1.57B</i> params</span>
+    <span class="badge">trained on <i>FineWeb-Edu</i></span>
     <span class="badge">H200 · TPU v4 validated</span>
     <span class="badge">64/64 regimes alive</span>
     <span class="badge">provisional patent <i>64002166</i></span>
@@ -254,12 +260,7 @@
 });</pre>
 </div>
 
-<div class="stats">
-  <div class="stat"><div class="num"><span>−15%</span> PPL</div><div class="lbl">vs a parameter-matched decoder-only baseline at 1.57B (33.2 vs 39.1, step ~24K, FineWeb-Edu)</div></div>
-  <div class="stat"><div class="num"><span>−52%</span> PPL</div><div class="lbl">vs Pythia-410M on WikiText-103 — with 26% fewer parameters (LOLM-304M)</div></div>
-  <div class="stat"><div class="num"><span>43%</span> faster</div><div class="lbl">early-training convergence vs matched baseline, cross-validated on Google TPU v4</div></div>
-  <div class="stat"><div class="num"><span>14,000,000×</span></div><div class="lbl">perplexity explosion when the latent path is removed — dependency inversion</div></div>
-</div>
+<p class="sub" style="margin:40px 0 4px">Trained on FineWeb-Edu and measured against parameter-matched baselines on real hardware — NVIDIA&nbsp;H200 and Google&nbsp;TPU&nbsp;v4. <a href="#results">See the measured numbers&nbsp;↓</a></p>
 
 <section id="architecture">
   <div class="sec-kicker">Architecture</div>
@@ -293,6 +294,7 @@
   <p class="sub">Identical data, batch size, and comparable parameter count for every baseline.
   Trained on FineWeb-Edu; validated independently on NVIDIA H200 and Google TPU v4.</p>
 
+  <details class="resd"><summary>Show the measured numbers — perplexity, ablations, cross-hardware</summary>
   <div class="tables">
     <div class="tbl">
       <h3>LOLM-1.57B vs matched decoder-only</h3>
@@ -326,7 +328,7 @@
       </table>
       <p class="note">Every stream earns its place — remove one and the whole degrades.</p>
     </div>
-  </div>
+  </div></details>
 </section>
 
 <section id="agent">
@@ -578,7 +580,7 @@
 (function(){
   const cv = document.getElementById('streams');
   const ctx = cv.getContext('2d');
-  const COLORS = ['#4ea1ff','#b07fff','#ffb454','#3fd6a0','#ff6b81'];
+  const COLORS = ['#2563eb','#7c3aed','#b8730a','#0f9d6b','#e11d6b'];
   let W, H, dpr, particles = [];
   function resize(){
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -605,9 +607,9 @@
     ctx.strokeStyle = '#d7dde622';
     ctx.beginPath(); ctx.moveTo(fuseX, outY); ctx.lineTo(W, outY); ctx.stroke();
     // fusion node
-    ctx.fillStyle = '#d7dde6';
+    ctx.fillStyle = '#1d242e';
     ctx.beginPath(); ctx.arc(fuseX, outY, 3.2, 0, 7); ctx.fill();
-    ctx.font = '10px ui-monospace,monospace'; ctx.fillStyle = '#5a6675';
+    ctx.font = '10px ui-monospace,monospace'; ctx.fillStyle = '#8a94a2';
     ctx.fillText('fusion', fuseX - 16, outY - 12);
     const labels = ['surface h','latent z','regime r','memory m','gate g'];
     for (let i = 0; i < 5; i++){ ctx.fillStyle = COLORS[i] + 'aa'; ctx.fillText(labels[i], 8, laneY(i) - 7); }
@@ -646,7 +648,7 @@ document.querySelectorAll('.devstrip .copy').forEach(btn => {
   const $ = id => document.getElementById(id);
   const feed = $('feed'), theater = $('theater'), receipt = $('receipt');
   const spark = $('spark'), sctx = spark.getContext('2d');
-  const CTRL_COLOR = {continue:'#8b96a5', retrieve:'#4ea1ff', verify:'#ffb454', branch:'#b07fff', finalize:'#3fd6a0'};
+  const CTRL_COLOR = {continue:'#525c69', retrieve:'#2563eb', verify:'#b8730a', branch:'#7c3aed', finalize:'#0f9d6b'};
   let entropies = [], curSeg = null, sideCards = {}, playSpeed = 1, playing = false;
 
   // XSS-safe markdown (escape first, add only our own tags)
