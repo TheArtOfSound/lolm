@@ -124,7 +124,18 @@ register_vault_routes(app, AGENT)
 # real fix for "the demo never searches" — allow_web is True only on this route.
 from local_ui.research_service import make_research_pipeline, register_research_routes
 RESEARCH = make_research_pipeline(FRONTIER, ChatRequest, ChatMessage)
-register_research_routes(app, RESEARCH, gate=globals().get("GATE"))
+# Background research scheduler: runs watch-topic jobs on a cadence (bounded to
+# one per check so it never hammers search), writing source-backed memory the
+# live research endpoint can reuse. This makes "learning in the background" real.
+from lolm.research.scheduler import build_scheduler
+from local_ui import internet_tools as _itools
+RESEARCH_SCHED = build_scheduler(_itools.web_search, _itools.fetch_url,
+                                 RESEARCH.memory_store, state_dir=ROOT / "runs")
+try:
+    RESEARCH_SCHED.start()
+except Exception:
+    pass
+register_research_routes(app, RESEARCH, gate=globals().get("GATE"), scheduler=RESEARCH_SCHED)
 
 # NFET control surface: public read-only decision math + deterministic
 # system-state answers; loopback/token-guarded autonomy tick + state.

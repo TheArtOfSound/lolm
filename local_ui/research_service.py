@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from fastapi import Request
 from pydantic import BaseModel
 
 from local_ui import internet_tools
@@ -27,17 +28,23 @@ from lolm.research.pipeline import ResearchPipeline
 class ResearchRequest(BaseModel):
     command: str
 
+
+class JobRequest(BaseModel):
+    job_id: str
+
 RESEARCH_MEMORY_PATH = Path(os.environ.get(
     "RESEARCH_MEMORY_PATH",
     str(Path(__file__).resolve().parents[1] / "runs" / "research_memory.jsonl")))
 
 GROUNDED_SYSTEM = (
-    "You are LOLM's research answerer. Answer the QUESTION using the SOURCES below. "
-    "You MAY synthesize across multiple sources to reach the answer. Cite the source "
-    "tag (e.g. [S1] or [M1]) after each claim it supports. Prefer official / primary "
-    "sources. Only if the sources genuinely do not address the question, say: 'The "
-    "sources I found do not confirm this.' Do not invent facts beyond the sources. "
-    "Be concise and specific."
+    "You are LOLM's research answerer. Use the SOURCES to answer the QUESTION, "
+    "synthesizing across them. If a source identifies the person or fact currently "
+    "filling a role (e.g. names a CEO or president, or states a version/price), "
+    "ANSWER with it and cite the source — treat the most authoritative / most recent "
+    "source as current unless another source contradicts it. Cite [S#] or [M#] after "
+    "each claim. Say 'The sources I found do not confirm this' ONLY when no source "
+    "addresses the question at all. Never invent facts beyond the sources. Be direct "
+    "and concise; lead with the answer."
 )
 
 # When the controller decided NOT to search (logic, math, creative, or a fact the
@@ -100,7 +107,8 @@ def make_research_pipeline(frontier_loop: Callable, ChatRequest: Any, ChatMessag
 
 
 def register_research_routes(app: Any, pipeline: ResearchPipeline,
-                             gate: Optional[Any] = None) -> None:
+                             gate: Optional[Any] = None,
+                             scheduler: Optional[Any] = None) -> None:
 
     @app.post("/api/demo/research")
     def research(req: ResearchRequest):
@@ -127,3 +135,40 @@ def register_research_routes(app: Any, pipeline: ResearchPipeline,
                             "source_urls": m.get("source_urls"),
                             "last_checked_at": m.get("last_checked_at"),
                             "review_status": m.get("review_status")} for m in recent]}
+
+    if scheduler is None:
+        return
+
+    import os as _os
+
+    def _admin_ok(request) -> bool:
+        secret = _os.environ.get("RESEARCH_ADMIN_SECRET")
+        if not secret:
+            return True   # no secret configured (dev) — allow
+        auth = (request.headers.get("authorization") or "").replace("Bearer ", "")
+        return auth == secret
+
+    @app.get("/api/demo/research/jobs")
+    def research_jobs():
+        return scheduler.status()
+
+    @app.post("/api/demo/research/jobs/run")
+    def research_job_run(req: JobRequest):
+        if gate is not None and hasattr(gate, "check_rate"):
+            ok, msg = gate.check_rate("research_job")
+            if not ok:
+                return {"error": msg, "rate_limited": True}
+        rcpt = scheduler.run_job_now(req.job_id)
+        return rcpt or {"error": f"unknown job: {req.job_id}"}
+
+    @app.post("/api/demo/research/jobs/pause")
+    def research_job_pause(req: JobRequest, request: Request):
+        if not _admin_ok(request):
+            return {"error": "unauthorized"}
+        return {"paused": scheduler.pause(req.job_id)}
+
+    @app.post("/api/demo/research/jobs/resume")
+    def research_job_resume(req: JobRequest, request: Request):
+        if not _admin_ok(request):
+            return {"error": "unauthorized"}
+        return {"resumed": scheduler.resume(req.job_id)}
