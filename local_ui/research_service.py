@@ -117,6 +117,52 @@ def make_research_pipeline(frontier_loop: Callable, ChatRequest: Any, ChatMessag
 ALWAYS_SEARCH = True
 
 
+def gather_web_sources(pipeline: ResearchPipeline, command: str, max_sources: int = 4):
+    """Search the live web for the prompt and return its results as a grounding
+    STRING for the NFET agent's BYO-sources — so the per-token uncertainty-control
+    theater runs OVER real web evidence (search + measured self-control in one run).
+    Returns (grounding_text, n_sources, titles)."""
+    from lolm.research.decide import plan_queries
+    from lolm.research.pipeline import unwrap_url
+
+    retrieved: list = []
+    seen: set = set()
+    for q in plan_queries(command, max_q=2):
+        try:
+            res = pipeline.search_fn(q, 6) or {}
+        except Exception:
+            continue
+        for r in (res.get("results") or []):
+            url = unwrap_url(r.get("url", ""))
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            retrieved.append({"title": r.get("title", ""), "url": url,
+                              "snippet": r.get("snippet", "")})
+    try:
+        ranked = pipeline._rank(retrieved, command)
+    except Exception:
+        ranked = retrieved
+
+    blocks: list = []
+    titles: list = []
+    for r in ranked[:max_sources]:
+        text, title = r.get("snippet", ""), r.get("title", "")
+        if pipeline.fetch_fn is not None:
+            try:
+                f = pipeline.fetch_fn(r["url"]) or {}
+                text = f.get("text") or text
+                title = f.get("title") or title
+            except Exception:
+                pass
+        if not (text or "").strip():
+            continue
+        n = len(blocks) + 1
+        titles.append(title or r["url"])
+        blocks.append(f"SOURCE [{n}] {title} ({r['url']})\n{(text or '').strip()[:1400]}")
+    return "\n\n".join(blocks), len(blocks), titles
+
+
 def web_route_events(pipeline: ResearchPipeline, command: str):
     """Run real web research for the prompt and yield it as the main demo's SSE
     event protocol. With ALWAYS_SEARCH the landing-page agent searches the web on

@@ -116,13 +116,15 @@ register_nfet_agent_routes(app, AGENT)
 # demo routes so the MAIN agent can divert to it on currentness prompts (the real
 # fix for "I asked for today's news and it didn't search").
 from local_ui.research_service import (make_research_pipeline, register_research_routes,
-                                       web_route_events)
+                                       web_route_events, gather_web_sources)
 RESEARCH = make_research_pipeline(FRONTIER, ChatRequest, ChatMessage)
 
 register_demo_routes(
     app, AGENT, REPLAYS_DIR,
     model_ready_fn=lambda: STATE.backbone is not None,
-    web_events_fn=lambda cmd: web_route_events(RESEARCH, cmd),
+    # Combine: search the live web every prompt → ground the NFET agent on the
+    # results → run the uncertainty-control theater over real evidence.
+    web_sources_fn=lambda cmd: gather_web_sources(RESEARCH, cmd),
 )
 
 from local_ui.vault_routes import register_vault_routes

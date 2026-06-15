@@ -218,7 +218,7 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
                          limits: Optional[DemoLimits] = None,
                          model_ready_fn: Any = lambda: True,
                          log_path: Optional[Path] = None,
-                         web_events_fn: Any = None) -> DemoGate:
+                         web_sources_fn: Any = None) -> DemoGate:
     limits = limits or DemoLimits()
     gate = DemoGate(limits)
     replays_dir = Path(replays_dir)
@@ -309,24 +309,28 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
             )
         gate.record(ip)
         gate.runs_started += 1
-        agent_req = clamp_request(req.command, limits, getattr(req, "session_id", None),
-                                  getattr(req, "sources", None))
         started = time.time()
 
-        # If the prompt needs CURRENT facts, the agent searches the web (real
-        # research → grounded answer → sources) instead of answering from stale
-        # weights. Otherwise it runs the normal NFET control theater.
-        web_stream = None
-        if web_events_fn is not None:
+        # COMBINE: search the live web on every prompt, feed the results in as the
+        # agent's grounding, then run the NFET uncertainty-control theater OVER that
+        # evidence — one run that BOTH searches the web AND shows measured self-control
+        # (per-token uncertainty, the five control moves). web_sources_fn returns
+        # (grounding_text, n_sources, titles); it degrades gracefully to no grounding.
+        grounding, n_src, titles = "", 0, []
+        if web_sources_fn is not None:
             try:
-                web_stream = web_events_fn(req.command)
+                grounding, n_src, titles = web_sources_fn(req.command)
             except Exception:
-                web_stream = None
+                grounding, n_src, titles = "", 0, []
+        user_src = getattr(req, "sources", None)
+        combined = "\n\n".join([s for s in (grounding, user_src) if s]) or None
+        agent_req = clamp_request(req.command, limits,
+                                  getattr(req, "session_id", None), combined)
 
-        # When it did NOT search but the topic is time-sensitive, attach an honest
-        # freshness notice so an answer from training memory never reads as current.
+        # Honest fallback: if the web search found nothing usable AND the topic is
+        # time-sensitive, still flag that the answer is from training memory.
         fresh = None
-        if web_stream is None:
+        if n_src == 0:
             try:
                 from lolm.research.freshness import time_sensitivity, freshness_notice
                 if time_sensitivity(req.command).get("risk") in ("high", "medium"):
@@ -336,15 +340,14 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
 
         def events() -> Iterator[str]:
             try:
-                if web_stream is not None:
-                    for item in web_stream:
-                        yield sse_event(item["event"], item["data"])
-                else:
-                    for item in agent.run_events(agent_req):
-                        # Emit the freshness warning just before the run closes.
-                        if fresh is not None and item.get("event") == "run_done":
-                            yield sse_event("freshness", fresh)
-                        yield sse_event(item["event"], item["data"])
+                # Show the web search up front; the agent then runs its theater,
+                # checking these sources whenever its measured uncertainty spikes.
+                if n_src:
+                    yield sse_event("web_search", {"sources": n_src, "titles": titles[:5]})
+                for item in agent.run_events(agent_req):
+                    if fresh is not None and item.get("event") == "run_done":
+                        yield sse_event("freshness", fresh)
+                    yield sse_event(item["event"], item["data"])
                 gate.runs_completed += 1
             except Exception as exc:  # surface as an SSE error, never a half-dead stream
                 yield sse_event("error", {"error": str(exc)[:300]})
