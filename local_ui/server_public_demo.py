@@ -119,6 +119,13 @@ register_demo_routes(
 from local_ui.vault_routes import register_vault_routes
 register_vault_routes(app, AGENT)
 
+# Live web-research surface: real search (DuckDuckGo keyless / Brave / Tavily) +
+# SSRF-safe fetch + 70B grounded answer + honest research receipt. This is the
+# real fix for "the demo never searches" — allow_web is True only on this route.
+from local_ui.research_service import make_research_pipeline, register_research_routes
+RESEARCH = make_research_pipeline(FRONTIER, ChatRequest, ChatMessage)
+register_research_routes(app, RESEARCH, gate=globals().get("GATE"))
+
 # NFET control surface: public read-only decision math + deterministic
 # system-state answers; loopback/token-guarded autonomy tick + state.
 from local_ui.control_routes import register_control_routes

@@ -50,24 +50,48 @@ class SearchDecision:
                 "queries": self.queries}
 
 
+# Search engines return nothing for a 160-char question — queries must be short
+# keyword phrases, not the whole prompt.
+_STOP = set((
+    "the a an and or of to in on for it its that this is are was were be been "
+    "who what when where which why how does do did can could would should please "
+    "tell me i you we they about as at by from with into than then so such your "
+    "their our his her him she he them confirms confirm").split())
+_LEAD = re.compile(
+    r"^(please |can you |could you |tell me |i want to know |what'?s |what is |"
+    r"who'?s |who is |when is |where is |which is |how (many|much) (is|are) )",
+    re.IGNORECASE)
+
+
+def _keywords(prompt: str, max_words: int = 5) -> str:
+    """Concise keyword phrase: drop lead-in + stopwords, keep proper nouns first."""
+    p = _LEAD.sub("", (prompt or "").strip())
+    p = re.sub(r"[?.!,;:'\"()]", " ", p)
+    words = [w for w in p.split() if w]
+    proper = [w for w in words if w[:1].isupper() and w.lower() not in _STOP]
+    other = [w for w in words if w not in proper and w.lower() not in _STOP and len(w) > 2]
+    seen, out = set(), []
+    for w in proper + other:
+        k = w.lower()
+        if k not in seen:
+            seen.add(k); out.append(w)
+    return " ".join(out[:max_words]) or " ".join(words[:max_words])
+
+
 def plan_queries(prompt: str, max_q: int = 3) -> List[str]:
-    """Turn a prompt into a few focused search queries (deterministic)."""
-    p = re.sub(r"\s+", " ", prompt).strip()
-    base = re.sub(r"^(please |can you |could you |tell me |i want to know )", "", p, flags=re.IGNORECASE)
-    queries = [base[:160]]
-    # An "official source" variant when currentness/authority matters.
-    if _EXPLICIT.search(p) or _FACTUAL.search(p):
-        core = re.sub(r"[?.!]+$", "", base)[:120]
-        queries.append(f"{core} official source")
-    if _CURRENT.search(p):
-        core = re.sub(r"[?.!]+$", "", base)[:120]
-        queries.append(f"{core} latest")
+    """A few short, focused search queries (deterministic)."""
+    kw = _keywords(prompt, 5)
+    head = " ".join(kw.split()[:3])           # minimal entity query (most likely to hit)
+    queries = [kw, head]
+    if _EXPLICIT.search(prompt) or _FACTUAL.search(prompt):
+        queries.append(f"{head} official")
+    if _CURRENT.search(prompt):
+        queries.append(f"{head} latest")
     seen, out = set(), []
     for q in queries:
         k = q.lower().strip()
         if k and k not in seen:
-            seen.add(k)
-            out.append(q.strip())
+            seen.add(k); out.append(q.strip())
     return out[:max_q]
 
 
