@@ -323,6 +323,17 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
             except Exception:
                 web_stream = None
 
+        # When it did NOT search but the topic is time-sensitive, attach an honest
+        # freshness notice so an answer from training memory never reads as current.
+        fresh = None
+        if web_stream is None:
+            try:
+                from lolm.research.freshness import time_sensitivity, freshness_notice
+                if time_sensitivity(req.command).get("risk") in ("high", "medium"):
+                    fresh = freshness_notice(req.command)
+            except Exception:
+                fresh = None
+
         def events() -> Iterator[str]:
             try:
                 if web_stream is not None:
@@ -330,6 +341,9 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
                         yield sse_event(item["event"], item["data"])
                 else:
                     for item in agent.run_events(agent_req):
+                        # Emit the freshness warning just before the run closes.
+                        if fresh is not None and item.get("event") == "run_done":
+                            yield sse_event("freshness", fresh)
                         yield sse_event(item["event"], item["data"])
                 gate.runs_completed += 1
             except Exception as exc:  # surface as an SSE error, never a half-dead stream

@@ -118,10 +118,17 @@ def web_route_events(pipeline: ResearchPipeline, command: str):
     plain factual or arithmetic prompt does NOT get web-routed."""
     import re as _re
     from lolm.research.decide import should_search
+    from lolm.research.freshness import time_sensitivity
 
     dec = should_search(command)
     sig = dec.signals or {}
-    if not (dec.search and (sig.get("currentness") or sig.get("explicit_latest"))):
+    strong = dec.search and (sig.get("currentness") or sig.get("explicit_latest"))
+    # Also search anything the freshness scorer flags as time-sensitive (role-holder,
+    # event/status, market, fast-moving event) so current questions get REAL answers
+    # — not a stale answer plus a warning. The warning is only the fallback when this
+    # path is unavailable.
+    time_sensitive = time_sensitivity(command).get("risk") == "high"
+    if not (strong or time_sensitive):
         return None
 
     def gen():

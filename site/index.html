@@ -237,6 +237,9 @@
   .receipt .verdict{font-family:var(--mono);font-weight:700;color:var(--memory);font-size:14px}
   .receipt .plain{font-size:13px;color:var(--dim);margin:6px 0 10px}
   .receipt .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .fresh-warn{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 13px;margin:0 0 12px;font-size:13px;color:#92400e;line-height:1.5}
+  .fresh-warn b{color:#78350f}
+  .fresh-tip{font-family:var(--mono);font-size:11.5px;color:#b45309}
   .receipt .chip{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:5px;padding:3px 9px;color:var(--dim)}
   .speed-row{display:flex;gap:8px;align-items:center;padding:0 18px 14px}
   .speed-row button{font-family:var(--mono);font-size:11px;background:var(--panel);color:var(--dim);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
@@ -818,6 +821,11 @@ document.querySelectorAll('.devstrip .copy').forEach(btn => {
           <span class="chip">ended by: ${data.ended_by||'—'}</span>
         </div>`;
       receipt.classList.add('on');
+    } else if (event === 'freshness'){
+      const w = document.createElement('div');
+      w.className = 'fresh-warn';
+      w.innerHTML = `⚠ <b>Answered from training memory — not the live web.</b> ${esc(data.message||'')}<br><span class="fresh-tip">${esc(data.suggestion||'')}</span>`;
+      receipt.classList.add('on'); receipt.prepend(w);
     } else if (event === 'run_done'){
       status('run complete'); $('lamp').classList.remove('on'); playing = false;
       // render the streamed final answer as markdown (bold, lists, code)
