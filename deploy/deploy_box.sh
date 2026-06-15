@@ -35,7 +35,18 @@ echo "[deploy] syncing static site → $HOST:$WEB"
 rsync -rc --rsync-path="sudo rsync" site/ "$HOST:$WEB/"
 
 echo "[deploy] clearing stale bytecode + restarting $SVC"
-ssh "$HOST" "find $APP -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null; sudo systemctl restart $SVC; sleep 5; systemctl is-active $SVC"
+ssh "$HOST" "find $APP -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null; sudo systemctl restart $SVC; sleep 3; systemctl is-active $SVC"
+
+# The app imports torch + loads the model on boot, so it binds in ~10-15s. Poll
+# for readiness instead of checking once too early (that produced false 502s).
+echo "[deploy] waiting for the app to become ready (up to 90s)"
+ready=0
+for i in $(seq 1 30); do
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$BASE/api/demo/status" || echo 000)
+  if [ "$code" = "200" ]; then ready=1; echo "[deploy] app ready after ~$((i*3))s"; break; fi
+  sleep 3
+done
+if [ "$ready" -ne 1 ]; then echo "[deploy] app never became ready — failing"; exit 1; fi
 
 fail=0
 check() { # name url expect

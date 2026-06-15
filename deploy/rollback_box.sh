@@ -26,7 +26,13 @@ ssh "$HOST" "
   sleep 5
   systemctl is-active $SVC
 "
-code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/api/demo/status" || echo 000)
+# Same readiness poll as deploy — the app needs ~10-15s to bind after restart.
+code=000
+for i in $(seq 1 30); do
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$BASE/api/demo/status" || echo 000)
+  [ "$code" = "200" ] && break
+  sleep 3
+done
 echo "[rollback] health after rollback: $code"
 [ "$code" = "200" ] || { echo "[rollback] STILL UNHEALTHY — page a human"; exit 1; }
 echo "[rollback] healthy at $BASE"
