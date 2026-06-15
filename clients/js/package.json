@@ -1,0 +1,49 @@
+{
+  "name": "lolm-nfet-client",
+  "version": "0.1.1",
+  "description": "Client for the LOLM-NFET agent protocol \u2014 live SSE runs, replay playback, and plain-English narration for an agent controlled by its own latent telemetry.",
+  "type": "module",
+  "main": "index.mjs",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.mjs"
+    }
+  },
+  "files": [
+    "index.mjs",
+    "index.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/run.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "agent",
+    "ai",
+    "llm",
+    "sse",
+    "streaming",
+    "telemetry",
+    "lolm",
+    "nfet",
+    "uncertainty",
+    "interpretability"
+  ],
+  "author": "Qira LLC (Bryan Leonard & Brandyn Leonard)",
+  "license": "MIT",
+  "homepage": "https://lolm.imagineqira.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheArtOfSound/lolm.git",
+    "directory": "clients/js"
+  },
+  "bugs": {
+    "url": "https://imagineqira.com/#contact"
+  }
+}

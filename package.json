@@ -1,0 +1,28 @@
+{
+  "name": "lolm-nfet-ops",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Repo-ops for the LOLM/NFET self-driving daily learned-update agent. Not published — the client library lives in clients/js.",
+  "type": "module",
+  "scripts": {
+    "qira:learning:pull": "python3 -c \"from lolm.release.learning import gather_learning; import json; print(json.dumps(gather_learning('.'), indent=2))\"",
+    "qira:hf:ingest": "python3 scripts/qira_hf_ingest.py",
+    "qira:web:research": "python3 scripts/qira_web_research.py",
+    "agent:daily-learned-update": "python3 scripts/agent_daily_update.py",
+    "eval:lolm": "python3 scripts/eval_lolm.py",
+    "eval:controller": "python3 scripts/eval_lolm.py --only controller",
+    "eval:retrieval": "python3 scripts/eval_lolm.py --only retrieval",
+    "eval:memory": "python3 scripts/eval_lolm.py --only memory",
+    "qira:receipt:daily": "python3 scripts/qira_receipt.py",
+    "qira:release:canary": "python3 scripts/agent_daily_update.py --allow-fire --commit --push",
+    "qira:release:stable": "python3 scripts/agent_daily_update.py --allow-fire --commit --push",
+    "qira:deploy": "bash deploy/deploy_box.sh",
+    "qira:rollback": "bash deploy/rollback_box.sh",
+    "test:all": "python3 -m pytest tests/ -q"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "author": "Qira LLC (Bryan Leonard & Brandyn Leonard)",
+  "license": "MIT"
+}

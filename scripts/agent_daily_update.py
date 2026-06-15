@@ -220,7 +220,7 @@ def main() -> int:
     run_n = len(list(DAILY_DIR.glob("*.json"))) + 1
     run_id = f"daily_{args.date.replace('-', '')}_{run_n}"
     branch = f"agent/daily-learned-update-{args.date.replace('-', '')}"
-    base_ver = read_pkg_version(PKG)
+    base_ver = read_pkg_version(PKG) if PKG.exists() else "0.0.0"
     canary = canary_version(base_ver, args.date, run_n)
     creds = _creds()
 
