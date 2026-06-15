@@ -1,6 +1,6 @@
 {
   "name": "lolm-nfet-client",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Client for the LOLM-NFET agent protocol \u2014 live SSE runs, replay playback, and plain-English narration for an agent controlled by its own latent telemetry.",
   "type": "module",
   "main": "index.mjs",
