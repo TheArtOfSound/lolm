@@ -42,9 +42,13 @@ GROUNDED_SYSTEM = (
     "filling a role (e.g. names a CEO or president, or states a version/price), "
     "ANSWER with it and cite the source — treat the most authoritative / most recent "
     "source as current unless another source contradicts it. Cite [S#] or [M#] after "
-    "each claim. Say 'The sources I found do not confirm this' ONLY when no source "
-    "addresses the question at all. Never invent facts beyond the sources. Be direct "
-    "and concise; lead with the answer."
+    "each claim. "
+    "IMPORTANT — if the sources are thin or don't actually address the question, do "
+    "NOT refuse with 'the sources do not confirm this.' Instead ANSWER from your own "
+    "knowledge and add one short note: '(not confirmed by the live sources — from "
+    "training knowledge, may be out of date).' A correct answer with that caveat is "
+    "always better than a non-answer. Never invent fake citations. Be direct and "
+    "concise; lead with the answer."
 )
 
 # When the controller decided NOT to search (logic, math, creative, or a fact the
@@ -123,11 +127,12 @@ def web_route_events(pipeline: ResearchPipeline, command: str):
     dec = should_search(command)
     sig = dec.signals or {}
     strong = dec.search and (sig.get("currentness") or sig.get("explicit_latest"))
-    # Also search anything the freshness scorer flags as time-sensitive (role-holder,
-    # event/status, market, fast-moving event) so current questions get REAL answers
-    # — not a stale answer plus a warning. The warning is only the fallback when this
-    # path is unavailable.
-    time_sensitive = time_sensitivity(command).get("risk") == "high"
+    # Search anything the freshness scorer flags as time-sensitive — HIGH (current
+    # events, role-holders, markets) AND MEDIUM (slow-changing real-world facts:
+    # populations, capitals, superlatives). Only LOW (math, creative, how/why
+    # explainers) answers directly and keeps the per-token uncertainty theater.
+    # The freshness banner stays as the honest fallback when this path is unavailable.
+    time_sensitive = time_sensitivity(command).get("risk") in ("high", "medium")
     if not (strong or time_sensitive):
         return None
 

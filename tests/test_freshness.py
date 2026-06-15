@@ -46,11 +46,12 @@ def test_slow_changing_facts_flagged_medium():
         assert time_sensitivity(q)["risk"] == "medium", q
 
 
-def test_medium_warns_but_does_not_search():
+def test_medium_now_searches():
+    # "push the line": medium (slow-changing facts) now routes to web too —
+    # only LOW (math/creative/evergreen) answers directly.
     fp = _FakePipe()
     for q in MEDIUM:
-        # medium = answer from memory + honest banner, NOT a full web search
-        assert web_route_events(fp, q) is None, f"medium should not search: {q}"
+        assert web_route_events(fp, q) is not None, f"medium should now search: {q}"
 
 
 def test_time_sensitive_questions_route_to_web():
