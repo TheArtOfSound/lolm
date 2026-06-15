@@ -43,12 +43,12 @@ GROUNDED_SYSTEM = (
     "ANSWER with it and cite the source — treat the most authoritative / most recent "
     "source as current unless another source contradicts it. Cite [S#] or [M#] after "
     "each claim. "
-    "IMPORTANT — if the sources are thin or don't actually address the question, do "
-    "NOT refuse with 'the sources do not confirm this.' Instead ANSWER from your own "
-    "knowledge and add one short note: '(not confirmed by the live sources — from "
-    "training knowledge, may be out of date).' A correct answer with that caveat is "
-    "always better than a non-answer. Never invent fake citations. Be direct and "
-    "concise; lead with the answer."
+    "If the sources confirm the answer, just give it with citations and STOP — do "
+    "not mention training knowledge or any caveat. "
+    "ONLY if the sources are thin or don't address the question: answer from your own "
+    "knowledge and append exactly one short tag '(from training knowledge — not "
+    "confirmed by live sources)', then stop. Never discuss whether the caveat is "
+    "needed, never invent citations. Be direct and concise; lead with the answer."
 )
 
 # When the controller decided NOT to search (logic, math, creative, or a fact the
@@ -110,39 +110,37 @@ def make_research_pipeline(frontier_loop: Callable, ChatRequest: Any, ChatMessag
         max_sources=max_sources)
 
 
-def web_route_events(pipeline: ResearchPipeline, command: str):
-    """If a prompt needs CURRENT facts, run real web research and yield it as the
-    main demo's SSE event protocol so the landing-page agent actually searches —
-    not just the Research tab. Returns None when no live search is warranted, so
-    the caller falls through to the normal NFET control theater (math, logic,
-    general knowledge keep the per-token uncertainty graph).
+# Always-on web mode: every prompt searches the live web before answering. Set by
+# the owner's explicit choice — no per-prompt gating. The grounded answerer falls
+# back to the model's own knowledge (with a disclosed caveat) when search comes up
+# empty, so always-searching never degrades a known answer into a refusal.
+ALWAYS_SEARCH = True
 
-    Gate is deliberately tight: only currentness ("today/latest/current/news/
-    price/2025…") or an explicit ask for current/official info diverts here. A
-    plain factual or arithmetic prompt does NOT get web-routed."""
+
+def web_route_events(pipeline: ResearchPipeline, command: str):
+    """Run real web research for the prompt and yield it as the main demo's SSE
+    event protocol. With ALWAYS_SEARCH the landing-page agent searches the web on
+    EVERY prompt (the owner's setting); the search is forced through the pipeline."""
     import re as _re
     from lolm.research.decide import should_search
-    from lolm.research.freshness import time_sensitivity
 
     dec = should_search(command)
-    sig = dec.signals or {}
-    strong = dec.search and (sig.get("currentness") or sig.get("explicit_latest"))
-    # Search anything the freshness scorer flags as time-sensitive — HIGH (current
-    # events, role-holders, markets) AND MEDIUM (slow-changing real-world facts:
-    # populations, capitals, superlatives). Only LOW (math, creative, how/why
-    # explainers) answers directly and keeps the per-token uncertainty theater.
-    # The freshness banner stays as the honest fallback when this path is unavailable.
-    time_sensitive = time_sensitivity(command).get("risk") in ("high", "medium")
-    if not (strong or time_sensitive):
-        return None
+    if not ALWAYS_SEARCH:
+        sig = dec.signals or {}
+        from lolm.research.freshness import time_sensitivity
+        strong = dec.search and (sig.get("currentness") or sig.get("explicit_latest"))
+        if not (strong or time_sensitivity(command).get("risk") in ("high", "medium")):
+            return None
+
+    reason = dec.reason if dec.search else "always-on web mode — searching every prompt"
 
     def gen():
         yield {"event": "run_start", "data": {"head_trained": False, "mode": "web_research"}}
         yield {"event": "decision", "data": {"segment": 1, "decision": {
-            "label": "retrieve", "source": "search", "reason": dec.reason, "zscores": {}}}}
+            "label": "retrieve", "source": "search", "reason": reason, "zscores": {}}}}
         yield {"event": "phase", "data": {"phase": "finalize"}}
         try:
-            result = pipeline.run(command, allow_web=True)
+            result = pipeline.run(command, allow_web=True, force=ALWAYS_SEARCH)
         except Exception as exc:
             yield {"event": "error", "data": {"error": f"web research failed: {exc}"[:200]}}
             return

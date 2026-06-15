@@ -73,7 +73,8 @@ class ResearchPipeline:
     memory_write: bool = True
 
     def run(self, prompt: str, *, uncertainty: float = 0.0,
-            run_id: Optional[str] = None, allow_web: bool = True) -> Dict[str, Any]:
+            run_id: Optional[str] = None, allow_web: bool = True,
+            force: bool = False) -> Dict[str, Any]:
         run_id = run_id or f"research-{uuid.uuid4().hex[:12]}"
         actions: List[Dict[str, Any]] = []
         step = [0]
@@ -88,17 +89,19 @@ class ResearchPipeline:
             act("retrieve_local_memory", "check what we already learned",
                 count=len(mem_hits), stale=sum(1 for m in mem_hits if m.get("_stale")))
 
-        # 2) Decide.
+        # 2) Decide. `force` = always-on web mode: search every prompt regardless.
         decision = should_search(prompt, uncertainty=uncertainty, memory_hits=mem_hits)
-        act("search_decision", decision.reason, search=decision.search,
-            signals=decision.signals)
+        reason = ("always-on web mode — searching every prompt"
+                  if force and not decision.search else decision.reason)
+        act("search_decision", reason, search=decision.search or force,
+            signals=decision.signals, forced=bool(force and not decision.search))
 
         retrieved: List[Dict[str, Any]] = []
         opened: List[Dict[str, Any]] = []
         written: List[str] = []
         mode = "model_only"
 
-        do_search = decision.search and allow_web and self.search_fn is not None
+        do_search = (decision.search or force) and allow_web and self.search_fn is not None
         if decision.search and not do_search:
             act("search_skipped", "search indicated but web is disabled or no provider — "
                 "answering without it (disclosed)")

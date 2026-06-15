@@ -54,16 +54,22 @@ def test_medium_now_searches():
         assert web_route_events(fp, q) is not None, f"medium should now search: {q}"
 
 
-def test_time_sensitive_questions_route_to_web():
+def test_always_search_routes_every_prompt():
+    # Owner setting: ALWAYS_SEARCH -> every prompt searches the web, no exceptions.
+    fp = _FakePipe()
+    for q in TIME_SENSITIVE + MEDIUM + EVERGREEN:
+        assert web_route_events(fp, q) is not None, f"always-on should search: {q}"
+
+
+def test_gated_mode_still_works_when_disabled(monkeypatch):
+    # With ALWAYS_SEARCH off, the tiered gate routes current/time-sensitive only.
+    import local_ui.research_service as rs
+    monkeypatch.setattr(rs, "ALWAYS_SEARCH", False)
     fp = _FakePipe()
     for q in TIME_SENSITIVE:
-        assert web_route_events(fp, q) is not None, f"should search: {q}"
-
-
-def test_evergreen_questions_keep_the_nfet_theater():
-    fp = _FakePipe()
+        assert web_route_events(fp, q) is not None, f"gated should search: {q}"
     for q in EVERGREEN:
-        assert web_route_events(fp, q) is None, f"should NOT search: {q}"
+        assert web_route_events(fp, q) is None, f"gated should NOT search: {q}"
 
 
 def test_freshness_notice_is_honest():
