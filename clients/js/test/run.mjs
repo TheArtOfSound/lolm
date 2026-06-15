@@ -27,7 +27,7 @@ const ok = (name) => { passed++; console.log("  ✓", name); };
 
 // 2. Replay playback over the REAL recorded replay shipped with the site.
 {
-  const replay = JSON.parse(await readFile(join(here, "../../../site/replays/gate.json"), "utf-8"));
+  const replay = JSON.parse(await readFile(join(here, "../../../site/replays/credit-score.json"), "utf-8"));
   const seen = { tokens: 0, decisions: [], actions: [], proof: null };
   const result = await playReplay(replay, {
     speed: 0,
