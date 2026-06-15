@@ -37,7 +37,8 @@ jobs:
           python -m pip install -U pip
           # CPU-only torch wheel keeps the install small + fast
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements.txt
+          # requirements-agent.txt = -r requirements.txt + mcp + anthropic
+          pip install -r requirements-agent.txt
           pip install httpx   # starlette TestClient needs it
       - name: Run the FULL test suite
         run: python -m pytest tests/ -q --durations=10
