@@ -57,9 +57,9 @@ jobs:
         run: |
           # GitHub Actions disallows secrets in step-level if:, so gate in bash.
           if [ -n "$DEPLOY_KEY" ]; then
-            mkdir -p ~/.ssh && echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+            mkdir -p ~/.ssh && printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
             chmod 600 ~/.ssh/id_ed25519
-            ssh-keyscan -H "$DEPLOY_SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+            ssh-keyscan -H "${DEPLOY_SSH_HOST##*@}" >> ~/.ssh/known_hosts 2>/dev/null || true
           else
             echo "no DEPLOY_KEY secret — skipping (deploy stays gated)"
           fi
