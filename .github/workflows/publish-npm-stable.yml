@@ -1,0 +1,51 @@
+name: publish-npm-stable
+
+# Publish a STABLE patch of clients/js — only after the canary smoke passed. Inert
+# until NPM_TOKEN is set. Runs tests + content inspection again before publishing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      canary_passed:
+        description: 'Confirm the canary was published AND smoke-tested green'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  stable:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/js
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Gate — canary must have passed
+        run: '[ "${{ inputs.canary_passed }}" = "true" ] || { echo "stable blocked: canary smoke not confirmed"; exit 1; }'
+      - name: Guard — require NPM_TOKEN
+        run: '[ -n "${{ secrets.NPM_TOKEN }}" ] || { echo "NPM_TOKEN not set — refusing to publish"; exit 1; }'
+      - name: Bump patch
+        run: |
+          npm version patch --no-git-tag-version
+          echo "STABLE_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+      - name: Test + inspect
+        run: |
+          node test/run.mjs
+          npm pack --dry-run
+      - name: Publish stable (provenance)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+      - name: Tag the release
+        working-directory: .
+        run: |
+          git config user.name lolm-daily-agent
+          git config user.email agent@imagineqira.com
+          git tag "v$STABLE_VERSION" && git push origin "v$STABLE_VERSION" || true

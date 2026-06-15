@@ -111,19 +111,23 @@ AGENT = NFETAgent(AgentDeps(
 ))
 
 register_nfet_agent_routes(app, AGENT)
+# Live web-research pipeline: real search (DuckDuckGo keyless / Brave / Tavily) +
+# SSRF-safe fetch + 70B grounded answer + honest research receipt. Built BEFORE the
+# demo routes so the MAIN agent can divert to it on currentness prompts (the real
+# fix for "I asked for today's news and it didn't search").
+from local_ui.research_service import (make_research_pipeline, register_research_routes,
+                                       web_route_events)
+RESEARCH = make_research_pipeline(FRONTIER, ChatRequest, ChatMessage)
+
 register_demo_routes(
     app, AGENT, REPLAYS_DIR,
     model_ready_fn=lambda: STATE.backbone is not None,
+    web_events_fn=lambda cmd: web_route_events(RESEARCH, cmd),
 )
 
 from local_ui.vault_routes import register_vault_routes
 register_vault_routes(app, AGENT)
 
-# Live web-research surface: real search (DuckDuckGo keyless / Brave / Tavily) +
-# SSRF-safe fetch + 70B grounded answer + honest research receipt. This is the
-# real fix for "the demo never searches" — allow_web is True only on this route.
-from local_ui.research_service import make_research_pipeline, register_research_routes
-RESEARCH = make_research_pipeline(FRONTIER, ChatRequest, ChatMessage)
 # Background research scheduler: runs watch-topic jobs on a cadence (bounded to
 # one per check so it never hammers search), writing source-backed memory the
 # live research endpoint can reuse. This makes "learning in the background" real.
@@ -136,6 +140,18 @@ try:
 except Exception:
     pass
 register_research_routes(app, RESEARCH, gate=globals().get("GATE"), scheduler=RESEARCH_SCHED)
+
+# Hugging Face daily-learning surface: ingest the AI dataset ecosystem daily →
+# license/quality/poison/dedupe filter → source-backed memory + training-candidate
+# queue. Weight training stays GATED (eval wall), so the receipt honestly reports
+# model_weights_changed: false. This is "learns daily" you can actually prove.
+from local_ui.hf_service import make_hf_service, register_hf_routes
+HF_LEARN = make_hf_service(ROOT / "runs")
+try:
+    HF_LEARN.start()
+except Exception:
+    pass
+register_hf_routes(app, HF_LEARN, gate=globals().get("GATE"))
 
 # NFET control surface: public read-only decision math + deterministic
 # system-state answers; loopback/token-guarded autonomy tick + state.

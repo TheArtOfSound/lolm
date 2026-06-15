@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOLM learns from Hugging Face daily — and proves what it learned · Qira</title>
+<meta name="description" content="LOLM ingests the Hugging Face dataset ecosystem every day, filters by license / quality / poison / duplication, writes source-backed memories, and queues training candidates — but changes model weights only when an eval proves improvement. Every ingest leaves a receipt.">
+<link rel="canonical" href="https://lolm.imagineqira.com/hf.html">
+<style>
+  :root{
+    --bg:#ffffff; --ink:#0a0c10; --dim:#41474f; --faint:#7a828c; --line:#e7e9ee;
+    --panel:#f7f8fa; --panel2:#fbfcfd; --accent:#f43f5e; --good:#16a34a; --warn:#d97706;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    --high:#16a34a; --med:#0ea5e9; --low:#9aa1ab;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  .wrap{max-width:1020px;margin:0 auto;padding:0 22px}
+  header{border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(255,255,255,.86);backdrop-filter:blur(8px);z-index:10}
+  nav{display:flex;align-items:center;gap:18px;height:58px;font-size:14px}
+  nav .brand{font-weight:700;letter-spacing:-.02em}
+  nav .brand span{color:var(--accent)}
+  nav .links{margin-left:auto;display:flex;gap:18px}
+  nav .links a{color:var(--dim)}
+  .hero{padding:54px 0 10px}
+  .kick{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+  h1{font-size:clamp(30px,5vw,46px);line-height:1.05;letter-spacing:-.03em;margin:12px 0 10px}
+  h1 .g{background:linear-gradient(95deg,var(--accent),#fb7185);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{font-size:17px;color:var(--dim);max-width:700px}
+  section{padding:30px 0 6px}
+  .sk{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  h2{font-size:23px;letter-spacing:-.02em;margin:6px 0 14px}
+  h3{font-size:16px;margin:18px 0 8px}
+  .btn{background:var(--ink);color:#fff;border:none;border-radius:11px;padding:10px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--sans)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.sm{padding:5px 12px;font-size:12.5px;border-radius:8px}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:11px 13px}
+  .stat .n{font-size:22px;font-weight:700;letter-spacing:-.02em}
+  .stat .l{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .layers{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin:12px 0}
+  .layer{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .layer .lt{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .layer h3{margin:4px 0 6px;font-size:17px}
+  .layer p{font-size:13.5px;color:var(--dim);margin:0}
+  .badge{font-family:var(--mono);font-size:10.5px;font-weight:700;text-transform:uppercase;border-radius:6px;padding:3px 8px;display:inline-block}
+  .b-live{background:#dcfce7;color:#15803d}.b-gated{background:#fef3c7;color:#b45309}
+  .honest{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:16px 20px;margin:14px 0;color:#15803d;font-size:14.5px}
+  .honest b{color:#166534}
+  .weightline{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:13px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 14px;margin-top:10px}
+  .weightline .ok{color:var(--good);font-weight:700}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  .qbadge{font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;border-radius:5px;padding:2px 6px}
+  .q-high{background:#dcfce7;color:#15803d}.q-medium{background:#e0f2fe;color:#0369a1}.q-low{background:#f1f5f9;color:#64748b}
+  .lic{font-family:var(--mono);font-size:11px;border-radius:5px;padding:2px 7px;background:var(--panel);border:1px solid var(--line);color:var(--dim)}
+  .lic.ok{background:#dcfce7;color:#15803d;border-color:#bbf7d0}
+  .rej{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0}
+  .rejchip{font-family:var(--mono);font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:4px 11px;color:var(--dim)}
+  .rejchip b{color:var(--ink)}
+  .muted{color:var(--faint);font-size:13px}
+  .bar{height:7px;border-radius:5px;background:var(--line);overflow:hidden;margin-top:5px}
+  .bar > i{display:block;height:100%;background:var(--accent)}
+  .foot{border-top:1px solid var(--line);margin-top:40px;padding:22px 0;color:var(--faint);font-size:12.5px}
+  @media(max-width:560px){.wrap{padding:0 16px}.hero{padding:40px 0 8px}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><nav>
+  <a class="brand" href="/">LOLM<span>.</span></a>
+  <span class="links">
+    <a href="/">Home</a><a href="/try.html">Try it</a><a href="/research.html">Research</a>
+    <a href="/operator.html">Operator</a>
+    <a href="https://github.com/TheArtOfSound/lolm" target="_blank" rel="noopener">Code</a>
+  </span>
+</nav></div></header>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="kick">Daily learning · provable</div>
+    <h1>It learns from the AI ecosystem<br><span class="g">every day — and proves it.</span></h1>
+    <p class="lead">Every day LOLM scans the Hugging Face dataset hub for the things it actually wants
+    to be good at — reasoning, tool-use, retrieval, verification — filters each candidate by
+    <b>license, quality, duplication and poison</b>, and writes a source-backed memory it can reuse
+    immediately. What it does <i>not</i> do is quietly retrain on random data forever. Weight changes
+    are gated behind an eval. The receipt below proves exactly what changed — and what didn't.</p>
+  </div>
+
+  <div class="honest" id="honest">Loading the honest claim…</div>
+
+  <section>
+    <div class="sk">Three layers of learning</div>
+    <h2>What "learns daily" actually means here.</h2>
+    <div class="layers">
+      <div class="layer">
+        <div class="lt">Layer 1 · memory <span class="badge b-live">live daily</span></div>
+        <h3>Source-backed memory</h3>
+        <p>Each relevant, clean dataset becomes a structured memory — repo, license, quality, topic,
+        with the Hugging Face URL as its source. LOLM is smarter the same day, with a citation.</p>
+      </div>
+      <div class="layer">
+        <div class="lt">Layer 2 · retrieval <span class="badge b-live">live daily</span></div>
+        <h3>Index &amp; candidate queue</h3>
+        <p>Those memories are queryable, and license-clean, high-signal datasets are queued as
+        training candidates — an index of what <i>could</i> teach the controller, not raw downloads.</p>
+      </div>
+      <div class="layer">
+        <div class="lt">Layer 3 · weights <span class="badge b-gated">gated</span></div>
+        <h3>Eval-gated training</h3>
+        <p>Adapter training runs only behind an eval wall: it must beat the current model, inside a
+        regression budget, on a clean license trail. It never fires on autopilot. <span id="l3status"></span></p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sk">Latest ingest receipt</div>
+    <h2>Today's run, in numbers you can audit.</h2>
+    <button class="btn" id="run">Run an ingest now</button>
+    <span class="muted" id="runnote" style="margin-left:10px"></span>
+    <div class="grid4" id="latest" style="margin-top:14px"></div>
+    <div class="weightline" id="weight"></div>
+    <h3>Why datasets were rejected</h3>
+    <div class="rej" id="rej"><span class="muted">loading…</span></div>
+    <h3>Licenses seen this run</h3>
+    <div id="lics" class="muted">loading…</div>
+  </section>
+
+  <section>
+    <div class="sk">Training-candidate queue</div>
+    <h2>Queued — not trained.</h2>
+    <p class="muted">Commercial-license, high-quality datasets that passed every filter. They wait here
+    until an eval proves training on them helps. Queued count is not a weight change.</p>
+    <div id="cands" class="muted">loading…</div>
+  </section>
+
+  <section>
+    <div class="sk">Run history</div>
+    <h2>Recent ingests</h2>
+    <div id="hist" class="muted">loading…</div>
+  </section>
+</div>
+
+<div class="foot"><div class="wrap">LOLM daily learning · Qira. Every number here is a mechanism you can hit at
+<code>/api/demo/hf/dashboard</code>. Dataset metadata is from the public Hugging Face Hub; memory is
+source-backed; weight training is eval-gated and currently reports
+<code>model_weights_changed: false</code>.</div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+function esc(s){return (s||"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));}
+const LICOK=new Set(["apache-2.0","mit","bsd","cc-by-4.0","cc-by-sa-4.0","cc0-1.0","odc-by"]);
+const REJ_LABEL={unknown_license:"unknown license",noncommercial:"non-commercial",
+  gated_or_unapproved:"gated / unapproved",low_quality:"low quality",duplicate:"duplicate",
+  poison_flagged:"poison-flagged",copyleft_or_custom:"copyleft / custom",irrelevant:"off-topic"};
+
+function renderLatest(r){
+  if(!r){$("latest").innerHTML='<p class="muted">No ingest yet — click “Run an ingest now”.</p>';return;}
+  $("latest").innerHTML=`
+    <div class="stat"><div class="n">${r.datasets_seen||0}</div><div class="l">datasets seen</div></div>
+    <div class="stat"><div class="n">${r.datasets_relevant||0}</div><div class="l">relevant</div></div>
+    <div class="stat"><div class="n" style="color:var(--good)">${r.datasets_accepted||0}</div><div class="l">accepted (licensed)</div></div>
+    <div class="stat"><div class="n">${r.memories_written||0}</div><div class="l">memories written</div></div>
+    <div class="stat"><div class="n">${r.training_examples_queued||0}</div><div class="l">candidates queued</div></div>
+    <div class="stat"><div class="n">${r.adapters_trained||0}</div><div class="l">adapters trained</div></div>`;
+  $("weight").innerHTML=`model_weights_changed: <span class="ok">${String(r.model_weights_changed)}</span>
+    &nbsp;·&nbsp; adapters_trained: <span class="ok">${r.adapters_trained||0}</span>
+    &nbsp;·&nbsp; <span class="muted">ingest ${esc(r.ingest_date||"")} · id ${esc((r.ingest_id||"").slice(0,16))}</span>`;
+  const rr=r.rejection_reasons||{};
+  const chips=Object.keys(rr).filter(k=>rr[k]>0).sort((a,b)=>rr[b]-rr[a])
+    .map(k=>`<span class="rejchip">${esc(REJ_LABEL[k]||k)} <b>${rr[k]}</b></span>`).join("");
+  $("rej").innerHTML=chips||'<span class="muted">nothing rejected this run</span>';
+  const ls=r.licenses_seen||{}, tot=Object.values(ls).reduce((a,b)=>a+b,0)||1;
+  $("lics").innerHTML='<table><tbody>'+Object.keys(ls).sort((a,b)=>ls[b]-ls[a]).map(k=>{
+    const ok=LICOK.has((k||"").toLowerCase());
+    return `<tr><td style="width:200px"><span class="lic ${ok?'ok':''}">${esc(k)}</span></td>
+      <td>${ls[k]}</td><td style="width:50%"><div class="bar"><i style="width:${Math.round(ls[k]/tot*100)}%"></i></div></td></tr>`;
+  }).join("")+'</tbody></table>';
+}
+
+async function load(){
+  try{
+    const d=await fetch("/api/demo/hf/dashboard").then(r=>r.json());
+    $("honest").innerHTML=`✓ <b>The honest claim:</b> ${esc(d.honest_claim||"")}`;
+    renderLatest(d.latest_ingest);
+    const t=d.training||{};
+    $("l3status").innerHTML = t.enabled
+      ? `<span class="badge b-live">eval gate ready</span>`
+      : `Blocked: ${esc((t.blockers||[]).join("; "))}.`;
+    // candidate queue
+    const cs=d.candidate_stats||{};
+    const cands=await fetch("/api/demo/hf/candidates").then(r=>r.json());
+    $("cands").innerHTML=`<p class="muted">${cs.untrained||0} of ${cs.total||0} candidates untrained · `
+      +Object.entries(cs.by_topic||{}).map(([k,v])=>`${esc(k)} ${v}`).join(" · ")+`</p>`
+      +`<table><thead><tr><th>Dataset</th><th>License</th><th>Topic</th><th>Quality</th></tr></thead><tbody>`
+      +(cands.candidates||[]).slice().reverse().slice(0,20).map(c=>{
+        const ok=LICOK.has((c.license||"").toLowerCase());
+        return `<tr><td><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.repo_id)}</a></td>
+          <td><span class="lic ${ok?'ok':''}">${esc(c.license||"?")}</span></td>
+          <td>${esc(c.topic||"")}</td>
+          <td><span class="qbadge q-${(c.quality||0)>=0.6?'high':'medium'}">${(c.quality||0).toFixed(2)}</span></td></tr>`;
+      }).join("")+`</tbody></table>`;
+    // history
+    const h=d.recent_receipts||[];
+    $("hist").innerHTML=h.length?`<table><thead><tr><th>Date</th><th>Seen</th><th>Accepted</th><th>Memories</th><th>Queued</th><th>Weights</th></tr></thead><tbody>`
+      +h.slice().reverse().map(r=>`<tr><td>${esc(r.ingest_date||"")}</td><td>${r.datasets_seen||0}</td>
+        <td>${r.datasets_accepted||0}</td><td>${r.memories_written||0}</td><td>${r.training_examples_queued||0}</td>
+        <td><span class="qbadge q-high">unchanged</span></td></tr>`).join("")+`</tbody></table>`
+      :'<p class="muted">No runs recorded yet.</p>';
+  }catch(e){$("honest").innerHTML='<span class="muted">dashboard unavailable</span>';}
+}
+
+$("run").onclick=async()=>{
+  const b=$("run"); b.disabled=true; b.textContent="Ingesting… (~20s)";
+  $("runnote").textContent="Scanning Hugging Face, filtering by license + quality…";
+  try{
+    const r=await fetch("/api/demo/hf/ingest",{method:"POST"}).then(x=>x.json());
+    if(r.error){$("runnote").textContent=r.error;}
+    else{$("runnote").textContent=`Done — ${r.datasets_accepted} accepted, ${r.memories_written} memories, weights unchanged.`;renderLatest(r);}
+  }catch(e){$("runnote").textContent="ingest failed";}
+  finally{b.disabled=false;b.textContent="Run an ingest now";load();}
+};
+load(); setInterval(load,30000);
+</script>
+</body>
+</html>

@@ -217,7 +217,8 @@ def load_replay_index(replays_dir: Path) -> Dict[str, Any]:
 def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
                          limits: Optional[DemoLimits] = None,
                          model_ready_fn: Any = lambda: True,
-                         log_path: Optional[Path] = None) -> DemoGate:
+                         log_path: Optional[Path] = None,
+                         web_events_fn: Any = None) -> DemoGate:
     limits = limits or DemoLimits()
     gate = DemoGate(limits)
     replays_dir = Path(replays_dir)
@@ -312,10 +313,24 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
                                   getattr(req, "sources", None))
         started = time.time()
 
+        # If the prompt needs CURRENT facts, the agent searches the web (real
+        # research → grounded answer → sources) instead of answering from stale
+        # weights. Otherwise it runs the normal NFET control theater.
+        web_stream = None
+        if web_events_fn is not None:
+            try:
+                web_stream = web_events_fn(req.command)
+            except Exception:
+                web_stream = None
+
         def events() -> Iterator[str]:
             try:
-                for item in agent.run_events(agent_req):
-                    yield sse_event(item["event"], item["data"])
+                if web_stream is not None:
+                    for item in web_stream:
+                        yield sse_event(item["event"], item["data"])
+                else:
+                    for item in agent.run_events(agent_req):
+                        yield sse_event(item["event"], item["data"])
                 gate.runs_completed += 1
             except Exception as exc:  # surface as an SSE error, never a half-dead stream
                 yield sse_event("error", {"error": str(exc)[:300]})

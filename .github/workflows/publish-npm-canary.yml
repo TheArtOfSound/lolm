@@ -1,0 +1,54 @@
+name: publish-npm-canary
+
+# Publish a canary of clients/js with provenance, then smoke-test it in a clean
+# project. Inert until NPM_TOKEN is set. Stable publish is gated on this passing
+# (see publish-npm-stable.yml).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Canary version (e.g. 0.1.1-canary.20260615.1). Blank = derive from package.json + run number'
+        required: false
+  workflow_call:
+    inputs:
+      version: { required: false, type: string }
+
+permissions:
+  contents: read
+  id-token: write                # npm trusted publishing / provenance
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/js
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Guard — require NPM_TOKEN
+        run: '[ -n "${{ secrets.NPM_TOKEN }}" ] || { echo "NPM_TOKEN not set — refusing to publish"; exit 1; }'
+      - name: Set canary version
+        run: |
+          V="${{ inputs.version }}"
+          if [ -z "$V" ]; then V="$(node -p "require('./package.json').version")-canary.$(date +%Y%m%d).${{ github.run_number }}"; fi
+          npm version "$V" --no-git-tag-version
+          echo "CANARY_VERSION=$V" >> "$GITHUB_ENV"
+      - name: Test + inspect package contents
+        run: |
+          node test/run.mjs
+          npm pack --dry-run
+      - name: Publish canary (provenance)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public --tag canary
+      - name: Canary smoke in a clean project
+        run: |
+          cd "$RUNNER_TEMP"
+          mkdir smoke && cd smoke && npm init -y >/dev/null
+          npm install "lolm-nfet-client@$CANARY_VERSION"
+          node -e "import('lolm-nfet-client').then(m=>{if(!m)process.exit(1);console.log('canary import OK')})"

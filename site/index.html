@@ -250,6 +250,7 @@
   <span class="links">
     <a href="try.html">Try it</a>
     <a href="/research.html">Research</a>
+    <a href="/hf.html">Learns daily</a>
     <a href="#autonomy" class="mob-hide">Autonomy</a>
     <a href="#architecture" class="mob-hide">How it works</a>
     <a href="/operator.html">Operator</a>
@@ -455,7 +456,7 @@
   <div class="demo-picker" id="replayPicker"></div>
 
   <div class="live-row">
-    <input id="liveCommand" maxlength="300" placeholder="…or give it your own command and run it live">
+    <input id="liveCommand" maxlength="300" placeholder="ask anything — e.g. “what's the top AI news today?” (it searches the web when a question needs current facts)">
     <select id="backendSel" style="display:none;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:0 12px;font-size:13px;font-family:var(--mono)">
       <option value="/api/demo">70B · Workers AI</option>
       <option value="/api/demo4b">4B · lab line</option>
@@ -919,7 +920,7 @@ document.querySelectorAll('.devstrip .copy').forEach(btn => {
       if (!s.model_ready){ btn.disabled = true; note.textContent = 'live backend is loading the model — replays are instant meanwhile'; }
       else if (s.busy){ btn.disabled = true; note.textContent = 'another live run is in progress — replays are instant while you wait'; }
       else { btn.disabled = false; note.textContent =
-        `live runs: Llama 70B writes, LOLM measures its uncertainty and controls — usually under 15 seconds · ${s.limits.rate_per_hour} runs/hour per visitor`; }
+        `live: Llama 70B writes, LOLM measures uncertainty and controls — and searches the web when a question needs current facts · ${s.limits.rate_per_hour} runs/hour per visitor`; }
     }).catch(() => {
       $('liveBtn').disabled = true;
       $('liveNote').textContent = 'live backend offline — replays of real recorded runs still work';

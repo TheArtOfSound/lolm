@@ -106,6 +106,52 @@ def make_research_pipeline(frontier_loop: Callable, ChatRequest: Any, ChatMessag
         max_sources=max_sources)
 
 
+def web_route_events(pipeline: ResearchPipeline, command: str):
+    """If a prompt needs CURRENT facts, run real web research and yield it as the
+    main demo's SSE event protocol so the landing-page agent actually searches —
+    not just the Research tab. Returns None when no live search is warranted, so
+    the caller falls through to the normal NFET control theater (math, logic,
+    general knowledge keep the per-token uncertainty graph).
+
+    Gate is deliberately tight: only currentness ("today/latest/current/news/
+    price/2025…") or an explicit ask for current/official info diverts here. A
+    plain factual or arithmetic prompt does NOT get web-routed."""
+    import re as _re
+    from lolm.research.decide import should_search
+
+    dec = should_search(command)
+    sig = dec.signals or {}
+    if not (dec.search and (sig.get("currentness") or sig.get("explicit_latest"))):
+        return None
+
+    def gen():
+        yield {"event": "run_start", "data": {"head_trained": False, "mode": "web_research"}}
+        yield {"event": "decision", "data": {"segment": 1, "decision": {
+            "label": "retrieve", "source": "search", "reason": dec.reason, "zscores": {}}}}
+        yield {"event": "phase", "data": {"phase": "finalize"}}
+        try:
+            result = pipeline.run(command, allow_web=True)
+        except Exception as exc:
+            yield {"event": "error", "data": {"error": f"web research failed: {exc}"[:200]}}
+            return
+        s = result.get("sources") or {}
+        used = s.get("used") or []
+        yield {"event": "action", "data": {"segment": 1, "kind": "retrieve", "added": len(used)}}
+        for tok in _re.findall(r"\S+\s*", result.get("answer") or "(no answer)"):
+            yield {"event": "token", "data": {"channel": "final", "token": tok}}
+        cites = " · ".join(f"[S{i+1}] {(u.get('title') or u.get('url') or '')[:48]}"
+                           for i, u in enumerate(used[:4])) or "no sources materially used"
+        yield {"event": "proof", "data": {
+            "verdict": result.get("verdict", ""), "plain": "Sources: " + cites,
+            "control_counts": {"web_search": 1, "sources_used": len(used)},
+            "decision_sources": {"web": len(used),
+                                 "retrieved": len(s.get("retrieved") or []),
+                                 "opened": len(s.get("opened") or [])},
+            "ended_by": "web_search"}}
+        yield {"event": "run_done", "data": {}}
+    return gen()
+
+
 def register_research_routes(app: Any, pipeline: ResearchPipeline,
                              gate: Optional[Any] = None,
                              scheduler: Optional[Any] = None) -> None:
