@@ -17,7 +17,7 @@ ssh "$HOST" "
   PREV=\$(ls -dt ${APP}.bak.* 2>/dev/null | head -1 || true)
   if [ -n \"\$PREV\" ]; then
     echo '[rollback] restoring '\$PREV
-    sudo rsync -rc --delete --exclude runs \"\$PREV/\" '$APP/'
+    sudo rsync -rc --delete --exclude runs --exclude .venv \"\$PREV/\" '$APP/'
   else
     echo '[rollback] no backup snapshot found — restarting current build'
   fi

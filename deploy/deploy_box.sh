@@ -19,6 +19,12 @@ SVC="${DEPLOY_SERVICE:-lolm-demo}"
 BASE="${PUBLIC_BASE:-https://lolm.imagineqira.com}"
 cd "$(dirname "$0")/.."
 
+echo "[deploy] snapshotting current build for rollback (keeps newest 3)"
+ssh "$HOST" "TS=\$(date +%Y%m%d%H%M%S); \
+  sudo rsync -a --exclude .venv --exclude runs --exclude __pycache__ '$APP/' \"${APP}.bak.\$TS/\" && \
+  echo '[deploy] backup → ${APP}.bak.'\$TS; \
+  ls -dt ${APP}.bak.* 2>/dev/null | tail -n +4 | xargs -r sudo rm -rf"
+
 echo "[deploy] syncing code → $HOST:$APP (checksum; box is not a git repo)"
 rsync -rc --delete --exclude '.venv' --exclude '__pycache__' --exclude 'runs' \
   lolm/ "$HOST:$APP/lolm/"
