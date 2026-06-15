@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOLM Research — investigate, learn, prove · Qira</title>
+<meta name="description" content="LOLM searches the live web when it lacks information, reads real sources, learns into source-backed memory, and proves every decision with an honest receipt.">
+<link rel="canonical" href="https://lolm.imagineqira.com/research.html">
+<style>
+  :root{
+    --bg:#ffffff; --ink:#0a0c10; --dim:#41474f; --faint:#7a828c; --line:#e7e9ee;
+    --panel:#f7f8fa; --panel2:#fbfcfd; --accent:#f43f5e; --good:#16a34a; --warn:#d97706;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    --high:#16a34a; --med:#0ea5e9; --low:#9aa1ab;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  .wrap{max-width:1020px;margin:0 auto;padding:0 22px}
+  header{border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(255,255,255,.86);backdrop-filter:blur(8px);z-index:10}
+  nav{display:flex;align-items:center;gap:18px;height:58px;font-size:14px}
+  nav .brand{font-weight:700;letter-spacing:-.02em}
+  nav .brand span{color:var(--accent)}
+  nav .links{margin-left:auto;display:flex;gap:18px}
+  nav .links a{color:var(--dim)}
+  .hero{padding:54px 0 10px}
+  .kick{font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+  h1{font-size:clamp(30px,5vw,46px);line-height:1.05;letter-spacing:-.03em;margin:12px 0 10px}
+  h1 .g{background:linear-gradient(95deg,var(--accent),#fb7185);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lead{font-size:17px;color:var(--dim);max-width:680px}
+  section{padding:30px 0 6px}
+  .sk{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+  h2{font-size:23px;letter-spacing:-.02em;margin:6px 0 14px}
+  .askrow{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 8px}
+  .askrow input{flex:1 1 320px;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px 15px;font-size:15px;color:var(--ink);font-family:var(--sans)}
+  .btn{background:var(--ink);color:#fff;border:none;border-radius:11px;padding:0 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--sans)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.sm{padding:5px 12px;font-size:12.5px;border-radius:8px}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0}
+  .chip{font-family:var(--mono);font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:4px 11px;color:var(--dim);cursor:pointer}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-top:12px;display:none}
+  .panel.on{display:block}
+  .verdict{font-size:14px;font-weight:600;border-radius:10px;padding:11px 14px;margin-bottom:12px}
+  .verdict.good{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0}
+  .verdict.warn{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+  .verdict.flat{background:var(--panel2);color:var(--dim);border:1px solid var(--line)}
+  .ans{font-size:15.5px;color:var(--ink);margin:4px 0 14px;white-space:pre-wrap}
+  .grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:11px 13px}
+  .stat .n{font-size:22px;font-weight:700;letter-spacing:-.02em}
+  .stat .l{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)}
+  .srcs{margin-top:8px}
+  .src{display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px}
+  .qbadge{font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;border-radius:5px;padding:2px 6px;flex:none;margin-top:2px}
+  .q-high{background:#dcfce7;color:#15803d}.q-medium{background:#e0f2fe;color:#0369a1}.q-low{background:#f1f5f9;color:#64748b}
+  .tag{font-family:var(--mono);font-size:10px;border-radius:5px;padding:2px 6px;flex:none;margin-top:2px}
+  .t-used{background:#dcfce7;color:#15803d}.t-ignored{background:#f1f5f9;color:#94a3b8}
+  .src a{font-size:12.5px;color:var(--faint);word-break:break-all}
+  .actlog{font-family:var(--mono);font-size:11.5px;color:var(--dim);margin-top:12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;overflow-x:auto}
+  .actlog .a{color:var(--accent)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);padding:8px 10px;border-bottom:1px solid var(--line)}
+  td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px}
+  .dot.ok{background:var(--good)}.dot.idle{background:var(--low)}.dot.partial{background:var(--warn)}
+  .mem{padding:10px 0;border-top:1px solid var(--line);font-size:13.5px}
+  .mem .c{color:var(--ink)} .mem .s{font-size:12px;color:var(--faint);word-break:break-all}
+  .hi{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:9px 13px;font-size:13px;color:#9a3412;margin-top:8px}
+  .muted{color:var(--faint);font-size:13px}
+  .foot{border-top:1px solid var(--line);margin-top:40px;padding:22px 0;color:var(--faint);font-size:12.5px}
+  @media(max-width:560px){.wrap{padding:0 16px}.hero{padding:40px 0 8px}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><nav>
+  <a class="brand" href="/">LOLM<span>.</span></a>
+  <span class="links">
+    <a href="/">Home</a><a href="/try.html">Try it</a><a href="/operator.html">Operator</a>
+    <a href="https://github.com/TheArtOfSound/lolm" target="_blank" rel="noopener">Code</a>
+  </span>
+</nav></div></header>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="kick">Autonomous research · live</div>
+    <h1>It investigates when it<br><span class="g">doesn't know — and proves it.</span></h1>
+    <p class="lead">LOLM searches the live web when a question depends on current facts, reads real
+    sources, prefers official ones, learns into source-backed memory it reuses later, and leaves a
+    receipt that separates what it <i>retrieved</i> from what it actually <i>used</i>. No faked
+    "source use." When research didn't help, the receipt says so.</p>
+  </div>
+
+  <section>
+    <div class="sk">Live research</div>
+    <h2>Ask it something current.</h2>
+    <div class="askrow">
+      <input id="q" maxlength="300" placeholder="e.g. What's the latest on AI agent audit-trail receipts?">
+      <button class="btn" id="run">Research it</button>
+    </div>
+    <div class="chips" id="examples"></div>
+    <div class="panel" id="out"></div>
+  </section>
+
+  <section>
+    <div class="sk">Learning in the background</div>
+    <h2>It keeps researching when nobody's watching.</h2>
+    <p class="muted">A bounded scheduler runs watch-topic jobs on a cadence, writing source-backed
+    memory every run. This is live, not a mockup — the numbers below update as it learns.</p>
+    <div class="grid4" id="memstats"></div>
+    <div id="hiwrap"></div>
+    <h2 style="font-size:18px;margin-top:22px">Research jobs</h2>
+    <div id="jobs" class="muted">loading…</div>
+    <h2 style="font-size:18px;margin-top:22px">Recently learned (source-backed)</h2>
+    <div id="mems" class="muted">loading…</div>
+  </section>
+</div>
+
+<div class="foot"><div class="wrap">LOLM Research · Qira. Every claim here is a mechanism you can hit at
+<code>/api/demo/research</code>. Sources are public-web; memory is source-backed and reversible.</div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const EX=["Who is the current CEO of OpenAI, and what official source confirms it?",
+  "What's the latest on AI agent audit-trail receipts?",
+  "Check this proof: x^2 = y^2 so x = y. Step 4: divide by x-y.",
+  "What is the current recommended way to use web search in the OpenAI API?"];
+$("examples").innerHTML=EX.map(e=>`<span class="chip">${e.length>46?e.slice(0,44)+'…':e}</span>`).join("");
+[...document.querySelectorAll("#examples .chip")].forEach((c,i)=>c.onclick=()=>{$("q").value=EX[i];run();});
+
+function esc(s){return (s||"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]));}
+async function run(){
+  const q=$("q").value.trim(); if(!q)return;
+  const btn=$("run"); btn.disabled=true; btn.textContent="Researching…";
+  const out=$("out"); out.className="panel on"; out.innerHTML='<p class="muted">Deciding whether to search, then investigating… (can take ~30s)</p>';
+  try{
+    const r=await fetch("/api/demo/research",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({command:q})});
+    const d=await r.json();
+    if(d.error){out.innerHTML=`<p class="verdict warn">${esc(d.error)}</p>`;return;}
+    const s=d.sources||{}, dec=d.search_decision||{};
+    const imp=d.answer_improved_by_research;
+    const vcl=imp===true?"good":imp===false?"warn":"flat";
+    const srcHtml=(list,tag)=>(list||[]).map(x=>`<div class="src"><span class="qbadge q-${x.quality||'medium'}">${x.quality||'med'}</span><span class="tag t-${tag}">${tag}</span><div><div>${esc(x.title||x.url)}</div><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.url)}</a></div></div>`).join("");
+    out.innerHTML=`
+      <div class="verdict ${vcl}">${esc(d.verdict||"")}</div>
+      <div class="ans">${esc(d.answer||"(no answer)")}</div>
+      <div class="grid4">
+        <div class="stat"><div class="n">${(s.retrieved||[]).length}</div><div class="l">retrieved</div></div>
+        <div class="stat"><div class="n">${(s.opened||[]).length}</div><div class="l">opened</div></div>
+        <div class="stat"><div class="n" style="color:var(--good)">${(s.used||[]).length}</div><div class="l">materially used</div></div>
+        <div class="stat"><div class="n">${(d.memories?.written||[]).length}</div><div class="l">memory written</div></div>
+      </div>
+      <p class="muted" style="margin-top:6px"><b>Decision:</b> ${dec.search?'searched':'did not search'} — ${esc(dec.reason||"")}</p>
+      ${(dec.queries&&dec.queries.length)?`<div class="chips">${dec.queries.map(x=>`<span class="chip">🔎 ${esc(x)}</span>`).join("")}</div>`:""}
+      ${(s.used&&s.used.length)?`<div class="srcs"><div class="sk">Sources used</div>${srcHtml(s.used,'used')}</div>`:""}
+      ${(s.ignored&&s.ignored.length)?`<div class="srcs"><div class="sk">Opened but not used</div>${srcHtml(s.ignored,'ignored')}</div>`:""}
+      <div class="actlog">${(d.actions||[]).map(a=>`<span class="a">${a.action}</span>${a.query?'('+esc(a.query)+')':''}`).join(" → ")}</div>`;
+  }catch(e){out.innerHTML=`<p class="verdict warn">Request failed: ${esc(String(e))}</p>`;}
+  finally{btn.disabled=false;btn.textContent="Research it";}
+}
+$("run").onclick=run;
+$("q").addEventListener("keydown",e=>{if(e.key==="Enter")run();});
+
+async function refresh(){
+  try{
+    const [js,ms]=await Promise.all([
+      fetch("/api/demo/research/jobs").then(r=>r.json()),
+      fetch("/api/demo/research/memory").then(r=>r.json())]);
+    const st=ms.stats||{}, bq=st.by_quality||{};
+    $("memstats").innerHTML=`
+      <div class="stat"><div class="n">${st.total||0}</div><div class="l">source-backed memories</div></div>
+      <div class="stat"><div class="n" style="color:var(--good)">${bq.high||0}</div><div class="l">high-quality sources</div></div>
+      <div class="stat"><div class="n">${js.memories_written_total||0}</div><div class="l">learned by jobs</div></div>
+      <div class="stat"><div class="n">${js.running?'live':'off'}</div><div class="l">scheduler</div></div>`;
+    $("hiwrap").innerHTML=(js.high_impact&&js.high_impact.length)
+      ? js.high_impact.slice(-4).map(h=>`<div class="hi">⚡ <b>${esc((h.findings||[]).join(", "))}</b> — flagged by <code>${esc(h.job_id)}</code></div>`).join("")
+      : "";
+    $("jobs").innerHTML=`<table><thead><tr><th>Topic</th><th>Schedule</th><th>Next run</th><th>Status</th><th></th></tr></thead><tbody>${
+      (js.jobs||[]).map(j=>`<tr><td>${esc(j.topic)}</td><td>${j.schedule}</td><td>${j.next_run_in_sec==null?'—':(j.next_run_in_sec<0?'due':'in '+Math.round(j.next_run_in_sec/60)+'m')}</td><td><span class="dot ${j.status}"></span>${j.enabled?j.status:'paused'}</td><td><button class="btn sm ghost" data-job="${esc(j.job_id)}">Run now</button></td></tr>`).join("")
+    }</tbody></table>`;
+    [...document.querySelectorAll("#jobs button[data-job]")].forEach(b=>b.onclick=async()=>{
+      b.disabled=true;b.textContent="running…";
+      try{await fetch("/api/demo/research/jobs/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({job_id:b.dataset.job})});}catch(e){}
+      b.textContent="done";setTimeout(refresh,1200);});
+    $("mems").innerHTML=(ms.recent||[]).slice().reverse().slice(0,8).map(m=>`<div class="mem"><span class="qbadge q-${m.source_quality||'medium'}">${m.source_quality||'med'}</span> <span class="c">${esc((m.claim||'').slice(0,160))}</span><div class="s">${esc((m.source_urls||[''])[0])} · checked ${esc((m.last_checked_at||'').slice(0,10))}${m.review_status==='needs_human_review'?' · ⚠ needs review':''}</div></div>`).join("")||'<p class="muted">No memories yet — run a job above.</p>';
+  }catch(e){$("jobs").innerHTML='<p class="muted">dashboard unavailable</p>';}
+}
+refresh(); setInterval(refresh,30000);
+</script>
+</body>
+</html>
