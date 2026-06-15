@@ -1,0 +1,43 @@
+name: full-test-suite
+
+# The complete test suite, INCLUDING the torch model-integration tests (graft,
+# controller training, registry) that the fast daily gate skips. Heavier (installs
+# CPU torch + transformers) so it runs on pushes/PRs to code, on demand, and weekly
+# — separate from the daily ship gate, which stays fast and torch-free.
+
+on:
+  push:
+    branches: [main]
+    paths: ['lolm/**', 'local_ui/**', 'tests/**', 'scripts/**', 'requirements*.txt']
+  pull_request:
+    paths: ['lolm/**', 'local_ui/**', 'tests/**', 'scripts/**', 'requirements*.txt']
+  workflow_dispatch:
+  schedule:
+    - cron: '23 8 * * 0'        # Sundays 08:23 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: full-test-suite-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install full deps (CPU torch)
+        run: |
+          python -m pip install -U pip
+          # CPU-only torch wheel keeps the install small + fast
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+          pip install httpx   # starlette TestClient needs it
+      - name: Run the FULL test suite
+        run: python -m pytest tests/ -q --durations=10
