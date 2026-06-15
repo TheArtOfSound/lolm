@@ -49,11 +49,18 @@ jobs:
           git config user.name  "lolm-daily-agent"
           git config user.email "agent@imagineqira.com"
       - name: Optional deploy key
-        if: ${{ secrets.DEPLOY_KEY != '' }}
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
         run: |
-          mkdir -p ~/.ssh && echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${{ secrets.DEPLOY_SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          # GitHub Actions disallows secrets in step-level if:, so gate in bash.
+          if [ -n "$DEPLOY_KEY" ]; then
+            mkdir -p ~/.ssh && echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+            chmod 600 ~/.ssh/id_ed25519
+            ssh-keyscan -H "$DEPLOY_SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          else
+            echo "no DEPLOY_KEY secret — skipping (deploy stays gated)"
+          fi
       - name: Run daily learned update
         id: run
         env:
