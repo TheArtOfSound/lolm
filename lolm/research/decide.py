@@ -24,6 +24,9 @@ from typing import Any, Dict, List, Optional
 _CURRENT = re.compile(r"\b(current(ly)?|latest|today|now|recent(ly)?|this (year|week|month)|"
                       r"as of|up[- ]?to[- ]?date|real[- ]?time|live|present|"
                       r"price|cost|version|release|update|news|status|who is the|"
+                      # conversational current-events phrasings (how people actually ask)
+                      r"going on|happening|what'?s up with|situation|unfold|escalat|"
+                      r"breaking|right now|these days|so far this|state of|where things stand|"
                       r"\b20(2[4-9]|[3-9]\d))\b", re.IGNORECASE)
 _EXPLICIT = re.compile(r"\b(latest|current|real[- ]?time|up[- ]?to[- ]?date|official (source|docs?|documentation)|"
                        r"right now|as of today|confirm(ed)? by)\b", re.IGNORECASE)
