@@ -95,6 +95,8 @@
   .badge.amber{background:#fef3c7;color:#92400e} .badge.gray{background:var(--panel2);color:var(--dim)}
   .src{font-size:11.5px;margin-bottom:7px;line-height:1.4}
   .src a{border-bottom:1px solid #bfdbfe}
+  .seal-btn{font-size:11px;font-family:var(--mono);padding:5px 10px;border:1px solid var(--line);background:#fff;border-radius:7px;color:var(--dim);display:inline-block}
+  .seal-btn:hover{border-color:var(--accent);color:var(--ink)}
   .notconn{margin:18px 0;padding:14px;border:1px dashed var(--line);border-radius:10px;text-align:center;color:var(--faint);font-size:12px}
   .notconn b{display:block;color:var(--dim);font-family:var(--mono);font-size:11px;margin-bottom:5px}
   pre.json{font-family:var(--mono);font-size:10.5px;white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;color:#334155}
@@ -323,18 +325,24 @@ function handle(name, data, ctx){
 }
 
 /* ── inspectors (right panel) ── */
+let lastRec = null;
 function renderInspectors(meta){
-  const rec = meta.receipt||{};
+  const rec = meta.receipt||{}; lastRec = rec;
   // Receipt
   const vColor = /block|fail|red/i.test(rec.verdict)?'red':(/ready|confident|shipped|done|complete/i.test(rec.verdict)?'green':'gray');
+  const sealed = rec.qev_seal_id;
   $('pane-receipt').innerHTML =
     `<div class="kv"><span class="k">model</span><span class="v">${esc(rec.model||'—')}</span></div>`+
     `<div class="kv"><span class="k">mode</span><span class="v">${esc(rec.mode||'—')}</span></div>`+
     `<div class="kv"><span class="k">controls</span><span class="v">${esc(Object.entries(rec.control_counts||rec.controls||{}).map(([k,v])=>k+'×'+v).join(' · ')||'—')}</span></div>`+
     `<div class="kv"><span class="k">ended by</span><span class="v">${esc(rec.ended_by||'—')}</span></div>`+
     `<div class="kv"><span class="k">verdict</span><span class="v"><span class="badge ${vColor}">${esc(rec.verdict||'—')}</span></span></div>`+
-    `<div class="kv"><span class="k">QEV seal</span><span class="v"><span class="badge gray">not sealed (Phase 4)</span></span></div>`+
+    `<div class="kv"><span class="k">QEV seal</span><span class="v">${sealed?`<span class="badge green">sealed</span> <span style="font-family:var(--mono);font-size:9px">${esc(sealed.slice(0,18))}…</span>`:'<span class="badge gray">not sealed</span>'}</span></div>`+
+    `<div style="margin-top:10px;display:flex;gap:6px"><button class="seal-btn" id="sealBtn">⊕ Seal (QEV)</button><button class="seal-btn" id="verifyBtn" style="display:${sealed?'inline-block':'none'}">Verify seal</button></div>`+
+    `<div id="sealResult" style="margin-top:8px"></div>`+
     `<details style="margin-top:10px"><summary style="font-size:11px;color:var(--dim);font-family:var(--mono);cursor:pointer">raw receipt JSON</summary><pre class="json">${esc(JSON.stringify(rec,null,2))}</pre></details>`;
+  const sb=$('sealBtn'); if(sb) sb.onclick=sealReceipt;
+  const vb=$('verifyBtn'); if(vb) vb.onclick=()=>verifySeal(rec.qev_envelope);
   // Web sources (deeplinked)
   const src = meta.sources||rec.sources||[];
   $('pane-web').innerHTML = src.length ? src.map(s =>
@@ -344,6 +352,37 @@ function renderInspectors(meta){
   const mem = meta.memories||[];
   $('pane-memory').innerHTML = mem.length ? mem.map(m=>`<div class="src">${esc(m)}</div>`).join('')
     : '<div class="notconn">The learned memories used by a run will appear here.<br><br>The agent folds source-backed memory into its grounding — visible as “learned: …” entries in the Web tab.</div>';
+}
+
+/* ── QEV seal + verify (real /api/demo/vault/*) ── */
+async function sealReceipt(){
+  if(!lastRec){ return; }
+  const pass = prompt('Passphrase to seal this receipt (you keep it — it opens the envelope at secure.imagineqira.com):');
+  if(!pass) return;
+  const r = $('sealResult'); r.innerHTML = '<div class="notconn">sealing… (heavy key-derivation, a few seconds)</div>';
+  try{
+    const d = await (await fetch('/api/demo/vault/seal', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({passphrase: pass, payload: lastRec})})).json();
+    if(d.error){ r.innerHTML = `<div class="notconn">seal failed: ${esc(d.error)}</div>`; return; }
+    lastRec.qev_seal_id = d.envelope_id; lastRec.qev_envelope = d.envelope;
+    r.innerHTML = `<div class="kv"><span class="k">sealed ✓</span><span class="v"><span class="badge green">${esc((d.envelope_id||'').slice(0,22))}…</span></span></div>`+
+      `<div style="font-size:10.5px;color:var(--faint);margin:4px 0 7px">${esc(d.limits||'')}</div>`+
+      `<button class="seal-btn" id="copyEnv">copy envelope JSON</button> <a class="seal-btn" href="${esc(d.opens_at||'#')}" target="_blank" style="text-decoration:none">opens at secure ↗</a>`;
+    const ce=$('copyEnv'); if(ce) ce.onclick=()=>{ navigator.clipboard.writeText(JSON.stringify(d.envelope)); ce.textContent='copied ✓'; };
+    const vb=$('verifyBtn'); if(vb){ vb.style.display='inline-block'; vb.onclick=()=>verifySeal(lastRec.qev_envelope); }
+  }catch(e){ r.innerHTML = `<div class="notconn">seal error: ${esc(e.message)}</div>`; }
+}
+async function verifySeal(envelope){
+  if(!envelope){ alert('No envelope in this session — seal first.'); return; }
+  const pass = prompt('Passphrase to verify the seal:');
+  if(!pass) return;
+  const r = $('sealResult'); r.innerHTML = '<div class="notconn">verifying…</div>';
+  try{
+    const d = await (await fetch('/api/demo/vault/verify', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({passphrase: pass, envelope})})).json();
+    const integ = d.integrity||{};
+    r.innerHTML = Object.entries(integ).map(([k,v])=>`<div class="kv"><span class="k">${esc(k)}</span><span class="v"><span class="badge ${v===true?'green':(v===false?'red':'gray')}">${esc(String(v))}</span></span></div>`).join('')+
+      (d.error?`<div style="font-size:11px;color:var(--warn);margin-top:4px">${esc(d.error)}</div>`:'')+
+      `<div style="font-size:10.5px;color:var(--faint);margin-top:5px">${d.sealed_at?('sealed '+esc(d.sealed_at)+' · '):''}integrity & custody only — not factual correctness</div>`;
+  }catch(e){ r.innerHTML = `<div class="notconn">verify error: ${esc(e.message)}</div>`; }
 }
 
 /* ── tabs ── */

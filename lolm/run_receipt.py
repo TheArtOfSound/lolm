@@ -434,13 +434,16 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
 
 
 def mark_sealed(receipt: Dict[str, Any], env_id: str) -> Dict[str, Any]:
-    receipt["layers"]["vault"] = {"verdict": "vault_sealed", "envelope_id": env_id}
+    # Defensive: a sealed payload's receipt may not be a canonical run-receipt with
+    # a "layers" dict (e.g. a workspace turn receipt) — never crash on sealing.
+    receipt.setdefault("layers", {})["vault"] = {"verdict": "vault_sealed", "envelope_id": env_id}
+    receipt["qev_seal_id"] = env_id
     return receipt
 
 
 def mark_verified(receipt: Dict[str, Any], integrity: Dict[str, Any]) -> Dict[str, Any]:
     ok = bool(integrity.get("aead_authenticated")) and integrity.get("payload_hash_match", True)
-    receipt["layers"]["integrity"] = {
+    receipt.setdefault("layers", {})["integrity"] = {
         "verdict": "authenticated" if ok else "tamper_detected",
         **integrity,
     }
