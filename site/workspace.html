@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOLM Workspace — persistent AI agent workbench</title>
+<meta name="description" content="A persistent AI agent workspace: conversations, projects, receipts, memory, web search, and uncertainty-controlled coding — Claude Code with receipts.">
+<style>
+  :root{
+    --bg:#ffffff; --panel:#f8fafc; --panel2:#f1f5f9; --ink:#0a0c10; --dim:#475569;
+    --faint:#94a3b8; --line:#e2e8f0; --accent:#f43f5e; --accent2:#6366f1; --good:#0f9d6b;
+    --warn:#b45309; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px}
+  a{color:var(--accent2);text-decoration:none}
+  button{font-family:inherit;cursor:pointer}
+  .app{display:grid;grid-template-columns:260px 1fr 340px;grid-template-rows:1fr 200px;height:100vh;
+       grid-template-areas:"side main right" "side bottom right"}
+  /* ── left sidebar ── */
+  .side{grid-area:side;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+  .brand{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;font-weight:700}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+  .brand small{font-weight:400;color:var(--faint);font-family:var(--mono);font-size:10px}
+  .newbtn{margin:12px;padding:9px;border:1px solid var(--line);background:var(--accent);color:#fff;border-radius:9px;font-weight:600;font-size:13px}
+  .newbtn:hover{filter:brightness(.95)}
+  .search{margin:0 12px 8px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:12px;width:calc(100% - 24px)}
+  .side-scroll{overflow-y:auto;flex:1;padding:0 8px 12px}
+  .sec-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-family:var(--mono);margin:14px 8px 6px}
+  .conv{padding:8px 10px;border-radius:8px;margin-bottom:2px;cursor:pointer;border:1px solid transparent}
+  .conv:hover{background:var(--panel2)}
+  .conv.active{background:#fff;border-color:var(--line)}
+  .conv .t{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .conv .m{font-size:10px;color:var(--faint);font-family:var(--mono);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap}
+  .pill{font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:5px;background:var(--panel2);color:var(--dim)}
+  .nav-link{display:block;padding:6px 10px;font-size:12px;color:var(--dim);border-radius:7px}
+  .nav-link:hover{background:var(--panel2)}
+  /* ── center ── */
+  .main{grid-area:main;display:flex;flex-direction:column;overflow:hidden}
+  .conv-head{padding:11px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .conv-head h1{font-size:15px;margin:0;font-weight:600;flex:1;min-width:120px}
+  .conv-head .meta{font-size:10.5px;color:var(--faint);font-family:var(--mono);display:flex;gap:8px;flex-wrap:wrap}
+  .feed{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:14px}
+  .msg{max-width:760px}
+  .msg.user{align-self:flex-end}
+  .msg .bub{padding:10px 14px;border-radius:12px;font-size:13.5px;line-height:1.55;white-space:pre-wrap}
+  .msg.user .bub{background:var(--accent2);color:#fff;border-bottom-right-radius:4px}
+  .msg.assistant .bub{background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msg .who{font-size:10px;color:var(--faint);font-family:var(--mono);margin:0 4px 3px}
+  .msg.user .who{text-align:right}
+  .reason{font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);
+          border-radius:9px;padding:8px 11px;max-width:760px;display:none}
+  .reason.on{display:block}
+  .reason .step{padding:1px 0;opacity:.9}
+  .reason .step b{color:var(--accent2)}
+  .empty{margin:auto;text-align:center;color:var(--faint);max-width:420px}
+  .empty h2{color:var(--ink);font-weight:600;margin-bottom:6px}
+  .composer{border-top:1px solid var(--line);padding:12px 18px;display:flex;flex-direction:column;gap:8px}
+  .modes{display:flex;gap:6px;flex-wrap:wrap}
+  .mode{font-size:11px;font-family:var(--mono);padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--dim)}
+  .mode.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .mode.off{opacity:.5}
+  .mode .nc{color:var(--warn);font-size:9px}
+  .crow{display:flex;gap:8px;align-items:flex-end}
+  .crow textarea{flex:1;resize:none;min-height:42px;max-height:160px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:13.5px}
+  .send{padding:0 18px;height:42px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-weight:600}
+  .send:disabled{opacity:.5;cursor:default}
+  /* ── right panel ── */
+  .right{grid-area:right;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+  .tabs{display:flex;border-bottom:1px solid var(--line);background:#fff}
+  .tab{flex:1;padding:9px 4px;font-size:11px;font-family:var(--mono);text-align:center;color:var(--dim);border-bottom:2px solid transparent}
+  .tab.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+  .tab-body{flex:1;overflow-y:auto;padding:14px}
+  .pane{display:none}
+  .pane.on{display:block}
+  .kv{font-family:var(--mono);font-size:11px;margin-bottom:5px;display:flex;gap:6px}
+  .kv .k{color:var(--faint);min-width:96px}
+  .kv .v{color:var(--ink);word-break:break-word}
+  .badge{display:inline-block;font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:5px}
+  .badge.green{background:#dcfce7;color:#166534} .badge.red{background:#fee2e2;color:#991b1b}
+  .badge.amber{background:#fef3c7;color:#92400e} .badge.gray{background:var(--panel2);color:var(--dim)}
+  .src{font-size:11.5px;margin-bottom:7px;line-height:1.4}
+  .src a{border-bottom:1px solid #bfdbfe}
+  .notconn{margin:18px 0;padding:14px;border:1px dashed var(--line);border-radius:10px;text-align:center;color:var(--faint);font-size:12px}
+  .notconn b{display:block;color:var(--dim);font-family:var(--mono);font-size:11px;margin-bottom:5px}
+  pre.json{font-family:var(--mono);font-size:10.5px;white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;color:#334155}
+  /* ── bottom ── */
+  .bottom{grid-area:bottom;border-top:1px solid var(--line);background:#0a0c10;color:#cbd5e1;display:flex;flex-direction:column;overflow:hidden}
+  .bottom .tabs{background:#0d1117;border-bottom-color:#1e293b}
+  .bottom .tab{color:#64748b}
+  .bottom .tab.on{color:#e2e8f0;border-bottom-color:var(--accent)}
+  .bottom .tab-body{padding:12px;font-family:var(--mono);font-size:11.5px}
+  .bottom .notconn{border-color:#1e293b;color:#64748b}
+  .bottom .notconn b{color:#94a3b8}
+  @media(max-width:1100px){.app{grid-template-columns:220px 1fr;grid-template-areas:"side main" "side bottom"}.right{display:none}}
+  @media(max-width:680px){.app{grid-template-columns:1fr;grid-template-rows:auto 1fr auto;grid-template-areas:"main" "main" "bottom"}.side{position:fixed;left:-280px;top:0;bottom:0;width:260px;z-index:30;transition:left .2s}.side.show{left:0}.bottom{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- LEFT -->
+  <aside class="side" id="side">
+    <div class="brand"><span class="dot"></span> LOLM Workspace <small>phase 1</small></div>
+    <button class="newbtn" id="newConv">＋ New conversation</button>
+    <input class="search" id="search" placeholder="search conversations…">
+    <div class="side-scroll">
+      <div class="sec-label">Conversations</div>
+      <div id="convList"></div>
+      <div class="sec-label">Projects</div>
+      <div id="projList"><div class="nav-link" id="newProj">＋ Add a project</div></div>
+      <div class="sec-label">Inspect</div>
+      <a class="nav-link" href="/research.html" target="_blank">Background research →</a>
+      <a class="nav-link" href="/hf.html" target="_blank">Daily learning →</a>
+      <a class="nav-link" href="/operator.html" target="_blank">Operator (autonomy) →</a>
+      <a class="nav-link" href="/" >← Landing demo</a>
+    </div>
+  </aside>
+
+  <!-- CENTER -->
+  <section class="main">
+    <div class="conv-head">
+      <h1 id="convTitle">LOLM Workspace</h1>
+      <div class="meta" id="convMeta"></div>
+    </div>
+    <div class="feed" id="feed">
+      <div class="empty" id="emptyState">
+        <h2>A persistent AI agent workspace</h2>
+        <p>Start a conversation — it searches the web, runs LOLM's uncertainty control,
+        writes a receipt for every turn, and remembers across sessions. Reopen any
+        conversation from the left and continue where you left off.</p>
+        <p style="font-size:11px;font-family:var(--mono);color:var(--faint)">Code execution, file diffs and PR creation are Phase 2 — shown honestly as “not connected” until they’re real.</p>
+      </div>
+    </div>
+    <div class="composer">
+      <div class="modes" id="modeRow"></div>
+      <div class="crow">
+        <textarea id="prompt" placeholder="Ask anything, or describe a task… (Enter to send, Shift+Enter for newline)"></textarea>
+        <button class="send" id="send">Send</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT -->
+  <aside class="right">
+    <div class="tabs" id="rtabs">
+      <div class="tab on" data-pane="receipt">Receipt</div>
+      <div class="tab" data-pane="memory">Memory</div>
+      <div class="tab" data-pane="web">Web</div>
+      <div class="tab" data-pane="sandbox">Sandbox</div>
+    </div>
+    <div class="tab-body">
+      <div class="pane on" id="pane-receipt"><div class="notconn">Run a turn — its receipt appears here.</div></div>
+      <div class="pane" id="pane-memory"><div class="notconn">Memory retrieved for a run shows here.</div></div>
+      <div class="pane" id="pane-web"><div class="notconn">Web sources used in a run show here, deep-linked.</div></div>
+      <div class="pane" id="pane-sandbox"></div>
+    </div>
+  </aside>
+
+  <!-- BOTTOM -->
+  <section class="bottom">
+    <div class="tabs" id="btabs">
+      <div class="tab on" data-bpane="terminal">Terminal</div>
+      <div class="tab" data-bpane="diff">Diff</div>
+      <div class="tab" data-bpane="files">Files</div>
+      <div class="tab" data-bpane="tasks">Tasks</div>
+    </div>
+    <div class="tab-body">
+      <div class="pane on" id="bpane-terminal"></div>
+      <div class="pane" id="bpane-diff"></div>
+      <div class="pane" id="bpane-files"></div>
+      <div class="pane" id="bpane-tasks"><div class="notconn">Task checklists arrive with Code mode (Phase 2).</div></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function ownerKey(){ let k = localStorage.getItem('lolm_ws_owner'); if(!k){ k = 'w_'+Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem('lolm_ws_owner', k);} return k; }
+async function api(path, opts={}){ opts.headers = Object.assign({'Content-Type':'application/json','X-Workspace-Owner':ownerKey()}, opts.headers||{}); const r = await fetch('/api/demo/workspace'+path, opts); return r.json(); }
+
+let state = { conv:null, mode:'chat', modes:[], running:false };
+
+/* ── modes + sandbox honesty ── */
+async function loadModes(){
+  const d = await api('/modes'); state.modes = d.modes||[];
+  $('modeRow').innerHTML = state.modes.map(m =>
+    `<span class="mode ${m.key===state.mode?'on':''} ${m.connected?'':'off'}" data-mode="${m.key}" title="${m.connected?'':'tools not connected yet'}">${esc(m.label)}${m.connected?'':' <span class="nc">·offline</span>'}</span>`).join('');
+  document.querySelectorAll('.mode').forEach(el => el.onclick = () => {
+    const m = state.modes.find(x=>x.key===el.dataset.mode);
+    state.mode = el.dataset.mode;
+    loadModes();
+    if(m && !m.connected) renderSandbox(m);
+  });
+}
+async function renderSandbox(mode){
+  const d = await api('/sandbox/status');
+  const av = d.available||{};
+  $('pane-sandbox').innerHTML =
+    `<div class="kv"><span class="k">sandbox</span><span class="v"><span class="badge ${d.connected?'green':'gray'}">${d.connected?'connected':'not connected'}</span></span></div>`+
+    `<div class="notconn"><b>Phase ${d.phase} — execution not wired</b>${esc(d.reason)}</div>`+
+    '<div style="margin-top:10px">'+Object.entries(av).map(([k,v])=>
+      `<div class="kv"><span class="k">${esc(k)}</span><span class="v"><span class="badge ${v?'green':'gray'}">${v?'available':'not yet'}</span></span></div>`).join('')+'</div>';
+  const nc = `<div class="notconn"><b>Sandbox not connected</b>No execution environment is wired in Phase 1. Conversations, receipts, memory and web search are real; command execution and file diffs are honestly disabled until Phase 2.</div>`;
+  $('bpane-terminal').innerHTML = nc; $('bpane-diff').innerHTML = nc; $('bpane-files').innerHTML = nc;
+}
+
+/* ── conversations ── */
+async function loadConvs(){
+  const q = $('search').value.trim();
+  const d = await api('/conversations'+(q?('?q='+encodeURIComponent(q)):''));
+  const list = d.conversations||[];
+  $('convList').innerHTML = list.length ? list.map(c =>
+    `<div class="conv ${state.conv&&state.conv.id===c.id?'active':''}" data-id="${c.id}">
+       <div class="t">${esc(c.title)}</div>
+       <div class="m"><span class="pill">${esc(c.mode||'chat')}</span>${c.last_model_used?`<span>${esc(c.last_model_used)}</span>`:''}<span>${c.turns} turn${c.turns===1?'':'s'}</span></div>
+     </div>`).join('') : '<div style="padding:8px 10px;color:var(--faint);font-size:12px">No conversations yet.</div>';
+  document.querySelectorAll('.conv').forEach(el => el.onclick = () => openConv(el.dataset.id));
+}
+async function newConv(){
+  const c = await api('/conversations', {method:'POST', body: JSON.stringify({mode: state.mode})});
+  await loadConvs(); openConv(c.id);
+}
+async function openConv(id){
+  const c = await api('/conversations/'+id);
+  if(c.error) return;
+  state.conv = c; state.mode = c.mode || state.mode;
+  $('convTitle').textContent = c.title;
+  $('convMeta').innerHTML = `<span>${(c.messages||[]).length} turns</span>${c.last_model_used?`<span>· ${esc(c.last_model_used)}</span>`:''}${c.last_verdict?`<span>· ${esc(c.last_verdict)}</span>`:''}`;
+  renderFeed();
+  loadConvs(); loadModes();
+}
+function renderFeed(){
+  const c = state.conv; const feed = $('feed');
+  if(!c){ return; }
+  feed.innerHTML = '';
+  (c.messages||[]).forEach(m => addBubble(m.role, m.content, m.meta));
+  if(!(c.messages||[]).length) feed.innerHTML = '<div class="empty"><h2>'+esc(c.title)+'</h2><p>Send a message to start this conversation.</p></div>';
+  feed.scrollTop = feed.scrollHeight;
+}
+function addBubble(role, content, meta){
+  const d = document.createElement('div'); d.className = 'msg '+role;
+  d.innerHTML = `<div class="who">${role==='user'?'you':'LOLM'}</div><div class="bub">${esc(content)}</div>`;
+  $('feed').appendChild(d); $('feed').scrollTop = $('feed').scrollHeight;
+  if(meta && (meta.receipt || meta.sources)) renderInspectors(meta);
+  return d;
+}
+
+/* ── run a turn through the REAL agent, persist it ── */
+async function send(){
+  const text = $('prompt').value.trim();
+  if(!text || state.running) return;
+  if(!state.conv) await newConv();
+  state.running = true; $('send').disabled = true; $('prompt').value = '';
+  $('emptyState') && $('emptyState').remove();
+  const c = state.conv;
+  addBubble('user', text);
+  await api('/conversations/'+c.id+'/messages', {method:'POST', body: JSON.stringify({role:'user', content:text})});
+
+  // reasoning stream + answer bubble
+  const reason = document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
+  const ansEl = addBubble('assistant', ''); const bub = ansEl.querySelector('.bub');
+  const rec = {events:[], controls:{}, sources:[], memories:[], model:'Llama 70B + LOLM', verdict:'', mode:'web+nfet'};
+  const step = t => { const s=document.createElement('div'); s.className='step'; s.innerHTML=t; reason.appendChild(s); reason.scrollTop=reason.scrollHeight; };
+
+  try{
+    const resp = await fetch('/api/demo/run/stream', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({command:text})});
+    if(!resp.ok){ bub.textContent = 'run refused: '+resp.status; }
+    else {
+      const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf='';
+      while(true){ const {done,value} = await reader.read(); if(done) break; buf += dec.decode(value,{stream:true});
+        let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+          let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: '))data=JSON.parse(ln.slice(6)); }
+          if(name) handle(name, data, {bub, step, rec});
+        }
+      }
+    }
+  }catch(e){ bub.textContent += ' [stream lost: '+e.message+']'; }
+
+  rec.verdict = rec.verdict || 'completed';
+  renderInspectors({receipt:rec, sources:rec.sources, memories:rec.memories});
+  await api('/conversations/'+c.id+'/messages', {method:'POST', body: JSON.stringify({
+    role:'assistant', content: bub.textContent, model_used: rec.model, verdict: rec.verdict,
+    meta:{receipt:rec, sources:rec.sources, memories:rec.memories}})});
+  state.running = false; $('send').disabled = false;
+  openConv(c.id);
+}
+
+function handle(name, data, ctx){
+  const {bub, step, rec} = ctx;
+  if(name==='run_start'){ rec.mode = data.mode||rec.mode; step('▸ <b>start</b> — '+(data.mode==='web_research'?'searching the web + measuring uncertainty':'LOLM controller')); }
+  else if(name==='web_search'){ rec.sources = data.links||[]; step('🌐 <b>searched the web</b> — '+data.sources+' source'+(data.sources===1?'':'s')); }
+  else if(name==='segment_start'){ step('· drafting segment '+data.segment); }
+  else if(name==='decision'){ const d=data.decision; rec.controls[d.label]=(rec.controls[d.label]||0)+1; step('◆ <b>'+esc(d.label)+'</b> '+esc((d.reason||'').slice(0,70))); }
+  else if(name==='action'){ if(data.kind==='retrieve') step('  ↳ +'+data.added+' evidence'); else if(data.kind==='verify') step('  ↳ verify: '+esc(data.verdict||'')); }
+  else if(name==='token'){ if(data.channel==='final'){ bub.textContent += data.token; $('feed').scrollTop=$('feed').scrollHeight; } }
+  else if(name==='grounded'){ rec.grounded = data; }
+  else if(name==='proof'){ rec.verdict = data.verdict||''; rec.ended_by = data.ended_by; rec.control_counts=data.control_counts; rec.decision_sources=data.decision_sources; rec.word_similarity=data.word_similarity; step('⊨ <b>receipt</b> — '+esc((data.verdict||'').slice(0,80))); }
+  else if(name==='freshness'){ rec.freshness = data; bub.textContent += '\n\n⚠ '+(data.message||''); }
+  else if(name==='confidence_map'){ rec.confidence = data; }
+  else if(name==='run_done'){ step('● done'); }
+  else if(name==='error'){ bub.textContent += '\n[error] '+(data.error||''); }
+}
+
+/* ── inspectors (right panel) ── */
+function renderInspectors(meta){
+  const rec = meta.receipt||{};
+  // Receipt
+  const vColor = /block|fail|red/i.test(rec.verdict)?'red':(/ready|confident|shipped|done|complete/i.test(rec.verdict)?'green':'gray');
+  $('pane-receipt').innerHTML =
+    `<div class="kv"><span class="k">model</span><span class="v">${esc(rec.model||'—')}</span></div>`+
+    `<div class="kv"><span class="k">mode</span><span class="v">${esc(rec.mode||'—')}</span></div>`+
+    `<div class="kv"><span class="k">controls</span><span class="v">${esc(Object.entries(rec.control_counts||rec.controls||{}).map(([k,v])=>k+'×'+v).join(' · ')||'—')}</span></div>`+
+    `<div class="kv"><span class="k">ended by</span><span class="v">${esc(rec.ended_by||'—')}</span></div>`+
+    `<div class="kv"><span class="k">verdict</span><span class="v"><span class="badge ${vColor}">${esc(rec.verdict||'—')}</span></span></div>`+
+    `<div class="kv"><span class="k">QEV seal</span><span class="v"><span class="badge gray">not sealed (Phase 4)</span></span></div>`+
+    `<details style="margin-top:10px"><summary style="font-size:11px;color:var(--dim);font-family:var(--mono);cursor:pointer">raw receipt JSON</summary><pre class="json">${esc(JSON.stringify(rec,null,2))}</pre></details>`;
+  // Web sources (deeplinked)
+  const src = meta.sources||rec.sources||[];
+  $('pane-web').innerHTML = src.length ? src.map(s =>
+    `<div class="src">${s.url&&/^https?:/.test(s.url)?`<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title||s.url)} ↗</a>`:esc(s.title||'source')}</div>`).join('')
+    : '<div class="notconn">No web sources used in this run.</div>';
+  // Memory
+  const mem = meta.memories||[];
+  $('pane-memory').innerHTML = mem.length ? mem.map(m=>`<div class="src">${esc(m)}</div>`).join('')
+    : '<div class="notconn">The learned memories used by a run will appear here.<br><br>The agent folds source-backed memory into its grounding — visible as “learned: …” entries in the Web tab.</div>';
+}
+
+/* ── tabs ── */
+document.querySelectorAll('#rtabs .tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('#rtabs .tab').forEach(x=>x.classList.toggle('on',x===t));
+  document.querySelectorAll('.right .pane').forEach(p=>p.classList.toggle('on', p.id==='pane-'+t.dataset.pane));
+});
+document.querySelectorAll('#btabs .tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('#btabs .tab').forEach(x=>x.classList.toggle('on',x===t));
+  document.querySelectorAll('.bottom .pane').forEach(p=>p.classList.toggle('on', p.id==='bpane-'+t.dataset.bpane));
+});
+
+/* ── wire-up ── */
+$('newConv').onclick = newConv;
+$('send').onclick = send;
+$('prompt').addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); }});
+$('search').addEventListener('input', () => loadConvs());
+$('newProj').onclick = async () => { const name = prompt('Project name (repo work arrives in Phase 2):'); if(name){ const url = prompt('Repo URL (optional):')||''; await api('/projects',{method:'POST',body:JSON.stringify({name,repo_url:url})}); loadProjects(); } };
+async function loadProjects(){ const d = await api('/projects'); const ps=d.projects||[]; $('projList').innerHTML = ps.map(p=>`<div class="nav-link" title="${esc(p.repo_url||'')}">▦ ${esc(p.name)}</div>`).join('')+'<div class="nav-link" id="newProj2">＋ Add a project</div>'; const n=$('newProj2'); if(n) n.onclick=$('newProj').onclick; }
+
+loadModes(); loadConvs(); loadProjects(); renderSandbox({});
+</script>
+</body>
+</html>
