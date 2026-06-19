@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOLM — Latent Order Language Model · Qira</title>
+<meta name="description" content="Paste your notes or a doc and LOLM answers only from your material, cites the exact passage, and says when the answer isn't there instead of making one up. A 70B writer kept honest by a local uncertainty-control layer — with an auditable receipt for every answer.">
+<meta property="og:title" content="LOLM — AI that won't make things up about your stuff">
+<meta property="og:description" content="A 70B writes; LOLM measures its own uncertainty and decides whether to verify, retrieve, act, or refuse. Every decision gets an auditable receipt. Patent pending — Qira LLC.">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://lolm.imagineqira.com/about.html">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2307090d'/%3E%3Cpath d='M5 7 Q20 7 26 16' stroke='%234ea1ff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 12 Q19 12 26 16' stroke='%23b07fff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 16 H26' stroke='%23ffb454' stroke-width='2.2'/%3E%3Cpath d='M5 20 Q19 20 26 16' stroke='%233fd6a0' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 25 Q20 25 26 16' stroke='%23ff6b81' stroke-width='2.2' fill='none'/%3E%3Ccircle cx='26' cy='16' r='2.6' fill='%23d7dde6'/%3E%3C/svg%3E">
+<meta property="og:url" content="https://lolm.imagineqira.com/about.html">
+<meta name="theme-color" content="#07090d">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
+<meta property="og:image:alt" content="LOLM — an uncertainty-control layer for AI answers">
+<meta property="og:site_name" content="LOLM · Qira">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lolm.imagineqira.com/og-card.png">
+<meta name="twitter:title" content="LOLM — AI that won't make things up about your stuff">
+<meta name="twitter:description" content="A 70B writes; LOLM measures its own uncertainty and decides to verify, retrieve, act, or refuse — with an auditable receipt for every run.">
+<link rel="canonical" href="https://lolm.imagineqira.com/">
+<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "LOLM",
+  "alternateName": "Latent Order Language Model",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Web, Node.js",
+  "url": "https://lolm.imagineqira.com/",
+  "image": "https://lolm.imagineqira.com/og-card.png",
+  "description": "LOLM is an uncertainty-control layer for AI answers. A 70-billion-parameter model writes while the local LOLM/NFET layer measures, token by token, how certain it actually is, and the controller decides whether to continue, retrieve, verify, branch, use a tool, idle, or refuse — with an auditable receipt for every run and bounded, uncertainty-gated autonomy.",
+  "softwareVersion": "0.1.1",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "downloadUrl": "https://www.npmjs.com/package/lolm-nfet-client",
+  "publisher": { "@type": "Organization", "name": "Qira LLC", "url": "https://imagineqira.com/" },
+  "keywords": "uncertainty quantification, AI agent, LLM control, retrieval-augmented, agent receipts, calibrated autonomy, NFET, latent order language model"
+}
+</script>
+<style>
+  :root{
+    /* light neutral ramp — unified with imagineqira.com (white canvas, near-black ink) */
+    --bg:#ffffff; --bg2:#f6f7f9; --panel:#ffffff; --panel-2:#f1f3f6;
+    --line:#e6e8ec; --line-2:#cdd2da;
+    --t-hi:#0a0c10; --text:#2a323c; --dim:#525c69; --faint:#8a94a2;
+    /* one confident brand accent (rose) — matches imagineqira.com */
+    --accent:#f43f5e; --accent-2:#6366f1; --accent-ink:#ffffff; --good:#0f9d6b;
+    /* data palette — used ONLY where the five streams ARE the data (diagram,
+       equation, stream cards, controls, canvas). Darkened for contrast on white. */
+    --surface:#2563eb; --latent:#7c3aed; --regime:#b8730a; --memory:#0f9d6b; --gate:#e11d6b;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:"Inter var","Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;overflow-x:hidden}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;
+       font-size:16px;letter-spacing:-.003em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  h1,h2,h3,h4{color:var(--t-hi);font-weight:680;letter-spacing:-.02em}
+  a{color:var(--accent);text-decoration:none;transition:color .15s}
+  a:hover{color:var(--t-hi);text-decoration:none}
+  ::selection{background:rgba(244,63,94,.16)}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 24px}
+  header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.82);backdrop-filter:blur(12px) saturate(140%);border-bottom:1px solid var(--line)}
+  nav{display:flex;align-items:center;gap:22px;height:58px}
+  .brand{font-family:var(--mono);font-weight:700;letter-spacing:.12em;color:var(--text);font-size:15px}
+  .brand b{color:var(--accent)}
+  nav .links{margin-left:auto;display:flex;gap:18px;font-size:13.5px}
+  nav .links a{color:var(--dim)} nav .links a:hover{color:var(--text);text-decoration:none}
+
+  .hero{padding:84px 0 36px;position:relative;overflow:hidden}
+  .hero .kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;margin-bottom:18px}
+  h1{font-size:clamp(34px,5.4vw,58px);line-height:1.08;font-weight:760;letter-spacing:-.015em}
+  h1 .grad{background:linear-gradient(96deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.lead{margin:22px 0 8px;max-width:680px;font-size:17.5px;color:var(--dim)}
+  .badges{display:flex;flex-wrap:wrap;gap:10px;margin:26px 0 8px}
+  .badge{font-family:var(--mono);font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:5px 13px;background:var(--bg2)}
+  .badge i{font-style:normal;color:var(--good)}
+  .cta{display:flex;gap:14px;margin-top:30px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:11px 20px;border-radius:10px;font-size:14.5px;font-weight:600;border:1px solid var(--line);transition:all .15s}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 8px 22px -10px var(--accent)}
+  .btn.primary:hover{filter:brightness(1.08);transform:translateY(-1px);text-decoration:none;color:#fff}
+  .btn.ghost{color:var(--text);background:var(--panel)}
+  .btn.ghost:hover{border-color:var(--line-2);background:var(--panel-2);text-decoration:none}
+
+  #streams{display:block;width:100%;height:240px;margin:36px 0 0;border:1px solid var(--line);border-radius:14px;background:var(--bg2)}
+
+  /* dev install strip — terminal styling, no decoration */
+  .devstrip{margin:40px 0 0;border:1px solid var(--line);border-radius:14px;background:var(--bg2);overflow:hidden}
+  .devstrip .bar{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .devstrip .bar .d{width:10px;height:10px;border-radius:50%;background:var(--line)}
+  .devstrip .bar a{margin-left:auto;color:var(--dim)}
+  .devstrip pre{margin:0;padding:16px 18px;font-family:var(--mono);font-size:13px;line-height:1.75;color:var(--text);overflow-x:auto}
+  .devstrip .c{color:var(--faint)} .devstrip .p{color:var(--good)} .devstrip .s{color:var(--dim)}
+  .devstrip .copy{float:right;background:var(--panel);border:1px solid var(--line);color:var(--dim);border-radius:6px;font-family:var(--mono);font-size:11px;padding:3px 10px;cursor:pointer}
+  .devstrip .copy:hover{color:var(--text);border-color:var(--faint)}
+  @media (max-width:720px){ nav .links a.lowpri{display:none} }
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:44px 0 8px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+  .stat .num{font-family:var(--mono);font-size:27px;font-weight:700;color:var(--text)}
+  .stat .num span{color:var(--good)}
+  .stat .lbl{font-size:13px;color:var(--dim);margin-top:6px}
+
+  section{padding:64px 0 8px}
+  .sec-kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin-bottom:10px}
+  h2{font-size:clamp(24px,3.4vw,34px);letter-spacing:-.01em;margin-bottom:14px}
+  .sub{color:var(--dim);max-width:720px;margin-bottom:30px}
+
+  .eq{font-family:var(--mono);font-size:clamp(13px,2.4vw,17px);background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:18px 22px;overflow-x:auto;color:var(--text);margin-bottom:28px}
+  .eq .g{color:var(--gate)} .eq .h{color:var(--surface)} .eq .z{color:var(--latent)} .eq .m{color:var(--memory)} .eq .r{color:var(--regime)}
+
+  .streams-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
+  .stream{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px 22px;border-top:3px solid var(--line)}
+  .stream h3{font-size:16px;margin-bottom:6px}
+  .stream .role{font-family:var(--mono);font-size:12px;color:var(--dim);margin-bottom:10px}
+  .stream p{font-size:14px;color:var(--dim)}
+  .stream.s1{border-top-color:var(--surface)} .stream.s2{border-top-color:var(--latent)}
+  .stream.s3{border-top-color:var(--regime)} .stream.s4{border-top-color:var(--memory)}
+  .stream.s5{border-top-color:var(--gate)}
+
+  .callout{background:linear-gradient(180deg,rgba(99,102,241,.06),rgba(244,63,94,.035));border:1px solid var(--line-2);border-radius:16px;padding:30px 32px;margin-top:36px}
+  .callout .big{font-family:var(--mono);font-size:clamp(22px,4vw,34px);font-weight:700;color:var(--latent)}
+  .callout p{color:var(--dim);margin-top:10px;max-width:760px}
+  .callout b{color:var(--text)}
+
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 26px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+  th{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600}
+  td{color:var(--dim)} td:first-child{color:var(--text)}
+  td .win{color:var(--good);font-weight:600}
+  .tables{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px}
+  .tbl h3{font-size:15px;margin-bottom:8px}
+  .tbl .note{font-size:12.5px;color:var(--faint);margin-top:-18px}
+  details.resd{margin-top:6px}
+  details.resd>summary{cursor:pointer;color:var(--accent);font-family:var(--mono);font-size:13px;list-style:none;padding:6px 0;user-select:none}
+  details.resd>summary::-webkit-details-marker{display:none}
+  details.resd>summary::before{content:"▸ "}
+  details.resd[open]>summary::before{content:"▾ "}
+  details.resd[open]>summary{margin-bottom:18px}
+
+  .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:26px 0}
+  .ctrl{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .ctrl .id{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .ctrl .name{font-family:var(--mono);font-weight:700;font-size:15px;margin:4px 0 6px}
+  .ctrl p{font-size:13px;color:var(--dim)}
+  .ctrl.c0 .name{color:var(--dim)} .ctrl.c1 .name{color:var(--surface)} .ctrl.c2 .name{color:var(--regime)}
+  .ctrl.c3 .name{color:var(--latent)} .ctrl.c4 .name{color:var(--memory)}
+
+  .quote{border-left:3px solid var(--accent);padding:6px 0 6px 22px;margin:30px 0;font-size:19px;color:var(--text);max-width:720px}
+  .quote i{color:var(--dim);font-size:14px;display:block;margin-top:8px;font-style:normal}
+
+  .flow{font-family:var(--mono);font-size:12.5px;color:var(--dim);background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:20px 22px;overflow-x:auto;white-space:pre;line-height:1.7}
+
+  details{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin:26px 0}
+  summary{cursor:pointer;font-size:14px;color:var(--dim);font-weight:600}
+  pre.bib{font-family:var(--mono);font-size:12.5px;color:var(--dim);margin-top:14px;overflow-x:auto;line-height:1.6}
+
+  footer{margin-top:80px;border-top:1px solid var(--line);padding:36px 0 48px;color:var(--faint);font-size:13.5px}
+  footer .row{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:baseline}
+  @media (max-width:640px){ .hero{padding-top:56px} section{padding-top:48px} }
+  @media (max-width:560px){
+    .wrap{padding:0 16px}
+    .hero{padding:46px 0 16px} h1{font-size:clamp(29px,8.5vw,40px)} .hero p.lead{font-size:16px}
+    section{padding:38px 0 4px}
+    nav{gap:12px} nav .links{gap:13px;font-size:13px} nav .links a.mob-hide{display:none}
+    .badges{gap:8px} .badge{font-size:11px;padding:4px 11px}
+    .cta{gap:10px} .cta .btn{flex:1 1 auto;text-align:center}
+    th,td{padding:9px 10px;font-size:13px}
+    /* wide comparison table → horizontal scroll with a sticky row-label column */
+    #different table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    #different th,#different td{min-width:132px}
+    #different th:first-child,#different td:first-child{min-width:144px;position:sticky;left:0;background:var(--bg)}
+    .callout{padding:22px 20px} .stream{padding:18px 18px}
+  }
+
+  /* ── live demo theater ─────────────────────────────────────────── */
+  .demo-picker{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 14px}
+  .replay-chip{font-size:13px;border:1px solid var(--line);background:var(--panel);color:var(--dim);
+    border-radius:999px;padding:8px 15px;cursor:pointer;transition:border-color .15s}
+  .replay-chip:hover{border-color:var(--accent);color:var(--text)}
+  .replay-chip .rec{color:var(--gate);font-size:10px;margin-right:6px}
+  .live-row{display:flex;gap:10px;margin:8px 0 22px;flex-wrap:wrap}
+  .live-row input{flex:1;min-width:240px;background:var(--bg2);border:1px solid var(--line);
+    border-radius:9px;color:var(--text);padding:11px 14px;font-size:14px;font-family:var(--sans)}
+  .live-row input:focus{outline:none;border-color:var(--accent)}
+  .live-row .btn{cursor:pointer}
+  .live-row .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .demo-note{font-size:12.5px;color:var(--faint);margin:-12px 0 18px}
+  .theater{border:1px solid var(--line);border-radius:16px;background:var(--bg2);overflow:hidden;display:none}
+  .theater.on{display:block}
+  .theater-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--dim)}
+  .theater-head .mode{color:var(--bg);background:var(--memory);border-radius:5px;padding:2px 9px;font-weight:700}
+  .theater-head .mode.live{background:var(--gate)}
+  .theater-head .ctrl-lamp{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .lamp{width:9px;height:9px;border-radius:50%;background:var(--faint);transition:background .2s}
+  .lamp.on{background:var(--memory);box-shadow:0 0 8px var(--memory)}
+  .theater-body{display:grid;grid-template-columns:minmax(0,1fr) 250px;min-height:300px}
+  @media (max-width:760px){ .theater-body{grid-template-columns:1fr} .tele{border-left:none;border-top:1px solid var(--line)} }
+  .feed{padding:18px 20px;max-height:520px;overflow-y:auto;font-size:14px}
+  .feed .seg{margin-bottom:14px}
+  .feed .seg-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+  .feed .seg-text{color:var(--dim);white-space:pre-wrap}
+  .feed .seg-text.final-text{color:var(--text);background:rgba(15,157,107,.06);border:1px solid rgba(15,157,107,.28);border-radius:10px;padding:13px 16px}
+  .feed .seg-text.md{white-space:normal}
+  .feed .seg-text.md p{margin:0 0 9px} .feed .seg-text.md p:last-child{margin-bottom:0}
+  .feed .seg-text.md h3,.feed .seg-text.md h4,.feed .seg-text.md h5{font-size:14px;margin:12px 0 5px;color:var(--text)}
+  .feed .seg-text.md ul,.feed .seg-text.md ol{margin:0 0 9px;padding-left:20px} .feed .seg-text.md li{margin:2px 0}
+  .feed .seg-text.md code{font-family:var(--mono);font-size:.88em;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  .feed .seg-text.md pre.md-code{font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:11px 13px;overflow-x:auto;margin:0 0 9px;white-space:pre}
+  .feed .seg-text.md strong{color:var(--text)} .feed .seg-text.md a{color:var(--accent)}
+  .decision-badge{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin:14px 0;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel)}
+  .decision-badge .dlabel{font-family:var(--mono);font-weight:700;font-size:13.5px}
+  .decision-badge .dsource{font-family:var(--mono);font-size:10.5px;border:1px solid var(--line);border-radius:4px;padding:1px 7px;color:var(--dim)}
+  .decision-badge .dsource.head{color:var(--gate);border-color:var(--gate)}
+  .decision-badge .dreason{flex-basis:100%;font-size:12.5px;color:var(--dim)}
+  .decision-badge .dz{flex-basis:100%;font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .decision-badge .dresult{font-size:12.5px;color:var(--memory)}
+  .d-continue{border-left:3px solid var(--faint)} .d-continue .dlabel{color:var(--dim)}
+  .d-retrieve{border-left:3px solid var(--surface)} .d-retrieve .dlabel{color:var(--surface)}
+  .d-verify{border-left:3px solid var(--regime)} .d-verify .dlabel{color:var(--regime)}
+  .d-branch{border-left:3px solid var(--latent)} .d-branch .dlabel{color:var(--latent)}
+  .d-finalize{border-left:3px solid var(--memory)} .d-finalize .dlabel{color:var(--memory)}
+  .side-card{margin:10px 0;border:1px dashed var(--line);border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--faint)}
+  .side-card .sc-label{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px}
+  .tele{border-left:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:13px}
+  .tele h4{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+  #spark{width:100%;height:64px;background:var(--bg);border:1px solid var(--line);border-radius:8px}
+  .gauges{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .gauge{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+  .gauge .gv{font-family:var(--mono);font-size:16px;color:var(--text)}
+  .gauge .gl{font-size:10.5px;color:var(--faint);margin-top:2px}
+  .status-line{font-size:12px;color:var(--faint);font-family:var(--mono);min-height:18px}
+  .receipt{margin:14px 18px 18px;border:1px solid var(--line);background:var(--bg2);border-radius:12px;padding:15px 18px;display:none}
+  .receipt.on{display:block}
+  .receipt .verdict{font-family:var(--mono);font-weight:700;color:var(--memory);font-size:14px}
+  .receipt .plain{font-size:13px;color:var(--dim);margin:6px 0 10px}
+  .receipt .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .web-chip{background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:9px 13px;margin:0 0 12px;font-size:13px;color:#1e40af}
+  .web-chip .web-titles{font-family:var(--mono);font-size:11px;color:#3b82f6;margin-top:4px;opacity:.85}
+  .web-chip .web-links{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px;font-size:11.5px}
+  .web-chip .web-links a{color:#2563eb;text-decoration:none;border-bottom:1px solid #bfdbfe}
+  .web-chip .web-links a:hover{border-bottom-color:#2563eb}
+  .web-chip .web-links span{color:#64748b}
+  .fresh-warn{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 13px;margin:0 0 12px;font-size:13px;color:#92400e;line-height:1.5}
+  .fresh-warn b{color:#78350f}
+  .fresh-tip{font-family:var(--mono);font-size:11.5px;color:#b45309}
+  .receipt .chip{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:5px;padding:3px 9px;color:var(--dim)}
+  .speed-row{display:flex;gap:8px;align-items:center;padding:0 18px 14px}
+  .speed-row button{font-family:var(--mono);font-size:11px;background:var(--panel);color:var(--dim);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+  .speed-row button.on{color:var(--text);border-color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header><div class="wrap"><nav>
+  <span class="brand">LO<b>LM</b></span>
+  <span class="links">
+    <a href="/"><b>Open the Workspace ↗</b></a>
+    <a href="try.html">Try it</a>
+    <a href="/research.html">Research</a>
+    <a href="/hf.html">Learns daily</a>
+    <a href="#autonomy" class="mob-hide">Autonomy</a>
+    <a href="#architecture" class="mob-hide">How it works</a>
+    <a href="/operator.html">Operator</a>
+    <a href="#different" class="lowpri">Why different</a>
+    <a href="#build" class="lowpri">Use it</a>
+    <a href="https://www.npmjs.com/package/lolm-nfet-client" rel="noopener" target="_blank">npm</a>
+    <a href="#cite" class="lowpri">Cite</a>
+  </span>
+</nav></div></header>
+
+<div class="wrap">
+
+<div class="hero">
+  <div class="kicker">Qira Research · Patent Pending</div>
+  <h1>AI that won't make<br><span class="grad">things up about your stuff.</span></h1>
+  <p class="lead">Paste your notes, a doc, an email thread — LOLM answers <b>only from your
+  material</b>, cites the exact passage it used, and tells you plainly when the answer
+  <b>isn't in there</b>, instead of inventing one. A 70B model writes; a local
+  uncertainty-control layer keeps it honest and hands you an <b>auditable receipt</b> for
+  every answer. The AI that knows when it doesn't know.</p>
+  <div class="badges">
+    <span class="badge">answers from <i>your</i> sources</span>
+    <span class="badge">cites the passage</span>
+    <span class="badge">says “not in here” honestly</span>
+    <span class="badge">a receipt for every run</span>
+    <span class="badge">patent pending</span>
+  </div>
+  <div class="cta">
+    <a class="btn primary" href="try.html">▶ Try it — paste your own text</a>
+    <a class="btn ghost" href="#build">Add the trust layer to your app →</a>
+  </div>
+  <canvas id="streams" aria-hidden="true"></canvas>
+</div>
+
+<div class="devstrip">
+  <div class="bar"><span class="d"></span><span class="d"></span><span class="d"></span>
+    <span>lolm-nfet-client · v0.1.1 · MIT</span>
+    <a href="https://www.npmjs.com/package/lolm-nfet-client" rel="noopener" target="_blank">npmjs.com →</a>
+  </div>
+  <pre><button class="copy" data-copy="npm install lolm-nfet-client">copy</button><span class="p">$</span> npm install lolm-nfet-client
+
+<span class="c">// stream a live run — every token, decision and receipt</span>
+<span class="s">import</span> { runAgent, friendly } <span class="s">from</span> <span class="p">'lolm-nfet-client'</span>;
+
+<span class="s">const</span> run = <span class="s">await</span> runAgent({
+  command: <span class="p">'why is the sky blue?'</span>,
+  onEvent: ev =&gt; { <span class="s">const</span> line = friendly(ev); <span class="s">if</span> (line) console.log(line); },
+  onProof: p  =&gt; console.log(p.verdict),     <span class="c">// honest receipt, every run</span>
+});</pre>
+</div>
+
+<section id="architecture">
+  <div class="sec-kicker">Architecture</div>
+  <h2>Five streams. One fused representation.</h2>
+  <p class="sub">Each token flows through five parallel streams that converge via learned,
+  per-dimension fusion — the surface stays fluent while the latent core tracks
+  what the sequence is actually doing.</p>
+
+  <div class="eq">o<sub>t</sub> = <span class="g">g</span> · LN(W<sub>h</sub> <span class="h">h<sub>t</sub></span>) + (1 − <span class="g">g</span>) · LN(W<sub>z</sub> <span class="z">z<sub>t</sub></span>) + W<sub>m</sub> <span class="m">m<sub>t</sub></span> + W<sub>r</sub> <span class="r">r<sub>t</sub></span></div>
+
+  <div class="streams-grid">
+    <div class="stream s1"><h3>Surface Decoder</h3><div class="role">h — local token relationships</div><p>Pre-norm Transformer with rotary position embeddings. The fluent voice.</p></div>
+    <div class="stream s2"><h3>Latent SSM Core</h3><div class="role">z — slow latent dynamics</div><p>Selective state-space model (Mamba-style) with parallel scan. Tracks the order beneath the words.</p></div>
+    <div class="stream s3"><h3>Regime Layer</h3><div class="role">r — discrete phase detection</div><p>Gumbel-Softmax over 64 codes with causal-conv neighbor interaction. Gradient-isolated so no code collapses.</p></div>
+    <div class="stream s4"><h3>Persistent Memory</h3><div class="role">m — cross-sequence state</div><p>Three banks — episodic, semantic, self — with gated, chunked read/write that keeps gradients flowing.</p></div>
+    <div class="stream s5"><h3>Manifestation Gate</h3><div class="role">g — surface vs latent arbitration</div><p>Per-dimension sigmoid deciding, feature by feature, whether the surface or the latent stream speaks.</p></div>
+  </div>
+
+  <div class="callout">
+    <div class="big">The order beneath the words is load-bearing.</div>
+    <p><b>Why this matters for you, not just the math.</b> The latent core carries a minority of
+    the representation — yet remove it and the fluent surface collapses. That latent signal is
+    exactly what the controller reads to tell when the model is on solid ground and when it isn't.
+    It's the difference between an AI that <i>sounds</i> sure and one that can <i>measure</i> whether
+    it should be.</p>
+  </div>
+</section>
+
+<section id="evidence">
+  <div class="sec-kicker">Evidence</div>
+  <h2>Every claim here is a mechanism you can check.</h2>
+  <p class="sub">Nothing on this page is an adjective. The control decisions, the receipts, the
+  math checks and the confidence map are all things you can reproduce in the live demo or read in
+  the code. The architecture is validated independently on NVIDIA&nbsp;H200 and Google&nbsp;TPU&nbsp;v4
+  against parameter-matched baselines — the full benchmark numbers and ablations live in the code and
+  the proof pack, kept off this page on purpose.</p>
+  <div class="cta">
+    <a class="btn ghost" href="https://github.com/TheArtOfSound/lolm" target="_blank" rel="noopener">Read the code →</a>
+    <a class="btn ghost" href="#different">What it does that others don't ↓</a>
+  </div>
+</section>
+
+<section id="agent">
+  <div class="sec-kicker">The NFET Agent</div>
+  <h2>Control from latent dynamics.</h2>
+  <p class="sub">Every token, the model measures four observables of its own trajectory —
+  logit entropy, hidden drift, gate balance, regime entropy. A learned controller maps
+  them to five actions that drive a real agent loop.</p>
+
+  <div class="quote">Prompted agents <b>ask</b> the model whether it is uncertain.
+  This agent <b>measures</b> it.<i>— Noise-Driven Functional Emergence Theory (NFET), applied</i></div>
+
+  <div class="controls">
+    <div class="ctrl c0"><div class="id">0</div><div class="name">continue</div><p>Trajectory healthy — keep generating.</p></div>
+    <div class="ctrl c1"><div class="id">1</div><div class="name">retrieve</div><p>Sustained uncertainty — go get evidence from memory or the web.</p></div>
+    <div class="ctrl c2"><div class="id">2</div><div class="name">verify</div><p>Representation jumped while uncertain — check the draft.</p></div>
+    <div class="ctrl c3"><div class="id">3</div><div class="name">branch</div><p>Stuck in a rut — fork alternatives, keep the healthiest.</p></div>
+    <div class="ctrl c4"><div class="id">4</div><div class="name">finalize</div><p>Confident and stable — wrap up and answer.</p></div>
+  </div>
+
+  <div class="flow">command ──► generate segment ──► decide(telemetry, head)
+                 ▲                       │
+                 │       continue ───────┤
+                 │       retrieve ───────┼──► evidence injected mid-run
+                 │       verify ─────────┼──► critique fed back to the draft
+                 │       branch ─────────┼──► healthiest fork survives
+                 └───────────────────────┘
+                         finalize ───────► answer + proof receipt</div>
+
+  <p class="sub" style="margin-top:26px">A calibrated control policy works untrained from the first run;
+  the control head then <b>trains on the workspace's own logged traffic</b> and takes over only
+  when it is confident — otherwise the heuristic decides. Every run emits an honest receipt of
+  what the controller actually did; it never claims the answer beat a baseline.
+  A frontier mode lets a large reasoner generate while LOLM's latent machinery monitors
+  and controls — and the whole workspace speaks the open
+  <b>Model Context Protocol</b>, so it plugs into any modern agent stack.</p>
+</section>
+
+<section id="autonomy">
+  <div class="sec-kicker">Autonomy, bounded</div>
+  <h2>It can act on its own — and it earns the right.</h2>
+  <p class="sub">The same measured uncertainty that drives the controller also gates real action.
+  LOLM acts autonomously only when its <b>calibrated</b> probability of being correct clears a
+  risk-tiered bar — generous for read-only, near-zero for anything that touches money — and every
+  action's outcome is verified before the receipt may say it happened.</p>
+
+  <div class="streams-grid">
+    <div class="stream s1"><h3>Five honest levels</h3><div class="role">L1 → L5</div>
+      <p>From receipt-monitored answers to a bounded persistent agent that maintains goals, memory,
+      verification, scheduling and tools. The system reports its <b>real</b> current level — never a
+      higher one. It's live at <a href="/api/demo/agent/level" target="_blank" rel="noopener">/api/demo/agent/level</a>.</p></div>
+    <div class="stream s2"><h3>Gated tools, verified outcomes</h3><div class="role">read · reversible only</div>
+      <p>It runs read and reversible tools on its own — each gated by measured uncertainty and its
+      outcome independently checked. Money, sending, deletion and deploys are <b>hard-gated to a
+      human</b>, no matter how confident it is. That ceiling is in the math, not a policy doc.</p></div>
+    <div class="stream s3"><h3>Bold where cheap, humble where not</h3><div class="role">the safety asymmetry</div>
+      <p>It acts where a mistake is recoverable and escalates where it isn't. A missing uncertainty
+      signal is a reason to ask, never a license to act — and it stops itself at a budget, a safety
+      limit, or when nothing more is worth doing.</p></div>
+  </div>
+</section>
+
+<section id="variants">
+  <div class="sec-kicker">Contribution, isolated</div>
+  <h2>What each layer actually adds.</h2>
+  <p class="sub">The fair question a reviewer asks: is the intelligence the big model, the telemetry, or the control? Here is what changes — and what does not — at each layer. We name what we have <b>not</b> measured rather than imply it.</p>
+  <div style="overflow-x:auto;margin-top:8px">
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+    <thead><tr style="text-align:left;color:var(--faint);font-family:var(--mono);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em">
+      <th style="padding:11px 12px;border-bottom:1px solid var(--line)">Variant</th>
+      <th style="padding:11px 12px;border-bottom:1px solid var(--line)">What it adds</th>
+      <th style="padding:11px 12px;border-bottom:1px solid var(--line)">Changes the answer?</th>
+      <th style="padding:11px 12px;border-bottom:1px solid var(--line)">What's proven</th>
+    </tr></thead>
+    <tbody style="color:var(--dim)">
+      <tr><td style="padding:11px 12px;border-bottom:1px solid var(--line)"><b style="color:var(--text)">70B only</b></td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">the frontier voice</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line);color:var(--faint)">baseline</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">the capability is the frontier model's, not ours</td></tr>
+      <tr><td style="padding:11px 12px;border-bottom:1px solid var(--line)"><b style="color:var(--text)">70B + passive telemetry</b></td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">per-token uncertainty + confidence spans</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line);color:var(--faint)">No — observer only</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">the telemetry is real, measured per token</td></tr>
+      <tr><td style="padding:11px 12px;border-bottom:1px solid var(--line)"><b style="color:var(--text)">70B + NFET control</b></td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">retrieve / verify / branch / audit decisions</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line);color:var(--text)">Yes — the run's <i>path</i> (segment-level), not the 70B's per-token sampling</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">control fires &amp; is consumed; gated retrieval <b style="color:#2fb170">proven</b> to lift answer correctness 0&nbsp;&rarr;&nbsp;7/8 on facts the writer can't otherwise know, with no regression on knowns; broader reasoning-quality lift <b style="color:#e0a106">still open</b></td></tr>
+      <tr><td style="padding:11px 12px;border-bottom:1px solid var(--line)"><b style="color:var(--text)">4B only</b></td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">a small local model</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line);color:var(--faint)">baseline</td>
+          <td style="padding:11px 12px;border-bottom:1px solid var(--line)">weak / inconsistent on hard reasoning (stated plainly)</td></tr>
+      <tr><td style="padding:11px 12px"><b style="color:var(--text)">4B + NFET</b></td>
+          <td style="padding:11px 12px">inline graft (rewrites token logits) + control</td>
+          <td style="padding:11px 12px;color:var(--green)">Yes — per token <i>and</i> path</td>
+          <td style="padding:11px 12px">the graft measurably changes local generation; gated retrieval <b style="color:#2fb170">proven</b> to lift correctness (baseline&nbsp;0 &rarr; up to 88% on unknowable facts, no regression on knowns); broader quality lift <b style="color:#e0a106">still open</b></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="sub" style="margin-top:22px">Grounded in the real test battery (<code>artifacts/lolm-real-tests</code>): controller invocation <b>100%</b> of NFET runs, control actions fired in a <b>minority</b>, and the one clear win was <b>retrieval grounding</b>. None of this proves the answer beat a baseline — it proves the controller <i>acted on measured uncertainty</i>, and the raw trace is sealed and inspectable.</p>
+</section>
+
+<section id="demo">
+  <div class="sec-kicker">Live Demo</div>
+  <h2>Watch it think.</h2>
+  <p class="sub">Real runs: a <b>70B model (Llama 3.3) writes the answer</b>; LOLM's local graft
+  re-reads it per token for uncertainty and, at each segment boundary, decides whether to check
+  notes, verify, or stop. Control acts between segments — it does not steer the 70B's tokens — and
+  on most easy runs it stays out of the way. Every decision badge you see was made from measured
+  telemetry — entropy, drift, gate, regime — not from a prompt. Tap a recorded run, or type your own below.</p>
+
+  <p id="liveStats" style="display:none;font-family:var(--mono);font-size:12px;color:var(--faint);margin:-14px 0 18px"></p>
+
+  <div class="demo-picker" id="replayPicker"></div>
+
+  <div class="live-row">
+    <input id="liveCommand" maxlength="300" placeholder="ask anything — it searches the live web, then measures its own uncertainty over what it found">
+    <select id="backendSel" style="display:none;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:0 12px;font-size:13px;font-family:var(--mono)">
+      <option value="/api/demo">70B · Workers AI</option>
+      <option value="/api/demo4b">4B · lab line</option>
+    </select>
+    <button class="btn primary" id="liveBtn" disabled>Run live</button>
+  </div>
+  <p class="demo-note" id="liveNote">checking the live backend…</p>
+
+  <div class="theater" id="theater">
+    <div class="theater-head">
+      <span class="mode" id="theaterMode">REPLAY</span>
+      <span id="theaterCommand"></span>
+      <span class="ctrl-lamp"><span class="status-line" id="statusLine"></span><span class="lamp" id="lamp"></span></span>
+    </div>
+    <div class="theater-body">
+      <div class="feed" id="feed"></div>
+      <div class="tele">
+        <h4>logit entropy</h4>
+        <canvas id="spark"></canvas>
+        <div class="gauges">
+          <div class="gauge"><div class="gv" id="gGate">—</div><div class="gl">gate (surface share)</div></div>
+          <div class="gauge"><div class="gv" id="gDrift">—</div><div class="gl">hidden drift</div></div>
+          <div class="gauge"><div class="gv" id="gRegime">—</div><div class="gl">regime entropy</div></div>
+          <div class="gauge"><div class="gv" id="gControl">—</div><div class="gl">last control</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="receipt" id="receipt"></div>
+    <div class="speed-row" id="speedRow" style="display:none">
+      <span style="font-size:11px;color:var(--faint)">playback</span>
+      <button data-speed="1" class="on">1×</button>
+      <button data-speed="3">3×</button>
+      <button data-speed="0">skip</button>
+    </div>
+  </div>
+</section>
+
+<section id="different">
+  <div class="sec-kicker">Positioning</div>
+  <h2>What it does that others don't.</h2>
+  <p class="sub">These are mechanism claims, not benchmark claims — every row is something you can
+  verify yourself in the demo above or in the code.</p>
+
+  <table>
+    <tr><th></th><th>Plain chatbot</th><th>Prompted agent (ReAct-style)</th><th>LOLM-NFET agent</th></tr>
+    <tr>
+      <td>How it decides to check facts or verify</td>
+      <td>It doesn't</td>
+      <td>Asks itself in words — a self-report, which models are famously bad at</td>
+      <td><span class="win">Measures</span> entropy, drift, gate and regime in its own activations, every token</td>
+    </tr>
+    <tr>
+      <td>Can you see <em>which words</em> it was unsure of?</td>
+      <td>No</td>
+      <td>No — it can only re-state the whole answer</td>
+      <td><span class="win">Yes</span> — it highlights the exact spans it measured as least confident, from its own per-token signals</td>
+    </tr>
+    <tr>
+      <td>Can you see why it acted?</td>
+      <td>—</td>
+      <td>Reasoning text (post-hoc; can confabulate)</td>
+      <td><span class="win">Numbers</span> — the exact telemetry and z-scores behind every decision</td>
+    </tr>
+    <tr>
+      <td>An honest receipt of what it actually did</td>
+      <td>None</td>
+      <td>None</td>
+      <td><span class="win">Every run</span> — what it retrieved, verified, or stopped on, red/yellow/green, with a math check. It does <b>not</b> claim the answer beat a baseline.</td>
+    </tr>
+    <tr>
+      <td>Learns from your usage</td>
+      <td>No</td>
+      <td>No (or cloud fine-tuning)</td>
+      <td><span class="win">Yes, locally</span> — the controller retrains on your own logged runs</td>
+    </tr>
+    <tr>
+      <td>Runs on</td>
+      <td>Someone else's cloud</td>
+      <td>A frontier-model API</td>
+      <td><span class="win">2 vCPUs</span> — no GPU, no API key, fully private (this very demo)</td>
+    </tr>
+  </table>
+
+  <p class="sub" style="margin-top:6px">The honest caveat: the demo's 0.6B research model will not out-write
+  GPT-class systems — the claim is the <b style="color:var(--text)">control mechanism</b>, and it is
+  model-agnostic. The same graft rides on any open backbone (0.6B → 32B tested targets), and a hybrid mode
+  lets the latent machinery monitor a frontier model while <em>it</em> does the writing.</p>
+</section>
+
+<section id="build">
+  <div class="sec-kicker">Use it</div>
+  <h2>What you can build with this.</h2>
+  <p class="sub">Everything below ships in the repo today — labels are honest about maturity.</p>
+
+  <div class="streams-grid">
+    <div class="stream s4">
+      <h3>A private assistant over YOUR notes</h3>
+      <div class="role">works today · fully local</div>
+      <p>Point the importer at a markdown folder or Obsidian vault. When the agent's
+      uncertainty spikes, it retrieves from <b>your</b> facts — ranked by relevance and
+      importance, never sent off your machine, with a receipt showing exactly what it used.
+      <code style="font-family:var(--mono);font-size:11.5px;display:block;margin-top:8px;color:var(--dim)">make import-notes NOTES=~/vault && make agent-ui</code></p>
+    </div>
+    <div class="stream s1">
+      <h3>Uncertainty telemetry for any open model</h3>
+      <div class="role">works today · model-agnostic</div>
+      <p>The graft rides any Hugging Face backbone (0.6B and 4B shipped; 32B targeted) and
+      streams per-token entropy, drift, gate balance, regime entropy and control logits over
+      a documented SSE protocol. <code style="font-family:var(--mono);font-size:11.5px">npm install lolm-nfet-client</code></p>
+    </div>
+    <div class="stream s2">
+      <h3>A latent co-processor for frontier agents</h3>
+      <div class="role">works today · MCP</div>
+      <p>The whole workspace speaks the Model Context Protocol — plug it into Claude Code or
+      Claude Desktop and a frontier agent gains local memory, the NFET control loop, and
+      telemetry tools it can call like any other tool.</p>
+    </div>
+    <div class="stream s5">
+      <h3>Big model writes, LOLM watches</h3>
+      <div class="role">built · bring an API key</div>
+      <p>Hybrid mode: a frontier model generates while the local latent machinery re-reads
+      every token for control telemetry — measured uncertainty driving <b>segment-level control</b>
+      (retrieve / verify / stop), not steering the big model's prose.
+      The bridge ships in the repo; it activates with an Anthropic API key.</p>
+    </div>
+  </div>
+</section>
+
+<section id="cite">
+  <div class="sec-kicker">Reference</div>
+  <h2>Cite LOLM.</h2>
+  <details open>
+    <summary>BibTeX</summary>
+    <pre class="bib">@article{leonard2026lolm,
+  title  = {LOLM: Language Modeling Beyond the Surface with Hybrid
+            Transformer-SSM Latent Order Fields},
+  author = {Leonard, Bryan and Leonard, Brandyn},
+  year   = {2026},
+  note   = {Qira LLC. Provisional patent application No. 64002166.}
+}</pre>
+  </details>
+  <p class="sub">Code is private during patent review and available under the
+  <b>LOLM Community License</b> — free for research, education, and small entities.
+  Access and commercial licensing on request via <a href="https://imagineqira.com">imagineqira.com</a>.</p>
+</section>
+
+<footer>
+  <div class="row">
+    <div>© 2026 <b>Qira LLC</b> · Bryan Leonard &amp; Brandyn Leonard · all rights reserved · patent pending</div>
+    <div><a href="https://www.npmjs.com/package/lolm-nfet-client">npm: lolm-nfet-client</a> · <a href="https://lolm-edge.bryanleonard237.workers.dev">status</a> · <a href="https://secure.imagineqira.com">vault</a> · <a href="https://imagineqira.com">imagineqira.com</a></div>
+  </div>
+</footer>
+
+</div>
+
+<script>
+(function(){
+  const cv = document.getElementById('streams');
+  const ctx = cv.getContext('2d');
+  const COLORS = ['#2563eb','#7c3aed','#b8730a','#0f9d6b','#e11d6b'];
+  let W, H, dpr, particles = [];
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function laneY(i){ return H * (0.18 + i * 0.16); }
+  function spawn(){
+    const lane = Math.floor(Math.random() * 5);
+    particles.push({lane, x: -10, y: laneY(lane), v: 0.8 + Math.random() * 1.4, r: 1 + Math.random() * 1.6});
+  }
+  function step(){
+    ctx.clearRect(0, 0, W, H);
+    const fuseX = W * 0.62, outY = H * 0.5;
+    // lanes
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++){
+      ctx.strokeStyle = COLORS[i] + '22';
+      ctx.beginPath(); ctx.moveTo(0, laneY(i));
+      ctx.bezierCurveTo(fuseX * 0.7, laneY(i), fuseX * 0.85, outY, fuseX, outY);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = '#d7dde622';
+    ctx.beginPath(); ctx.moveTo(fuseX, outY); ctx.lineTo(W, outY); ctx.stroke();
+    // fusion node
+    ctx.fillStyle = '#1d242e';
+    ctx.beginPath(); ctx.arc(fuseX, outY, 3.2, 0, 7); ctx.fill();
+    ctx.font = '10px ui-monospace,monospace'; ctx.fillStyle = '#8a94a2';
+    ctx.fillText('fusion', fuseX - 16, outY - 12);
+    const labels = ['surface h','latent z','regime r','memory m','gate g'];
+    for (let i = 0; i < 5; i++){ ctx.fillStyle = COLORS[i] + 'aa'; ctx.fillText(labels[i], 8, laneY(i) - 7); }
+    // particles
+    if (Math.random() < 0.5 && particles.length < 140) spawn();
+    particles = particles.filter(p => p.x < W + 12);
+    for (const p of particles){
+      p.x += p.v;
+      let y;
+      if (p.x < fuseX){
+        const t = Math.max(0, (p.x - fuseX * 0.55) / (fuseX * 0.45));
+        y = laneY(p.lane) * (1 - t * t) + outY * (t * t);
+      } else { y = outY; }
+      ctx.fillStyle = p.x < fuseX ? COLORS[p.lane] : '#d7dde6';
+      ctx.globalAlpha = p.x < fuseX ? 0.85 : 0.95;
+      ctx.beginPath(); ctx.arc(p.x, y, p.r, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    requestAnimationFrame(step);
+  }
+  window.addEventListener('resize', resize);
+  resize(); step();
+})();
+
+document.querySelectorAll('.devstrip .copy').forEach(btn => {
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(btn.dataset.copy).then(() => {
+      btn.textContent = 'copied';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1400);
+    });
+  });
+});
+
+/* ── demo theater ──────────────────────────────────────────────── */
+(function(){
+  const $ = id => document.getElementById(id);
+  const feed = $('feed'), theater = $('theater'), receipt = $('receipt');
+  const spark = $('spark'), sctx = spark.getContext('2d');
+  const CTRL_COLOR = {continue:'#525c69', retrieve:'#2563eb', verify:'#b8730a', branch:'#7c3aed', finalize:'#0f9d6b'};
+  let entropies = [], curSeg = null, sideCards = {}, playSpeed = 1, playing = false;
+
+  // XSS-safe markdown (escape first, add only our own tags)
+  function escHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function mdInline(t){ return escHtml(t)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+    .replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
+  function mdToHtml(src){
+    if (!src) return '';
+    const blocks = [];
+    src = src.replace(/```(\w*)\n?([\s\S]*?)```/g, (m, l, code) => { blocks.push('<pre class="md-code">' + escHtml(code.replace(/\n$/, '')) + '</pre>'); return ' ' + (blocks.length - 1) + ' '; });
+    let html = '', list = null;
+    const closeList = () => { if (list){ html += '</' + list + '>'; list = null; } };
+    for (const raw of src.split('\n')){
+      const ph = raw.match(/^ (\d+) $/);
+      if (ph){ closeList(); html += blocks[+ph[1]]; continue; }
+      const line = raw.trim();
+      if (!line){ closeList(); continue; }
+      let m;
+      if (m = line.match(/^(#{1,5})\s+(.+)$/)){ closeList(); const lv = Math.min(m[1].length + 2, 6); html += `<h${lv}>${mdInline(m[2])}</h${lv}>`; continue; }
+      if (m = line.match(/^[-*•]\s+(.+)$/)){ if (list !== 'ul'){ closeList(); html += '<ul>'; list = 'ul'; } html += '<li>' + mdInline(m[1]) + '</li>'; continue; }
+      if (m = line.match(/^\d+[.)]\s+(.+)$/)){ if (list !== 'ol'){ closeList(); html += '<ol>'; list = 'ol'; } html += '<li>' + mdInline(m[1]) + '</li>'; continue; }
+      closeList(); html += '<p>' + mdInline(line) + '</p>';
+    }
+    closeList();
+    return html;
+  }
+
+  function resetTheater(mode, command){
+    feed.innerHTML = ''; receipt.innerHTML = ''; receipt.classList.remove('on');
+    entropies = []; curSeg = null; sideCards = {}; drawSpark();
+    ['gGate','gDrift','gRegime','gControl'].forEach(g => $(g).textContent = '—');
+    $('theaterMode').textContent = mode.toUpperCase();
+    $('theaterMode').className = 'mode' + (mode === 'live' ? ' live' : '');
+    $('theaterCommand').textContent = command.slice(0, 80);
+    $('lamp').classList.add('on');
+    theater.classList.add('on');
+    theater.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+  function status(text){ $('statusLine').textContent = text; }
+  function drawSpark(){
+    const dpr = Math.min(window.devicePixelRatio||1, 2);
+    const w = spark.clientWidth, h = spark.clientHeight;
+    spark.width = w*dpr; spark.height = h*dpr; sctx.setTransform(dpr,0,0,dpr,0,0);
+    sctx.clearRect(0,0,w,h);
+    if (entropies.length < 2) return;
+    const max = Math.max(...entropies, 4), min = Math.min(...entropies, 0);
+    sctx.strokeStyle = '#4ea1ff'; sctx.lineWidth = 1.5; sctx.beginPath();
+    const window_ = entropies.slice(-160);
+    window_.forEach((e, i) => {
+      const x = i/(window_.length-1)*(w-8)+4;
+      const y = h-6-((e-min)/(max-min+1e-6))*(h-12);
+      i ? sctx.lineTo(x,y) : sctx.moveTo(x,y);
+    });
+    sctx.stroke();
+  }
+  function segBlock(label, cls){
+    const div = document.createElement('div'); div.className = 'seg';
+    div.innerHTML = `<div class="seg-label">${label}</div><div class="seg-text ${cls||''}"></div>`;
+    feed.appendChild(div); feed.scrollTop = feed.scrollHeight;
+    return div.querySelector('.seg-text');
+  }
+  function sideCard(key, label){
+    if (sideCards[key]) return sideCards[key];
+    const div = document.createElement('div'); div.className = 'side-card';
+    div.innerHTML = `<div class="sc-label">${label}</div><span></span>`;
+    feed.appendChild(div);
+    sideCards[key] = div.querySelector('span');
+    return sideCards[key];
+  }
+  function fmt(x, d=3){ return (x===null||x===undefined) ? '—' : Number(x).toFixed(d); }
+
+  function handle(ev){
+    const {event, data} = ev;
+    if (event === 'run_start'){
+      status(data.head_trained ? 'trained control head armed' : 'calibrated heuristic policy');
+    } else if (event === 'web_search'){
+      const b = document.createElement('div');
+      b.className = 'web-chip';
+      const links = (data.links||[]).slice(0,6).map(l => {
+        const title = esc(l.title||l.url||'source');
+        return (l.url && /^https?:\/\//.test(l.url))
+          ? `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">${title} ↗</a>`
+          : `<span>${title}</span>`;
+      }).join('');
+      b.innerHTML = `🌐 <b>searched the web — grounded this run in ${data.sources} live source${data.sources===1?'':'s'}</b>` + (links ? `<div class="web-links">${links}</div>` : '');
+      feed.appendChild(b); feed.scrollTop = feed.scrollHeight;
+      status('searched the web — now measuring its uncertainty over the evidence');
+    } else if (event === 'phase'){
+      if (data.phase === 'base_comparison') status('comparing against base mode…');
+      if (data.phase === 'finalize'){ status('composing final answer'); curSeg = segBlock('final answer','final-text'); curSeg.dataset.channel='final'; }
+    } else if (event === 'segment_start'){
+      curSeg = segBlock('segment ' + data.segment); curSeg.dataset.channel='draft';
+      status('drafting segment ' + data.segment + '…');
+      sideCards = {};
+    } else if (event === 'token'){
+      const ch = data.channel;
+      if (ch === 'draft' || ch === 'final'){
+        if (curSeg && curSeg.dataset.channel !== ch){ /* phase handled creation */ }
+        if (curSeg) { curSeg.textContent += data.token; feed.scrollTop = feed.scrollHeight; }
+      } else if (ch === 'verify'){
+        sideCard('verify','verifier pass').textContent += data.token;
+      } else if (ch && ch.startsWith('branch:')){
+        sideCard(ch, 'branch candidate ' + ch.split(':')[1]).textContent += data.token;
+      }
+      if (data.nfet){
+        if (typeof data.nfet.entropy === 'number'){ entropies.push(data.nfet.entropy); drawSpark(); }
+        $('gGate').textContent = fmt(data.nfet.gate, 2);
+        $('gDrift').textContent = fmt(data.nfet.drift, 4);
+        $('gRegime').textContent = fmt(data.nfet.regime, 2);
+        if (data.nfet.control){ $('gControl').textContent = data.nfet.control; $('gControl').style.color = CTRL_COLOR[data.nfet.control] || ''; }
+      }
+    } else if (event === 'decision'){
+      const d = data.decision;
+      const div = document.createElement('div');
+      div.className = 'decision-badge d-' + d.label;
+      const z = d.zscores || {};
+      div.innerHTML = `<span class="dlabel">▸ ${d.label}</span>
+        <span class="dsource ${d.source==='head'?'head':''}">${d.source}</span>
+        <span class="dresult"></span>
+        <span class="dreason">${d.reason || ''}</span>
+        <span class="dz">z — entropy ${fmt(z.entropy,2)} · drift ${fmt(z.drift,2)} · gate ${fmt(z.gate,2)} · regime ${fmt(z.regime,2)}</span>`;
+      feed.appendChild(div); feed.scrollTop = feed.scrollHeight;
+      div.id = 'dec-' + data.segment;
+      status('NFET decision: ' + d.label);
+    } else if (event === 'action'){
+      const badge = document.querySelector('#dec-' + data.segment + ' .dresult');
+      if (!badge) return;
+      if (data.kind === 'retrieve') badge.textContent = '+' + data.added + ' evidence';
+      else if (data.kind === 'verify') badge.textContent = 'verdict: ' + data.verdict;
+      else if (data.kind === 'branch') badge.textContent = 'kept candidate ' + data.chosen;
+    } else if (event === 'proof'){
+      const counts = Object.entries(data.control_counts||{}).map(([k,v])=>`${k}×${v}`).join(' · ');
+      const sources = Object.entries(data.decision_sources||{}).map(([k,v])=>`${k}×${v}`).join(' · ');
+      receipt.innerHTML = `<div class="verdict">⊨ ${data.verdict}</div>
+        <div class="plain">${data.plain||''}</div>
+        <div class="chips">
+          <span class="chip">controls: ${counts||'—'}</span>
+          <span class="chip">sources: ${sources||'—'}</span>
+          ${typeof data.word_similarity === 'number' ? `<span class="chip">vs base similarity: ${fmt(data.word_similarity,2)}</span>` : ''}
+          <span class="chip">ended by: ${data.ended_by||'—'}</span>
+        </div>`;
+      receipt.classList.add('on');
+    } else if (event === 'freshness'){
+      const w = document.createElement('div');
+      w.className = 'fresh-warn';
+      w.innerHTML = `⚠ <b>Answered from training memory — not the live web.</b> ${esc(data.message||'')}<br><span class="fresh-tip">${esc(data.suggestion||'')}</span>`;
+      receipt.classList.add('on'); receipt.prepend(w);
+    } else if (event === 'run_done'){
+      status('run complete'); $('lamp').classList.remove('on'); playing = false;
+      // render the streamed final answer as markdown (bold, lists, code)
+      const fin = [...document.querySelectorAll('.seg-text.final-text')].pop();
+      if (fin && fin.textContent.trim()){ fin.classList.add('md'); fin.innerHTML = mdToHtml(fin.textContent); }
+      feed.scrollTop = feed.scrollHeight;
+    } else if (event === 'error'){
+      status('error: ' + (data.error||'unknown')); $('lamp').classList.remove('on'); playing = false;
+    }
+  }
+
+  /* replay playback with pacing */
+  async function playReplay(id){
+    if (playing) return;
+    playing = true; playSpeed = 1;
+    document.querySelectorAll('.speed-row button').forEach(b => b.classList.toggle('on', b.dataset.speed==='1'));
+    $('speedRow').style.display = 'flex';
+    try {
+      const r = await fetch('replays/' + id + '.json');
+      const replay = await r.json();
+      resetTheater('replay', replay.meta.command);
+      for (const ev of replay.events){
+        if (!playing) break;
+        handle(ev);
+        if (playSpeed === 0) continue;
+        const wait = ev.event === 'token' ? 24 : (ev.event === 'decision' ? 850 : 220);
+        await new Promise(res => setTimeout(res, wait / playSpeed));
+      }
+      if (playSpeed === 0){ /* ensure terminal state rendered */ }
+    } catch(e){ status('replay failed: ' + e.message); }
+    playing = false; $('lamp').classList.remove('on');
+  }
+
+  /* live run over fetch-SSE */
+  async function runLive(command){
+    if (playing) return;
+    playing = true; $('speedRow').style.display = 'none';
+    const base = $('backendSel').style.display !== 'none' ? $('backendSel').value : '/api/demo';
+    resetTheater('live' + (base === '/api/demo4b' ? ' · 4B' : ''), command);
+    status(base === '/api/demo4b' ? 'contacting the lab line…' : 'contacting the box…');
+    try {
+      const resp = await fetch(base + '/run/stream', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({command}),
+      });
+      if (!resp.ok){
+        const err = await resp.json().catch(()=>({error: resp.status}));
+        status('refused: ' + (err.error||resp.status)); $('lamp').classList.remove('on'); playing = false;
+        return;
+      }
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      while (true){
+        const {done, value} = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, {stream:true});
+        let idx;
+        while ((idx = buf.indexOf('\n\n')) >= 0){
+          const block = buf.slice(0, idx); buf = buf.slice(idx+2);
+          let name=null, data=null;
+          for (const line of block.split('\n')){
+            if (line.startsWith('event: ')) name = line.slice(7);
+            else if (line.startsWith('data: ')) data = JSON.parse(line.slice(6));
+          }
+          if (name) handle({event:name, data});
+        }
+      }
+    } catch(e){ status('stream lost: ' + e.message); }
+    playing = false; $('lamp').classList.remove('on');
+  }
+
+  /* wire-up */
+  $('speedRow').addEventListener('click', e => {
+    if (e.target.dataset.speed === undefined) return;
+    playSpeed = Number(e.target.dataset.speed);
+    document.querySelectorAll('.speed-row button').forEach(b => b.classList.toggle('on', b===e.target));
+  });
+  $('liveBtn').addEventListener('click', () => {
+    const cmd = $('liveCommand').value.trim();
+    if (cmd) runLive(cmd);
+  });
+  $('liveCommand').addEventListener('keydown', e => { if (e.key === 'Enter') $('liveBtn').click(); });
+
+  fetch('replays/index.json').then(r => r.json()).then(idx => {
+    const picker = $('replayPicker');
+    (idx.replays||[]).forEach(meta => {
+      const b = document.createElement('button');
+      b.className = 'replay-chip';
+      b.innerHTML = `<span class="rec">●</span>${meta.title}${meta.model ? ` <span style="color:var(--latent);font-family:var(--mono);font-size:10px">${meta.model}</span>` : ''}`;
+      b.title = `recorded ${meta.recorded_at} · ${meta.seconds}s · ${meta.verdict}`;
+      b.addEventListener('click', () => playReplay(meta.id));
+      picker.appendChild(b);
+    });
+  }).catch(()=>{});
+
+  function pollStatus(){
+    fetch('/api/demo/status').then(r => r.json()).then(s => {
+      const btn = $('liveBtn'), note = $('liveNote');
+      if (!s.model_ready){ btn.disabled = true; note.textContent = 'live backend is loading the model — replays are instant meanwhile'; }
+      else if (s.busy){ btn.disabled = true; note.textContent = 'another live run is in progress — replays are instant while you wait'; }
+      else { btn.disabled = false; note.textContent =
+        `live: searches the web on every prompt, then Llama 70B writes while LOLM measures its uncertainty over the evidence and controls · ${s.limits.rate_per_hour} runs/hour per visitor`; }
+    }).catch(() => {
+      $('liveBtn').disabled = true;
+      $('liveNote').textContent = 'live backend offline — replays of real recorded runs still work';
+    });
+    // the 4B lab line appears only when its tunnel is up
+    fetch('/api/demo4b/status').then(r => r.json()).then(s => {
+      $('backendSel').style.display = (s.model_ready || s.busy) ? 'block' : 'none';
+    }).catch(() => { $('backendSel').style.display = 'none'; $('backendSel').value = '/api/demo'; });
+  }
+  pollStatus(); setInterval(pollStatus, 12000);
+
+  fetch('/api/demo/stats').then(r => r.json()).then(s => {
+    if (!s.total_runs) return;
+    const el = $('liveStats');
+    const bits = [`${s.total_runs} real runs served`];
+    if (s.runs_24h) bits.push(`${s.runs_24h} in the last day`);
+    if (s.control_visible_runs) bits.push(`control actions visible in ${s.control_visible_runs}`);
+    if (s.head_decisions) bits.push(`${s.head_decisions} decisions by the trained head`);
+    el.textContent = '⊨ ' + bits.join(' · ') + ' — every one logged with an honest receipt';
+    el.style.display = 'block';
+  }).catch(() => {});
+})();
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(function(){});}</script>
+</body>
+</html>
