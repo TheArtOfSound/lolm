@@ -316,16 +316,22 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
         # evidence — one run that BOTH searches the web AND shows measured self-control
         # (per-token uncertainty, the five control moves). web_sources_fn returns
         # (grounding_text, n_sources, titles); it degrades gracefully to no grounding.
-        grounding, n_src, titles = "", 0, []
-        if web_sources_fn is not None:
-            try:
-                grounding, n_src, titles = web_sources_fn(req.command)
-            except Exception:
-                grounding, n_src, titles = "", 0, []
+        grounding, n_src, links = "", 0, []
         user_src = getattr(req, "sources", None)
+        # Don't web-ground when the user pasted their OWN notes — that's strict BYO
+        # mode (answer only from their material). Otherwise: always search the web.
+        if web_sources_fn is not None and not user_src:
+            try:
+                grounding, n_src, links = web_sources_fn(req.command)
+            except Exception:
+                grounding, n_src, links = "", 0, []
         combined = "\n\n".join([s for s in (grounding, user_src) if s]) or None
         agent_req = clamp_request(req.command, limits,
                                   getattr(req, "session_id", None), combined)
+        # ADVISORY grounding: the web results are evidence to draw on, never a cage —
+        # the agent answers from knowledge + evidence and never refuses "not in sources".
+        if grounding and not user_src:
+            agent_req.web_grounded = True
 
         # Honest fallback: if the web search found nothing usable AND the topic is
         # time-sensitive, still flag that the answer is from training memory.
@@ -343,7 +349,7 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
                 # Show the web search up front; the agent then runs its theater,
                 # checking these sources whenever its measured uncertainty spikes.
                 if n_src:
-                    yield sse_event("web_search", {"sources": n_src, "titles": titles[:5]})
+                    yield sse_event("web_search", {"sources": n_src, "links": links[:6]})
                 for item in agent.run_events(agent_req):
                     if fresh is not None and item.get("event") == "run_done":
                         yield sse_event("freshness", fresh)

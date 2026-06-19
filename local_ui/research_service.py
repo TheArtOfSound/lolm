@@ -125,8 +125,30 @@ def gather_web_sources(pipeline: ResearchPipeline, command: str, max_sources: in
     from lolm.research.decide import plan_queries
     from lolm.research.pipeline import unwrap_url
 
+    blocks: list = []
+    links: list = []
+    seen_urls: set = set()
+
+    # 1) What LOLM has already LEARNED — source-backed memory the scheduler wrote.
+    # This is how accumulated learning visibly shapes the answer.
+    try:
+        for m in (pipeline.memory_store.retrieve(command, limit=3) or []):
+            claim = (m.get("claim") or m.get("summary") or "").strip()
+            if not claim:
+                continue
+            url = (m.get("source_urls") or [""])[0]
+            n = len(blocks) + 1
+            stale = " (memory flagged stale)" if m.get("_stale") else ""
+            blocks.append(f"SOURCE [{n}] LEARNED MEMORY{stale}: {claim} ({url})")
+            su = url if isinstance(url, str) and url.lower().startswith(("http://", "https://")) else ""
+            links.append({"n": n, "title": ("learned: " + claim[:70]), "url": su})
+            if su:
+                seen_urls.add(su)
+    except Exception:
+        pass
+
     retrieved: list = []
-    seen: set = set()
+    seen: set = set(seen_urls)
     for q in plan_queries(command, max_q=2):
         try:
             res = pipeline.search_fn(q, 6) or {}
@@ -144,8 +166,6 @@ def gather_web_sources(pipeline: ResearchPipeline, command: str, max_sources: in
     except Exception:
         ranked = retrieved
 
-    blocks: list = []
-    titles: list = []
     for r in ranked[:max_sources]:
         text, title = r.get("snippet", ""), r.get("title", "")
         if pipeline.fetch_fn is not None:
@@ -158,9 +178,12 @@ def gather_web_sources(pipeline: ResearchPipeline, command: str, max_sources: in
         if not (text or "").strip():
             continue
         n = len(blocks) + 1
-        titles.append(title or r["url"])
-        blocks.append(f"SOURCE [{n}] {title} ({r['url']})\n{(text or '').strip()[:1400]}")
-    return "\n\n".join(blocks), len(blocks), titles
+        url = r["url"]
+        # Only surface http(s) deeplinks (no javascript:/data: from a search result).
+        safe_url = url if isinstance(url, str) and url.lower().startswith(("http://", "https://")) else ""
+        links.append({"n": n, "title": (title or url)[:90], "url": safe_url})
+        blocks.append(f"SOURCE [{n}] {title} ({url})\n{(text or '').strip()[:1400]}")
+    return "\n\n".join(blocks), len(blocks), links
 
 
 def web_route_events(pipeline: ResearchPipeline, command: str):
