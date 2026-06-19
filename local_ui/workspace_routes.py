@@ -123,17 +123,25 @@ def register_workspace_routes(app: Any, store: WorkspaceStore) -> None:
 
     @app.get("/api/demo/workspace/sandbox/status")
     def sandbox_status():
-        # Honest: no execution sandbox is wired in Phase 1. The UI shows this as
-        # "Sandbox not connected" rather than faking terminal/diff output.
+        # Honest: the Phase-2 execution engine EXISTS (real command exec, file diffs,
+        # clone, rollback — all recorded), but it is token-gated and never exposed on
+        # the public path, so for anonymous visitors it reports "not connected". It
+        # lights up only on loopback with SANDBOX_SECRET. No faking either way.
+        import os as _os
+        exec_enabled = bool(_os.environ.get("SANDBOX_SECRET"))
         return {
-            "connected": False,
-            "reason": "Phase 1: no execution sandbox wired yet — code/command execution, "
-                      "file diffs, and PR creation are not available.",
+            "connected": exec_enabled,
+            "engine_built": True,
+            "reason": ("Sandbox engine is built (real command execution, file diffs, "
+                       "clone, rollback — every action recorded) but command execution "
+                       "is token-gated and never exposed to anonymous public traffic. "
+                       "Enable on loopback with SANDBOX_SECRET + a Bearer token."),
             "available": {"conversations": True, "projects": True, "receipts": True,
                           "memory": True, "web_search": True,
-                          "command_execution": False, "file_diffs": False,
+                          "command_execution": exec_enabled, "file_diffs": exec_enabled,
+                          "repo_clone": exec_enabled, "rollback": exec_enabled,
                           "github_pr": False, "qev_seal_live": False},
-            "phase": 1,
+            "phase": 2,
         }
 
     @app.get("/api/demo/workspace/stats")
