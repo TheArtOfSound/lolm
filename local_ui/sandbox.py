@@ -41,7 +41,8 @@ def _sha(text: str) -> str:
     return hashlib.sha256((text or "").encode("utf-8", "replace")).hexdigest()[:16]
 
 
-# Commands refused outright — destructive / exfiltration / privilege / host reach.
+# Commands refused outright — destructive / exfiltration / privilege / host reach /
+# credential-file reads (the sandbox isn't a jail, so block reading the box's keys).
 _DENY = [
     r"\brm\s+-rf\s+[/~]", r":\(\)\s*\{", r"\bsudo\b", r"\bshutdown\b", r"\breboot\b",
     r"\bmkfs\b", r"\bdd\s+if=", r"\bchmod\s+-R?\s*777\s+/", r">\s*/dev/sd",
@@ -49,6 +50,10 @@ _DENY = [
     r"curl[^|]*\|\s*(sh|bash)", r"wget[^|]*\|\s*(sh|bash)", r"\bcrontab\b",
     r"/etc/(passwd|shadow|sudoers)", r"\bsystemctl\b", r"\bkillall\b",
     r"\b(history|env|printenv)\b.*(secret|token|key|password)", r"\.\./\.\./\.\.",
+    # credential / secret file reads (defense-in-depth — no real FS jail)
+    r"\.ssh/", r"\bid_rsa\b", r"\bid_ed25519\b", r"\bid_ecdsa\b", r"authorized_keys",
+    r"\.aws/", r"\.npmrc\b", r"\.git-credentials\b", r"\.kube/", r"\.docker/config",
+    r"/proc/\d+/environ", r"\bwai\.env\b", r"OPERATOR_SECRET|SANDBOX_SECRET|NPM_TOKEN",
 ]
 _DENY_RE = re.compile("|".join(_DENY), re.IGNORECASE)
 

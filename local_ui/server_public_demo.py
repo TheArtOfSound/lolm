@@ -288,6 +288,20 @@ def _load_model_background() -> None:
 threading.Thread(target=_load_model_background, daemon=True).start()
 
 
+# Serve the static workspace from the SAME origin as the API (mounted LAST so all
+# /api/* routes above take precedence). On the box this is redundant with nginx and
+# harmless; locally it makes `python -m local_ui.server_public_demo` a self-contained
+# workspace — so the owner can enable SANDBOX_SECRET and use Code mode in the browser
+# at the same origin where /api/sandbox/ is reachable (loopback), with no public RCE.
+try:
+    from fastapi.staticfiles import StaticFiles
+    _site = ROOT / "site"
+    if _site.is_dir():
+        app.mount("/", StaticFiles(directory=str(_site), html=True), name="site")
+except Exception as _exc:  # never let a static-mount issue take down the API
+    print(f"[demo] static mount skipped: {_exc}", flush=True)
+
+
 if __name__ == "__main__":
     import uvicorn
 

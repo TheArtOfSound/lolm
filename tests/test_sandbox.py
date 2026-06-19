@@ -57,6 +57,15 @@ def test_deny_list_blocks_destructive(tmp_path):
         assert "blocked" in rec["stderr"]
 
 
+def test_deny_list_blocks_credential_reads(tmp_path):
+    # The sandbox is not a jail, so reading the host's keys/secrets is refused.
+    sb = Sandbox(tmp_path)
+    for bad in ("cat /home/ubuntu/.ssh/id_ed25519", "cat ~/.ssh/authorized_keys",
+                "cat /home/ubuntu/.aws/credentials", "cat ~/.npmrc",
+                "cat /home/ubuntu/.git-credentials", "echo $NPM_TOKEN"):
+        assert sb.run(bad)["blocked"] is True, bad
+
+
 def test_clone_rejects_non_public_urls(tmp_path):
     sb = Sandbox(tmp_path)
     for bad in ("file:///etc", "http://github.com/a/b", "https://evil.com/a/b",
