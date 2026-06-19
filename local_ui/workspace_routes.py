@@ -47,17 +47,28 @@ class NewProject(BaseModel):
     scripts: List[str] = []
 
 
-# The agent modes the workspace offers; each declares which tool surfaces it uses
-# and — honestly — whether that surface is actually connected yet.
+# The agent modes the workspace offers. Every mode is a LIVE agent behaviour — the
+# 70B + LOLM reasons in that mode right now (writes code, debugs, audits, plans a
+# release, verifies a receipt). `needs_exec` marks the modes that ALSO use the
+# execution sandbox to actually run things; reasoning is live regardless, and the
+# sandbox's connected/not state is shown separately (never faked).
 AGENT_MODES = [
-    {"key": "chat", "label": "Chat", "tools": ["model"], "connected": True},
-    {"key": "research", "label": "Research", "tools": ["web_search", "memory"], "connected": True},
-    {"key": "code", "label": "Code", "tools": ["sandbox", "files"], "connected": False},
-    {"key": "debug", "label": "Debug", "tools": ["sandbox", "commands"], "connected": False},
-    {"key": "repo_audit", "label": "Repo audit", "tools": ["sandbox", "files"], "connected": False},
-    {"key": "build_test", "label": "Build/Test", "tools": ["sandbox", "commands"], "connected": False},
-    {"key": "package_release", "label": "Package release", "tools": ["sandbox", "npm"], "connected": False},
-    {"key": "receipt_verify", "label": "Receipt verify", "tools": ["verifier"], "connected": True},
+    {"key": "chat", "label": "Chat", "tools": ["model"], "connected": True, "needs_exec": False,
+     "frame": ""},
+    {"key": "research", "label": "Research", "tools": ["web_search", "memory"], "connected": True,
+     "needs_exec": False, "frame": "Research the question across the live web and your learned memory; cite sources."},
+    {"key": "code", "label": "Code", "tools": ["model", "sandbox"], "connected": True, "needs_exec": True,
+     "frame": "Coding task. Write correct, runnable code with a brief explanation; if it's a fix, show the changed code/diff. When a sandbox is connected you can run it."},
+    {"key": "debug", "label": "Debug", "tools": ["model", "sandbox"], "connected": True, "needs_exec": True,
+     "frame": "Debugging task. Diagnose the issue, name the most likely root cause, and give the precise fix. Interpret any error/stack-trace provided."},
+    {"key": "repo_audit", "label": "Repo audit", "tools": ["model", "sandbox"], "connected": True, "needs_exec": True,
+     "frame": "Code review / audit. Identify real bugs, security risks, and concrete improvements, each with a short reason. No vague nits."},
+    {"key": "build_test", "label": "Build/Test", "tools": ["model", "sandbox"], "connected": True, "needs_exec": True,
+     "frame": "Build/test help. Say exactly what to run, and interpret any output or failure provided. When a sandbox is connected the commands can actually run."},
+    {"key": "package_release", "label": "Package release", "tools": ["model", "sandbox"], "connected": True, "needs_exec": True,
+     "frame": "Release prep. Help with semver bump, changelog, and a safe publish checklist (provenance, canary, smoke). Flag anything irreversible."},
+    {"key": "receipt_verify", "label": "Receipt verify", "tools": ["verifier", "vault"], "connected": True,
+     "needs_exec": False, "frame": "Verify the most recent run receipt: explain what it proves, what it does NOT prove, and whether it can be QEV-sealed."},
 ]
 
 

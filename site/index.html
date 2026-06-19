@@ -206,14 +206,17 @@ function status(m){ const h=$('convMeta'); if(h){ let s=document.getElementById(
 
 /* ── modes + sandbox honesty ── */
 async function loadModes(){
-  const d = await api('/modes'); state.modes = d.modes||[];
-  $('modeRow').innerHTML = state.modes.map(m =>
-    `<span class="mode ${m.key===state.mode?'on':''} ${m.connected?'':'off'}" data-mode="${m.key}" title="${m.connected?'':'tools not connected yet'}">${esc(m.label)}${m.connected?'':' <span class="nc">·offline</span>'}</span>`).join('');
+  if(!state.modes.length){ const d = await api('/modes'); state.modes = d.modes||[]; }
+  $('modeRow').innerHTML = state.modes.map(m => {
+    // every mode is a LIVE agent behaviour; ⚙ = "reasons live, connect the sandbox to RUN".
+    const execHint = (m.needs_exec && !sandbox.id) ? ' <span class="nc" title="reasons live now — connect the sandbox to also run code">⚙</span>' : (m.needs_exec ? ' <span class="nc" style="color:var(--good)" title="sandbox connected — can run code">▶</span>' : '');
+    return `<span class="mode ${m.key===state.mode?'on':''}" data-mode="${m.key}" title="${esc(m.frame||m.label)}">${esc(m.label)}${execHint}</span>`;
+  }).join('');
   document.querySelectorAll('.mode').forEach(el => el.onclick = () => {
-    const m = state.modes.find(x=>x.key===el.dataset.mode);
     state.mode = el.dataset.mode;
+    const m = state.modes.find(x=>x.key===state.mode);
     loadModes();
-    if(m && !m.connected) renderSandbox(m);
+    if(m && m.needs_exec) document.querySelector('#rtabs .tab[data-pane=sandbox]').click();
   });
 }
 /* ── real execution sandbox (loopback/tunnel only; never public RCE) ── */
@@ -351,14 +354,21 @@ async function send(){
   addBubble('user', text);
   await api('/conversations/'+c.id+'/messages', {method:'POST', body: JSON.stringify({role:'user', content:text})});
 
+  // The selected mode frames how the agent behaves (Code/Debug/Audit/Release/…).
+  // We display + persist what YOU typed, but send the framed command to the agent.
+  const modeObj = state.modes.find(x=>x.key===state.mode) || {};
+  const frame = (state.mode!=='chat' && modeObj.frame) ? modeObj.frame : '';
+  const command = frame ? (frame + '\n\nUSER REQUEST: ' + text) : text;
+
   // reasoning stream + answer bubble
   const reason = document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
   const ansEl = addBubble('assistant', ''); const bub = ansEl.querySelector('.bub');
-  const rec = {events:[], controls:{}, sources:[], memories:[], model:'Llama 70B + LOLM', verdict:'', mode:'web+nfet'};
+  const rec = {events:[], controls:{}, sources:[], memories:[], model:'Llama 70B + LOLM', verdict:'', mode:(state.mode||'chat')};
   const step = t => { const s=document.createElement('div'); s.className='step'; s.innerHTML=t; reason.appendChild(s); reason.scrollTop=reason.scrollHeight; };
+  if(frame) step('◆ <b>'+esc(state.mode)+' mode</b> — '+esc(modeObj.label||''));
 
   try{
-    const resp = await fetch('/api/demo/run/stream', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({command:text})});
+    const resp = await fetch('/api/demo/run/stream', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({command})});
     if(!resp.ok){ bub.textContent = 'run refused: '+resp.status; }
     else {
       const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf='';
