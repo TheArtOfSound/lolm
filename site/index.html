@@ -64,6 +64,9 @@
   .reason.on{display:block}
   .reason .step{padding:1px 0;opacity:.9}
   .reason .step b{color:var(--accent2)}
+  .reason .step code{font-family:var(--mono);font-size:10.5px;background:var(--panel2);padding:0 4px;border-radius:4px}
+  .pulse{animation:pulse 1.1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
   .empty{margin:auto;text-align:center;color:var(--faint);max-width:460px}
   .empty h2{color:var(--ink);font-weight:600;margin-bottom:6px}
   .starters{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:16px 0 6px}
@@ -424,6 +427,47 @@ async function send(){
     meta:{receipt:rec, sources:rec.sources, memories:rec.memories}})});
   state.running = false; $('send').disabled = false;
   openConv(c.id);
+}
+
+/* ── agentic coding loop: the 70B writes code, runs it in the jail, fixes it ── */
+async function runCodeLoop(task, c){
+  const reason = document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
+  const ansEl = addBubble('assistant',''); const bub = ansEl.querySelector('.bub');
+  const step = (t,id)=>{ let s = id && document.getElementById(id); if(!s){ s=document.createElement('div'); s.className='step'; if(id)s.id=id; reason.appendChild(s);} s.innerHTML=t; reason.scrollTop=reason.scrollHeight; return s; };
+  step('🤖 <b>agentic coding</b> — write → run → read failure → fix, in a network-isolated jail');
+  try{ document.querySelector('#btabs .tab[data-bpane=terminal]').click(); }catch(e){}
+  $('bpane-terminal').innerHTML='<div id="termOut"></div>';
+  const term = h => { const o=$('termOut'); if(o){ o.innerHTML+=h; o.scrollTop=o.scrollHeight; } };
+  const rec = {model:'Llama 70B (agentic)', mode:'code', verdict:'', files:[], runs:0, ok:false, lastOut:'', controls:{}, sources:[], memories:[]};
+  try{
+    const resp = await fetch('/api/demo/code/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
+    if(!resp.ok){ const e=await resp.json().catch(()=>({})); step('⚠ '+esc(e.error||('HTTP '+resp.status))); bub.textContent='Code execution refused: '+(e.error||resp.status); }
+    else{
+      const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
+      while(true){ const {done,value}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+        let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+          let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: ')){ try{data=JSON.parse(ln.slice(6));}catch(_){} } }
+          if(!name) continue;
+          if(name==='code_start') step('▸ sandbox <code>'+esc(data.sandbox||'')+'</code> ready');
+          else if(name==='code_thinking') step('<span class="pulse">🤔 thinking… step '+((data.step|0)+1)+'/'+(data.of||'')+'</span>','codethink');
+          else if(name==='file_changed'){ rec.files.push(data.path); step('✏️ wrote <b>'+esc(data.path)+'</b> · '+data.bytes+'b'); term('<div style="color:#64748b"># wrote '+esc(data.path)+'</div>'); if(data.diff){ $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">'+esc(data.path)+'</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(data.diff)+'</pre>'; } }
+          else if(name==='command_started'){ step('▶ <b>run</b> <code>'+esc(data.command)+'</code>'); term('<div style="color:#3fd6a0">$ '+esc(data.command)+'</div>'); }
+          else if(name==='command_finished'){ rec.runs++; const out=((data.stdout||'')+(data.stderr||'')).trim(); const code=data.blocked?'blocked':data.exit_code; const col=code===0?'#3fd6a0':(code==='blocked'?'#fbbf24':'#ff6b81'); if(out) term('<pre style="margin:2px 0;white-space:pre-wrap;color:#cbd5e1">'+esc(out.slice(0,4000))+'</pre>'); term('<div style="color:'+col+';font-size:10px">exit '+code+'</div>'); step('  ↳ exit '+code); if(data.exit_code===0){ rec.ok=true; rec.lastOut=data.stdout||''; } }
+          else if(name==='agent_note') step('• '+esc(data.text||''));
+          else if(name==='code_done'){ const t=document.getElementById('codethink'); if(t)t.remove(); rec.verdict=data.budget_hit?'budget_hit':(data.ran?'ran':'no_run'); step('✅ <b>done</b>'+(data.summary?' — '+esc(data.summary):'')); }
+          else if(name==='error') step('⚠ '+esc(data.error||''));
+        }
+      }
+    }
+  }catch(e){ step('⚠ stream lost: '+esc(e.message)); }
+  // compose the conversation answer from the real trace
+  let html='';
+  if(rec.files.length) html += '<div>Wrote <b>'+rec.files.map(esc).join(', ')+'</b> and ran it'+(rec.runs>1?(' · '+rec.runs+' runs'):'')+'.</div>';
+  if(rec.lastOut) html += '<div style="margin-top:6px">Output:</div><pre style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;white-space:pre-wrap;font-size:12px;overflow:auto">'+esc(rec.lastOut.trim())+'</pre>';
+  html += '<div style="margin-top:6px;color:'+(rec.ok?'var(--good)':'var(--warn)')+';font-size:12px">'+(rec.ok?'✅ Ran successfully in a network-isolated sandbox.':'⚠ Did not reach a clean run.')+'</div>';
+  bub.innerHTML = html || 'No actions taken.';
+  renderInspectors({receipt:rec, sources:[], memories:[]});
+  await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:(rec.files.join(', ')+' → '+(rec.ok?'ok':'incomplete')+(rec.lastOut?('\n'+rec.lastOut.trim()):'')),model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
 }
 
 function handle(name, data, ctx){

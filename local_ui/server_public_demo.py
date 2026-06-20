@@ -251,6 +251,12 @@ register_operator_routes(
     model_ready_fn=lambda: STATE.backbone is not None,
 )
 
+# Agentic coding loop: the 70B writes code, runs it in the bwrap jail, reads the real
+# failure, and fixes it — streamed live. Public + rate-limited; uses the same frontier
+# chat as the operator planner (drives FRONTIER, falls back to the local model).
+from local_ui.code_routes import register_code_routes
+register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat)
+
 # Agentic coding loop: the 70B writes code → runs it in the bwrap jail → reads the
 # real failure → fixes it → repeats. Public + rate-limited; every command isolated.
 from local_ui.code_routes import register_code_routes
