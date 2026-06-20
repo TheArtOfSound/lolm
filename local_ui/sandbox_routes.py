@@ -13,11 +13,14 @@ engine is real and ready, but command execution is never exposed to the open int
 from __future__ import annotations
 
 import os
+import time
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel
-
-from local_ui.sandbox import Sandbox, SandboxError
+from fastapi import Header, HTTPException, Request   # MODULE level: `from __future__
+from fastapi.responses import JSONResponse           # import annotations` makes
+from pydantic import BaseModel                        # annotations strings that FastAPI
+                                                      # resolves from module globals.
+from local_ui.sandbox import Sandbox, SandboxError, _HAS_BWRAP
 
 
 class RunReq(BaseModel):
@@ -36,8 +39,6 @@ class CloneReq(BaseModel):
 
 
 def register_sandbox_routes(app: Any, root: str, secret_env: str = "SANDBOX_SECRET") -> None:
-    from fastapi import Header, HTTPException
-
     sandboxes: Dict[str, Sandbox] = {}
 
     def _auth(authorization: Optional[str]) -> None:
@@ -135,3 +136,96 @@ def register_sandbox_routes(app: Any, root: str, secret_env: str = "SANDBOX_SECR
     def changes(sid: str, authorization: Optional[str] = Header(default=None)):
         _auth(authorization)
         return {"changes": _sb(sid).changes}
+
+
+# ── PUBLIC isolated sandbox (/api/demo/sandbox/*) ────────────────────────────
+# Reachable by anyone (nginx forwards /api/demo/), but EVERY command runs inside the
+# bwrap namespace jail (no host FS / network / PIDs, ulimit caps) and is rate-limited.
+# No token — but also no host reach. If bwrap is missing, execution is refused (never
+# falls back to an un-jailed run on a public endpoint).
+def register_public_sandbox_routes(app: Any, root: str) -> None:
+    MAX_TOTAL, PER_IP, RUNS_PER_MIN, TTL = 40, 3, 30, 1800
+    pool: Dict[str, Dict[str, Any]] = {}        # sid -> {sb, ip, created, runs:[ts]}
+
+    def _ip(req: Request) -> str:
+        fwd = req.headers.get("x-forwarded-for", "")
+        return (fwd.split(",")[0].strip() if fwd else (req.client.host if req.client else "?"))
+
+    def _gc():
+        now = time.time()
+        for sid in [s for s, v in pool.items() if now - v["created"] > TTL]:
+            try:
+                pool[sid]["sb"].destroy()
+            except Exception:
+                pass
+            pool.pop(sid, None)
+
+    def _get(sid: str) -> Dict[str, Any]:
+        v = pool.get(sid)
+        if not v:
+            raise SandboxError("unknown or expired sandbox")
+        return v
+
+    @app.get("/api/demo/sandbox/health")
+    def pub_health():
+        return {"enabled": _HAS_BWRAP, "isolated": True, "rate_limited": True,
+                "limits": {"per_ip_sandboxes": PER_IP, "runs_per_min": RUNS_PER_MIN,
+                           "ttl_seconds": TTL, "run_timeout_s": 15},
+                "note": ("public code execution runs in a bwrap namespace jail — no "
+                         "network, no host filesystem, no host processes")
+                if _HAS_BWRAP else "isolation runtime (bwrap) not present — execution disabled"}
+
+    @app.post("/api/demo/sandbox/create")
+    def pub_create(request: Request):
+        _gc()
+        if not _HAS_BWRAP:
+            return JSONResponse({"error": "code execution unavailable — no sandbox isolation on this host"}, status_code=503)
+        ip = _ip(request)
+        if len(pool) >= MAX_TOTAL:
+            return JSONResponse({"error": "sandbox capacity reached — try again shortly"}, status_code=429)
+        if sum(1 for v in pool.values() if v["ip"] == ip) >= PER_IP:
+            return JSONResponse({"error": f"limit {PER_IP} sandboxes per visitor"}, status_code=429)
+        sb = Sandbox(root)
+        pool[sb.id] = {"sb": sb, "ip": ip, "created": time.time(), "runs": []}
+        return {**sb.state(), "isolated": True}
+
+    @app.post("/api/demo/sandbox/{sid}/run")
+    def pub_run(sid: str, req: RunReq, request: Request):
+        try:
+            v = _get(sid)
+        except SandboxError as e:
+            return JSONResponse({"error": str(e)}, status_code=404)
+        now = time.time()
+        v["runs"] = [t for t in v["runs"] if now - t < 60]
+        if len(v["runs"]) >= RUNS_PER_MIN:
+            return JSONResponse({"error": f"rate limit {RUNS_PER_MIN} runs/min"}, status_code=429)
+        v["runs"].append(now)
+        return v["sb"].run(req.command, timeout=15, isolated=True)   # JAIL ENFORCED
+
+    @app.post("/api/demo/sandbox/{sid}/write")
+    def pub_write(sid: str, req: WriteReq):
+        try:
+            return _get(sid)["sb"].write_file(req.path, req.content, reason=req.reason)
+        except SandboxError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    @app.get("/api/demo/sandbox/{sid}/read")
+    def pub_read(sid: str, path: str):
+        try:
+            return {"path": path, "content": _get(sid)["sb"].read_file(path)}
+        except SandboxError as e:
+            return JSONResponse({"error": str(e)}, status_code=404)
+
+    @app.get("/api/demo/sandbox/{sid}/files")
+    def pub_files(sid: str):
+        try:
+            return {"files": _get(sid)["sb"].list_files()}
+        except SandboxError as e:
+            return JSONResponse({"error": str(e)}, status_code=404)
+
+    @app.get("/api/demo/sandbox/{sid}/state")
+    def pub_state(sid: str):
+        try:
+            return {**_get(sid)["sb"].state(), "isolated": True}
+        except SandboxError as e:
+            return JSONResponse({"error": str(e)}, status_code=404)

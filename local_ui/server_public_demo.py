@@ -141,8 +141,11 @@ register_workspace_routes(app, WORKSPACE)
 # rollback, but DISABLED unless SANDBOX_SECRET is set and never forwarded by nginx,
 # so anonymous public traffic can't reach it (no public RCE). The workspace shows
 # "Sandbox not connected" until the owner enables it on loopback with a token.
-from local_ui.sandbox_routes import register_sandbox_routes
+from local_ui.sandbox_routes import register_sandbox_routes, register_public_sandbox_routes
 register_sandbox_routes(app, str(ROOT / "runs" / "sandboxes"))
+# PUBLIC code execution — every run jailed in a bwrap namespace (no host FS/net/PIDs)
+# + rate-limited. Safe to expose because the isolation, not a token, is the boundary.
+register_public_sandbox_routes(app, str(ROOT / "runs" / "pub_sandboxes"))
 
 # Background research scheduler: runs watch-topic jobs on a cadence (bounded to
 # one per check so it never hammers search), writing source-backed memory the

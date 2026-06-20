@@ -100,6 +100,32 @@ def test_snapshot_and_rollback(tmp_path):
         sb.read_file("extra.txt")                      # post-snapshot file removed
 
 
+def test_isolated_run_refused_without_bwrap(tmp_path, monkeypatch):
+    # On a public endpoint we force isolated=True; if no jail runtime exists it must
+    # REFUSE, never fall back to an un-jailed run.
+    import local_ui.sandbox as sbx
+    monkeypatch.setattr(sbx, "_HAS_BWRAP", False)
+    r = sbx.Sandbox(tmp_path).run("echo hi", isolated=True)
+    assert r["blocked"] is True
+    assert "isolation required" in r["stderr"]
+
+
+def test_isolated_flag_recorded(tmp_path):
+    from local_ui.sandbox import Sandbox, _HAS_BWRAP
+    r = Sandbox(tmp_path).run("echo hi")          # isolated=None → jail iff available
+    assert r["isolated"] == _HAS_BWRAP
+
+
+def test_bwrap_jail_hides_host_fs_and_net(tmp_path):
+    from local_ui.sandbox import Sandbox, _HAS_BWRAP
+    if not _HAS_BWRAP:
+        pytest.skip("bwrap not present on this host")
+    s = Sandbox(tmp_path)
+    r = s.run("python3 -c 'print(2+2)'; ls /home 2>&1; ls /opt 2>&1", isolated=True)
+    assert r["isolated"] is True and "4" in r["stdout"]
+    assert ("No such file" in r["stdout"] or "cannot access" in r["stdout"])  # /home invisible
+
+
 def test_state_and_destroy(tmp_path):
     sb = Sandbox(tmp_path)
     sb.write_file("a.txt", "1")

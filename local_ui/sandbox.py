@@ -64,6 +64,29 @@ _REPO_RE = re.compile(r"^https://(www\.)?(github\.com|gitlab\.com|bitbucket\.org
 _OUTPUT_CAP = 24000     # chars of stdout/stderr kept per command
 _MAX_FILE = 400_000     # bytes per readable/writable file
 
+# Bubblewrap = unprivileged namespace sandbox (what Flatpak uses). When present, a
+# command runs with NO network, NO host filesystem (only /usr+/etc read-only +
+# system binaries), NO host PIDs, and ulimit memory/proc/cpu caps — so it is safe
+# to expose publicly: the host's keys/app-code/secrets are simply not visible.
+_HAS_BWRAP = bool(shutil.which("bwrap"))
+
+
+def _bwrap_argv(workdir: str, command: str, *, cpu_s: int = 20,
+                mem_kb: int = 786_432, procs: int = 256) -> list:
+    inner = f"ulimit -v {mem_kb} -u {procs} -t {cpu_s} 2>/dev/null; {command}"
+    return [
+        "bwrap",
+        "--ro-bind", "/usr", "/usr", "--ro-bind", "/etc", "/etc",
+        "--symlink", "usr/bin", "/bin", "--symlink", "usr/lib", "/lib",
+        "--symlink", "usr/lib64", "/lib64", "--symlink", "usr/sbin", "/sbin",
+        "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
+        "--bind", workdir, "/work", "--chdir", "/work",
+        "--unshare-all", "--die-with-parent", "--new-session",
+        "--setenv", "HOME", "/work", "--setenv", "PATH", "/usr/bin:/bin",
+        "--setenv", "LANG", "C.UTF-8", "--setenv", "NODE_ENV", "development",
+        "--", "/bin/sh", "-c", inner,
+    ]
+
 
 class SandboxError(Exception):
     pass
@@ -132,13 +155,26 @@ class Sandbox:
         return out
 
     # ── command execution ──────────────────────────────────────────────────--
-    def run(self, command: str, timeout: int = 120) -> Dict[str, Any]:
+    def run(self, command: str, timeout: int = 120,
+            isolated: Optional[bool] = None) -> Dict[str, Any]:
+        """Run a command. isolated=True forces the bwrap namespace jail (no host FS /
+        net / PIDs) and REFUSES if bwrap is missing — use it for public/untrusted
+        callers. isolated=None uses the jail when available, else a plain subprocess
+        (owner/loopback). isolated=False is the bare subprocess (loopback only)."""
         command = (command or "").strip()
+        want_jail = _HAS_BWRAP if isolated is None else bool(isolated)
         rec: Dict[str, Any] = {"id": _id("cmd"), "command": command,
-                               "cwd": str(self.dir), "started_at": _now()}
+                               "cwd": "/work" if want_jail else str(self.dir),
+                               "isolated": want_jail, "started_at": _now()}
         if not command:
             rec.update(exit_code=None, stdout="", stderr="empty command",
                        blocked=True, ended_at=_now())
+            return rec
+        if isolated and not _HAS_BWRAP:
+            rec.update(exit_code=None, stdout="", blocked=True, ended_at=_now(),
+                       stderr="isolation required (bwrap) is not available — refusing to "
+                              "run un-jailed")
+            self.commands.append(rec); self._record("command", rec)
             return rec
         if _DENY_RE.search(command):
             rec.update(exit_code=None, stdout="",
@@ -151,8 +187,12 @@ class Sandbox:
                "NODE_ENV": "development", "CI": "1"}
         t0 = time.time()
         try:
-            p = subprocess.run(command, shell=True, cwd=str(self.dir), env=env,
-                               capture_output=True, text=True, timeout=timeout)
+            if want_jail:
+                argv = _bwrap_argv(str(self.dir), command, cpu_s=min(timeout, 60))
+                p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+            else:
+                p = subprocess.run(command, shell=True, cwd=str(self.dir), env=env,
+                                   capture_output=True, text=True, timeout=timeout)
             rec.update(exit_code=p.returncode, stdout=p.stdout[-_OUTPUT_CAP:],
                        stderr=p.stderr[-_OUTPUT_CAP:], blocked=False)
         except subprocess.TimeoutExpired:

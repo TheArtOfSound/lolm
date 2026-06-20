@@ -220,66 +220,69 @@ async function loadModes(){
   });
 }
 /* ── real execution sandbox (loopback/tunnel only; never public RCE) ── */
-let sandbox = { token: localStorage.getItem('lolm_sbx_token')||'', id:null, reachable:false, enabled:false };
+// Default = PUBLIC isolated sandbox (/api/demo/sandbox, no token, bwrap-jailed).
+// With an owner SANDBOX_SECRET it uses the more powerful loopback /api/sandbox (clone etc).
+let sandbox = { token: localStorage.getItem('lolm_sbx_token')||'', id:null, enabled:false, isolated:true };
+function sbxBase(){ return sandbox.token ? '/api/sandbox' : '/api/demo/sandbox'; }
 async function sbxApi(path, opts={}){
-  opts.headers = Object.assign({'Content-Type':'application/json','Authorization':'Bearer '+sandbox.token}, opts.headers||{});
-  const r = await fetch('/api/sandbox'+path, opts);
-  if(!r.ok) throw new Error((await r.json().catch(()=>({}))).detail || ('HTTP '+r.status));
-  return r.json();
+  const h = {'Content-Type':'application/json'}; if(sandbox.token) h['Authorization']='Bearer '+sandbox.token;
+  const r = await fetch(sbxBase()+path, Object.assign({}, opts, {headers:Object.assign(h, opts.headers||{})}));
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error || j.detail || ('HTTP '+r.status));
+  return j;
 }
 async function probeSandbox(){
-  try{ const h = await (await fetch('/api/sandbox/health')).json(); sandbox.reachable = true; sandbox.enabled = !!h.enabled; }
-  catch(e){ sandbox.reachable = false; sandbox.enabled = false; }
+  try{ const h = await (await fetch(sbxBase()+'/health')).json(); sandbox.enabled=!!h.enabled; sandbox.isolated=h.isolated!==false; }
+  catch(e){ sandbox.enabled=false; }
 }
 async function renderSandbox(){
   await probeSandbox();
   const pane = $('pane-sandbox');
-  if(!sandbox.reachable || !sandbox.enabled){
-    // Honest: exec engine is built but locked to loopback — never public RCE.
-    const d = await api('/sandbox/status').catch(()=>({reason:'',phase:2}));
+  if(sandbox.id){ await renderSandboxState(); return; }
+  if(sandbox.enabled){
     pane.innerHTML =
-      `<div class="kv"><span class="k">exec engine</span><span class="v"><span class="badge amber">built · loopback-only</span></span></div>`+
-      `<div class="notconn"><b>Sandbox not connected</b>The execution engine (real commands, diffs, clone, rollback) is built and gated. For safety it is never exposed to the public web — run LOLM locally or over an SSH tunnel with <code>SANDBOX_SECRET</code> set, and it lights up here.</div>`+
-      `<details style="margin-top:6px"><summary style="font-size:11px;font-family:var(--mono);color:var(--dim);cursor:pointer">enable on your machine</summary><pre class="json">export SANDBOX_SECRET=$(openssl rand -hex 24)\npython -m local_ui.server_public_demo\n# then open  http://localhost:7866/index.html\n# and paste $SANDBOX_SECRET below → Code mode goes live</pre></details>`+
-      `<div style="margin-top:8px;display:flex;gap:6px"><input id="sbxTok" placeholder="SANDBOX_SECRET" style="flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:11px"><button id="sbxConn" class="mode">connect</button></div>`;
-    const c=$('sbxConn'); if(c) c.onclick=()=>{ sandbox.token=$('sbxTok').value.trim(); localStorage.setItem('lolm_sbx_token',sandbox.token); connectSandbox(); };
-    const nc = `<div class="notconn"><b>Sandbox not connected</b>Command execution, diffs and the file tree appear here once the sandbox is reachable on loopback. Never exposed to the public web.</div>`;
+      `<div class="kv"><span class="k">code execution</span><span class="v"><span class="badge green">live · sandboxed</span></span></div>`+
+      `<div class="notconn" style="border-style:solid;border-color:#bbf7d0;background:#f0fdf4"><b style="color:#166534">network-isolated jail (bwrap)</b><span style="color:#15803d">Every command runs with no network, no host filesystem, no host processes — and is rate-limited. Real code, safely.</span></div>`+
+      `<button id="sbxConn" class="mode on" style="margin-top:8px">▶ start a sandbox</button>`+
+      `<details style="margin-top:10px"><summary style="font-size:11px;color:var(--dim);font-family:var(--mono);cursor:pointer">owner mode (full power, loopback)</summary><div style="margin-top:6px;display:flex;gap:6px"><input id="sbxTok" placeholder="SANDBOX_SECRET" style="flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:11px"><button id="sbxTokGo" class="mode">use</button></div></details>`;
+    $('sbxConn').onclick=connectSandbox;
+    const tg=$('sbxTokGo'); if(tg) tg.onclick=()=>{ sandbox.token=$('sbxTok').value.trim(); localStorage.setItem('lolm_sbx_token',sandbox.token); renderSandbox(); };
+  } else {
+    pane.innerHTML =
+      `<div class="kv"><span class="k">code execution</span><span class="v"><span class="badge gray">unavailable</span></span></div>`+
+      `<div class="notconn"><b>Sandbox isolation not present</b>This host has no bwrap/container runtime, so code execution is disabled here. The agent still reasons in Code/Debug/Audit modes; it just can't run things on this server.</div>`;
+    const nc=`<div class="notconn"><b>No sandbox</b>Start one in the Sandbox tab to run code.</div>`;
     $('bpane-terminal').innerHTML=nc; $('bpane-diff').innerHTML=nc; $('bpane-files').innerHTML=nc;
-    return;
   }
-  // reachable + enabled → offer connect (create sandbox) or show live state
-  if(!sandbox.id){
-    pane.innerHTML = `<div class="kv"><span class="k">exec engine</span><span class="v"><span class="badge green">reachable</span></span></div>`+
-      `<div style="margin-top:8px;display:flex;gap:6px"><input id="sbxTok" value="${esc(sandbox.token)}" placeholder="SANDBOX_SECRET" style="flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:11px"><button id="sbxConn" class="mode on">connect</button></div>`+
-      `<p style="font-size:11px;color:var(--faint);margin-top:8px">Creates an ephemeral sandbox. Every command + file change is recorded.</p>`;
-    $('sbxConn').onclick=()=>{ sandbox.token=$('sbxTok').value.trim(); localStorage.setItem('lolm_sbx_token',sandbox.token); connectSandbox(); };
-    return;
-  }
-  await renderSandboxState();
 }
 async function connectSandbox(){
   try{
     const st = await sbxApi('/create', {method:'POST'});
     sandbox.id = st.sandbox_id;
-    state.modes.forEach(m=>{ if(['code','debug','repo_audit','build_test'].includes(m.key)) m.connected=true; });
-    loadModes();
     await renderSandboxState(); renderTerminal(); await renderFiles();
-    status('sandbox connected — Code mode live ('+sandbox.id+')');
-  }catch(e){ status('sandbox connect failed: '+e.message); sandbox.token=''; renderSandbox(); }
+    document.querySelector('#btabs .tab[data-bpane=terminal]').click();
+    status('sandbox live — run code in the Terminal ('+sandbox.id+')');
+  }catch(e){ status('sandbox failed: '+e.message); if(sandbox.token){ sandbox.token=''; } renderSandbox(); }
 }
 async function renderSandboxState(){
   const st = await sbxApi('/'+sandbox.id+'/state');
+  const jail = (st.isolated!==false) ? '<span class="badge green" style="margin-left:6px">jailed</span>' : '';
+  // clone/snapshot/rollback + network are owner-mode (loopback) only — the public
+  // jail has no network, so those don't apply.
+  const owner = !!sandbox.token;
   $('pane-sandbox').innerHTML =
-    `<div class="kv"><span class="k">sandbox</span><span class="v"><span class="badge green">live</span> ${esc(sandbox.id)}</span></div>`+
+    `<div class="kv"><span class="k">sandbox</span><span class="v"><span class="badge green">live</span> ${esc(sandbox.id)} ${jail}</span></div>`+
     `<div class="kv"><span class="k">files</span><span class="v">${st.files}</span></div>`+
     `<div class="kv"><span class="k">commands</span><span class="v">${st.commands_run}</span></div>`+
     `<div class="kv"><span class="k">file changes</span><span class="v">${st.file_changes}</span></div>`+
-    `<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">`+
-      `<input id="sbxRepo" placeholder="public github URL to clone" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:11px">`+
-      `<button class="mode" id="sbxClone">clone</button><button class="mode" id="sbxSnap">snapshot</button><button class="mode" id="sbxRoll">rollback</button></div>`;
-  $('sbxClone').onclick=async()=>{ const u=$('sbxRepo').value.trim(); if(!u)return; status('cloning…'); const r=await sbxApi('/'+sandbox.id+'/clone',{method:'POST',body:JSON.stringify({repo_url:u})}); termLine('$ git clone '+u, r.stdout+r.stderr, r.exit_code); await sbxApi('/'+sandbox.id+'/detect').then(d=>termLine('# detected',JSON.stringify(d),0)).catch(()=>{}); renderFiles(); renderSandboxState(); };
-  $('sbxSnap').onclick=async()=>{ await sbxApi('/'+sandbox.id+'/snapshot',{method:'POST'}); status('snapshot saved'); renderSandboxState(); };
-  $('sbxRoll').onclick=async()=>{ await sbxApi('/'+sandbox.id+'/rollback',{method:'POST'}); status('rolled back'); renderFiles(); renderSandboxState(); };
+    (owner
+      ? `<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap"><input id="sbxRepo" placeholder="public github URL to clone" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:11px"><button class="mode" id="sbxClone">clone</button><button class="mode" id="sbxSnap">snapshot</button><button class="mode" id="sbxRoll">rollback</button></div>`
+      : `<p style="font-size:11px;color:var(--faint);margin-top:10px">Public jail has no network (no clone). Write files + run code in the Terminal below. New sandbox on reload.</p>`);
+  if(owner){
+    $('sbxClone').onclick=async()=>{ const u=$('sbxRepo').value.trim(); if(!u)return; status('cloning…'); const r=await sbxApi('/'+sandbox.id+'/clone',{method:'POST',body:JSON.stringify({repo_url:u})}); termLine('$ git clone '+u, r.stdout+r.stderr, r.exit_code); await sbxApi('/'+sandbox.id+'/detect').then(d=>termLine('# detected',JSON.stringify(d),0)).catch(()=>{}); renderFiles(); renderSandboxState(); };
+    $('sbxSnap').onclick=async()=>{ await sbxApi('/'+sandbox.id+'/snapshot',{method:'POST'}); status('snapshot saved'); renderSandboxState(); };
+    $('sbxRoll').onclick=async()=>{ await sbxApi('/'+sandbox.id+'/rollback',{method:'POST'}); status('rolled back'); renderFiles(); renderSandboxState(); };
+  }
 }
 function renderTerminal(){
   $('bpane-terminal').innerHTML = `<div id="termOut"></div><div style="display:flex;gap:6px;margin-top:8px"><span style="color:#3fd6a0">$</span><input id="termIn" style="flex:1;background:transparent;border:none;color:#e2e8f0;font-family:var(--mono);font-size:11.5px;outline:none" placeholder="run a command (recorded · destructive blocked)"></div>`;
