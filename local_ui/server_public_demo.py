@@ -251,6 +251,11 @@ register_operator_routes(
     model_ready_fn=lambda: STATE.backbone is not None,
 )
 
+# Agentic coding loop: the 70B writes code → runs it in the bwrap jail → reads the
+# real failure → fixes it → repeats. Public + rate-limited; every command isolated.
+from local_ui.code_routes import register_code_routes
+register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat)
+
 
 @app.get("/api/demo/operator")
 def public_operator_status():

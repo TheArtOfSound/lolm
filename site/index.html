@@ -347,6 +347,36 @@ function addBubble(role, content, meta){
 }
 
 /* ── run a turn through the REAL agent, persist it ── */
+async function runCodeLoop(task, c){
+  document.querySelector('#btabs .tab[data-bpane=terminal]').click();
+  $('bpane-terminal').innerHTML = '<div id="termOut"></div>';
+  const reason = document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
+  const step = t => { const s=document.createElement('div'); s.className='step'; s.innerHTML=t; reason.appendChild(s); reason.scrollTop=reason.scrollHeight; $('feed').scrollTop=$('feed').scrollHeight; };
+  const ansEl = addBubble('assistant',''); const bub=ansEl.querySelector('.bub');
+  bub.textContent='🛠 Coding agent — writing code, running it in an isolated sandbox, fixing failures…';
+  const rec={mode:'code_agent', model:'Llama 70B + LOLM (agentic)', files:[], runs:[], verdict:''};
+  step('🛠 <b>coding agent</b> — bwrap jail · no network, no host filesystem');
+  try{
+    const resp=await fetch('/api/demo/code/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
+    if(!resp.ok){ const e=await resp.json().catch(()=>({})); bub.textContent='code run refused: '+(e.error||resp.status); return; }
+    const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf='';
+    while(true){ const {done,value}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+      let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+        let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: ')){ try{data=JSON.parse(ln.slice(6));}catch(_){} } }
+        if(!name||!data) continue;
+        if(name==='code_start') step('· sandbox '+esc(data.sandbox||''));
+        else if(name==='file_changed'){ rec.files.push(data.path); step('✎ <b>wrote</b> '+esc(data.path)+(data.reason?(' — '+esc(data.reason)):'')); termLine('# wrote '+data.path, data.diff||'', 0); }
+        else if(name==='command_started'){ termLine('$ '+data.command, '', ''); step('▶ run <code>'+esc(data.command)+'</code>'); }
+        else if(name==='command_finished'){ rec.runs.push(data.exit_code); termLine('', (data.stdout||'')+(data.stderr||''), data.blocked?'blocked':data.exit_code); step((data.exit_code===0?'✓':'✗')+' exit '+(data.blocked?'blocked':data.exit_code)); }
+        else if(name==='agent_note') step('· '+esc((data.text||'').slice(0,120)));
+        else if(name==='code_done'){ rec.verdict=data.budget_hit?'budget_hit':'finished'; bub.textContent=(data.summary||'Done.'); step('● <b>done</b>'+(data.budget_hit?' (step budget hit)':'')); }
+        else if(name==='error'){ bub.textContent += '\n[error] '+(data.error||''); }
+      }
+    }
+  }catch(e){ bub.textContent += '\n[stream lost] '+e.message; }
+  renderInspectors({receipt:rec});
+  await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:bub.textContent,model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
+}
 async function send(){
   const text = $('prompt').value.trim();
   if(!text || state.running) return;
@@ -356,6 +386,9 @@ async function send(){
   const c = state.conv;
   addBubble('user', text);
   await api('/conversations/'+c.id+'/messages', {method:'POST', body: JSON.stringify({role:'user', content:text})});
+
+  // Code mode + isolated sandbox available → the AGENTIC LOOP (write→run→fix), not chat.
+  if(state.mode==='code' && sandbox.enabled){ await runCodeLoop(text, c); state.running=false; $('send').disabled=false; openConv(c.id); return; }
 
   // The selected mode frames how the agent behaves (Code/Debug/Audit/Release/…).
   // We display + persist what YOU typed, but send the framed command to the agent.
