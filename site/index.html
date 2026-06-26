@@ -112,7 +112,7 @@
   .bottom .notconn{border-color:#1e293b;color:#64748b}
   .bottom .notconn b{color:#94a3b8}
   @media(max-width:1100px){.app{grid-template-columns:220px 1fr;grid-template-areas:"side main" "side bottom"}.right{display:none}}
-  @media(max-width:680px){.app{grid-template-columns:1fr;grid-template-rows:auto 1fr auto;grid-template-areas:"main" "main" "bottom"}.side{position:fixed;left:-280px;top:0;bottom:0;width:260px;z-index:30;transition:left .2s}.side.show{left:0}.bottom{display:none}}
+  @media(max-width:680px){.app{grid-template-columns:1fr;grid-template-rows:1fr 46vh;grid-template-areas:"main" "bottom"}.side{position:fixed;left:-280px;top:0;bottom:0;width:260px;z-index:30;transition:left .2s}.side.show{left:0}.bottom{min-height:0}.bottom .pane{overflow:auto}}
 </style>
 </head>
 <body>
@@ -360,7 +360,7 @@ function renderPreview(html){
   // allow-scripts only (no allow-same-origin) → the app runs but can't reach our origin,
   // cookies, or network. Real, playable, isolated.
   f.setAttribute('sandbox','allow-scripts allow-pointer-lock');
-  f.style.cssText='width:100%;height:100%;min-height:440px;border:0;background:#0a0c10;border-radius:8px';
+  f.style.cssText='width:100%;height:100%;min-height:300px;border:0;background:#0a0c10;border-radius:8px';
   f.srcdoc=html; pane.appendChild(f);
 }
 async function runVisualBuild(task, c){
