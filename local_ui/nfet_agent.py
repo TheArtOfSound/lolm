@@ -112,9 +112,18 @@ _SPECIAL_RE = re.compile(
 )
 
 
+# Internal control markers a small local model sometimes echoes into the answer.
+_CONTROL_ARTIFACT_RE = re.compile(r"\[?\s*verdict:\s*(?:ok|revise)\s*\]?", re.IGNORECASE)
+
+
 def strip_special_tokens(s: str) -> str:
-    """Remove leaked chat-template/special tokens from model output."""
-    return _SPECIAL_RE.sub("", s) if s else s
+    """Remove leaked chat-template/special tokens AND internal control markers
+    (e.g. a stray 'VERDICT: revise') from model output before it reaches the user.
+    NOTE: called PER STREAMED TOKEN — must NOT .strip() (that eats the spaces between
+    tokens). Trailing/leading whitespace on the FULL answer is handled by the caller."""
+    if not s:
+        return s
+    return _CONTROL_ARTIFACT_RE.sub("", _SPECIAL_RE.sub("", s))
 
 
 class NFETAgentRequest(BaseModel):
@@ -535,7 +544,11 @@ DRAFT:
         )
         lower = seg.text.lower()
         verdict = "revise" if "revise" in lower.split("verdict:")[-1][:40] else "ok"
-        return {"verdict": verdict, "notes": seg.text, "raw_id": seg.raw.get("id")}
+        # Strip the control marker from the notes so it never bleeds into the finalizer
+        # feedback (a small local model will otherwise echo "VERDICT: revise" verbatim).
+        notes = re.sub(r"^\s*\[?\s*verdict:\s*(ok|revise)\s*\]?[.\s-]*", "", seg.text.strip(),
+                       flags=re.IGNORECASE)
+        return {"verdict": verdict, "notes": notes, "raw_id": seg.raw.get("id")}
 
     def _do_branch(self, command: str, draft: str, memory_hits: List[Dict[str, Any]],
                    evidence: List[Dict[str, Any]], req: NFETAgentRequest,

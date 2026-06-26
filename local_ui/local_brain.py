@@ -137,22 +137,17 @@ class LocalServerReasonerLoop:
             "profile": model_label, "use_graft": bool(traces),
             "latent_backend": "monitor" if traces else None, "reasoner": "local"}}
 
-        gate_means: List[float] = []
-        controls: List[int] = []
-        if traces:
-            tokenizer = backbone.tokenizer
-            for trace in traces:
-                piece = tokenizer.decode([trace["token_id"]])
-                gate_means.append(trace["gate_mean"])
-                logits = trace.get("control_logits") or []
-                if logits:
-                    controls.append(max(range(len(logits)), key=logits.__getitem__))
-                yield {"event": "token", "data": {"token": piece,
-                       "token_id": trace["token_id"], "trace": trace}}
-        else:
-            for piece in text.split(" "):
-                yield {"event": "token", "data": {"token": piece + " ",
-                       "trace": {"used_graft": False}}}
+        # Telemetry summary comes from the graft traces; but the DISPLAYED text is the
+        # REAL Ollama output (which has correct spacing). Decoding graft token-ids for
+        # display loses spaces — the graft's tokenizer ≠ how the local model wrote the
+        # text. So we stream the real words and ATTACH the per-token telemetry by index.
+        gate_means: List[float] = [t.get("gate_mean", 0.0) for t in traces] if traces else []
+        controls: List[int] = [max(range(len(t["control_logits"])), key=t["control_logits"].__getitem__)
+                               for t in traces if t.get("control_logits")]
+        words = text.split(" ") if text else []
+        for i, w in enumerate(words):
+            tr = traces[min(i, len(traces) - 1)] if traces else {"used_graft": False}
+            yield {"event": "token", "data": {"token": w + " ", "trace": tr}}
 
         elapsed = max(time.perf_counter() - started, 1e-9)
         n_tokens = len(traces) or len(text.split(" "))

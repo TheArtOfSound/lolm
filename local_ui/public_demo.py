@@ -58,8 +58,10 @@ class DemoLimits:
         self.max_segments = _int_env("DEMO_MAX_SEGMENTS", 2 if _lean else 40)
         self.segment_tokens = _int_env("DEMO_SEGMENT_TOKENS", 256 if _lean else 512)
         self.final_tokens = _int_env("DEMO_FINAL_TOKENS", 1200 if _lean else 32000)
-        self.max_retrieves = _int_env("DEMO_MAX_RETRIEVES", 12)
-        self.max_verifies = _int_env("DEMO_MAX_VERIFIES", 10)
+        # lean caps the EXTRA calls (each pays a graft re-read on a slow local model):
+        # at most a couple retrieves and one verify — the audit path still gets its check.
+        self.max_retrieves = _int_env("DEMO_MAX_RETRIEVES", 2 if _lean else 12)
+        self.max_verifies = _int_env("DEMO_MAX_VERIFIES", 1 if _lean else 10)
         self.max_branches = _int_env("DEMO_MAX_BRANCHES", 6)
         self.branch_width = _int_env("DEMO_BRANCH_WIDTH", 4)
         # anti-abuse only (shared box); set DEMO_RATE_PER_HOUR=0 on your own machine.
