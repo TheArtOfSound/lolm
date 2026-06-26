@@ -117,13 +117,11 @@ _CONTROL_ARTIFACT_RE = re.compile(r"\[?\s*verdict:\s*(?:ok|revise)\s*\]?", re.IG
 
 
 def strip_special_tokens(s: str) -> str:
-    """Remove leaked chat-template/special tokens AND internal control markers
-    (e.g. a stray 'VERDICT: revise') from model output before it reaches the user.
+    """Remove leaked chat-template/special tokens from model output.
     NOTE: called PER STREAMED TOKEN — must NOT .strip() (that eats the spaces between
-    tokens). Trailing/leading whitespace on the FULL answer is handled by the caller."""
-    if not s:
-        return s
-    return _CONTROL_ARTIFACT_RE.sub("", _SPECIAL_RE.sub("", s))
+    tokens), and must NOT touch 'VERDICT:' (the verify channel needs to parse it; the
+    finalizer cleans its own output via _CONTROL_ARTIFACT_RE)."""
+    return _SPECIAL_RE.sub("", s) if s else s
 
 
 class NFETAgentRequest(BaseModel):
@@ -738,6 +736,13 @@ WORKING DRAFT:
             [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
             req, tokens=req.final_tokens, channel="final", telemeter=False,
         )
+        # Backstop: strip any internal control marker the model echoed into the FINAL
+        # answer (a small local model sometimes parrots 'VERDICT: revise'). Only here —
+        # the verify channel keeps its marker so the verdict can be parsed.
+        cleaned = _CONTROL_ARTIFACT_RE.sub("", result.text).strip()
+        if cleaned != result.text:
+            result.text = cleaned
+            result.raw["response"] = cleaned
         if int(result.raw.get("tokens") or 0) >= req.final_tokens:
             trimmed = self._trim_to_sentence(result.text)
             if trimmed and trimmed != result.text:
