@@ -74,15 +74,16 @@ def channels_for_sequence(frames: Sequence[Dict], horizon: int = 4
         fut = rows[i + 1:i + 1 + horizon]                   # always exactly `horizon`
         stab = sum(x[1] for x in fut) / horizon
         P = math.exp(-stab / (drift_scale + 1e-9))
-        # K = LOCAL estimate of downstream consequence = regime dispersion (r1).
-        # Vindicated by the PROPER test: against the TRUE interventional causal influence
-        # K_int (do-perturbation of the residual stream, lolm/nfet_intervene), regime is the
-        # best local recoverer (rho=+0.25, n=56, p~0.06). Earlier it looked REJECTED only
-        # because it was tested against observable downstream-drift, which K_int reveals is
-        # itself a poor proxy for causal influence (K_int vs drift rho=0.16) — a bad ground
-        # truth, not a bad channel. Honest status: support is WEAK (~6% of variance); the
-        # gold-standard K is the intervention itself (use interventional_k for audits).
-        K = squash(r1)
+        # K = LOCAL estimate of downstream consequence. SETTLED by the large-n interventional
+        # test (scripts/nfet_intervene_large, n=341): the n=56 "regime rho=0.25" was SMALL-
+        # SAMPLE NOISE — at n=341 regime=0.073 with CI spanning 0 (NOT significant). The only
+        # robustly significant cheap recoverer of the TRUE K_int (do-perturbation) is hidden
+        # drift (rho=0.165, CI[0.05,0.27]) — and even that explains <3% of variance; a learned
+        # linear K-head does NOT beat it (CV rho=0.097, n.s.). Conclusion: NO cheap local
+        # graft signal faithfully recovers the causal channel — the gold-standard K is the
+        # intervention itself (interventional_k). Kept as drift = the only defensible (and
+        # near-useless) proxy. The weakness of K is NFET's settled, located soft spot.
+        K = squash(d1 / (drift_scale + 1e-9))
         chans.append(Channels(I=I, B=B, P=P, K=K, N=0.0))
         downstream.append(stab)                              # ground-truth downstream change
     return chans, downstream
