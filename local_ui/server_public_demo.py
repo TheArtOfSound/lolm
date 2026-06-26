@@ -277,7 +277,25 @@ register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat)
 # GOAL over its own bwrap-jailed virtual workspace — plan -> act -> observe -> verify,
 # streamed live. Public + rate-limited; every command isolated like the code sandbox.
 from local_ui.agent_routes import register_agent_routes
-register_agent_routes(app, str(ROOT / "runs" / "agent_workspaces"), _operator_chat)
+from local_ui import internet_tools
+
+
+def _operator_search(query: str):
+    """Real keyless web search (Brave/Tavily/SearxNG/DuckDuckGo) -> the result list the
+    operator expects ([{title,url,snippet}])."""
+    try:
+        return (internet_tools.web_search(query, limit=6) or {}).get("results", [])
+    except Exception:
+        return []
+
+
+def _operator_fetch(url: str):
+    """Read the full text of a public web page (SSRF-guarded in internet_tools)."""
+    return internet_tools.fetch_url(url)
+
+
+register_agent_routes(app, str(ROOT / "runs" / "agent_workspaces"), _operator_chat,
+                      search_fn=_operator_search, fetch_fn=_operator_fetch)
 
 
 @app.get("/api/demo/brain")

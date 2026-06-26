@@ -20,7 +20,7 @@ import socket
 from dataclasses import dataclass
 from html import unescape
 from typing import Any, Dict, List, Optional
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 import requests
 
@@ -126,8 +126,22 @@ def duckduckgo_lite_search(query: str, limit: int) -> List[SearchResult]:
     for href, title_html, snippet_html in blocks[:limit]:
         title = unescape(re.sub(r"<.*?>", "", title_html)).strip()
         snippet = unescape(re.sub(r"<.*?>", "", snippet_html)).strip()
-        results.append(SearchResult(title=title, url=unescape(href), snippet=snippet, source="duckduckgo-lite"))
+        results.append(SearchResult(title=title, url=_resolve_ddg(unescape(href)),
+                                    snippet=snippet, source="duckduckgo-lite"))
     return results
+
+
+def _resolve_ddg(href: str) -> str:
+    """DuckDuckGo wraps results in a redirect (//duckduckgo.com/l/?uddg=<real-url>).
+    Unwrap to the real https URL so the operator can actually FETCH it."""
+    if "duckduckgo.com/l/" in href and "uddg=" in href:
+        try:
+            real = parse_qs(urlparse(href if "://" in href else "https:" + href).query).get("uddg")
+            if real:
+                return unquote(real[0])
+        except Exception:
+            pass
+    return href
 
 
 def web_search(query: str, limit: int = 8) -> Dict[str, Any]:

@@ -34,6 +34,7 @@ def _sse(event: str, data: Dict[str, Any]) -> str:
 def register_agent_routes(app: Any, root: str,
                           chat_fn: Optional[Callable[[List[Dict[str, str]]], str]],
                           search_fn: Optional[Callable[[str], List[Dict[str, Any]]]] = None,
+                          fetch_fn: Optional[Callable[[str], Dict[str, Any]]] = None,
                           runs_per_min: int = 4) -> None:
     rate: Dict[str, List[float]] = {}
 
@@ -45,11 +46,12 @@ def register_agent_routes(app: Any, root: str,
     def agent_health():
         return {"enabled": bool(_HAS_BWRAP and chat_fn is not None),
                 "isolated": True, "runs_per_min": runs_per_min,
-                "tools": ["list", "read", "write", "run", "search", "done"],
+                "web": bool(search_fn is not None),
+                "tools": ["list", "read", "write", "edit", "run", "search", "fetch", "done"],
                 "note": "LOLM Operator: a goal-driven multi-tool agent over a sandboxed "
                         "virtual computer — lists/reads/writes/edits files, runs shell in a "
-                        "bwrap jail (no host FS/network), searches the web read-only, and "
-                        "verifies its own work before finishing."}
+                        "bwrap jail (no host FS/network), searches and fetches the web "
+                        "read-only, and verifies its own work before finishing."}
 
     @app.post("/api/demo/agent/run")
     def agent_run(req: OperatorGoal, request: Request):
@@ -68,7 +70,7 @@ def register_agent_routes(app: Any, root: str,
             return JSONResponse({"error": "empty goal"}, status_code=400)
 
         sb = Sandbox(root)
-        op = AgentOperator(sb, chat_fn, search_fn=search_fn,
+        op = AgentOperator(sb, chat_fn, search_fn=search_fn, fetch_fn=fetch_fn,
                            max_steps=min(max(req.max_steps, 1), 18), isolated=True)
 
         def gen():

@@ -33,18 +33,28 @@ SYSTEM = (
     "  READ: <path>                 — print a file's contents\n"
     "  WRITE: <path>                — create/overwrite a file; put the FULL contents in a\n"
     "  ```\n  <file contents>\n  ```  fenced block on the next lines\n"
+    "  EDIT: <path>                 — change PART of an existing file with a search/replace\n"
+    "      block (exact existing text -> new text), on the lines right after:\n"
+    "      <<<<<<< SEARCH\n      <exact existing lines to find>\n      =======\n"
+    "      <replacement lines>\n      >>>>>>> REPLACE\n"
     "  RUN: <shell command>         — run a command (python3/node/pip-free, must exit)\n"
-    "  SEARCH: <query>              — search the web (read-only) for facts/docs\n"
+    "  SEARCH: <query>              — search the web (read-only) for facts/docs/URLs\n"
+    "  FETCH: <url>                 — read the FULL text of a web page (read-only)\n"
     "  DONE: <one-line summary>     — the goal is fully achieved and VERIFIED\n\n"
-    "ENVIRONMENT LIMITS: no network except SEARCH; no GUI; no interactive stdin; the "
-    "jail has python3 + node + coreutils, stdlib only (no pip/npm install); commands must "
-    "run and EXIT (no servers/infinite loops). Build self-contained things.\n"
-    "RULES: take only ONE action per step. Before WRITE, prefer LIST/READ to know the "
-    "state. Always RUN code to verify it works before DONE — never claim success you "
-    "haven't seen. If a command fails, READ the error and fix the root cause."
+    "ENVIRONMENT LIMITS: network is READ-ONLY and only via SEARCH and FETCH; no GUI; no "
+    "interactive stdin; the jail has python3 + node + coreutils, stdlib only (no pip/npm "
+    "install); commands must run and EXIT (no servers/infinite loops). Build self-contained "
+    "things.\n"
+    "RULES: take only ONE action per step. Before WRITE/EDIT, prefer LIST/READ to know the "
+    "state. For a small change to an existing file use EDIT (cheaper and safer than rewriting "
+    "it whole); use WRITE for new files or full rewrites. To use the web, SEARCH for a URL "
+    "then FETCH it for the full content. Always RUN code to verify it works before DONE — "
+    "never claim success you haven't seen. If a command fails, READ the error and fix the "
+    "root cause."
 )
 
 _FENCE = re.compile(r"```[a-zA-Z0-9_]*\n?(.*?)```", re.DOTALL)
+_SR = re.compile(r"<<<<<<<\s*SEARCH\s*\n(.*?)\n?=======\s*\n(.*?)\n?>>>>>>>\s*REPLACE", re.DOTALL)
 
 
 def _parse_action(text: str) -> Optional[Dict[str, Any]]:
@@ -57,6 +67,14 @@ def _parse_action(text: str) -> Optional[Dict[str, Any]]:
     if m:
         step = m.group(1).strip()[:200]
 
+    # EDIT: <path> + a SEARCH/REPLACE block (checked before WRITE — both touch files)
+    me = re.search(r"^\s*EDIT:\s*(\S+)", text, re.MULTILINE)
+    if me:
+        blk = _SR.search(text)
+        if blk:
+            return {"tool": "edit", "path": me.group(1).strip().strip('"`'),
+                    "old": blk.group(1), "new": blk.group(2), "step": step}
+
     # WRITE: <path> + a fenced block of contents
     mw = re.search(r"^\s*WRITE:\s*(\S+)", text, re.MULTILINE)
     if mw:
@@ -68,6 +86,10 @@ def _parse_action(text: str) -> Optional[Dict[str, Any]]:
     mr = re.search(r"^\s*RUN:\s*(.+)$", text, re.MULTILINE)
     if mr:
         return {"tool": "run", "command": mr.group(1).strip().strip("`"), "step": step}
+
+    mf = re.search(r"^\s*FETCH:\s*(\S+)", text, re.MULTILINE)
+    if mf:
+        return {"tool": "fetch", "url": mf.group(1).strip().strip('"`<>'), "step": step}
 
     mrd = re.search(r"^\s*READ:\s*(\S+)", text, re.MULTILINE)
     if mrd:
@@ -90,11 +112,13 @@ class AgentOperator:
     def __init__(self, sandbox: Any,
                  chat_fn: Callable[[List[Dict[str, str]]], str],
                  search_fn: Optional[Callable[[str], List[Dict[str, Any]]]] = None,
+                 fetch_fn: Optional[Callable[[str], Dict[str, Any]]] = None,
                  max_steps: int = 14, run_timeout: int = 20,
                  isolated: Optional[bool] = True):
         self.sb = sandbox
         self.chat = chat_fn
         self.search = search_fn
+        self.fetch = fetch_fn
         self.max_steps = max_steps
         self.run_timeout = run_timeout
         self.isolated = isolated
@@ -131,7 +155,7 @@ class AgentOperator:
 
     def run(self, goal: str) -> Iterator[Dict[str, Any]]:
         yield {"event": "operator_start", "data": {"goal": goal, "sandbox": self.sb.id,
-               "tools": ["list", "read", "write", "run", "search", "done"]}}
+               "tools": ["list", "read", "write", "edit", "run", "search", "fetch", "done"]}}
         ran_something = False
         nudges = 0
         for step in range(self.max_steps):
@@ -209,6 +233,43 @@ class AgentOperator:
                     yield {"event": "agent_note", "data": {"text": f"write failed: {exc}"[:160]}}
                 continue
 
+            # ── EDIT (surgical search/replace in an existing file) ──
+            if tool == "edit":
+                path, old, new = act["path"], act["old"], act["new"]
+                try:
+                    content = self.sb.read_file(path)
+                except Exception as exc:
+                    self.log.append({"kind": "edit", "summary": f"edit {path} — can't read",
+                                     "observation": f"error: {exc}. WRITE the file first if it's new."})
+                    yield {"event": "agent_note", "data": {"text": f"edit: can't read {path}"[:160]}}
+                    continue
+                n = content.count(old)
+                if n == 0:
+                    self.log.append({"kind": "edit", "summary": f"edit {path} — text not found",
+                                     "observation": "The SEARCH text was not found EXACTLY (whitespace "
+                                     "counts). READ the file and copy the exact lines to replace."})
+                    yield {"event": "agent_note", "data": {"text": f"edit: SEARCH text not found in {path}"}}
+                    continue
+                if n > 1:
+                    self.log.append({"kind": "edit", "summary": f"edit {path} — text not unique",
+                                     "observation": f"The SEARCH text appears {n} times — add surrounding "
+                                     "lines so it matches exactly ONE place."})
+                    yield {"event": "agent_note", "data": {"text": f"edit: SEARCH not unique ({n}x) in {path}"}}
+                    continue
+                try:
+                    fc = self.sb.write_file(path, content.replace(old, new, 1), reason="operator-edit")
+                    yield {"event": "tool_call", "data": {"tool": "edit", "path": path}}
+                    yield {"event": "file_changed", "data": {"path": path,
+                           "diff": (fc.get("diff") or "")[:2500], "edit": True}}
+                    self.log.append({"kind": "edit", "summary": f"edited {path} "
+                                     f"(-{old.count(chr(10))+1}/+{new.count(chr(10))+1} lines)",
+                                     "observation": f"applied search/replace to {path}"})
+                except Exception as exc:
+                    self.log.append({"kind": "edit", "summary": f"edit {path} failed",
+                                     "observation": f"error: {exc}"[:300]})
+                    yield {"event": "agent_note", "data": {"text": f"edit failed: {exc}"[:160]}}
+                continue
+
             # ── RUN ──
             if tool == "run":
                 cmd = act["command"]
@@ -239,6 +300,28 @@ class AgentOperator:
                                  for x in results[:5]) or "(no results)")
                 self.log.append({"kind": "search", "summary": f"searched: {q}",
                                  "observation": obs})
+                continue
+
+            # ── FETCH (read the full text of a web page, read-only) ──
+            if tool == "fetch":
+                url = act["url"]
+                if self.fetch is None:
+                    self.log.append({"kind": "fetch", "summary": f"fetch {url} — unavailable",
+                                     "observation": "web fetch isn't enabled on this host"})
+                    yield {"event": "agent_note", "data": {"text": "fetch unavailable"}}
+                    continue
+                try:
+                    r = self.fetch(url) or {}
+                    text = (r.get("text") or "").strip()
+                    obs = f"{r.get('url', url)} [{r.get('status', '?')}, {r.get('chars', len(text))} chars]\n{text[:3500]}"
+                    yield {"event": "web_fetch", "data": {"url": r.get("url", url),
+                           "status": r.get("status"), "chars": r.get("chars", len(text))}}
+                    self.log.append({"kind": "fetch", "summary": f"fetched {url}",
+                                     "observation": obs})
+                except Exception as exc:
+                    self.log.append({"kind": "fetch", "summary": f"fetch {url} failed",
+                                     "observation": f"error: {exc}"[:300]})
+                    yield {"event": "agent_note", "data": {"text": f"fetch failed: {exc}"[:160]}}
                 continue
 
         yield {"event": "operator_done", "data": {"summary": "reached the step budget",
