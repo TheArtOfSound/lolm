@@ -22,8 +22,13 @@ import math
 from dataclasses import dataclass
 from typing import Dict, List, Sequence, Tuple
 
-# default exchange rates (sec. 13: model-relative free parameters, surfaced explicitly)
-WEIGHTS = (1.0, 0.6, 0.4, 1.0, 1.0)   # alpha I, beta B, gamma P, delta K, lambda N
+# Exchange rates (sec. 13: model-relative free parameters, surfaced explicitly).
+# delta (K weight) DOWN-WEIGHTED 1.0 -> 0.2: the empirical investigation (three escalating
+# tests — single signal, linear combo, learned head over the full 1024-d state) showed the
+# CHEAP causal channel recovers <~3% of the true interventional K_int. A channel we can
+# barely measure should barely move the event score; weight it by its validated effect size.
+# Full-strength K requires interventional_k (the audit-grade measure), not this proxy.
+WEIGHTS = (1.0, 0.6, 0.4, 0.2, 1.0)   # alpha I, beta B, gamma P, delta K(down-weighted), lambda N
 
 
 def squash(x: float) -> float:
