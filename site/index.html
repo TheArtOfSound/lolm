@@ -581,6 +581,9 @@ async function send(){
   addBubble('user', text);
   await api('/conversations/'+c.id+'/messages', {method:'POST', body: JSON.stringify({role:'user', content:text})});
 
+  // explicit memory commands ("remember that…" / "forget…") → instant, deterministic
+  if(await handleMemoryCommand(text, c)){ state.running=false; $('send').disabled=false; await openConv(c.id); return; }
+
   // AUTO-ROUTE: read the prompt and pick the path. Manual modes override.
   //   visual  → build a live HTML app in the sandboxed preview iframe (you can play it)
   //   code    → the agentic loop writes + runs real code in the bwrap jail terminal
@@ -748,6 +751,54 @@ function memNote(facts){
   const d=document.createElement('div'); d.className='memsaved';
   d.innerHTML='🧠 Remembered: '+facts.map(esc).join(' · ')+' <span>— manage in the Memory panel</span>';
   f.appendChild(d); f.scrollTop=f.scrollHeight;
+}
+function cleanRememberPhrase(text){
+  let s = text.replace(/^\s*(?:please\s+)?(?:remember|note|keep in mind|don'?t forget)\b\s*(?:that|this|to)?\s*[:,-]?\s*/i,'').trim().replace(/[.\s]+$/,'');
+  if(!s) return '';
+  return s.charAt(0).toUpperCase()+s.slice(1)+'.';
+}
+async function rememberFact(text){
+  let saved=[];
+  const cid=(state.conv&&state.conv.id)||'';
+  try{ const d=await api('/memory/extract',{method:'POST',body:JSON.stringify({user_message:text, conv_id:cid})}); saved=((d&&d.saved)||[]).map(m=>m.text); }catch(e){}
+  if(!saved.length){   // explicit remember but the extractor found nothing → save the phrase directly
+    const fact=cleanRememberPhrase(text);
+    if(fact){ try{ const r=await api('/memory',{method:'POST',body:JSON.stringify({text:fact, kind:'fact'})}); if(r&&r.saved) saved=[r.saved.text]; }catch(e){} }
+  }
+  await loadUserMemory();   // refresh from server (authoritative)
+  return saved;
+}
+async function handleMemoryCommand(text, c){
+  const t = text.trim();
+  // REMEMBER
+  if(/^\s*(?:please\s+)?(?:remember|note this|keep in mind|don'?t forget)\b/i.test(t)){
+    const saved = await rememberFact(t);
+    const body = saved.length ? ('Got it — I’ll remember that across our conversations:\n'+saved.map(s=>'- '+s).join('\n')) : 'Noted.';
+    addBubble('assistant', body);
+    await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:body,model_used:'memory',verdict:'remembered'})});
+    return true;
+  }
+  // FORGET
+  if(/^\s*(?:please\s+)?forget\b/i.test(t)){
+    let body;
+    if(/forget\s+(everything|all|it all|me|about me)\b/i.test(t)){
+      const n=(state.memories||[]).length; await clearMemory();
+      body = n ? ('Done — I’ve forgotten everything I had remembered about you ('+n+' fact'+(n===1?'':'s')+').') : 'There was nothing saved to forget.';
+    } else {
+      const q = t.replace(/^\s*(?:please\s+)?forget\b\s*(?:that|about|what i (?:said|told you)(?:\s+about)?|the fact that|my|i)?\s*/i,'').trim().replace(/[.?!]+$/,'');
+      // match on DISTINCTIVE words only — drop common verbs/articles so "forget dark
+      // mode" doesn't also nuke "prefers TypeScript" via the shared word "prefer".
+      const STOP = new Set(['the','user','users','i','my','me','a','an','of','to','do','does','is','am','are','was','that','this','about','and','or','it','in','on','for','prefer','prefers','like','likes','love','loves','want','wants','enjoy','enjoys','use','uses','using','named','name','call','called']);
+      const words = q.toLowerCase().replace(/[^\w\s]/g,' ').split(/\s+/).filter(w=>w.length>2 && !STOP.has(w));
+      const hits = (state.memories||[]).filter(mm=>{ const lc=(mm.text||'').toLowerCase(); return words.length && words.some(w=>lc.includes(w)); });
+      if(hits.length){ for(const h of hits){ await forgetMemory(h.id); } body = 'Forgotten:\n'+hits.map(h=>'- '+h.text).join('\n'); }
+      else body = q ? ('I don’t have anything saved about “'+q+'”. You can see everything I remember in the Memory panel.') : 'Tell me what to forget — e.g. “forget that I like hiking”.';
+    }
+    addBubble('assistant', body);
+    await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:body,model_used:'memory',verdict:'forgotten'})});
+    return true;
+  }
+  return false;
 }
 
 /* ── QEV seal + verify (real /api/demo/vault/*) ── */
