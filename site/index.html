@@ -448,10 +448,15 @@ function renderPreview(html, onCheck){
   // allow-scripts only (no allow-same-origin) → the app runs but can't reach our origin,
   // cookies, or network. Real, playable, isolated.
   f.setAttribute('sandbox','allow-scripts allow-pointer-lock');
+  f.tabIndex = 0;
   f.style.cssText='width:100%;height:100%;min-height:300px;border:0;background:#0a0c10;border-radius:8px';
   let out = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, PREVIEW_PROBE+'</body>') : (html+PREVIEW_PROBE);
   if(onCheck){ const h=ev=>{ if(ev.data&&ev.data.__lolm==='render'){ window.removeEventListener('message',h); onCheck(ev.data); } }; window.addEventListener('message',h); setTimeout(()=>window.removeEventListener('message',h),4500); }
+  // give the game keyboard focus so arrow/WASD keys work immediately (and on click)
+  f.addEventListener('load', ()=>{ try{ f.contentWindow.focus(); }catch(e){} });
+  f.addEventListener('mouseenter', ()=>{ try{ f.contentWindow.focus(); }catch(e){} });
   f.srcdoc=out; pane.appendChild(f);
+  setTimeout(()=>{ try{ f.contentWindow.focus(); }catch(e){} }, 300);
 }
 async function buildVisualOnce(task){
   const resp=await fetch('/api/demo/code/visual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
