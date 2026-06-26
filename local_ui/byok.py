@@ -41,6 +41,9 @@ KEY_SPECS: List[Dict[str, Any]] = [
      "unlocks": "AI-tuned web search", "url": "https://tavily.com", "group": "search"},
     {"env": "SEARXNG_URL", "label": "SearXNG URL", "secret": False,
      "unlocks": "your self-hosted SearXNG instance", "url": "", "group": "search"},
+    {"env": "STRIPE_SECRET_KEY", "label": "Stripe secret key", "secret": True,
+     "unlocks": "the 'Support this project' donate button (server-side only, never exposed)",
+     "url": "https://dashboard.stripe.com/apikeys", "group": "support"},
 ]
 _VALID = {s["env"] for s in KEY_SPECS}
 
@@ -108,4 +111,4 @@ def status(reveal_preview: bool = True) -> Dict[str, Any]:
         keys.append({k: s[k] for k in ("env", "label", "unlocks", "url", "secret", "group")}
                     | {"set": bool(v), "preview": (_mask(v) if (reveal_preview and v) else "")})
     return {"keys": keys, "keyfile": str(KEYFILE),
-            "groups": ["brain", "local", "search"]}
+            "groups": ["brain", "local", "search", "support"]}

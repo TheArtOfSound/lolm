@@ -304,6 +304,10 @@ def _operator_fetch(url: str):
 register_agent_routes(app, str(ROOT / "runs" / "agent_workspaces"), _operator_chat,
                       search_fn=_operator_search, fetch_fn=_operator_fetch)
 
+# Optional "Support this project" button — Stripe Checkout, secret key from env only.
+from local_ui.donate_routes import register_donate_routes  # noqa: E402
+register_donate_routes(app)
+
 
 @app.get("/api/demo/brain")
 def brain_status():
