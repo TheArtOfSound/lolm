@@ -50,9 +50,14 @@ class DemoLimits:
         # effectively unlimited for real use (they exist only so a runaway loop has
         # SOME backstop); the only remaining "limit" is a thin anti-DoS rate guard on
         # the shared PUBLIC box, which does not apply at all on your own machine.
-        self.max_segments = _int_env("DEMO_MAX_SEGMENTS", 40)
-        self.segment_tokens = _int_env("DEMO_SEGMENT_TOKENS", 512)
-        self.final_tokens = _int_env("DEMO_FINAL_TOKENS", 32000)
+        # LEAN when sovereign/local: a slow on-device model shouldn't do 40 sequential
+        # draft calls before answering — it answers in 1-2 and stays snappy. The
+        # uncertainty control still runs; it just doesn't pay for cloud-speed drafting.
+        _lean = os.environ.get("LOLM_SOVEREIGN", "").strip() in ("1", "true", "yes", "on") \
+            or os.environ.get("LOLM_LEAN", "").strip() in ("1", "true", "yes", "on")
+        self.max_segments = _int_env("DEMO_MAX_SEGMENTS", 2 if _lean else 40)
+        self.segment_tokens = _int_env("DEMO_SEGMENT_TOKENS", 256 if _lean else 512)
+        self.final_tokens = _int_env("DEMO_FINAL_TOKENS", 1200 if _lean else 32000)
         self.max_retrieves = _int_env("DEMO_MAX_RETRIEVES", 12)
         self.max_verifies = _int_env("DEMO_MAX_VERIFIES", 10)
         self.max_branches = _int_env("DEMO_MAX_BRANCHES", 6)
