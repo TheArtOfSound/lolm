@@ -16,6 +16,7 @@ Env:
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
@@ -295,6 +296,54 @@ def brain_status():
         "how_to_go_local": "run a capable open model locally (e.g. `ollama run "
                            "llama3.3:70b` or `qwen2.5:72b`), set LOLM_LOCAL_MODEL to its "
                            "name, and LOLM_SOVEREIGN=1 to refuse the cloud entirely.",
+    }
+
+
+@app.get("/api/demo/evolve")
+def evolve_status():
+    """Honest view of the two self-evolution loops — controller (judgment) and knowledge
+    (the model's own weights). Reads the daemons' durable state; shows 'not running'
+    truthfully if they aren't (never fabricates progress)."""
+    def _state(p: str):
+        try:
+            return json.loads((ROOT / p).read_text())
+        except Exception:
+            return None
+    def _recent(p: str, n: int = 8):
+        try:
+            lines = [l for l in (ROOT / p).read_text().splitlines() if l.strip()][-n:]
+            return [json.loads(l) for l in lines]
+        except Exception:
+            return []
+    def _queue(p: str) -> int:
+        try:
+            return sum(1 for l in (ROOT / p).read_text().splitlines() if l.strip())
+        except Exception:
+            return 0
+    ctrl = _state("runs/evolve/state.json")
+    know = _state("runs/evolve_knowledge/state.json")
+    return {
+        "running": bool(ctrl or know),
+        "controller": {
+            "active": ctrl is not None,
+            "cycles": (ctrl or {}).get("cycle", 0),
+            "promoted": (ctrl or {}).get("promoted", 0),
+            "rejected": (ctrl or {}).get("rejected", 0),
+            "best_accuracy": round((ctrl or {}).get("best_val_acc", 0.0), 4),
+            "recent": _recent("runs/evolve/receipts.jsonl"),
+        },
+        "knowledge": {
+            "active": know is not None,
+            "cycles": (know or {}).get("cycle", 0),
+            "promoted": (know or {}).get("promoted", 0),
+            "rejected": (know or {}).get("rejected", 0),
+            "facts_known": (know or {}).get("facts_known", 0),
+            "queued": _queue("runs/evolve_knowledge/queue.jsonl"),
+            "recent": _recent("runs/evolve_knowledge/receipts.jsonl"),
+        },
+        "note": ("evolves while this machine is awake. start the loops: "
+                 "scripts/evolve_daemon.py (judgment) + scripts/evolve_knowledge_daemon.py "
+                 "(knowledge, --serve)."),
     }
 
 

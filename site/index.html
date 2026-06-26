@@ -249,12 +249,14 @@
         <div class="tab" data-pane="memory">Memory</div>
         <div class="tab" data-pane="web">Web</div>
         <div class="tab" data-pane="sandbox">Sandbox</div>
+        <div class="tab" data-pane="evolve">Evolve</div>
       </div>
       <div class="tab-body">
         <div class="pane on" id="pane-receipt"><div class="notconn">Run a turn — its receipt appears here.</div></div>
         <div class="pane" id="pane-memory"><div class="notconn">Memory retrieved for a run shows here.</div></div>
         <div class="pane" id="pane-web"><div class="notconn">Web sources used in a run show here, deep-linked.</div></div>
         <div class="pane" id="pane-sandbox"></div>
+        <div class="pane" id="pane-evolve"><div class="notconn">How LOLM is evolving its own weights — open to load.</div></div>
       </div>
     </aside>
   </aside>
@@ -880,10 +882,36 @@ async function verifySeal(envelope){
   }catch(e){ r.innerHTML = `<div class="notconn">verify error: ${esc(e.message)}</div>`; }
 }
 
+/* ── evolution dashboard ── */
+let _evoTimer=null;
+function evoRow(label,val,sub){ return '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:3px 0"><span class="dim">'+label+'</span><span><b>'+val+'</b>'+(sub?' <span class="dim" style="font-size:11px">'+sub+'</span>':'')+'</span></div>'; }
+async function renderEvolve(){
+  const el=document.getElementById('pane-evolve'); if(!el) return;
+  let d; try{ d=await (await fetch('/api/demo/evolve')).json(); }catch(e){ el.innerHTML='<div class="notconn">Evolution status unavailable.</div>'; return; }
+  const c=d.controller, k=d.knowledge;
+  const dot=on=>'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+(on?'#16a34a':'#9ca3af')+';margin-right:6px"></span>';
+  let h='';
+  if(!d.running){ h+='<div class="notconn" style="margin-bottom:10px">Self-evolution isn\'t running yet — nothing fabricated.<br><br>Start the loops on your machine:<br><code style="font-size:11px">python scripts/evolve_daemon.py</code><br><code style="font-size:11px">python scripts/evolve_knowledge_daemon.py --serve</code></div>'; }
+  h+='<div style="border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:9px">';
+  h+='<div style="font-weight:600;margin-bottom:6px">'+dot(c.active)+'Judgment — controller weights</div>';
+  h+=evoRow('Cycles', c.cycles)+evoRow('Promoted', c.promoted, 'rejected '+c.rejected)+evoRow('Best held-out accuracy', (c.best_accuracy*100).toFixed(1)+'%');
+  h+='</div>';
+  h+='<div style="border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:9px">';
+  h+='<div style="font-weight:600;margin-bottom:6px">'+dot(k.active)+'Knowledge — model weights</div>';
+  h+=evoRow('Cycles', k.cycles)+evoRow('Promoted', k.promoted, 'rejected '+k.rejected)+evoRow('Facts learned', k.facts_known)+evoRow('Queued to learn', k.queued, 'from your conversations');
+  h+='</div>';
+  const recent=[...(k.recent||[]).map(r=>({...r,_k:'knowledge'})),...(c.recent||[]).map(r=>({...r,_k:'judgment'}))].slice(-6).reverse();
+  if(recent.length){ h+='<div style="font-weight:600;margin:10px 0 5px">Recent activity</div>';
+    recent.forEach(r=>{ const ok=r.weights_changed; h+='<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--line)"><span style="color:'+(ok?'#16a34a':'#b45309')+'">'+(ok?'✓ promoted':'· kept')+'</span> <span class="dim">'+r._k+' #'+(r.cycle||'?')+'</span>'+(r.new_facts_known_after!=null?' · learned '+(r.new_facts_known_after*100).toFixed(0)+'%, kept '+((r.control_retention||0)*100).toFixed(0)+'%':'')+(r.val_acc!=null?' · acc '+(r.val_acc*100).toFixed(0)+'%':'')+'</div>'; }); }
+  h+='<div class="dim" style="font-size:11px;margin-top:10px;line-height:1.5">'+d.note+'</div>';
+  el.innerHTML=h;
+}
 /* ── tabs ── */
 document.querySelectorAll('#rtabs .tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('#rtabs .tab').forEach(x=>x.classList.toggle('on',x===t));
   document.querySelectorAll('.right .pane').forEach(p=>p.classList.toggle('on', p.id==='pane-'+t.dataset.pane));
+  clearInterval(_evoTimer); _evoTimer=null;
+  if(t.dataset.pane==='evolve'){ renderEvolve(); _evoTimer=setInterval(renderEvolve, 8000); }
 });
 document.querySelectorAll('#btabs .tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('#btabs .tab').forEach(x=>x.classList.toggle('on',x===t));
