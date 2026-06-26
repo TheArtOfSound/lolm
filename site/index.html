@@ -43,10 +43,12 @@
   .search{margin:0 12px 8px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:12px;width:calc(100% - 24px)}
   .side-scroll{overflow-y:auto;flex:1;padding:0 8px 12px}
   .sec-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-family:var(--mono);margin:14px 8px 6px}
-  .conv{padding:8px 10px;border-radius:8px;margin-bottom:2px;cursor:pointer;border:1px solid transparent}
+  .conv{position:relative;padding:8px 10px;border-radius:8px;margin-bottom:2px;cursor:pointer;border:1px solid transparent}
   .conv:hover{background:var(--panel2)}
   .conv.active{background:#fff;border-color:var(--line)}
-  .conv .t{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .conv-x{position:absolute;top:6px;right:6px;opacity:0;border:none;background:transparent;color:var(--faint);font-size:16px;line-height:1;cursor:pointer;padding:1px 5px;border-radius:5px;transition:opacity .12s}
+  .conv:hover .conv-x{opacity:.7} .conv-x:hover{opacity:1;background:#fee2e2;color:#dc2626}
+  .conv .t{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:18px}
   .conv .m{font-size:10px;color:var(--faint);font-family:var(--mono);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap}
   .pill{font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:5px;background:var(--panel2);color:var(--dim)}
   .nav-link{display:block;padding:6px 10px;font-size:12px;color:var(--dim);border-radius:7px}
@@ -62,6 +64,17 @@
   .msg.user .bub{background:var(--accent2);color:#fff;border-bottom-right-radius:5px;max-width:80%;margin-left:auto}
   .msg.assistant .bub{background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:5px}
   .msg .who{font-size:10.5px;color:var(--faint);font-family:var(--mono);margin:0 5px 5px;letter-spacing:.04em}
+  /* rendered markdown answers */
+  .bub.md{white-space:normal}
+  .bub.md p{margin:0 0 10px} .bub.md p:last-child{margin-bottom:0}
+  .bub.md h2{font-size:19px;font-weight:650;margin:16px 0 8px;line-height:1.3} .bub.md h2:first-child{margin-top:0}
+  .bub.md h3{font-size:16px;font-weight:650;margin:14px 0 6px} .bub.md h4{font-size:14.5px;font-weight:650;margin:12px 0 5px}
+  .bub.md ul,.bub.md ol{margin:8px 0;padding-left:22px} .bub.md li{margin:4px 0}
+  .bub.md a{color:var(--accent2);text-decoration:underline;text-underline-offset:2px}
+  .bub.md strong{font-weight:650} .bub.md em{font-style:italic}
+  .bub.md code.ic{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-family:var(--mono);font-size:13px}
+  .bub.md pre.cb{background:#0d1117;border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow:auto;margin:10px 0}
+  .bub.md pre.cb code{font-family:var(--mono);font-size:12.5px;color:#c9d1d9;white-space:pre;background:none;border:0;padding:0;line-height:1.5}
   .msg.user .who{text-align:right}
   .reason{font-family:var(--mono);font-size:11.5px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);
           border-radius:11px;padding:11px 14px;width:100%;max-width:720px;display:none;line-height:1.7}
@@ -384,15 +397,27 @@ async function renderFiles(){
 async function loadConvs(){
   const q = $('search').value.trim();
   const d = await api('/conversations'+(q?('?q='+encodeURIComponent(q)):''));
-  const list = d.conversations||[];
+  let list = d.conversations||[];
+  // hide stray empty conversations (0 turns, never titled) so the sidebar doesn't fill
+  // with "New conversation" ghosts — but keep the one you're actively in.
+  list = list.filter(c => c.turns>0 || (state.conv&&state.conv.id===c.id) || (c.title&&c.title!=='New conversation'));
   $('convList').innerHTML = list.length ? list.map(c =>
     `<div class="conv ${state.conv&&state.conv.id===c.id?'active':''}" data-id="${c.id}">
+       <button class="conv-x" data-del="${c.id}" title="delete conversation">×</button>
        <div class="t">${esc(c.title)}</div>
        <div class="m"><span class="pill">${esc(c.mode||'chat')}</span>${c.last_model_used?`<span>${esc(c.last_model_used)}</span>`:''}<span>${c.turns} turn${c.turns===1?'':'s'}</span></div>
      </div>`).join('') : '<div style="padding:8px 10px;color:var(--faint);font-size:12px">No conversations yet.</div>';
-  document.querySelectorAll('.conv').forEach(el => el.onclick = () => openConv(el.dataset.id));
+  document.querySelectorAll('.conv').forEach(el => el.onclick = (e) => { if(e.target.classList.contains('conv-x')) return; openConv(el.dataset.id); });
+  document.querySelectorAll('.conv-x').forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteConv(b.dataset.del); });
+}
+async function deleteConv(id){
+  await api('/conversations/'+id, {method:'PATCH', body: JSON.stringify({archived:true})});
+  if(state.conv && state.conv.id===id){ state.conv=null; $('feed').innerHTML=''; $('convTitle').textContent='LOLM Workspace'; $('convMeta').innerHTML=''; }
+  await loadConvs();
 }
 async function newConv(){
+  // reuse the current conversation if it's still empty — don't spawn ghost duplicates
+  if(state.conv && (state.conv.messages||[]).length===0){ renderFeed(); const p=$('prompt'); if(p)p.focus(); return; }
   const c = await api('/conversations', {method:'POST', body: JSON.stringify({mode: state.mode})});
   await openConv(c.id);   // MUST await — send() reads state.conv right after
   await loadConvs();
@@ -470,9 +495,30 @@ function renderFeed(){
   if(!(c.messages||[]).length) feed.innerHTML = '<div class="empty"><h2>'+esc(c.title)+'</h2><p>Send a message to start this conversation.</p></div>';
   feed.scrollTop = feed.scrollHeight;
 }
+// Compact, XSS-safe markdown → HTML (escape FIRST, then format). Covers headings,
+// bold/italic, inline + fenced code, links, and bullet/number lists — the things a
+// chat answer actually uses. Keeps it feeling like a real assistant, not raw text.
+function mdToHtml(src){
+  if(src==null) return '';
+  let s = esc(String(src));
+  const blocks=[];
+  s = s.replace(/```(\w*)\n?([\s\S]*?)```/g, (m,lang,code)=>{ blocks.push('<pre class="cb"><code>'+code.replace(/\n+$/,'')+'</code></pre>'); return '\x01'+(blocks.length-1)+'\x02'; });
+  s = s.replace(/`([^`\n]+)`/g, '<code class="ic">$1</code>');
+  s = s.replace(/^#{4,6}\s+(.*)$/gm,'<h4>$1</h4>').replace(/^###\s+(.*)$/gm,'<h4>$1</h4>').replace(/^##\s+(.*)$/gm,'<h3>$1</h3>').replace(/^#\s+(.*)$/gm,'<h2>$1</h2>');
+  s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>');
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/(?:^|\n)((?:[ \t]*[-*+] .*(?:\n|$))+)/g, m=>'\n<ul>'+m.trim().split(/\n/).map(l=>'<li>'+l.replace(/^[ \t]*[-*+]\s+/,'')+'</li>').join('')+'</ul>\n');
+  s = s.replace(/(?:^|\n)((?:[ \t]*\d+\. .*(?:\n|$))+)/g, m=>'\n<ol>'+m.trim().split(/\n/).map(l=>'<li>'+l.replace(/^[ \t]*\d+\.\s+/,'')+'</li>').join('')+'</ol>\n');
+  s = '<p>'+s.replace(/\n{2,}/g,'</p><p>').replace(/\n/g,'<br>')+'</p>';
+  s = s.replace(/<p>(\s*<(?:ul|ol|pre|h[2-6])[\s\S]*?<\/(?:ul|ol|pre|h[2-6])>\s*)<\/p>/g,'$1').replace(/<p>\s*<\/p>/g,'');
+  return s.replace(/\x01(\d+)\x02/g, (m,i)=>blocks[+i]);
+}
 function addBubble(role, content, meta){
   const d = document.createElement('div'); d.className = 'msg '+role;
-  d.innerHTML = `<div class="who">${role==='user'?'you':'LOLM'}</div><div class="bub">${esc(content)}</div>`;
+  const isMd = role==='assistant' && content;
+  const inner = isMd ? mdToHtml(content) : esc(content);
+  d.innerHTML = `<div class="who">${role==='user'?'you':'LOLM'}</div><div class="bub${isMd?' md':''}">${inner}</div>`;
   $('feed').appendChild(d); $('feed').scrollTop = $('feed').scrollHeight;
   if(meta && (meta.receipt || meta.sources)) renderInspectors(meta);
   return d;
@@ -558,7 +604,7 @@ async function send(){
   rec.verdict = rec.verdict || 'completed';
   renderInspectors({receipt:rec, sources:rec.sources, memories:rec.memories});
   await api('/conversations/'+c.id+'/messages', {method:'POST', body: JSON.stringify({
-    role:'assistant', content: bub.textContent, model_used: rec.model, verdict: rec.verdict,
+    role:'assistant', content: (rec.answer||bub.textContent), model_used: rec.model, verdict: rec.verdict,
     meta:{receipt:rec, sources:rec.sources, memories:rec.memories}})});
   state.running = false; $('send').disabled = false;
   openConv(c.id);
@@ -612,12 +658,12 @@ function handle(name, data, ctx){
   else if(name==='segment_start'){ step('· drafting segment '+data.segment); }
   else if(name==='decision'){ const d=data.decision; rec.controls[d.label]=(rec.controls[d.label]||0)+1; step('◆ <b>'+esc(d.label)+'</b> '+esc((d.reason||'').slice(0,70))); }
   else if(name==='action'){ if(data.kind==='retrieve') step('  ↳ +'+data.added+' evidence'); else if(data.kind==='verify') step('  ↳ verify: '+esc(data.verdict||'')); }
-  else if(name==='token'){ if(data.channel==='final'){ bub.textContent += data.token; $('feed').scrollTop=$('feed').scrollHeight; } }
+  else if(name==='token'){ if(data.channel==='final'){ rec.answer=(rec.answer||'')+data.token; bub.textContent=rec.answer; $('feed').scrollTop=$('feed').scrollHeight; } }
   else if(name==='grounded'){ rec.grounded = data; }
   else if(name==='proof'){ rec.verdict = data.verdict||''; rec.ended_by = data.ended_by; rec.control_counts=data.control_counts; rec.decision_sources=data.decision_sources; rec.word_similarity=data.word_similarity; step('⊨ <b>receipt</b> — '+esc((data.verdict||'').slice(0,80))); }
-  else if(name==='freshness'){ rec.freshness = data; bub.textContent += '\n\n⚠ '+(data.message||''); }
+  else if(name==='freshness'){ rec.freshness = data; rec.answer=(rec.answer||'')+'\n\n⚠ '+(data.message||''); bub.textContent=rec.answer; }
   else if(name==='confidence_map'){ rec.confidence = data; }
-  else if(name==='run_done'){ step('● done'); }
+  else if(name==='run_done'){ if(rec.answer){ bub.innerHTML=mdToHtml(rec.answer); bub.classList.add('md'); } step('● done'); }
   else if(name==='error'){ bub.textContent += '\n[error] '+(data.error||''); }
 }
 

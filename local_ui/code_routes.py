@@ -10,6 +10,7 @@ proposes JSON actions — the loop is the sole thing that touches the sandbox.
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -57,6 +58,86 @@ def _extract_html(raw: str) -> Optional[str]:
         return None
     end = low.rfind("</html>")
     return t[start:end + 7] if end > start else t[start:]
+
+
+# Per-type implementation recipes — a proven spec for the common asks so the one-shot
+# build comes out right instead of a vague approximation.
+_VISUAL_RECIPES = [
+    (re.compile(r"\bsnake\b", re.I),
+     "SNAKE: ~22x22 cell grid; snake = array of {x,y} segments; food at a random empty cell; arrow/WASD set "
+     "direction (ignore a direct 180° reversal); advance on a ~110ms timer (unshift new head, pop tail unless it "
+     "ate food → grow + new food + score++); game-over on wall or self collision, show score + 'press R to "
+     "restart'. Rounded cells with a 1px gap; head a brighter shade."),
+    (re.compile(r"\b(raycast|fps|first[- ]?person|wolfenstein|doom)\b", re.I),
+     "RAYCASTER (true first-person 3D): a 2D integer wall map (1=wall,0=empty); player {x,y,angle}. Each frame: "
+     "clear, fill ceiling (top half, dark blue-grey) and floor (bottom half, dark grey); then for every screen "
+     "column x: compute the ray angle across a ~66° FOV, DDA-step through the grid to the first wall, take the "
+     "PERPENDICULAR distance (multiply by cos(rayAngle−playerAngle) to remove fisheye), wallHeight = "
+     "screenH/dist, draw a vertical wall strip centered vertically, shaded by distance and darker on N/S faces — "
+     "use a BRIGHT base wall color so it's clearly visible. WASD moves with wall collision, ←/→ rotate. Start the "
+     "player in an open cell."),
+    (re.compile(r"\bpong\b", re.I),
+     "PONG: left paddle = player (mouse or W/S), right paddle = AI tracking the ball; ball with vx,vy bounces off "
+     "top/bottom and paddles (add spin from paddle motion + hit position); score when it passes a paddle, reset "
+     "to center; dashed center line + big scores."),
+    (re.compile(r"\b(breakout|brick.?breaker|arkanoid)\b", re.I),
+     "BREAKOUT: a grid of colored bricks; paddle (mouse/arrows); ball bounces off walls/paddle/bricks (remove "
+     "brick + score on hit, reflect angle by where it hits the paddle); lose when the ball drops below the "
+     "paddle; win when bricks are cleared; restart key."),
+    (re.compile(r"\btetris\b", re.I),
+     "TETRIS: a 10x20 grid; the 7 tetrominoes with rotation states; the current piece falls on a timer; arrows "
+     "move/rotate (with collision + simple wall-kick), down = soft drop, space = hard drop; lock into the grid "
+     "when it can't fall, clear full rows + score, spawn the next piece, game-over if a spawn collides."),
+    (re.compile(r"\bflappy\b", re.I),
+     "FLAPPY: a bird with gravity; click/space sets an upward velocity; scrolling pipe pairs with a gap; score on "
+     "passing a pipe; game-over on pipe/ground collision + restart."),
+    (re.compile(r"\b(platformer|jump.?and.?run)\b", re.I),
+     "PLATFORMER: player with gravity + horizontal velocity; left/right move, up/space jump only when grounded; "
+     "AABB collision against an array of platform rects (resolve vertical then horizontal); a camera that "
+     "follows; collectibles + score."),
+    (re.compile(r"\basteroids\b", re.I),
+     "ASTEROIDS: a ship that rotates (←/→) and thrusts (↑) with momentum + screen wrap; space fires bullets; "
+     "asteroids drift and split into smaller ones when shot; score + lives."),
+    (re.compile(r"\b(space ?invaders|invaders)\b", re.I),
+     "SPACE INVADERS: a grid of aliens stepping side-to-side and dropping at the edges; a player cannon (arrows) "
+     "firing upward; bullets remove aliens + score; aliens occasionally fire back; win on clear, lose if they "
+     "reach the bottom."),
+    (re.compile(r"\b(plasma|shader|fragment shader|glsl)\b", re.I),
+     "PLASMA/SHADER (2D canvas, per-pixel): build an ImageData of a modest buffer (e.g. 220x220) scaled by CSS to "
+     "fill the screen; each frame, for every pixel compute v = sin(x*0.04+t) + sin(y*0.04+t) + "
+     "sin((x+y)*0.04+t) + sin(hypot(x-cx,y-cy)*0.04+t), map v to a vivid HSL color, write RGBA, then putImageData. "
+     "Animate t. Smooth and colorful — not a flat fill."),
+    (re.compile(r"\b(mandelbrot|julia|fractal)\b", re.I),
+     "FRACTAL (per-pixel ImageData): map each pixel to a complex c in the view rectangle; iterate z = z² + c up to "
+     "~120 iterations until |z|>2; color by (smoothed) iteration count with a vivid palette; never-escaping "
+     "points are black. Optionally animate a slow zoom toward a detailed point."),
+    (re.compile(r"\b(particles?|fireworks|starfield|confetti|boids|flocking)\b", re.I),
+     "PARTICLES: an array of particles with position + velocity (+ life for fireworks/confetti); update and draw "
+     "each on a slightly-faded canvas (semi-transparent black overlay for trails); spawn continuously or on "
+     "click; bright additive colors. Starfield = stars with a z depth moving toward the camera, perspective-"
+     "projected, wrapping when they pass. Boids = steer by separation + alignment + cohesion."),
+    (re.compile(r"\b(game of life|cellular automat)\b", re.I),
+     "GAME OF LIFE: a cell grid; each tick apply Conway's rules (a live cell with 2–3 live neighbors survives; a "
+     "dead cell with exactly 3 becomes live); draw live cells; click to toggle, space to play/pause, R to reseed "
+     "randomly."),
+    (re.compile(r"\b(rotating cube|3d cube|wireframe|spinning cube|rubik)\b", re.I),
+     "3D CUBE: 8 cube vertices; each frame rotate them on x/y/z (sin/cos), apply a simple perspective projection "
+     "(sx = x*f/(z+d)), draw the 12 edges; smooth continuous rotation; optionally depth-shade."),
+    (re.compile(r"\bclock\b", re.I),
+     "CLOCK: a canvas analog clock — face + hour ticks + hour/minute/second hands from new Date(), redrawn every "
+     "frame; clean, centered, scales to the canvas."),
+    (re.compile(r"\b(landing page|web ?site|web ?page|portfolio|dashboard)\b", re.I),
+     "WEBPAGE: a polished single page — a hero (headline + subtext + a CTA button), a few feature cards, a footer; "
+     "modern CSS (system font, a tasteful gradient/accent, rounded cards, hover states, responsive flex/grid). "
+     "Make it look designed and complete, never a blank page."),
+]
+
+
+def _visual_recipe(task: str) -> str:
+    for rx, rec in _VISUAL_RECIPES:
+        if rx.search(task or ""):
+            return rec
+    return ""
 
 
 def register_code_routes(app: Any, root: str,
@@ -151,8 +232,10 @@ def register_code_routes(app: Any, root: str,
             "- Size the canvas to the window (and on resize). Fill the viewport; dark, clean "
             "styling. Make it fun, correct, and complete."
         )
+        recipe = _visual_recipe(task)
+        guide = (f"\n\nIMPLEMENTATION GUIDE — follow this approach:\n{recipe}\n" if recipe else "")
         msgs = [{"role": "system", "content": system},
-                {"role": "user", "content": f"TASK: {task}\n\nReturn the full, complete HTML document now."}]
+                {"role": "user", "content": f"TASK: {task}{guide}\n\nReturn the full, complete HTML document now."}]
         try:
             raw = chat_fn(msgs, max_new_tokens=3600)
         except TypeError:
