@@ -144,7 +144,7 @@ def register_sandbox_routes(app: Any, root: str, secret_env: str = "SANDBOX_SECR
 # No token — but also no host reach. If bwrap is missing, execution is refused (never
 # falls back to an un-jailed run on a public endpoint).
 def register_public_sandbox_routes(app: Any, root: str) -> None:
-    MAX_TOTAL, PER_IP, RUNS_PER_MIN, TTL = 40, 3, 30, 1800
+    MAX_TOTAL, PER_IP, RUNS_PER_MIN, TTL = 40, 5, 30, 1800
     pool: Dict[str, Dict[str, Any]] = {}        # sid -> {sb, ip, created, runs:[ts]}
 
     def _ip(req: Request) -> str:
@@ -183,8 +183,18 @@ def register_public_sandbox_routes(app: Any, root: str) -> None:
         ip = _ip(request)
         if len(pool) >= MAX_TOTAL:
             return JSONResponse({"error": "sandbox capacity reached — try again shortly"}, status_code=429)
-        if sum(1 for v in pool.values() if v["ip"] == ip) >= PER_IP:
-            return JSONResponse({"error": f"limit {PER_IP} sandboxes per visitor"}, status_code=429)
+        # Never lock a visitor out: if they're at their cap, evict their OLDEST
+        # sandbox to make room. Manual sandboxes otherwise linger for the full TTL,
+        # so a few "start a sandbox" clicks would 429 forever — looks like "the
+        # terminal is broken." Reclaiming the oldest keeps it always-startable.
+        mine = sorted(((v["created"], s) for s, v in pool.items() if v["ip"] == ip))
+        while len(mine) >= PER_IP:
+            _, old = mine.pop(0)
+            try:
+                pool[old]["sb"].destroy()
+            except Exception:
+                pass
+            pool.pop(old, None)
         sb = Sandbox(root)
         pool[sb.id] = {"sb": sb, "ip": ip, "created": time.time(), "runs": []}
         return {**sb.state(), "isolated": True}

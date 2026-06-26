@@ -197,10 +197,13 @@ from lolm.autonomy import AutonomyGate
 from lolm.calibration import aggregate_uncertainty
 
 
-def _operator_chat(messages):
-    """Drive the frontier reasoner (local fallback) for ONE planner turn → text."""
+def _operator_chat(messages, max_new_tokens=640):
+    """Drive the frontier reasoner (local fallback) for ONE planner turn → text.
+
+    max_new_tokens defaults high enough for the code agent to emit a full program /
+    a complete HTML app in one turn (the visual builder asks for ~2600)."""
     msgs = [ChatMessage(role=m["role"], content=m["content"]) for m in messages]
-    kwargs = dict(messages=msgs, max_new_tokens=320, temperature=0.3,
+    kwargs = dict(messages=msgs, max_new_tokens=max_new_tokens, temperature=0.3,
                   top_p=0.9, use_graft=False)
     try:
         req = ChatRequest(**kwargs, telemeter=False)
@@ -254,11 +257,6 @@ register_operator_routes(
 # Agentic coding loop: the 70B writes code, runs it in the bwrap jail, reads the real
 # failure, and fixes it — streamed live. Public + rate-limited; uses the same frontier
 # chat as the operator planner (drives FRONTIER, falls back to the local model).
-from local_ui.code_routes import register_code_routes
-register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat)
-
-# Agentic coding loop: the 70B writes code → runs it in the bwrap jail → reads the
-# real failure → fixes it → repeats. Public + rate-limited; every command isolated.
 from local_ui.code_routes import register_code_routes
 register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat)
 

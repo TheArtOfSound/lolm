@@ -185,12 +185,14 @@
   <section class="bottom">
     <div class="tabs" id="btabs">
       <div class="tab on" data-bpane="terminal">Terminal</div>
+      <div class="tab" data-bpane="preview">Preview</div>
       <div class="tab" data-bpane="diff">Diff</div>
       <div class="tab" data-bpane="files">Files</div>
       <div class="tab" data-bpane="tasks">Tasks</div>
     </div>
     <div class="tab-body">
       <div class="pane on" id="bpane-terminal"></div>
+      <div class="pane" id="bpane-preview"><div class="notconn">Ask Code mode to build something visual — a game, animation, or web page — and it runs live here.</div></div>
       <div class="pane" id="bpane-diff"></div>
       <div class="pane" id="bpane-files"></div>
       <div class="pane" id="bpane-tasks"><div class="notconn">Task checklists arrive with Code mode (Phase 2).</div></div>
@@ -273,7 +275,14 @@ async function connectSandbox(){
     await renderSandboxState(); renderTerminal(); await renderFiles();
     document.querySelector('#btabs .tab[data-bpane=terminal]').click();
     status('sandbox live — run code in the Terminal ('+sandbox.id+')');
-  }catch(e){ status('sandbox failed: '+e.message); if(sandbox.token){ sandbox.token=''; } renderSandbox(); }
+  }catch(e){
+    sandbox.id=null; if(sandbox.token){ sandbox.token=''; }
+    await renderSandbox();   // back to the start button…
+    const p=$('pane-sandbox');  // …then show WHY, right in the panel (not a silent revert)
+    if(p) p.insertAdjacentHTML('afterbegin',
+      `<div class="notconn" style="border-color:#fecaca;background:#fef2f2"><b style="color:#b91c1c">couldn’t start the sandbox</b><span style="color:#dc2626">${esc(e.message)} — try again.</span></div>`);
+    status('sandbox: '+e.message);
+  }
 }
 async function renderSandboxState(){
   const st = await sbxApi('/'+sandbox.id+'/state');
@@ -342,6 +351,42 @@ async function openConv(id){
   renderFeed();
   loadConvs(); loadModes();
 }
+/* ── visual sandbox: build a self-contained HTML app, run it in a sandboxed iframe ── */
+const VISUAL_RE = /\b(game|snake|flappy|pong|tetris|breakout|asteroids|maze|platformer|arcade|animation|animate|canvas|draw(ing)?|particle|simulat(e|ion)|visuali[sz]e|web ?page|web ?site|landing page|clock|paint|fractal|starfield|fireworks|bouncing|interactive|sprite|3d|spinning|confetti|matrix rain|solar system)\b/i;
+function isVisualTask(t){ return VISUAL_RE.test(t||''); }
+function renderPreview(html){
+  const pane=$('bpane-preview'); pane.innerHTML='';
+  const f=document.createElement('iframe'); f.id='previewFrame';
+  // allow-scripts only (no allow-same-origin) → the app runs but can't reach our origin,
+  // cookies, or network. Real, playable, isolated.
+  f.setAttribute('sandbox','allow-scripts allow-pointer-lock');
+  f.style.cssText='width:100%;height:100%;min-height:440px;border:0;background:#0a0c10;border-radius:8px';
+  f.srcdoc=html; pane.appendChild(f);
+}
+async function runVisualBuild(task, c){
+  document.querySelector('#btabs .tab[data-bpane=preview]').click();
+  $('bpane-preview').innerHTML='<div class="notconn">🎨 building a live app — writing self-contained HTML, then running it in a sandboxed frame…</div>';
+  const reason=document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
+  const step=t=>{ const s=document.createElement('div'); s.className='step'; s.innerHTML=t; reason.appendChild(s); $('feed').scrollTop=$('feed').scrollHeight; };
+  const ansEl=addBubble('assistant',''); const bub=ansEl.querySelector('.bub');
+  bub.textContent='🎨 Building a live, playable app — self-contained HTML running in a sandboxed frame…';
+  step('🎨 <b>visual build</b> — self-contained HTML · sandboxed iframe (no network, no parent access)');
+  const rec={mode:'visual', model:'Llama 70B (visual)', files:['index.html'], verdict:''};
+  try{
+    const resp=await fetch('/api/demo/code/visual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
+    const j=await resp.json().catch(()=>({}));
+    if(!resp.ok || !j.html){ bub.textContent='Couldn’t build the visual app: '+(j.error||('HTTP '+resp.status)); rec.verdict='error'; step('✗ '+esc(j.error||resp.status)); }
+    else{
+      renderPreview(j.html);
+      bub.textContent='✅ Built a live app — '+j.bytes+' bytes of self-contained HTML, running now in the Preview tab below. Click into it and play.';
+      rec.verdict='rendered'; rec.bytes=j.bytes;
+      step('▶ <b>running live</b> in the Preview pane · '+j.bytes+' bytes');
+      $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">index.html</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(j.html.slice(0,14000))+'</pre>';
+    }
+  }catch(e){ bub.textContent='Visual build error: '+e.message; rec.verdict='error'; }
+  renderInspectors({receipt:rec});
+  await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:bub.textContent,model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
+}
 function renderFeed(){
   const c = state.conv; const feed = $('feed');
   if(!c){ return; }
@@ -400,6 +445,9 @@ async function send(){
   await api('/conversations/'+c.id+'/messages', {method:'POST', body: JSON.stringify({role:'user', content:text})});
 
   // Code mode + isolated sandbox available → the AGENTIC LOOP (write→run→fix), not chat.
+  // Code mode + a visual/interactive ask → build a live HTML app you can actually SEE/play
+  // (runs in a sandboxed iframe — the browser is the visual runtime the jail can't be).
+  if(state.mode==='code' && isVisualTask(text)){ await runVisualBuild(text, c); state.running=false; $('send').disabled=false; openConv(c.id); return; }
   if(state.mode==='code' && sandbox.enabled){ await runCodeLoop(text, c); state.running=false; $('send').disabled=false; openConv(c.id); return; }
 
   // The selected mode frames how the agent behaves (Code/Debug/Audit/Release/…).
