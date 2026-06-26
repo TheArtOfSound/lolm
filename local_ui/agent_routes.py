@@ -11,6 +11,7 @@ action per step — the loop is the sole thing that touches the sandbox.
 from __future__ import annotations
 
 import json
+import os
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -20,6 +21,20 @@ from pydantic import BaseModel
 
 from local_ui.agent_operator import AgentOperator
 from local_ui.sandbox import Sandbox, _HAS_BWRAP
+
+# Owner sovereignty: on a machine WITHOUT the bwrap jail (e.g. macOS), the owner can opt
+# into UNJAILED operator execution with LOLM_OPERATOR_LOCAL=1. This is gated to direct
+# loopback requests only (never a proxied/public one — nginx adds x-forwarded-for), so a
+# deployed public box can never be flipped into unjailed mode by a remote caller. The
+# sandbox deny-list still blocks destructive/exfil commands as defense-in-depth.
+_LOCAL_OPT_IN = bool(os.environ.get("LOLM_OPERATOR_LOCAL"))
+
+
+def _is_loopback(request: "Request") -> bool:
+    if request.headers.get("x-forwarded-for"):
+        return False
+    host = request.client.host if request.client else ""
+    return host in ("127.0.0.1", "::1", "localhost", "")
 
 
 class OperatorGoal(BaseModel):
@@ -43,21 +58,27 @@ def register_agent_routes(app: Any, root: str,
         return (fwd.split(",")[0].strip() if fwd else (req.client.host if req.client else "?"))
 
     @app.get("/api/demo/agent/health")
-    def agent_health():
-        return {"enabled": bool(_HAS_BWRAP and chat_fn is not None),
-                "isolated": True, "runs_per_min": runs_per_min,
+    def agent_health(request: Request):
+        local = _LOCAL_OPT_IN and not _HAS_BWRAP and _is_loopback(request)
+        return {"enabled": bool((_HAS_BWRAP or local) and chat_fn is not None),
+                "isolated": _HAS_BWRAP, "local_mode": bool(local),
+                "runs_per_min": runs_per_min,
                 "web": bool(search_fn is not None),
                 "tools": ["list", "read", "write", "edit", "run", "search", "fetch", "done"],
-                "note": "LOLM Operator: a goal-driven multi-tool agent over a sandboxed "
-                        "virtual computer — lists/reads/writes/edits files, runs shell in a "
-                        "bwrap jail (no host FS/network), searches and fetches the web "
-                        "read-only, and verifies its own work before finishing."}
+                "note": "LOLM Operator: a goal-driven multi-tool agent over its own virtual "
+                        "computer — lists/reads/writes/edits files, runs shell, searches and "
+                        "fetches the web read-only, and verifies its own work. On the public "
+                        "box commands run in a bwrap jail; on your own machine "
+                        "LOLM_OPERATOR_LOCAL=1 runs them directly (loopback only)."}
 
     @app.post("/api/demo/agent/run")
     def agent_run(req: OperatorGoal, request: Request):
-        if not (_HAS_BWRAP and chat_fn is not None):
-            return JSONResponse({"error": "the operator needs a sandbox jail (bwrap) — "
-                                          "unavailable on this host"}, status_code=503)
+        local = _LOCAL_OPT_IN and not _HAS_BWRAP and _is_loopback(request)
+        if not ((_HAS_BWRAP or local) and chat_fn is not None):
+            return JSONResponse({"error": "the operator runs commands in a bwrap jail (Linux). "
+                                 "On your own machine, set LOLM_OPERATOR_LOCAL=1 to run it "
+                                 "UNJAILED (loopback only); the deny-list still blocks "
+                                 "destructive/exfiltration commands."}, status_code=503)
         ip = _ip(request)
         now = time.time()
         rate[ip] = [t for t in rate.get(ip, []) if now - t < 60]
@@ -71,7 +92,7 @@ def register_agent_routes(app: Any, root: str,
 
         sb = Sandbox(root)
         op = AgentOperator(sb, chat_fn, search_fn=search_fn, fetch_fn=fetch_fn,
-                           max_steps=min(max(req.max_steps, 1), 18), isolated=True)
+                           max_steps=min(max(req.max_steps, 1), 18), isolated=_HAS_BWRAP)
 
         def gen():
             try:

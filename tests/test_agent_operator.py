@@ -69,6 +69,20 @@ def test_ddg_redirect_decoded():
     assert _resolve_ddg("https://direct.example.com") == "https://direct.example.com"
 
 
+def test_owner_local_loopback_gate():
+    """The unjailed local path must be loopback-only: a proxied/public request (x-forwarded-for,
+    set by nginx) can never flip a deployed box into unjailed mode."""
+    import local_ui.agent_routes as ar
+
+    def req(host, xff=None):
+        return type("R", (), {"client": type("C", (), {"host": host})(),
+                              "headers": {"x-forwarded-for": xff} if xff else {}})()
+    assert ar._is_loopback(req("127.0.0.1")) is True
+    assert ar._is_loopback(req("::1")) is True
+    assert ar._is_loopback(req("127.0.0.1", "1.2.3.4")) is False   # proxied → blocked
+    assert ar._is_loopback(req("8.8.8.8")) is False
+
+
 def test_operator_completes_a_multi_step_goal(tmp_path):
     sb = Sandbox(tmp_path)
     steps = iter([
