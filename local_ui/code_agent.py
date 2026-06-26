@@ -16,9 +16,20 @@ import re
 from typing import Any, Callable, Dict, Iterator, List, Optional
 
 SYSTEM = (
-    "You are a precise coding agent in a SANDBOXED Linux box: python3 and node are "
-    "available, there is NO network and NO pip/npm install. Solve the TASK by writing a "
-    "COMPLETE, RUNNABLE program that performs the task AND prints its results.\n\n"
+    "You are a precise coding agent in a SANDBOXED Linux box. python3 and node are "
+    "available. Solve the TASK by writing a COMPLETE, RUNNABLE program that performs the "
+    "task AND prints its results.\n\n"
+    "ENVIRONMENT LIMITS — code that violates these WILL FAIL, so design around them:\n"
+    "- NO network (requests/urllib/fetch/scraping/APIs all fail — never use them).\n"
+    "- NO pip/npm install — standard library only.\n"
+    "- NO GUI/display (no pygame/tkinter/turtle/matplotlib windows).\n"
+    "- NO interactive input — input()/readline BLOCKS FOREVER. Use fixed sample values.\n"
+    "- The program must RUN AND EXIT in ~15s: no servers, no infinite loops, no waiting.\n"
+    "If the task as literally asked needs the network, a GUI, a server, or live typing, "
+    "write a SELF-CONTAINED version that demonstrates the core logic with sample/hard-coded "
+    "data and PRINTS the result (e.g. simulate a few game turns and print each board; parse "
+    "a hard-coded HTML string instead of fetching a URL; drive a calculator with example "
+    "inputs). Print one line noting what you substituted.\n\n"
     "Reply in EXACTLY this format each turn (nothing else):\n"
     "FILE: <filename>\n"
     "```\n"
@@ -27,11 +38,9 @@ SYSTEM = (
     "RUN: <command to run it>\n\n"
     "When the run output correctly satisfies the TASK, reply with exactly one line:\n"
     "DONE: <one-line summary>\n\n"
-    "Rules: the FILE must be the WHOLE program (not a fragment) and must PRINT results — "
-    "a bare function with no calls/print is NOT a solution. Use only the standard library. "
-    "After each run you see the REAL output; if it failed or printed nothing, send a "
-    "corrected FILE + RUN. Never say DONE until you have SEEN a successful run with the "
-    "expected output."
+    "Rules: the FILE must be the WHOLE program and must PRINT results. After each run you "
+    "see the REAL output; if it failed, FIX THE ROOT CAUSE (don't repeat the same code). "
+    "Never say DONE until you have SEEN a successful run with the expected output."
 )
 
 _FENCE = re.compile(r"```[a-zA-Z0-9_+\-]*\n(.*?)```", re.S)
@@ -146,6 +155,8 @@ class CodeAgent:
         ran_any = False
         produced_output = False
         nudges = 0
+        fail_sig = None
+        fail_repeats = 0
         for step in range(self.max_steps):
             msgs = [{"role": "system", "content": SYSTEM},
                     {"role": "user", "content": f"TASK: {task}{self._context()}"}]
@@ -195,7 +206,8 @@ class CodeAgent:
                 yield {"event": "command_started", "data": {"command": cmd}}
                 r = self.sb.run(cmd, timeout=self.run_timeout, isolated=self.isolated)
                 ran_any = True
-                if r.get("exit_code") == 0 and not r.get("blocked") and (r.get("stdout") or "").strip():
+                ok = r.get("exit_code") == 0 and not r.get("blocked")
+                if ok and (r.get("stdout") or "").strip():
                     produced_output = True
                 self.actions.append({"kind": "run", "command": cmd, "result": r})
                 yield {"event": "command_finished", "data": {
@@ -203,6 +215,25 @@ class CodeAgent:
                     "stdout": r.get("stdout", ""), "stderr": r.get("stderr", ""),
                     "blocked": r.get("blocked", False), "isolated": r.get("isolated", True)}}
                 did = True
+                # Flail guard: if the same failure repeats, stop and report honestly
+                # instead of burning every step on identical errors.
+                if not ok:
+                    err = (r.get("stderr") or "").strip().splitlines()
+                    sig = (err[-1][:90] if err else "fail")
+                    fail_repeats = fail_repeats + 1 if sig == fail_sig else 0
+                    fail_sig = sig
+                    if fail_repeats >= 2:
+                        yield {"event": "code_done", "data": {
+                            "summary": ("Couldn't get a clean run in the sandbox — the same error "
+                                        "kept recurring. This task likely needs the network, a GUI, "
+                                        "a server, or live input, which the isolated sandbox doesn't "
+                                        "have. The code is written above."),
+                            "ran": ran_any, "produced_output": produced_output, "stuck": True,
+                            "steps": step}}
+                        return
+                else:
+                    fail_repeats = 0
+                    fail_sig = None
             if not did:
                 yield {"event": "agent_note", "data": {"step": step,
                        "text": "no FILE or RUN in the reply", "raw": (raw or "")[:200]}}
