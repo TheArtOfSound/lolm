@@ -9,6 +9,8 @@ as "Sandbox not connected" rather than fake terminal output.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import Request
@@ -16,6 +18,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from local_ui.workspace_store import WorkspaceStore
+
+# Facts extracted from conversations are ALSO queued here, so the knowledge daemon
+# (scripts/evolve_knowledge_daemon.py) bakes them into the local model's weights on its
+# next cycle. Memory = remembered instantly; weights = learned durably overnight.
+KNOWLEDGE_QUEUE = Path("runs/evolve_knowledge/queue.jsonl")
 
 
 class NewConversation(BaseModel):
@@ -121,29 +128,56 @@ def register_workspace_routes(app: Any, store: WorkspaceStore, chat_fn=None) -> 
         if chat_fn is None or len(msg) < 4:
             return {"saved": []}
         system = (
-            "You maintain a long-term memory of facts about the USER across conversations. "
-            "From the USER MESSAGE, extract only DURABLE facts worth remembering later: "
-            "their name, role, location, stable preferences, ongoing projects, or anything "
-            "they explicitly ask you to remember. Each fact on its own line and it MUST "
-            "start with 'The user' (e.g. \"The user's name is Bryan.\", \"The user prefers "
-            "Python.\", \"The user is building an NFT pipeline.\"). Ignore questions, one-off "
-            "requests, math/coding tasks, small talk, and transient details. If there is "
-            "nothing durable to remember, output exactly: NONE")
+            "You maintain a long-term memory of DURABLE facts about the USER across "
+            "conversations. From the USER MESSAGE, extract durable facts (name, role, "
+            "location, stable preferences, ongoing projects, or anything they ask you to "
+            "remember). For EACH fact output ONE JSON object on its own line, exactly: "
+            "{\"fact\": \"The user's name is Bryan.\", \"q\": \"What is the user's name?\", "
+            "\"target\": \"Bryan\"} — `fact` MUST start with 'The user', `q` is a question "
+            "whose answer is the fact, `target` is the single most distinctive word in the "
+            "answer. Ignore questions, one-off requests, math/coding tasks, and small talk. "
+            "If there is nothing durable, output exactly: NONE")
         user = f"USER MESSAGE:\n{msg[:1500]}"
         try:
             raw = chat_fn([{"role": "system", "content": system},
                            {"role": "user", "content": user}])
         except Exception:
-            return {"saved": []}
-        saved = []
+            return {"saved": [], "queued_for_training": 0}
+        saved, queued = [], 0
         for line in (raw or "").splitlines():
-            line = line.strip().lstrip("-•*0123456789. ").strip()
-            if not line or not line.lower().startswith("the user") or len(line) > 300:
+            line = line.strip()
+            if not line or line.upper() == "NONE":
                 continue
-            m = store.add_memory(owner, line, kind="fact", source_conv=req.conv_id or "")
+            fact = q = target = None
+            try:
+                d = json.loads(line)
+                fact = (d.get("fact") or "").strip()
+                q = (d.get("q") or "").strip()
+                target = (d.get("target") or "").strip()
+            except Exception:                      # tolerate a plain "The user ..." line
+                fl = line.lstrip("-•*0123456789. ").strip()
+                if fl.lower().startswith("the user"):
+                    fact = fl
+            if not fact or not fact.lower().startswith("the user") or len(fact) > 300:
+                continue
+            m = store.add_memory(owner, fact, kind="fact", source_conv=req.conv_id or "")
             if m:
                 saved.append(m)
-        return {"saved": saved}
+            # route to the weight-training queue → the model bakes it in on its next cycle.
+            # ONLY in sovereign/local mode: never train the shared public model on one
+            # visitor's facts (privacy + junk). On the box this is a no-op; on your machine
+            # it closes the loop conversation → memory → weights.
+            from local_ui.local_brain import sovereign
+            if q and target and len(q) < 200 and sovereign():
+                try:
+                    KNOWLEDGE_QUEUE.parent.mkdir(parents=True, exist_ok=True)
+                    with KNOWLEDGE_QUEUE.open("a") as fh:
+                        fh.write(json.dumps({"q": q, "a": fact, "target": target.lower(),
+                                             "source": "conversation"}) + "\n")
+                    queued += 1
+                except Exception:
+                    pass
+        return {"saved": saved, "queued_for_training": queued}
 
     # ── conversations ────────────────────────────────────────────────────────
     @app.post("/api/demo/workspace/conversations")
