@@ -23,11 +23,16 @@
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;-webkit-font-smoothing:antialiased}
   a{color:var(--accent2);text-decoration:none}
   button{font-family:inherit;cursor:pointer}
-  .app{display:grid;grid-template-columns:260px 1fr 340px;grid-template-rows:1fr 200px;height:100vh;
-       grid-template-areas:"side main right" "side bottom right"}
+  /* Default = a clean, spacious 2-pane workspace (sidebar + conversation). The
+     workbench/inspector live in an on-demand DOCK that slides in only when there's
+     something to show (a run, a preview, a receipt) — no four panels fighting at once. */
+  .app{display:grid;grid-template-columns:300px minmax(0,1fr);grid-template-areas:"side main";height:100vh;transition:grid-template-columns .22s ease}
+  .app.dock-open{grid-template-columns:300px minmax(0,1fr) minmax(380px,44vw);grid-template-areas:"side main dock"}
+  .app:not(.dock-open) .dock{display:none}
+  @media(max-width:980px){.app.dock-open{grid-template-columns:300px minmax(0,1fr)} .app.dock-open .dock{position:fixed;inset:0 0 0 auto;width:min(92vw,460px);z-index:40;box-shadow:-12px 0 40px rgba(2,6,23,.18)}}
   /* ── left sidebar ── */
   .side{grid-area:side;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
   .brand{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;font-weight:700}
@@ -51,37 +56,42 @@
   .conv-head{padding:11px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .conv-head h1{font-size:15px;margin:0;font-weight:600;flex:1;min-width:120px}
   .conv-head .meta{font-size:10.5px;color:var(--faint);font-family:var(--mono);display:flex;gap:8px;flex-wrap:wrap}
-  .feed{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:14px}
-  .msg{max-width:760px}
-  .msg.user{align-self:flex-end}
-  .msg .bub{padding:10px 14px;border-radius:12px;font-size:13.5px;line-height:1.55;white-space:pre-wrap}
-  .msg.user .bub{background:var(--accent2);color:#fff;border-bottom-right-radius:4px}
-  .msg.assistant .bub{background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:4px}
-  .msg .who{font-size:10px;color:var(--faint);font-family:var(--mono);margin:0 4px 3px}
+  .feed{flex:1;overflow-y:auto;padding:34px 24px 40px;display:flex;flex-direction:column;align-items:center;gap:22px}
+  .msg{width:100%;max-width:720px}
+  .msg .bub{padding:14px 18px;border-radius:14px;font-size:15px;line-height:1.65;white-space:pre-wrap}
+  .msg.user .bub{background:var(--accent2);color:#fff;border-bottom-right-radius:5px;max-width:80%;margin-left:auto}
+  .msg.assistant .bub{background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:5px}
+  .msg .who{font-size:10.5px;color:var(--faint);font-family:var(--mono);margin:0 5px 5px;letter-spacing:.04em}
   .msg.user .who{text-align:right}
-  .reason{font-family:var(--mono);font-size:11px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);
-          border-radius:9px;padding:8px 11px;max-width:760px;display:none}
+  .reason{font-family:var(--mono);font-size:11.5px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);
+          border-radius:11px;padding:11px 14px;width:100%;max-width:720px;display:none;line-height:1.7}
   .reason.on{display:block}
   .reason .step{padding:1px 0;opacity:.9}
   .reason .step b{color:var(--accent2)}
   .reason .step code{font-family:var(--mono);font-size:10.5px;background:var(--panel2);padding:0 4px;border-radius:4px}
   .pulse{animation:pulse 1.1s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
-  .empty{margin:auto;text-align:center;color:var(--faint);max-width:460px}
-  .empty h2{color:var(--ink);font-weight:600;margin-bottom:6px}
-  .starters{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:16px 0 6px}
-  .starters button{font-size:12px;padding:7px 12px;border:1px solid var(--line);background:#fff;border-radius:999px;color:var(--dim)}
+  .empty{margin:auto;text-align:center;color:var(--dim);max-width:580px;padding:24px}
+  .empty h2{color:var(--ink);font-weight:650;font-size:27px;margin-bottom:12px;letter-spacing:-.01em}
+  .empty p{font-size:15px;line-height:1.65}
+  .starters{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:24px 0 8px}
+  .starters button{font-size:13px;padding:10px 16px;border:1px solid var(--line);background:#fff;border-radius:999px;color:var(--dim)}
   .starters button:hover{border-color:var(--accent);color:var(--ink)}
-  .composer{border-top:1px solid var(--line);padding:12px 18px;display:flex;flex-direction:column;gap:8px}
-  .modes{display:flex;gap:6px;flex-wrap:wrap}
-  .mode{font-size:11px;font-family:var(--mono);padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--dim)}
+  .composer{padding:8px 20px 20px;display:flex;flex-direction:column;align-items:center}
+  .composer-inner{width:100%;max-width:760px}
+  .modes{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:9px}
+  .auto-pill{font-size:12px;font-family:var(--mono);color:var(--good);display:inline-flex;align-items:center;gap:5px}
+  .modes-toggle{font-size:11px;font-family:var(--mono);color:var(--faint);border:0;background:transparent;padding:2px 6px}
+  .modes-toggle:hover{color:var(--dim)}
+  .mode{font-size:11.5px;font-family:var(--mono);padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--dim)}
   .mode.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-  .mode.off{opacity:.5}
   .mode .nc{color:var(--warn);font-size:9px}
-  .crow{display:flex;gap:8px;align-items:flex-end}
-  .crow textarea{flex:1;resize:none;min-height:42px;max-height:160px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:13.5px}
-  .send{padding:0 18px;height:42px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-weight:600}
-  .send:disabled{opacity:.5;cursor:default}
+  .crow{display:flex;gap:8px;align-items:flex-end;background:#fff;border:1px solid var(--line);border-radius:16px;padding:8px 8px 8px 16px;box-shadow:0 2px 12px rgba(2,6,23,.05)}
+  .crow:focus-within{border-color:var(--accent2);box-shadow:0 2px 18px rgba(99,102,241,.13)}
+  .crow textarea{flex:1;resize:none;min-height:30px;max-height:210px;padding:8px 0;border:0;outline:0;font-family:inherit;font-size:15px;line-height:1.5;background:transparent}
+  .send{padding:0 20px;height:40px;border:none;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;align-self:flex-end}
+  .send:disabled{opacity:.45;cursor:default}
+  .menu-btn{display:none;border:1px solid var(--line);background:#fff;border-radius:9px;width:34px;height:34px;align-items:center;justify-content:center;font-size:16px;color:var(--dim)}
   /* ── right panel ── */
   .right{grid-area:right;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
   .tabs{display:flex;border-bottom:1px solid var(--line);background:#fff}
@@ -103,16 +113,31 @@
   .notconn{margin:18px 0;padding:14px;border:1px dashed var(--line);border-radius:10px;text-align:center;color:var(--faint);font-size:12px}
   .notconn b{display:block;color:var(--dim);font-family:var(--mono);font-size:11px;margin-bottom:5px}
   pre.json{font-family:var(--mono);font-size:10.5px;white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;color:#334155}
-  /* ── bottom ── */
-  .bottom{grid-area:bottom;border-top:1px solid var(--line);background:#0a0c10;color:#cbd5e1;display:flex;flex-direction:column;overflow:hidden}
+  /* ── on-demand dock (workbench + inspector live here) ── */
+  .dock{grid-area:dock;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+  .dock-head{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--line);background:#fff}
+  .dseg-wrap{display:flex;gap:4px;background:var(--panel2);border-radius:9px;padding:3px}
+  .dseg{font-size:12px;padding:5px 12px;border:0;border-radius:7px;background:transparent;color:var(--dim);font-weight:600}
+  .dseg.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(2,6,23,.08)}
+  .dock-x{border:0;background:transparent;color:var(--faint);font-size:16px;width:30px;height:30px;border-radius:8px}
+  .dock-x:hover{background:var(--panel2);color:var(--ink)}
+  .dview{flex:1;min-height:0;display:none;flex-direction:column;overflow:hidden}
+  .dview.on{display:flex}
+  /* workbench is the dark "artifact" surface (preview/terminal/diff) */
+  .bottom{background:#0a0c10;color:#cbd5e1}
   .bottom .tabs{background:#0d1117;border-bottom-color:#1e293b}
   .bottom .tab{color:#64748b}
   .bottom .tab.on{color:#e2e8f0;border-bottom-color:var(--accent)}
   .bottom .tab-body{padding:12px;font-family:var(--mono);font-size:11.5px}
+  .bottom #bpane-preview{padding:0;height:100%}
   .bottom .notconn{border-color:#1e293b;color:#64748b}
   .bottom .notconn b{color:#94a3b8}
-  @media(max-width:1100px){.app{grid-template-columns:220px 1fr;grid-template-areas:"side main" "side bottom"}.right{display:none}}
-  @media(max-width:680px){.app{grid-template-columns:1fr;grid-template-rows:1fr 46vh;grid-template-areas:"main" "bottom"}.side{position:fixed;left:-280px;top:0;bottom:0;width:260px;z-index:30;transition:left .2s}.side.show{left:0}.bottom{min-height:0}.bottom .pane{overflow:auto}}
+  .right{background:var(--panel)}
+  /* a slim button in the header to summon the dock when it's closed */
+  .dock-toggle{font-size:12px;font-family:var(--mono);padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--dim);white-space:nowrap}
+  .dock-toggle:hover{border-color:var(--accent2);color:var(--ink)}
+  .app.dock-open .dock-toggle{display:none}
+  @media(max-width:760px){.app,.app.dock-open{grid-template-columns:minmax(0,1fr);grid-template-areas:"main"}.side{position:fixed;left:-320px;top:0;bottom:0;width:290px;z-index:50;transition:left .2s;box-shadow:8px 0 40px rgba(2,6,23,.18)}.side.show{left:0}.menu-btn{display:inline-flex}}
 </style>
 </head>
 <body>
@@ -138,66 +163,77 @@
   <!-- CENTER -->
   <section class="main">
     <div class="conv-head">
+      <button class="menu-btn" id="menuBtn" title="conversations">☰</button>
       <h1 id="convTitle">LOLM Workspace</h1>
       <div class="meta" id="convMeta"></div>
+      <button class="dock-toggle" id="dockToggle" title="open the workbench / inspector">⧉ Panel</button>
     </div>
     <div class="feed" id="feed">
       <div class="empty" id="emptyState">
-        <h2>A persistent AI agent workspace</h2>
-        <p>Start a conversation — it searches the web, runs LOLM's uncertainty control,
-        writes a receipt for every turn, and remembers across sessions. Reopen any
-        conversation from the left and continue where you left off.</p>
+        <h2>What do you want to do?</h2>
+        <p>Just describe it — LOLM reads your prompt and picks the right tool on its own:
+        answer &amp; search the web, write&nbsp;&amp;&nbsp;run real code, or build something visual you can play.
+        Every turn gets an auditable receipt, and it remembers across sessions.</p>
         <div class="starters" id="starters">
           <button data-q="What's going on with AI agents this week?">📰 What's new in AI this week?</button>
-          <button data-q="Explain how RAG can fail, and how to catch it.">🧠 How does RAG fail?</button>
-          <button data-q="What makes an AI agent trustworthy?">🛡️ What makes an agent trustworthy?</button>
-          <button data-q="Compare Python and Rust for a new backend.">⚖️ Python vs Rust for a backend?</button>
+          <button data-q="Build a snake game with arrow keys and a score.">🎮 Build a snake game</button>
+          <button data-q="Write a Python function that finds prime numbers up to N and run it for N=50.">⌨️ Run some Python</button>
+          <button data-q="Is the statement 'this sentence is false' true or false? Explain the paradox.">♾️ A paradox</button>
         </div>
-        <p style="font-size:11px;font-family:var(--mono);color:var(--faint)">Code execution, file diffs and PR creation are Phase 2 — shown honestly as “not connected” until they’re real. <a href="/about.html">The science →</a></p>
+        <p style="font-size:11.5px;font-family:var(--mono);color:var(--faint)">Code runs live in a network-isolated sandbox; visual apps run in a sandboxed frame. <a href="/about.html">The science →</a></p>
       </div>
     </div>
     <div class="composer">
-      <div class="modes" id="modeRow"></div>
-      <div class="crow">
-        <textarea id="prompt" placeholder="Ask anything, or describe a task… (Enter to send, Shift+Enter for newline)"></textarea>
-        <button class="send" id="send">Send</button>
+      <div class="composer-inner">
+        <div class="modes" id="modeRow"></div>
+        <div class="crow">
+          <textarea id="prompt" placeholder="Ask anything, or describe a task — it figures out whether to answer, search the web, write & run code, or build something visual."></textarea>
+          <button class="send" id="send">Send</button>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- RIGHT -->
-  <aside class="right">
-    <div class="tabs" id="rtabs">
-      <div class="tab on" data-pane="receipt">Receipt</div>
-      <div class="tab" data-pane="memory">Memory</div>
-      <div class="tab" data-pane="web">Web</div>
-      <div class="tab" data-pane="sandbox">Sandbox</div>
+  <!-- ON-DEMAND DOCK: opens only when there's an artifact (preview / terminal / receipt) -->
+  <aside class="dock" id="dock">
+    <div class="dock-head">
+      <div class="dseg-wrap">
+        <button class="dseg on" data-dview="work">⚡ Workbench</button>
+        <button class="dseg" data-dview="inspect">🧾 Inspector</button>
+      </div>
+      <button class="dock-x" id="dockClose" title="hide panel">✕</button>
     </div>
-    <div class="tab-body">
-      <div class="pane on" id="pane-receipt"><div class="notconn">Run a turn — its receipt appears here.</div></div>
-      <div class="pane" id="pane-memory"><div class="notconn">Memory retrieved for a run shows here.</div></div>
-      <div class="pane" id="pane-web"><div class="notconn">Web sources used in a run show here, deep-linked.</div></div>
-      <div class="pane" id="pane-sandbox"></div>
-    </div>
+    <section class="dview bottom on" id="dview-work">
+      <div class="tabs" id="btabs">
+        <div class="tab on" data-bpane="preview">Preview</div>
+        <div class="tab" data-bpane="terminal">Terminal</div>
+        <div class="tab" data-bpane="diff">Diff</div>
+        <div class="tab" data-bpane="files">Files</div>
+        <div class="tab" data-bpane="tasks">Tasks</div>
+      </div>
+      <div class="tab-body">
+        <div class="pane on" id="bpane-preview"><div class="notconn">Ask for something visual — “a snake game”, “a bouncing-ball animation”, “a landing page” — and it runs live here.</div></div>
+        <div class="pane" id="bpane-terminal"></div>
+        <div class="pane" id="bpane-diff"></div>
+        <div class="pane" id="bpane-files"></div>
+        <div class="pane" id="bpane-tasks"><div class="notconn">Task checklists arrive with multi-step coding.</div></div>
+      </div>
+    </section>
+    <aside class="dview right" id="dview-inspect">
+      <div class="tabs" id="rtabs">
+        <div class="tab on" data-pane="receipt">Receipt</div>
+        <div class="tab" data-pane="memory">Memory</div>
+        <div class="tab" data-pane="web">Web</div>
+        <div class="tab" data-pane="sandbox">Sandbox</div>
+      </div>
+      <div class="tab-body">
+        <div class="pane on" id="pane-receipt"><div class="notconn">Run a turn — its receipt appears here.</div></div>
+        <div class="pane" id="pane-memory"><div class="notconn">Memory retrieved for a run shows here.</div></div>
+        <div class="pane" id="pane-web"><div class="notconn">Web sources used in a run show here, deep-linked.</div></div>
+        <div class="pane" id="pane-sandbox"></div>
+      </div>
+    </aside>
   </aside>
-
-  <!-- BOTTOM -->
-  <section class="bottom">
-    <div class="tabs" id="btabs">
-      <div class="tab on" data-bpane="terminal">Terminal</div>
-      <div class="tab" data-bpane="preview">Preview</div>
-      <div class="tab" data-bpane="diff">Diff</div>
-      <div class="tab" data-bpane="files">Files</div>
-      <div class="tab" data-bpane="tasks">Tasks</div>
-    </div>
-    <div class="tab-body">
-      <div class="pane on" id="bpane-terminal"></div>
-      <div class="pane" id="bpane-preview"><div class="notconn">Ask Code mode to build something visual — a game, animation, or web page — and it runs live here.</div></div>
-      <div class="pane" id="bpane-diff"></div>
-      <div class="pane" id="bpane-files"></div>
-      <div class="pane" id="bpane-tasks"><div class="notconn">Task checklists arrive with Code mode (Phase 2).</div></div>
-    </div>
-  </section>
 </div>
 
 <script>
@@ -206,32 +242,51 @@ const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':
 function ownerKey(){ let k = localStorage.getItem('lolm_ws_owner'); if(!k){ k = 'w_'+Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem('lolm_ws_owner', k);} return k; }
 async function api(path, opts={}){ opts.headers = Object.assign({'Content-Type':'application/json','X-Workspace-Owner':ownerKey()}, opts.headers||{}); const r = await fetch('/api/demo/workspace'+path, opts); return r.json(); }
 
-let state = { conv:null, mode:'chat', modes:[], running:false };
+let state = { conv:null, mode:'auto', modes:[], running:false };
+let manualModesOpen = false;
 function status(m){ const h=$('convMeta'); if(h){ let s=document.getElementById('statusChip'); if(!s){ s=document.createElement('span'); s.id='statusChip'; s.style.color='var(--accent2)'; h.appendChild(s);} s.textContent='· '+m; clearTimeout(status._t); status._t=setTimeout(()=>{ if(s) s.textContent=''; }, 6000); } }
 
-/* ── modes + sandbox honesty ── */
+/* ── modes: AUTO by default (it reads your prompt and routes). Manual chips are an
+   optional override tucked behind "modes ▾". ── */
 async function loadModes(){
   if(!state.modes.length){ const d = await api('/modes'); state.modes = d.modes||[]; }
-  $('modeRow').innerHTML = state.modes.map(m => {
-    // Code RUNS live for everyone via the public bwrap jail → always show ▶.
-    // Other exec modes reason live; running needs the owner sandbox → ⚙ until connected.
-    const execHint = (m.key==='code' || sandbox.id)
-      ? (m.needs_exec ? ' <span class="nc" style="color:var(--good)" title="runs code live in an isolated sandbox">▶</span>' : '')
-      : (m.needs_exec ? ' <span class="nc" title="reasons live now — connect the owner sandbox to also run code">⚙</span>' : '');
-    return `<span class="mode ${m.key===state.mode?'on':''}" data-mode="${m.key}" title="${esc(m.frame||m.label)}">${esc(m.label)}${execHint}</span>`;
-  }).join('');
-  document.querySelectorAll('.mode').forEach(el => el.onclick = () => {
-    state.mode = el.dataset.mode;
-    const m = state.modes.find(x=>x.key===state.mode);
-    // keep the conversation's stored mode in sync so the sidebar label is honest
-    if(state.conv && state.conv.mode !== state.mode){
-      state.conv.mode = state.mode;
-      api('/conversations/'+state.conv.id, {method:'PATCH', body: JSON.stringify({mode: state.mode})}).then(()=>loadConvs());
-    }
-    loadModes();
-    if(m && m.needs_exec) document.querySelector('#rtabs .tab[data-pane=sandbox]').click();
-  });
+  const isAuto = state.mode==='auto';
+  let html = `<span class="auto-pill">${isAuto?'⚡ Auto — reads your prompt and picks the right tool':'● Forced: '+esc(state.mode)}</span>`
+    + `<button class="modes-toggle" id="modesToggle">${manualModesOpen?'use auto ▴':'force a mode ▾'}</button>`;
+  if(manualModesOpen){
+    html += `<span class="mode ${isAuto?'on':''}" data-mode="auto" title="let LOLM decide from your prompt">Auto</span>`;
+    html += state.modes.map(m => {
+      const execHint = (m.key==='code' || sandbox.id)
+        ? (m.needs_exec ? ' <span class="nc" style="color:var(--good)" title="runs code live in an isolated sandbox">▶</span>' : '')
+        : (m.needs_exec ? ' <span class="nc" title="reasons live; connect the owner sandbox to also run">⚙</span>' : '');
+      return `<span class="mode ${m.key===state.mode?'on':''}" data-mode="${m.key}" title="${esc(m.frame||m.label)}">${esc(m.label)}${execHint}</span>`;
+    }).join('');
+  }
+  $('modeRow').innerHTML = html;
+  const mt = $('modesToggle'); if(mt) mt.onclick = () => { manualModesOpen=!manualModesOpen; if(!manualModesOpen) setMode('auto'); else loadModes(); };
+  document.querySelectorAll('.mode').forEach(el => el.onclick = () => setMode(el.dataset.mode));
 }
+function setMode(m){
+  state.mode = m;
+  if(state.conv && state.conv.mode !== m){
+    state.conv.mode = m;
+    api('/conversations/'+state.conv.id, {method:'PATCH', body: JSON.stringify({mode: m})}).then(()=>loadConvs());
+  }
+  loadModes();
+  const mo = state.modes.find(x=>x.key===m);
+  if(mo && mo.needs_exec){ openDock('inspect'); document.querySelector('#rtabs .tab[data-pane=sandbox]').click(); }
+}
+/* ── the on-demand dock (workbench + inspector) ── */
+function openDock(view){
+  document.querySelector('.app').classList.add('dock-open');
+  if(view){
+    document.querySelectorAll('.dseg').forEach(b=>b.classList.toggle('on', b.dataset.dview===view));
+    const w=$('dview-work'), i=$('dview-inspect');
+    if(w) w.classList.toggle('on', view==='work');
+    if(i) i.classList.toggle('on', view==='inspect');
+  }
+}
+function closeDock(){ document.querySelector('.app').classList.remove('dock-open'); }
 /* ── real execution sandbox (loopback/tunnel only; never public RCE) ── */
 // Default = PUBLIC isolated sandbox (/api/demo/sandbox, no token, bwrap-jailed).
 // With an owner SANDBOX_SECRET it uses the more powerful loopback /api/sandbox (clone etc).
@@ -273,7 +328,7 @@ async function connectSandbox(){
     const st = await sbxApi('/create', {method:'POST'});
     sandbox.id = st.sandbox_id;
     await renderSandboxState(); renderTerminal(); await renderFiles();
-    document.querySelector('#btabs .tab[data-bpane=terminal]').click();
+    openDock('work'); document.querySelector('#btabs .tab[data-bpane=terminal]').click();
     status('sandbox live — run code in the Terminal ('+sandbox.id+')');
   }catch(e){
     sandbox.id=null; if(sandbox.token){ sandbox.token=''; }
@@ -352,19 +407,34 @@ async function openConv(id){
   loadConvs(); loadModes();
 }
 /* ── visual sandbox: build a self-contained HTML app, run it in a sandboxed iframe ── */
-const VISUAL_RE = /\b(game|snake|flappy|pong|tetris|breakout|asteroids|maze|platformer|arcade|animation|animate|canvas|draw(ing)?|particle|simulat(e|ion)|visuali[sz]e|web ?page|web ?site|landing page|clock|paint|fractal|starfield|fireworks|bouncing|interactive|sprite|3d|spinning|confetti|matrix rain|solar system)\b/i;
+const VISUAL_RE = /\b(game|snake|flappy|pong|tetris|breakout|asteroids|invaders|space ?invaders|maze|platformer|arcade|fps|first[- ]?person|shooter|doom|raycast(ing)?|ray[- ]?trac(e|ing|er)|shader|webgl|three\.?js|3d|2d|animation|animate|canvas|draw(ing)?|particles?|simulat(e|ion|or)|visuali[sz]e|web ?page|web ?site|landing page|portfolio site|clock|paint|fractal|mandelbrot|julia set|starfield|fireworks|bouncing|interactive|sprite|spinning|rotating cube|confetti|matrix rain|solar system|galaxy|terrain|voxel|minecraft|orbit|pendulum|wave|plasma|tunnel|kaleidoscope|4k|retro|pixel art|demo ?scene|boids|flocking|cellular automat|game of life)\b/i;
 function isVisualTask(t){ return VISUAL_RE.test(t||''); }
-function renderPreview(html){
+const CODE_RE = /\b(write|create|make|build|implement|generate|refactor|debug|fix|optimi[sz]e|profile)\b[^.!?]{0,70}\b(program|script|function|method|class|module|cli|parser|compiler|server|api|endpoint|algorithm|app|bot|code|loop|recursion|regex|query|test|crawler|scraper)\b|\b(in|using|with)\s+(python|javascript|js|node\.?js|typescript|ts|c\+\+|cpp|c#|java|rust|golang|go|ruby|bash|sql|php|haskell|scala|kotlin)\b|\b(fizzbuzz|leetcode|reverse a string|sort (a |the |an )?(list|array)|parse (a |the )?(json|csv|xml|html)|regex (for|to|that)|merge ?sort|quick ?sort|bubble ?sort|binary search|linked list|hash ?map|two ?sum|valid parenthes|anagram|sieve of eratosthenes)\b|^\s*(write|code|implement|debug|refactor|optimi[sz]e)\b/i;
+function isCodeTask(t){ return CODE_RE.test(t||''); }
+// Auto-router: visual (runs in the preview iframe) > code (runs in the jail terminal) > smart chat.
+function classifyIntent(t){ if(isVisualTask(t)) return 'visual'; if(isCodeTask(t)) return 'code'; return 'chat'; }
+// A tiny self-check injected into the app: after it starts, downsample each canvas and
+// tell the parent if the whole thing is blank/black (a broken render). Runs INSIDE the
+// iframe's own origin (reading its own canvas is fine); only a postMessage crosses out.
+const PREVIEW_PROBE = "<scr"+"ipt>(function(){function chk(){try{var cs=document.querySelectorAll('canvas'),had=false,bright=0;for(var i=0;i<cs.length;i++){var c=cs[i];if(!c.width||!c.height)continue;had=true;try{var o=document.createElement('canvas');o.width=48;o.height=48;var g=o.getContext('2d');g.drawImage(c,0,0,48,48);var d=g.getImageData(0,0,48,48).data;for(var p=0;p<d.length;p+=4){if(d[p]>14||d[p+1]>14||d[p+2]>14)bright++;}}catch(e){bright+=999;}}parent.postMessage({__lolm:'render',hadCanvas:had,blank:had&&bright<4},'*');}catch(e){parent.postMessage({__lolm:'render',blank:false},'*');}}setTimeout(chk,1600);})();<\/scr"+"ipt>";
+function renderPreview(html, onCheck){
   const pane=$('bpane-preview'); pane.innerHTML='';
   const f=document.createElement('iframe'); f.id='previewFrame';
   // allow-scripts only (no allow-same-origin) → the app runs but can't reach our origin,
   // cookies, or network. Real, playable, isolated.
   f.setAttribute('sandbox','allow-scripts allow-pointer-lock');
   f.style.cssText='width:100%;height:100%;min-height:300px;border:0;background:#0a0c10;border-radius:8px';
-  f.srcdoc=html; pane.appendChild(f);
+  let out = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, PREVIEW_PROBE+'</body>') : (html+PREVIEW_PROBE);
+  if(onCheck){ const h=ev=>{ if(ev.data&&ev.data.__lolm==='render'){ window.removeEventListener('message',h); onCheck(ev.data); } }; window.addEventListener('message',h); setTimeout(()=>window.removeEventListener('message',h),4500); }
+  f.srcdoc=out; pane.appendChild(f);
 }
+async function buildVisualOnce(task){
+  const resp=await fetch('/api/demo/code/visual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
+  const j=await resp.json().catch(()=>({})); return {ok:resp.ok, status:resp.status, j};
+}
+function previewBlankCheck(html){ return new Promise(res=>{ let done=false; renderPreview(html, d=>{ if(!done){done=true; res(!!(d&&d.blank));} }); setTimeout(()=>{ if(!done){done=true; res(false);} }, 4400); }); }
 async function runVisualBuild(task, c){
-  document.querySelector('#btabs .tab[data-bpane=preview]').click();
+  openDock('work'); document.querySelector('#btabs .tab[data-bpane=preview]').click();
   $('bpane-preview').innerHTML='<div class="notconn">🎨 building a live app — writing self-contained HTML, then running it in a sandboxed frame…</div>';
   const reason=document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
   const step=t=>{ const s=document.createElement('div'); s.className='step'; s.innerHTML=t; reason.appendChild(s); $('feed').scrollTop=$('feed').scrollHeight; };
@@ -373,15 +443,20 @@ async function runVisualBuild(task, c){
   step('🎨 <b>visual build</b> — self-contained HTML · sandboxed iframe (no network, no parent access)');
   const rec={mode:'visual', model:'Llama 70B (visual)', files:['index.html'], verdict:''};
   try{
-    const resp=await fetch('/api/demo/code/visual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
-    const j=await resp.json().catch(()=>({}));
-    if(!resp.ok || !j.html){ bub.textContent='Couldn’t build the visual app: '+(j.error||('HTTP '+resp.status)); rec.verdict='error'; step('✗ '+esc(j.error||resp.status)); }
+    let r=await buildVisualOnce(task);
+    if(!r.ok || !r.j.html){ bub.textContent='Couldn’t build the visual app: '+(r.j.error||('HTTP '+r.status)); rec.verdict='error'; step('✗ '+esc(r.j.error||r.status)); }
     else{
-      renderPreview(j.html);
-      bub.textContent='✅ Built a live app — '+j.bytes+' bytes of self-contained HTML, running now in the Preview tab below. Click into it and play.';
-      rec.verdict='rendered'; rec.bytes=j.bytes;
-      step('▶ <b>running live</b> in the Preview pane · '+j.bytes+' bytes');
-      $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">index.html</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(j.html.slice(0,14000))+'</pre>';
+      let html=r.j.html, bytes=r.j.bytes, rebuilt=false;
+      const blank=await previewBlankCheck(html);   // renders it + watches for a blank frame
+      if(blank){
+        step('· first render came up blank — auto-rebuilding once');
+        const r2=await buildVisualOnce(task+"\n\nIMPORTANT: a previous attempt rendered a BLANK/BLACK screen. Ensure something is actually DRAWN and VISIBLE on the canvas every frame — correct coordinates and visible colors, the camera/player starts in OPEN space (not inside a wall), and the draw loop clears + redraws. Re-check the rendering math.");
+        if(r2.ok && r2.j.html){ html=r2.j.html; bytes=r2.j.bytes; rebuilt=true; renderPreview(html); }
+      }
+      bub.textContent='✅ Built a live app — '+bytes+' bytes of self-contained HTML, running now in the Preview tab. Click into it and play.';
+      rec.verdict='rendered'; rec.bytes=bytes; rec.rebuilt=rebuilt;
+      step('▶ <b>running live</b> in the Preview pane · '+bytes+' bytes'+(rebuilt?' · auto-rebuilt after a blank first try':''));
+      $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">index.html</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(html.slice(0,14000))+'</pre>';
     }
   }catch(e){ bub.textContent='Visual build error: '+e.message; rec.verdict='error'; }
   renderInspectors({receipt:rec});
@@ -405,7 +480,7 @@ function addBubble(role, content, meta){
 
 /* ── run a turn through the REAL agent, persist it ── */
 async function runCodeLoop(task, c){
-  document.querySelector('#btabs .tab[data-bpane=terminal]').click();
+  openDock('work'); document.querySelector('#btabs .tab[data-bpane=terminal]').click();
   $('bpane-terminal').innerHTML = '<div id="termOut"></div>';
   const reason = document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
   const step = t => { const s=document.createElement('div'); s.className='step'; s.innerHTML=t; reason.appendChild(s); reason.scrollTop=reason.scrollHeight; $('feed').scrollTop=$('feed').scrollHeight; };
@@ -444,16 +519,19 @@ async function send(){
   addBubble('user', text);
   await api('/conversations/'+c.id+'/messages', {method:'POST', body: JSON.stringify({role:'user', content:text})});
 
-  // Code mode + isolated sandbox available → the AGENTIC LOOP (write→run→fix), not chat.
-  // Code mode + a visual/interactive ask → build a live HTML app you can actually SEE/play
-  // (runs in a sandboxed iframe — the browser is the visual runtime the jail can't be).
-  if(state.mode==='code' && isVisualTask(text)){ await runVisualBuild(text, c); state.running=false; $('send').disabled=false; openConv(c.id); return; }
-  if(state.mode==='code' && sandbox.enabled){ await runCodeLoop(text, c); state.running=false; $('send').disabled=false; openConv(c.id); return; }
+  // AUTO-ROUTE: read the prompt and pick the path. Manual modes override.
+  //   visual  → build a live HTML app in the sandboxed preview iframe (you can play it)
+  //   code    → the agentic loop writes + runs real code in the bwrap jail terminal
+  //   else    → the smart chat path (web search + LOLM uncertainty control)
+  let route = state.mode;
+  if(route==='auto') route = classifyIntent(text);
+  if(route==='visual'){ await runVisualBuild(text, c); state.running=false; $('send').disabled=false; openConv(c.id); return; }
+  if(route==='code' && sandbox.enabled){ await runCodeLoop(text, c); state.running=false; $('send').disabled=false; openConv(c.id); return; }
 
-  // The selected mode frames how the agent behaves (Code/Debug/Audit/Release/…).
+  // The (manual) mode frames how the agent behaves (Debug/Audit/Release/…).
   // We display + persist what YOU typed, but send the framed command to the agent.
-  const modeObj = state.modes.find(x=>x.key===state.mode) || {};
-  const frame = (state.mode!=='chat' && modeObj.frame) ? modeObj.frame : '';
+  const modeObj = state.modes.find(x=>x.key===route) || {};
+  const frame = (route!=='chat' && route!=='auto' && modeObj.frame) ? modeObj.frame : '';
   const command = frame ? (frame + '\n\nUSER REQUEST: ' + text) : text;
 
   // reasoning stream + answer bubble
@@ -492,7 +570,7 @@ async function runCodeLoop(task, c){
   const ansEl = addBubble('assistant',''); const bub = ansEl.querySelector('.bub');
   const step = (t,id)=>{ let s = id && document.getElementById(id); if(!s){ s=document.createElement('div'); s.className='step'; if(id)s.id=id; reason.appendChild(s);} s.innerHTML=t; reason.scrollTop=reason.scrollHeight; return s; };
   step('🤖 <b>agentic coding</b> — write → run → read failure → fix, in a network-isolated jail');
-  try{ document.querySelector('#btabs .tab[data-bpane=terminal]').click(); }catch(e){}
+  try{ openDock('work'); document.querySelector('#btabs .tab[data-bpane=terminal]').click(); }catch(e){}
   $('bpane-terminal').innerHTML='<div id="termOut"></div>';
   const term = h => { const o=$('termOut'); if(o){ o.innerHTML+=h; o.scrollTop=o.scrollHeight; } };
   const rec = {model:'Llama 70B (agentic)', mode:'code', verdict:'', files:[], runs:0, ok:false, lastOut:'', controls:{}, sources:[], memories:[]};
@@ -613,6 +691,12 @@ document.querySelectorAll('#btabs .tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('#btabs .tab').forEach(x=>x.classList.toggle('on',x===t));
   document.querySelectorAll('.bottom .pane').forEach(p=>p.classList.toggle('on', p.id==='bpane-'+t.dataset.bpane));
 });
+
+/* ── dock (workbench / inspector) controls ── */
+document.querySelectorAll('.dseg').forEach(b => b.onclick = () => openDock(b.dataset.dview));
+$('dockClose').onclick = closeDock;
+$('dockToggle').onclick = () => { document.querySelector('.app').classList.contains('dock-open') ? closeDock() : openDock('inspect'); };
+$('menuBtn').onclick = () => $('side').classList.toggle('show');
 
 /* ── wire-up ── */
 $('newConv').onclick = newConv;

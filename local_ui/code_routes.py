@@ -142,12 +142,19 @@ def register_code_routes(app: Any, root: str,
             "- Use <canvas> or DOM + vanilla JS. Make it ACTUALLY WORK and be playable: "
             "wire keyboard/mouse handlers, a requestAnimationFrame game loop, score, and "
             "on-screen instructions. Start automatically or on a key/click.\n"
-            "- Fill the viewport; dark, clean styling. Make it fun and complete."
+            "- RENDER WHAT THE USER ACTUALLY ASKED FOR, completely — not a simplified "
+            "placeholder or a schematic. For a first-person / FPS / raycaster, draw the "
+            "3D VIEW the player sees: cast a ray per screen column and draw each wall as a "
+            "vertical strip whose height is inversely proportional to its distance (fisheye-"
+            "corrected) — NOT a 2D top-down map. For 3D, project points to 2D yourself. For "
+            "a shader/plasma effect, write per-pixel ImageData. Implement the real math.\n"
+            "- Size the canvas to the window (and on resize). Fill the viewport; dark, clean "
+            "styling. Make it fun, correct, and complete."
         )
         msgs = [{"role": "system", "content": system},
-                {"role": "user", "content": f"TASK: {task}\n\nReturn the full HTML document now."}]
+                {"role": "user", "content": f"TASK: {task}\n\nReturn the full, complete HTML document now."}]
         try:
-            raw = chat_fn(msgs, max_new_tokens=2600)
+            raw = chat_fn(msgs, max_new_tokens=3600)
         except TypeError:
             raw = chat_fn(msgs)          # chat_fn without a token arg (tests)
         except Exception as exc:
