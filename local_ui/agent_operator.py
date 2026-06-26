@@ -111,7 +111,22 @@ class AgentOperator:
         last = self.log[-1]
         if last.get("observation"):
             lines.append(f"\nLAST RESULT:\n{last['observation'][:1400]}")
-        lines.append("\nTake the next single action (or DONE: if the goal is verified).")
+        # Convergence: don't let it re-run already-working commands forever. Once
+        # something has run cleanly, steer hard toward DONE.
+        run_cmds = [a["summary"] for a in self.log if a["kind"] == "run"]
+        ok_runs = [a for a in self.log if a["kind"] == "run" and "-> exit 0" in a["summary"]]
+        repeated = len(run_cmds) != len(set(run_cmds))
+        if last["kind"] == "run" and "-> exit 0" in last["summary"]:
+            lines.append("\n✓ Your last command SUCCEEDED. If the GOAL is now achieved, reply "
+                         "`DONE: <summary>` THIS step. Do NOT re-run a command that already "
+                         "worked — that wastes steps.")
+        elif repeated or len(ok_runs) >= 2:
+            lines.append("\nYou have already run things successfully — STOP repeating commands. "
+                         "If the GOAL is met, reply `DONE: <summary>` now; otherwise take the ONE "
+                         "remaining new action needed.")
+        else:
+            lines.append("\nTake the next single action (or `DONE: <summary>` if the goal is "
+                         "verified).")
         return "\n".join(lines)
 
     def run(self, goal: str) -> Iterator[Dict[str, Any]]:

@@ -280,8 +280,8 @@ async function loadModes(){
   if(manualModesOpen){
     html += `<span class="mode ${isAuto?'on':''}" data-mode="auto" title="let LOLM decide from your prompt">Auto</span>`;
     html += state.modes.map(m => {
-      const execHint = (m.key==='code' || sandbox.id)
-        ? (m.needs_exec ? ' <span class="nc" style="color:var(--good)" title="runs code live in an isolated sandbox">▶</span>' : '')
+      const execHint = (m.key==='code' || m.key==='operator' || sandbox.id)
+        ? (m.needs_exec ? ' <span class="nc" style="color:var(--good)" title="runs live in an isolated sandbox">▶</span>' : '')
         : (m.needs_exec ? ' <span class="nc" title="reasons live; connect the owner sandbox to also run">⚙</span>' : '');
       return `<span class="mode ${m.key===state.mode?'on':''}" data-mode="${m.key}" title="${esc(m.frame||m.label)}">${esc(m.label)}${execHint}</span>`;
     }).join('');
@@ -591,6 +591,7 @@ async function send(){
   let route = state.mode;
   if(route==='auto') route = classifyIntent(text);
   if(route==='visual'){ await runVisualBuild(text, c); state.running=false; $('send').disabled=false; await openConv(c.id); return; }
+  if(route==='operator' && sandbox.enabled){ await runOperator(text, c); state.running=false; $('send').disabled=false; await openConv(c.id); return; }
   if(route==='code' && sandbox.enabled){ await runCodeLoop(text, c); state.running=false; $('send').disabled=false; await openConv(c.id); return; }
 
   // The (manual) mode frames how the agent behaves (Debug/Audit/Release/…).
@@ -673,6 +674,53 @@ async function runCodeLoop(task, c){
   bub.innerHTML = html || 'No actions taken.';
   renderInspectors({receipt:rec, sources:[], memories:[]});
   await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:(rec.files.join(', ')+' → '+(rec.ok?'ok':'incomplete')+(rec.lastOut?('\n'+rec.lastOut.trim()):'')),model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
+}
+
+/* ── LOLM Operator: a goal-driven multi-tool agent over its own sandboxed virtual PC ── */
+async function runOperator(goal, c){
+  const reason = document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
+  const ansEl = addBubble('assistant',''); const bub = ansEl.querySelector('.bub');
+  const step = (t,id)=>{ let s = id && document.getElementById(id); if(!s){ s=document.createElement('div'); s.className='step'; if(id)s.id=id; reason.appendChild(s);} s.innerHTML=t; reason.scrollTop=reason.scrollHeight; return s; };
+  step('🛠 <b>LOLM Operator</b> — plan → act → observe → verify, in its own sandboxed virtual computer');
+  try{ openDock('work'); document.querySelector('#btabs .tab[data-bpane=terminal]').click(); }catch(e){}
+  $('bpane-terminal').innerHTML='<div id="termOut"></div>';
+  const term = h => { const o=$('termOut'); if(o){ o.innerHTML+=h; o.scrollTop=o.scrollHeight; } };
+  const TOOL = {list:'📁 list',read:'📄 read',write:'✏️ write',run:'▶️ run',search:'🌐 search',done:'✅ done'};
+  const rec = {model:'Llama 70B (operator)', mode:'operator', verdict:'', files:[], runs:0, ok:false, lastOut:'', tools:[], steps:0};
+  try{
+    const resp = await fetch('/api/demo/agent/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal})});
+    if(!resp.ok){ const e=await resp.json().catch(()=>({})); step('⚠ '+esc(e.error||('HTTP '+resp.status))); bub.textContent='Operator unavailable: '+(e.error||resp.status); }
+    else{
+      const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
+      while(true){ const {done,value}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+        let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+          let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: ')){ try{data=JSON.parse(ln.slice(6));}catch(_){} } }
+          if(!name) continue;
+          if(name==='operator_start') step('▸ virtual computer <code>'+esc(data.sandbox||'')+'</code> ready · tools: '+(data.tools||[]).join(', '));
+          else if(name==='operator_thinking') step('<span class="pulse">🤔 thinking… step '+((data.step|0)+1)+'/'+(data.of||'')+'</span>','opthink');
+          else if(name==='operator_step'){ const t=document.getElementById('opthink'); if(t)t.remove(); rec.steps++; rec.tools.push(data.tool); step((TOOL[data.tool]||'•')+' <b>'+esc(data.tool)+'</b> — '+esc((data.plan||'').slice(0,140))); }
+          else if(name==='tool_call' && data.tool==='list'){ if(data.files&&data.files.length){ $('bpane-files').innerHTML=data.files.map(f=>'<div class="filerow" style="padding:1px 0;color:#94a3b8">📄 '+esc(f)+'</div>').join(''); } }
+          else if(name==='file_view'){ $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">'+esc(data.path)+'</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc((data.content||'').slice(0,8000))+'</pre>'; }
+          else if(name==='file_changed'){ rec.files.push(data.path); term('<div style="color:#64748b"># wrote '+esc(data.path)+'</div>'); if(data.diff){ $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">'+esc(data.path)+'</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(data.diff)+'</pre>'; } }
+          else if(name==='command_started'){ term('<div style="color:#3fd6a0">$ '+esc(data.command)+'</div>'); }
+          else if(name==='command_finished'){ rec.runs++; const out=((data.stdout||'')+(data.stderr||'')).trim(); const code=data.blocked?'blocked':data.exit_code; const col=code===0?'#3fd6a0':(code==='blocked'?'#fbbf24':'#ff6b81'); if(out) term('<pre style="margin:2px 0;white-space:pre-wrap;color:#cbd5e1">'+esc(out.slice(0,4000))+'</pre>'); term('<div style="color:'+col+';font-size:10px">exit '+code+'</div>'); step('  ↳ exit '+code); if(data.exit_code===0){ rec.ok=true; rec.lastOut=data.stdout||''; } }
+          else if(name==='web_result'){ step('  ↳ '+(data.results?data.results.length:0)+' web result(s)'); }
+          else if(name==='agent_note') step('• '+esc(data.text||''));
+          else if(name==='operator_done'){ const t=document.getElementById('opthink'); if(t)t.remove(); rec.verdict=data.budget_hit?'budget_hit':(data.verified?'verified':'finished'); rec.summary=data.summary; rec.actions=data.actions; step('✅ <b>done</b>'+(data.summary?' — '+esc(data.summary):'')); }
+          else if(name==='error') step('⚠ '+esc(data.error||''));
+        }
+      }
+    }
+  }catch(e){ step('⚠ stream lost: '+esc(e.message)); }
+  let html='';
+  html += '<div>'+esc(rec.summary||'Worked on it.')+'</div>';
+  if(rec.tools.length) html += '<div style="margin-top:6px;font-size:12px;color:var(--dim)">Used <b>'+rec.tools.length+'</b> tool call'+(rec.tools.length===1?'':'s')+': '+rec.tools.map(esc).join(' → ')+'</div>';
+  if(rec.files.length) html += '<div style="margin-top:4px;font-size:12px;color:var(--dim)">Files: '+rec.files.map(esc).join(', ')+'</div>';
+  if(rec.lastOut) html += '<div style="margin-top:6px">Output:</div><pre style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;white-space:pre-wrap;font-size:12px;overflow:auto">'+esc(rec.lastOut.trim().slice(0,2000))+'</pre>';
+  html += '<div style="margin-top:6px;color:'+(rec.ok?'var(--good)':'var(--warn)')+';font-size:12px">'+(rec.ok?'✅ Verified by running it in a network-isolated virtual computer.':'⚠ Did not reach a verified result.')+'</div>';
+  bub.innerHTML = html;
+  renderInspectors({receipt:rec, sources:[], memories:[]});
+  await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:(rec.summary||'')+(rec.lastOut?('\n'+rec.lastOut.trim()):''),model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
 }
 
 function handle(name, data, ctx){

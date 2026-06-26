@@ -71,6 +71,8 @@ AGENT_MODES = [
      "frame": ""},
     {"key": "research", "label": "Research", "tools": ["web_search", "memory"], "connected": True,
      "needs_exec": False, "frame": "Research the question across the live web and your learned memory; cite sources."},
+    {"key": "operator", "label": "Agent", "tools": ["model", "sandbox", "tools"], "connected": True,
+     "needs_exec": True, "frame": "Autonomous goal. Plan and use tools (list/read/write/run/search) over your sandboxed virtual computer to ACHIEVE it end-to-end — build it, run it, verify it."},
     {"key": "code", "label": "Code", "tools": ["model", "sandbox"], "connected": True, "needs_exec": True,
      "frame": "Coding task. Write correct, runnable code with a brief explanation; if it's a fix, show the changed code/diff. When a sandbox is connected you can run it."},
     {"key": "debug", "label": "Debug", "tools": ["model", "sandbox"], "connected": True, "needs_exec": True,
