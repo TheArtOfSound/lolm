@@ -90,9 +90,27 @@ export interface RunAgentOptions extends Handlers {
   baseUrl?: string;
   endpoint?: string;
   command: string;
+  /** Prior turns of THIS conversation → in-conversation memory. */
+  history?: Array<{ role: string; content: string }>;
+  /** Durable facts about the user → cross-session memory. */
+  memory?: string[];
   body?: Record<string, any>;
   signal?: AbortSignal;
   fetch?: typeof fetch;
+}
+
+export interface UserMemory {
+  id: string;
+  text: string;
+  kind: string;
+  source_conv: string;
+  created_at: string;
+  owner?: string;
+}
+
+export interface VisualResult {
+  html: string;
+  bytes: number;
 }
 
 export interface PlayReplayOptions extends Handlers {
@@ -134,3 +152,46 @@ export function getStatus(opts?: {
   fetch?: typeof fetch;
   signal?: AbortSignal;
 }): Promise<DemoStatus>;
+
+/** Build a self-contained, sandboxed visual app (game/animation/page) from a prompt. */
+export function buildVisual(opts: {
+  task: string;
+  baseUrl?: string;
+  fetch?: typeof fetch;
+  signal?: AbortSignal;
+}): Promise<VisualResult>;
+
+/** Run the agentic coding loop (writes + runs real code in a jail, streamed). */
+export function runCode(opts: {
+  task: string;
+  baseUrl?: string;
+  maxSteps?: number;
+  onEvent?(ev: ProtocolEvent): void;
+  signal?: AbortSignal;
+  fetch?: typeof fetch;
+}): Promise<Record<string, any>>;
+
+/** List durable facts remembered about a user (cross-session memory). */
+export function getMemory(opts?: {
+  owner?: string;
+  baseUrl?: string;
+  fetch?: typeof fetch;
+}): Promise<UserMemory[]>;
+
+/** Remember a durable fact (verbatim, or `extract:true` to mine it from a message). */
+export function rememberFact(opts: {
+  text: string;
+  owner?: string;
+  extract?: boolean;
+  baseUrl?: string;
+  fetch?: typeof fetch;
+}): Promise<{ saved: UserMemory | UserMemory[] | null; duplicate?: boolean }>;
+
+/** Forget one fact by id, or `all:true` to clear everything for this owner. */
+export function forgetMemory(opts: {
+  id?: string;
+  all?: boolean;
+  owner?: string;
+  baseUrl?: string;
+  fetch?: typeof fetch;
+}): Promise<{ deleted?: boolean; cleared?: number }>;

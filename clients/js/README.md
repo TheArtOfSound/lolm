@@ -45,6 +45,59 @@ await runAgent({
 });
 ```
 
+## Memory
+
+Give the agent **in-conversation** memory (the open thread) and **cross-session**
+memory (durable facts it recalls in every conversation):
+
+```js
+import { runAgent, getMemory, rememberFact, forgetMemory } from "lolm-nfet-client";
+
+const owner = "user-42";                       // your per-user key (no accounts)
+
+// teach it something durable; `extract` lets the model mine the fact for you
+await rememberFact({ owner, text: "I'm building an NFT pipeline in Python", extract: true });
+
+// later, in a brand-new conversation, it remembers — pass history + memory:
+await runAgent({
+  command: "what am I working on, and what did I just say?",
+  history: [{ role: "user", content: "hey" }, { role: "assistant", content: "Hi!" }],
+  memory: (await getMemory({ owner })).map((m) => m.text),
+  onToken: (t) => { if (t.channel === "final") process.stdout.write(t.token); },
+});
+
+// fully transparent — list and delete anything
+const facts = await getMemory({ owner });      // [{id, text, kind, created_at}, …]
+await forgetMemory({ owner, id: facts[0].id }); // or { owner, all: true }
+```
+
+## Build something visual
+
+Turn a prompt into a complete, self-contained app you render in a sandboxed
+iframe — the browser is the runtime, so a game is actually playable:
+
+```js
+import { buildVisual } from "lolm-nfet-client";
+
+const { html } = await buildVisual({ task: "a playable snake game" });
+// <iframe sandbox="allow-scripts" srcdoc={html}>  ← no network, no parent access
+```
+
+## Run code
+
+The agentic loop writes real code, runs it in a **network-isolated bwrap jail**,
+reads the failure, and fixes it — streamed live:
+
+```js
+import { runCode } from "lolm-nfet-client";
+
+const done = await runCode({
+  task: "print the first 10 prime numbers",
+  onEvent: (e) => console.log(e.event, e.data),  // file_changed / command_finished / …
+});
+console.log(done.ran ? "ran in the jail" : "couldn't complete");
+```
+
 ## Replays
 
 Recorded real runs play through the same handlers — instant, no backend:

@@ -75,6 +75,10 @@ function dispatch(ev, handlers) {
  * @param {string} [opts.endpoint="/api/demo/run/stream"] public demo endpoint;
  *   use "/api/agent/nfet/run/stream" against your own local workspace
  * @param {string} opts.command the instruction for the agent
+ * @param {Array<{role:string,content:string}>} [opts.history] prior turns of THIS
+ *   conversation → in-conversation memory (resolves "it/that/what I just asked")
+ * @param {string[]} [opts.memory] durable facts about the user → cross-session memory
+ *   (the agent recalls them in every conversation). See getMemory()/rememberFact().
  * @param {Object} [opts.body] extra request fields (budgets etc., local endpoint only)
  * @param {AbortSignal} [opts.signal]
  * @param {Function} [opts.onEvent] every protocol event `{event, data}`
@@ -91,6 +95,8 @@ export async function runAgent(opts) {
     baseUrl = "https://lolm.imagineqira.com",
     endpoint = "/api/demo/run/stream",
     command,
+    history,
+    memory,
     body = {},
     signal,
     fetch: fetchImpl = globalThis.fetch,
@@ -98,10 +104,14 @@ export async function runAgent(opts) {
   if (!command || !command.trim()) throw new AgentRunError("command is required");
   if (!fetchImpl) throw new AgentRunError("no fetch available; pass opts.fetch");
 
+  const payload = { command, ...body };
+  if (Array.isArray(history) && history.length) payload.history = history;
+  if (Array.isArray(memory) && memory.length) payload.user_memory = memory;
+
   const resp = await fetchImpl(new URL(endpoint, baseUrl), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ command, ...body }),
+    body: JSON.stringify(payload),
     signal,
   });
   if (!resp.ok) {
@@ -235,5 +245,86 @@ export function friendly(ev) {
 export async function getStatus({ baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch, signal } = {}) {
   const resp = await fetchImpl(new URL("/api/demo/status", baseUrl), { signal });
   if (!resp.ok) throw new AgentRunError(`status failed: HTTP ${resp.status}`, { status: resp.status });
+  return resp.json();
+}
+
+/**
+ * Build a self-contained, sandboxed visual app (game / animation / page) from a
+ * prompt. Returns one complete HTML document — render it in a sandboxed iframe
+ * (`<iframe sandbox="allow-scripts" srcdoc={html}>`); the browser is the runtime.
+ * @returns {Promise<{html:string, bytes:number}>}
+ */
+export async function buildVisual({ task, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch, signal } = {}) {
+  if (!task || !task.trim()) throw new AgentRunError("task is required");
+  if (!fetchImpl) throw new AgentRunError("no fetch available; pass opts.fetch");
+  const resp = await fetchImpl(new URL("/api/demo/code/visual", baseUrl), {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task }), signal,
+  });
+  const j = await resp.json().catch(() => ({}));
+  if (!resp.ok || !j.html) throw new AgentRunError(j.error || `visual build failed: HTTP ${resp.status}`, { status: resp.status, body: j });
+  return j;
+}
+
+/**
+ * Run the agentic coding loop: the model writes real code, runs it in a network-
+ * isolated bwrap jail, reads the failure, and fixes it — streamed as SSE. Same
+ * handler shape as runAgent (`onEvent`); events: code_start / file_changed /
+ * command_started / command_finished / agent_note / code_done / error.
+ * @returns {Promise<Object>} the `code_done` payload
+ */
+export async function runCode(opts) {
+  const { task, baseUrl = "https://lolm.imagineqira.com", maxSteps, signal, fetch: fetchImpl = globalThis.fetch } = opts;
+  if (!task || !task.trim()) throw new AgentRunError("task is required");
+  if (!fetchImpl) throw new AgentRunError("no fetch available; pass opts.fetch");
+  const resp = await fetchImpl(new URL("/api/demo/code/run", baseUrl), {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task, ...(maxSteps ? { max_steps: maxSteps } : {}) }), signal,
+  });
+  if (!resp.ok) {
+    let p = null; try { p = await resp.json(); } catch { /* not json */ }
+    throw new AgentRunError((p && p.error) || `code run refused: HTTP ${resp.status}`, { status: resp.status, body: p });
+  }
+  let result = null;
+  for await (const ev of parseSSEStream(resp.body)) {
+    if (opts.onEvent) opts.onEvent(ev);
+    if (ev.event === "code_done") result = ev.data;
+    if (ev.event === "error") throw new AgentRunError((ev.data && ev.data.error) || "code stream error", { body: ev.data });
+  }
+  return result;
+}
+
+// ── cross-session memory (owner-scoped; `owner` is a per-user key your app picks) ──
+function memHeaders(owner) {
+  const h = { "Content-Type": "application/json" };
+  if (owner) h["X-Workspace-Owner"] = owner;
+  return h;
+}
+
+/** List the durable facts remembered about a user (recalled in every conversation). */
+export async function getMemory({ owner, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch } = {}) {
+  const resp = await fetchImpl(new URL("/api/demo/workspace/memory", baseUrl), { headers: memHeaders(owner) });
+  if (!resp.ok) throw new AgentRunError(`memory list failed: HTTP ${resp.status}`, { status: resp.status });
+  return (await resp.json()).memories || [];
+}
+
+/**
+ * Remember a durable fact about the user. By default stores `text` verbatim; pass
+ * `extract:true` to let the model pull the durable fact(s) out of a raw message.
+ * @returns {Promise<Object>} `{saved}` (verbatim) or `{saved:[...]}` (extract)
+ */
+export async function rememberFact({ text, owner, extract = false, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch } = {}) {
+  if (!text || !text.trim()) throw new AgentRunError("text is required");
+  const url = new URL(extract ? "/api/demo/workspace/memory/extract" : "/api/demo/workspace/memory", baseUrl);
+  const resp = await fetchImpl(url, { method: "POST", headers: memHeaders(owner), body: JSON.stringify(extract ? { user_message: text } : { text }) });
+  if (!resp.ok) throw new AgentRunError(`remember failed: HTTP ${resp.status}`, { status: resp.status });
+  return resp.json();
+}
+
+/** Forget one fact by `id`, or pass `all:true` to clear everything for this owner. */
+export async function forgetMemory({ id, all = false, owner, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch } = {}) {
+  const url = new URL(all ? "/api/demo/workspace/memory/clear" : `/api/demo/workspace/memory/${id}`, baseUrl);
+  const resp = await fetchImpl(url, { method: all ? "POST" : "DELETE", headers: memHeaders(owner) });
+  if (!resp.ok) throw new AgentRunError(`forget failed: HTTP ${resp.status}`, { status: resp.status });
   return resp.json();
 }

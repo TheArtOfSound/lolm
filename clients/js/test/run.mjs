@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import assert from "node:assert/strict";
-import { AgentRunError, friendly, parseSSEStream, playReplay, runAgent } from "../index.mjs";
+import { AgentRunError, buildVisual, forgetMemory, friendly, getMemory, parseSSEStream, playReplay, rememberFact, runAgent, runCode } from "../index.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 let passed = 0;
@@ -79,4 +79,59 @@ const ok = (name) => { passed++; console.log("  ✓", name); };
   ok("runAgent surfaces 429 as AgentRunError");
 }
 
-console.log(`\n${passed}/5 passed`);
+// 6. runAgent threads history + memory into the request body.
+{
+  let sentBody = null;
+  const body = 'event: run_done\ndata: {"ended_by":"nfet_finalize"}\n\n';
+  const mockFetch = async (_url, init) => { sentBody = JSON.parse(init.body); return new Response(body, { status: 200 }); };
+  await runAgent({
+    command: "what did I just ask?", fetch: mockFetch,
+    history: [{ role: "user", content: "how are you?" }],
+    memory: ["The user's name is Bryan."],
+  });
+  assert.equal(sentBody.history[0].content, "how are you?");
+  assert.deepEqual(sentBody.user_memory, ["The user's name is Bryan."]);
+  ok("runAgent threads history + cross-session memory into the request");
+}
+
+// 7. buildVisual returns the HTML document.
+{
+  const mockFetch = async (url) => {
+    assert.match(String(url), /\/api\/demo\/code\/visual$/);
+    return new Response(JSON.stringify({ html: "<!DOCTYPE html><canvas>", bytes: 22 }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  const r = await buildVisual({ task: "snake game", fetch: mockFetch });
+  assert.ok(r.html.startsWith("<!DOCTYPE") && r.bytes === 22);
+  ok("buildVisual returns a self-contained HTML app");
+}
+
+// 8. runCode streams the agentic loop and returns code_done.
+{
+  const body = 'event: code_start\ndata: {"sandbox":"sbx_1"}\n\nevent: command_finished\ndata: {"exit_code":0,"stdout":"42"}\n\nevent: code_done\ndata: {"ran":true,"produced_output":true}\n\n';
+  const mockFetch = async () => new Response(body, { status: 200 });
+  const events = [];
+  const done = await runCode({ task: "print 42", fetch: mockFetch, onEvent: (e) => events.push(e.event) });
+  assert.deepEqual(events, ["code_start", "command_finished", "code_done"]);
+  assert.equal(done.ran, true);
+  ok("runCode streams the jailed coding loop");
+}
+
+// 9. memory helpers hit the right routes + send the owner header.
+{
+  const calls = [];
+  const mockFetch = async (url, init = {}) => {
+    calls.push({ url: String(url), method: init.method || "GET", owner: (init.headers || {})["X-Workspace-Owner"] });
+    if (String(url).endsWith("/memory") && (init.method || "GET") === "GET")
+      return new Response(JSON.stringify({ memories: [{ id: "m1", text: "The user's name is Bryan." }] }), { status: 200 });
+    return new Response(JSON.stringify({ saved: { id: "m2" }, deleted: true }), { status: 200 });
+  };
+  const mems = await getMemory({ owner: "u1", fetch: mockFetch });
+  assert.equal(mems[0].text, "The user's name is Bryan.");
+  await rememberFact({ text: "The user prefers Python.", owner: "u1", fetch: mockFetch });
+  await forgetMemory({ id: "m1", owner: "u1", fetch: mockFetch });
+  assert.ok(calls.every((c) => c.owner === "u1"), "owner header sent");
+  assert.equal(calls[2].method, "DELETE");
+  ok("memory helpers (list/remember/forget) use the right routes + owner");
+}
+
+console.log(`\n${passed} passed`);
