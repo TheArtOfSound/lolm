@@ -262,6 +262,12 @@ register_operator_routes(
 from local_ui.code_routes import register_code_routes
 register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat)
 
+# LOLM Operator: a general multi-tool agent (list/read/write/run/search) that pursues a
+# GOAL over its own bwrap-jailed virtual workspace — plan -> act -> observe -> verify,
+# streamed live. Public + rate-limited; every command isolated like the code sandbox.
+from local_ui.agent_routes import register_agent_routes
+register_agent_routes(app, str(ROOT / "runs" / "agent_workspaces"), _operator_chat)
+
 
 @app.get("/api/demo/operator")
 def public_operator_status():
