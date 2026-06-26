@@ -593,7 +593,10 @@ async function send(){
   if(frame) step('◆ <b>'+esc(state.mode)+' mode</b> — '+esc(modeObj.label||''));
 
   try{
-    const resp = await fetch('/api/demo/run/stream', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({command})});
+    // in-conversation memory: send the prior turns of THIS conversation so the agent
+    // can resolve "it/that/what I just asked" and stay coherent across the thread.
+    const history = (c.messages||[]).filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role, content:m.content})).slice(-12);
+    const resp = await fetch('/api/demo/run/stream', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({command, history})});
     if(!resp.ok){ bub.textContent = 'run refused: '+resp.status; }
     else {
       const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf='';

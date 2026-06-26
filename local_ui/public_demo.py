@@ -27,7 +27,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Any, Deque, Dict, Iterator, Optional
+from typing import Any, Deque, Dict, Iterator, List, Optional
 
 from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -68,6 +68,9 @@ class DemoRunRequest(BaseModel):
     command: str
     session_id: Optional[str] = None   # opt-in long-form conversation key
     sources: Optional[str] = None      # BYO grounding text — answer only from this
+    history: Optional[List[Dict[str, str]]] = None  # prior turns [{role,content},…]
+                                       # for in-conversation memory (the workspace
+                                       # passes the open conversation's transcript)
 
 
 class DemoGate:
@@ -135,13 +138,27 @@ def client_ip(request: Any) -> str:
 
 def clamp_request(command: str, limits: DemoLimits,
                   session_id: Optional[str] = None,
-                  sources: Optional[str] = None) -> NFETAgentRequest:
+                  sources: Optional[str] = None,
+                  history: Optional[List[Dict[str, str]]] = None) -> NFETAgentRequest:
     # accept a sanitized session id (opaque token only) for long conversations
     sid = None
     if session_id and isinstance(session_id, str):
         sid = "".join(c for c in session_id if c.isalnum() or c in "-_")[:64] or None
     # BYO grounding text: pasted by the user, capped to keep the demo bounded.
     src = sources.strip()[:24000] if (sources and isinstance(sources, str) and sources.strip()) else None
+    # Conversation history → in-thread memory. Keep last 10 turns, roles sanitized,
+    # content capped so a long thread can't blow the context budget.
+    hist = None
+    if isinstance(history, list) and history:
+        hist = []
+        for t in history[-10:]:
+            if not isinstance(t, dict):
+                continue
+            role = "user" if t.get("role") == "user" else "assistant"
+            content = str(t.get("content") or "").strip()[:1200]
+            if content:
+                hist.append({"role": role, "content": content})
+        hist = hist or None
     return NFETAgentRequest(
         command=command.strip()[: limits.command_chars],
         reasoner=limits.reasoner,
@@ -155,6 +172,7 @@ def clamp_request(command: str, limits: DemoLimits,
         allow_web=False,
         session_id=sid,
         sources=src,
+        history=hist,
     )
 
 
@@ -327,7 +345,8 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
                 grounding, n_src, links = "", 0, []
         combined = "\n\n".join([s for s in (grounding, user_src) if s]) or None
         agent_req = clamp_request(req.command, limits,
-                                  getattr(req, "session_id", None), combined)
+                                  getattr(req, "session_id", None), combined,
+                                  getattr(req, "history", None))
         # ADVISORY grounding: the web results are evidence to draw on, never a cage —
         # the agent answers from knowledge + evidence and never refuses "not in sources".
         if grounding and not user_src:

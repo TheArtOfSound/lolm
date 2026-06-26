@@ -136,6 +136,9 @@ class NFETAgentRequest(BaseModel):
     web_limit: int = 3
     session_id: Optional[str] = None       # long-form conversation key; prior
                                            # turns load from the cloud brain
+    history: Optional[List[Dict[str, str]]] = None  # explicit prior turns
+                                           # [{role, content}, …] from the caller
+                                           # (workspace conversation) → in-thread memory
     sources: Optional[str] = None          # BYO grounding: when set, the agent
                                            # answers ONLY from this text, cites
                                            # the passage, and refuses when the
@@ -696,6 +699,14 @@ DRAFT:
 
 WORKING DRAFT:
 {draft}"""
+        # In-thread memory: prepend the conversation so the FINALIZER (which writes
+        # the actual answer) can resolve "it/that/what I just asked" and stay coherent
+        # across turns. Applies to every finalize branch (advisory/BYO/social/default).
+        convo = getattr(self, "_convo_context", "")
+        if convo:
+            system = (system + " You are in an ongoing conversation; use CONVERSATION SO "
+                      "FAR to resolve references and answer questions about what was said.")
+            user = (f"CONVERSATION SO FAR (most recent last):\n{convo}\n\n" + user)
         result = yield from self._collect_stream(
             [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
             req, tokens=req.final_tokens, channel="final", telemeter=False,
@@ -762,9 +773,22 @@ WORKING DRAFT:
         # shared cloud brain so the agent continues the thread instead of
         # answering each prompt cold. Stored as a context the generators inject.
         self._convo_context = ""
+        # Explicit history from the caller (the workspace conversation) takes
+        # priority — it's the actual thread the user is looking at. This is what
+        # makes "what did I just ask you?" work.
+        hist_turns = getattr(req, "history", None)
+        if hist_turns:
+            lines = []
+            for t in hist_turns[-10:]:
+                role = "user" if (t.get("role") == "user") else "assistant"
+                content = (t.get("content") or "").strip()
+                if content:
+                    lines.append(f"{role}: {content[:600]}")
+            if lines:
+                self._convo_context = "\n".join(lines)
         brain = getattr(self.deps, "cloud_brain", None)
         sid = getattr(req, "session_id", None)
-        if brain is not None and sid and brain.available():
+        if not self._convo_context and brain is not None and sid and brain.available():
             turns = brain.session_turns(sid, limit=12)
             if turns:
                 hist = "\n".join(f"{t['role']}: {t['content'][:600]}" for t in turns[-10:])
