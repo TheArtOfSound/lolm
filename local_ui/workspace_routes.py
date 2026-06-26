@@ -28,6 +28,7 @@ class NewConversation(BaseModel):
 class PatchConversation(BaseModel):
     title: Optional[str] = None
     archived: Optional[bool] = None
+    mode: Optional[str] = None
 
 
 class NewMessage(BaseModel):
@@ -104,6 +105,8 @@ def register_workspace_routes(app: Any, store: WorkspaceStore) -> None:
             out = store.rename_conversation(conv_id, req.title)
         if req.archived is not None:
             out = store.set_archived(conv_id, req.archived)
+        if req.mode is not None:
+            out = store.set_mode(conv_id, req.mode)
         if out is None:
             return JSONResponse({"error": "unknown conversation"}, status_code=404)
         return out

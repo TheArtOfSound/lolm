@@ -211,13 +211,21 @@ function status(m){ const h=$('convMeta'); if(h){ let s=document.getElementById(
 async function loadModes(){
   if(!state.modes.length){ const d = await api('/modes'); state.modes = d.modes||[]; }
   $('modeRow').innerHTML = state.modes.map(m => {
-    // every mode is a LIVE agent behaviour; ⚙ = "reasons live, connect the sandbox to RUN".
-    const execHint = (m.needs_exec && !sandbox.id) ? ' <span class="nc" title="reasons live now — connect the sandbox to also run code">⚙</span>' : (m.needs_exec ? ' <span class="nc" style="color:var(--good)" title="sandbox connected — can run code">▶</span>' : '');
+    // Code RUNS live for everyone via the public bwrap jail → always show ▶.
+    // Other exec modes reason live; running needs the owner sandbox → ⚙ until connected.
+    const execHint = (m.key==='code' || sandbox.id)
+      ? (m.needs_exec ? ' <span class="nc" style="color:var(--good)" title="runs code live in an isolated sandbox">▶</span>' : '')
+      : (m.needs_exec ? ' <span class="nc" title="reasons live now — connect the owner sandbox to also run code">⚙</span>' : '');
     return `<span class="mode ${m.key===state.mode?'on':''}" data-mode="${m.key}" title="${esc(m.frame||m.label)}">${esc(m.label)}${execHint}</span>`;
   }).join('');
   document.querySelectorAll('.mode').forEach(el => el.onclick = () => {
     state.mode = el.dataset.mode;
     const m = state.modes.find(x=>x.key===state.mode);
+    // keep the conversation's stored mode in sync so the sidebar label is honest
+    if(state.conv && state.conv.mode !== state.mode){
+      state.conv.mode = state.mode;
+      api('/conversations/'+state.conv.id, {method:'PATCH', body: JSON.stringify({mode: state.mode})}).then(()=>loadConvs());
+    }
     loadModes();
     if(m && m.needs_exec) document.querySelector('#rtabs .tab[data-pane=sandbox]').click();
   });

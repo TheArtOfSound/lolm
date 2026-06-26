@@ -170,6 +170,14 @@ class WorkspaceStore:
         self._save_conv(c)
         return asdict(c)
 
+    def set_mode(self, conv_id: str, mode: str) -> Optional[Dict[str, Any]]:
+        c = self._load_conv(conv_id)
+        if not c:
+            return None
+        c.mode = (mode or "chat")[:40]
+        self._save_conv(c)
+        return asdict(c)
+
     def append_message(self, conv_id: str, role: str, content: str, *,
                        model_used: str = "", receipt_id: str = "",
                        verdict: str = "", meta: Optional[Dict[str, Any]] = None
