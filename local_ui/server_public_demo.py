@@ -48,6 +48,16 @@ REPLAYS_DIR = Path(os.environ.get("DEMO_REPLAYS_DIR", str(ROOT / "site" / "repla
 # are set; otherwise the demo runs the local model directly.
 FRONTIER = WorkersAIReasonerLoop(state_fn=lambda: STATE)
 
+# SOVEREIGN brain: a capable model running on YOUR machine (Ollama / llama.cpp /
+# LM Studio / MLX). When it's up, GEN prefers it and nothing leaves the box; the
+# cloud is only a fallback (and refused entirely when LOLM_SOVEREIGN=1). This is the
+# tether-cutting path — local generation + the same on-device NFET telemetry.
+# (Named GEN to avoid the CloudBrain memory `BRAIN` below — they are different things:
+#  GEN generates text; BRAIN is shared persistent memory.)
+from local_ui.local_brain import LocalServerReasonerLoop, BestBrain, sovereign
+LOCAL = LocalServerReasonerLoop(state_fn=lambda: STATE)
+GEN = BestBrain(LOCAL, FRONTIER)
+
 # Shared cloud brain (Cloudflare D1): persistent memory + long-form sessions,
 # accumulating across every user anywhere. Reuses the Workers-AI worker URL/
 # secret unless BRAIN_URL/BRAIN_SECRET are set. No-ops gracefully if unset.
@@ -103,7 +113,7 @@ AGENT = NFETAgent(AgentDeps(
     generation_loop=generation_loop,
     append_event=append_improvement_event,
     head_trained_fn=lambda: STATE.head_trained,
-    frontier_loop=FRONTIER,
+    frontier_loop=GEN,
     cloud_brain=BRAIN,
     confidence_fn=_confidence,
     flywheel=FLYWHEEL,
@@ -117,7 +127,7 @@ register_nfet_agent_routes(app, AGENT)
 # fix for "I asked for today's news and it didn't search").
 from local_ui.research_service import (make_research_pipeline, register_research_routes,
                                        web_route_events, gather_web_sources)
-RESEARCH = make_research_pipeline(FRONTIER, ChatRequest, ChatMessage)
+RESEARCH = make_research_pipeline(GEN, ChatRequest, ChatMessage)
 
 register_demo_routes(
     app, AGENT, REPLAYS_DIR,
@@ -219,12 +229,12 @@ def _operator_chat(messages, max_new_tokens=640):
             elif ev.get("event") == "error":
                 raise RuntimeError(ev.get("data", {}).get("error", "planner failed"))
         return text
-    # Prefer the 70B planner; fall back to the local model on any runtime failure
-    # (quota/502/timeout) so the operator keeps planning instead of dying — the
-    # same resilience the agent loop has.
-    if FRONTIER.available():
+    # Prefer the best brain (local sovereign model first, else cloud); fall back to
+    # the tiny in-process model on any runtime failure (quota/502/timeout) so the
+    # operator keeps planning instead of dying — the same resilience the agent loop has.
+    if GEN.available():
         try:
-            t = _drive(FRONTIER)
+            t = _drive(GEN)
             if t.strip():
                 return t
         except Exception:
@@ -267,6 +277,25 @@ register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat)
 # streamed live. Public + rate-limited; every command isolated like the code sandbox.
 from local_ui.agent_routes import register_agent_routes
 register_agent_routes(app, str(ROOT / "runs" / "agent_workspaces"), _operator_chat)
+
+
+@app.get("/api/demo/brain")
+def brain_status():
+    """Which brain is generating — and whether anything leaves the machine.
+    'local' = a model on your own box (sovereign); 'cloud' = the shared 70B."""
+    active = GEN.active()
+    return {
+        "active": active,                       # local | cloud | none
+        "sovereign": sovereign(),               # cloud refused entirely?
+        "on_device": active == "local",         # nothing leaves the machine
+        "local": {"configured": LOCAL.configured(), "available": LOCAL.available(),
+                  "model": LOCAL.model or None, "url": LOCAL.url, "api": LOCAL.api},
+        "cloud": {"available": (FRONTIER.available() if not sovereign() else False),
+                  "model": FRONTIER.model.split("/")[-1]},
+        "how_to_go_local": "run a capable open model locally (e.g. `ollama run "
+                           "llama3.3:70b` or `qwen2.5:72b`), set LOLM_LOCAL_MODEL to its "
+                           "name, and LOLM_SOVEREIGN=1 to refuse the cloud entirely.",
+    }
 
 
 @app.get("/api/demo/operator")
