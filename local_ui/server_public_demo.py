@@ -22,6 +22,13 @@ import threading
 import time
 from pathlib import Path
 
+from typing import Dict                          # noqa: E402  (module-level for FastAPI/pydantic
+from fastapi import Request                       # noqa: E402   to resolve string annotations under
+from fastapi.responses import JSONResponse        # noqa: E402   `from __future__ import annotations`)
+
+from local_ui import byok
+byok.load_into_env()   # BYOK: load ~/.lolm/keys.env into the env before brain/search read keys
+
 from local_ui.cloud_brain import CloudBrain
 from local_ui.nfet_agent import AgentDeps, NFETAgent, register_nfet_agent_routes
 from local_ui.public_demo import register_demo_routes
@@ -363,6 +370,33 @@ def evolve_status():
                  "scripts/evolve_daemon.py (judgment) + scripts/evolve_knowledge_daemon.py "
                  "(knowledge, --serve)."),
     }
+
+
+# ── BYOK: your own API keys, set from your own machine (loopback only) ──────────
+from local_ui.agent_routes import _is_loopback as _loopback  # noqa: E402
+from pydantic import BaseModel as _BM  # noqa: E402
+
+
+class _KeysBody(_BM):
+    keys: Dict[str, str] = {}
+
+
+@app.get("/api/demo/keys")
+def keys_status(request: Request):
+    """Masked status of every supported key. Raw values are NEVER returned; the last-4
+    preview is shown only to a direct loopback caller (your own machine)."""
+    return byok.status(reveal_preview=_loopback(request))
+
+
+@app.post("/api/demo/keys")
+def keys_set(body: _KeysBody, request: Request):
+    """Set/clear your keys — loopback only, so a public visitor can never write keys on a
+    shared box. Writes ~/.lolm/keys.env (chmod 600) and the live environment."""
+    if not _loopback(request):
+        return JSONResponse({"error": "keys can only be set from your own machine (loopback)"},
+                            status_code=403)
+    n = byok.set_keys(body.keys or {})
+    return {"updated": n, **byok.status(reveal_preview=True)}
 
 
 @app.get("/api/demo/operator")
