@@ -31,6 +31,19 @@ class PatchConversation(BaseModel):
     mode: Optional[str] = None
 
 
+class NewMemory(BaseModel):
+    text: str
+    kind: str = "fact"
+    source_conv: str = ""
+    owner: str = ""
+
+
+class ExtractMemory(BaseModel):
+    user_message: str
+    conv_id: str = ""
+    owner: str = ""
+
+
 class NewMessage(BaseModel):
     role: str
     content: str
@@ -73,10 +86,62 @@ AGENT_MODES = [
 ]
 
 
-def register_workspace_routes(app: Any, store: WorkspaceStore) -> None:
+def register_workspace_routes(app: Any, store: WorkspaceStore, chat_fn=None) -> None:
 
     def _owner(request: Request, body_owner: str = "") -> str:
         return (body_owner or request.headers.get("X-Workspace-Owner", "")).strip()[:64]
+
+    # ── cross-session user memory (owner-scoped, fully visible/deletable) ──────
+    @app.get("/api/demo/workspace/memory")
+    def list_memory(request: Request):
+        return {"memories": store.list_memories(_owner(request))}
+
+    @app.post("/api/demo/workspace/memory")
+    def add_memory(req: NewMemory, request: Request):
+        m = store.add_memory(_owner(request, req.owner), req.text,
+                             kind=req.kind or "fact", source_conv=req.source_conv or "")
+        return {"saved": m, "duplicate": m is None}
+
+    @app.delete("/api/demo/workspace/memory/{mem_id}")
+    def delete_memory(mem_id: str, request: Request):
+        return {"deleted": store.delete_memory(_owner(request), mem_id)}
+
+    @app.post("/api/demo/workspace/memory/clear")
+    def clear_memory(request: Request):
+        return {"cleared": store.clear_memories(_owner(request))}
+
+    @app.post("/api/demo/workspace/memory/extract")
+    def extract_memory(req: ExtractMemory, request: Request):
+        """After a turn, pull any DURABLE fact about the user and remember it.
+        Runs the model once; honest no-op if no extractor is wired or nothing durable."""
+        owner = _owner(request, req.owner)
+        msg = (req.user_message or "").strip()
+        if chat_fn is None or len(msg) < 4:
+            return {"saved": []}
+        system = (
+            "You maintain a long-term memory of facts about the USER across conversations. "
+            "From the USER MESSAGE, extract only DURABLE facts worth remembering later: "
+            "their name, role, location, stable preferences, ongoing projects, or anything "
+            "they explicitly ask you to remember. Each fact on its own line and it MUST "
+            "start with 'The user' (e.g. \"The user's name is Bryan.\", \"The user prefers "
+            "Python.\", \"The user is building an NFT pipeline.\"). Ignore questions, one-off "
+            "requests, math/coding tasks, small talk, and transient details. If there is "
+            "nothing durable to remember, output exactly: NONE")
+        user = f"USER MESSAGE:\n{msg[:1500]}"
+        try:
+            raw = chat_fn([{"role": "system", "content": system},
+                           {"role": "user", "content": user}])
+        except Exception:
+            return {"saved": []}
+        saved = []
+        for line in (raw or "").splitlines():
+            line = line.strip().lstrip("-•*0123456789. ").strip()
+            if not line or not line.lower().startswith("the user") or len(line) > 300:
+                continue
+            m = store.add_memory(owner, line, kind="fact", source_conv=req.conv_id or "")
+            if m:
+                saved.append(m)
+        return {"saved": saved}
 
     # ── conversations ────────────────────────────────────────────────────────
     @app.post("/api/demo/workspace/conversations")

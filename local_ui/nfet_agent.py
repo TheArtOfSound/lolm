@@ -139,6 +139,8 @@ class NFETAgentRequest(BaseModel):
     history: Optional[List[Dict[str, str]]] = None  # explicit prior turns
                                            # [{role, content}, …] from the caller
                                            # (workspace conversation) → in-thread memory
+    user_memory: Optional[List[str]] = None  # durable facts about the user, recalled
+                                           # ACROSS conversations (cross-session memory)
     sources: Optional[str] = None          # BYO grounding: when set, the agent
                                            # answers ONLY from this text, cites
                                            # the passage, and refuses when the
@@ -602,8 +604,10 @@ DRAFT:
                 "information', 'the provided sources', 'based on the provided', 'the "
                 "sources don't', 'not in your sources', 'no sources were needed', 'no "
                 "citation needed', 'without referencing any external sources', 'this is a "
-                "basic mathematical calculation', 'no external sources'. Do NOT add any "
-                "closing sentence ABOUT sources or about how the answer was computed. "
+                "basic mathematical calculation', 'no external sources', 'the provided "
+                "snippets', 'none of the snippets', 'the snippets don't', 'the web "
+                "snippets'. Do NOT mention 'snippets' at all. Do NOT add any "
+                "closing sentence ABOUT sources/snippets or about how the answer was computed. "
                 "Do NOT hedge about what the sources do or don't cover. "
                 "If the sources don't answer it, just answer from your own knowledge "
                 "silently and confidently. A confident correct answer with no citation "
@@ -707,6 +711,16 @@ WORKING DRAFT:
             system = (system + " You are in an ongoing conversation; use CONVERSATION SO "
                       "FAR to resolve references and answer questions about what was said.")
             user = (f"CONVERSATION SO FAR (most recent last):\n{convo}\n\n" + user)
+        # Cross-session memory: durable facts about THIS user from past conversations.
+        mem = getattr(req, "user_memory", None)
+        if mem:
+            mem_lines = "\n".join("- " + str(x).strip() for x in mem if str(x).strip())[:1500]
+            if mem_lines:
+                system = (system + " You have PERSISTENT MEMORY about this user from earlier "
+                          "conversations; use it naturally when relevant (e.g. greet them by "
+                          "name, respect stated preferences) but do not recite it unprompted.")
+                user = ("WHAT YOU REMEMBER ABOUT THIS USER (persistent, across "
+                        f"conversations):\n{mem_lines}\n\n" + user)
         result = yield from self._collect_stream(
             [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
             req, tokens=req.final_tokens, channel="final", telemeter=False,

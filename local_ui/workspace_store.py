@@ -96,12 +96,80 @@ class FileChange:
     id: str = field(default_factory=lambda: _id("fc"))
 
 
+@dataclass
+class UserMemory:
+    """A durable fact about the user, remembered ACROSS conversations.
+    Owner-scoped (per browser key) and fully visible/deletable — never hidden."""
+    text: str
+    owner: str = ""
+    kind: str = "fact"                     # fact | preference | project | identity
+    source_conv: str = ""
+    id: str = field(default_factory=lambda: _id("mem"))
+    created_at: str = field(default_factory=_now)
+
+
 class WorkspaceStore:
     def __init__(self, base_dir: str | Path):
         self.base = Path(base_dir)
         self.conv_dir = self.base / "conversations"
         self.conv_dir.mkdir(parents=True, exist_ok=True)
+        self.mem_dir = self.base / "memories"
+        self.mem_dir.mkdir(parents=True, exist_ok=True)
         self.projects_path = self.base / "projects.jsonl"
+
+    # ── cross-session user memory (owner-scoped, transparent) ─────────────────
+    def _mem_path(self, owner: str) -> Path:
+        safe = "".join(c for c in (owner or "anon") if c.isalnum() or c in "-_")[:64] or "anon"
+        return self.mem_dir / f"{safe}.jsonl"
+
+    def list_memories(self, owner: str) -> List[Dict[str, Any]]:
+        p = self._mem_path(owner)
+        if not p.exists():
+            return []
+        out = []
+        for line in p.read_text().splitlines():
+            line = line.strip()
+            if line:
+                try:
+                    out.append(json.loads(line))
+                except Exception:
+                    pass
+        return out
+
+    def _write_memories(self, owner: str, mems: List[Dict[str, Any]]) -> None:
+        self._mem_path(owner).write_text(
+            "\n".join(json.dumps(m, ensure_ascii=False) for m in mems) + ("\n" if mems else ""))
+
+    def add_memory(self, owner: str, text: str, *, kind: str = "fact",
+                   source_conv: str = "", cap: int = 60) -> Optional[Dict[str, Any]]:
+        text = (text or "").strip()[:400]
+        if not text:
+            return None
+        mems = self.list_memories(owner)
+        norm = " ".join(text.lower().split())
+        for m in mems:                       # dedup: skip near-duplicates / containment
+            ex = " ".join((m.get("text") or "").lower().split())
+            if ex == norm or (len(norm) > 12 and (norm in ex or ex in norm)):
+                return None
+        entry = asdict(UserMemory(text=text, owner=owner, kind=kind, source_conv=source_conv))
+        mems.append(entry)
+        if len(mems) > cap:                  # bounded: drop the oldest
+            mems = mems[-cap:]
+        self._write_memories(owner, mems)
+        return entry
+
+    def delete_memory(self, owner: str, mem_id: str) -> bool:
+        mems = self.list_memories(owner)
+        kept = [m for m in mems if m.get("id") != mem_id]
+        if len(kept) == len(mems):
+            return False
+        self._write_memories(owner, kept)
+        return True
+
+    def clear_memories(self, owner: str) -> int:
+        n = len(self.list_memories(owner))
+        self._write_memories(owner, [])
+        return n
 
     # ── conversations ────────────────────────────────────────────────────────
     def _conv_path(self, conv_id: str) -> Path:

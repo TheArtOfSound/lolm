@@ -71,6 +71,8 @@ class DemoRunRequest(BaseModel):
     history: Optional[List[Dict[str, str]]] = None  # prior turns [{role,content},…]
                                        # for in-conversation memory (the workspace
                                        # passes the open conversation's transcript)
+    user_memory: Optional[List[str]] = None  # durable facts about the user, recalled
+                                       # across conversations (cross-session memory)
 
 
 class DemoGate:
@@ -139,7 +141,8 @@ def client_ip(request: Any) -> str:
 def clamp_request(command: str, limits: DemoLimits,
                   session_id: Optional[str] = None,
                   sources: Optional[str] = None,
-                  history: Optional[List[Dict[str, str]]] = None) -> NFETAgentRequest:
+                  history: Optional[List[Dict[str, str]]] = None,
+                  user_memory: Optional[List[str]] = None) -> NFETAgentRequest:
     # accept a sanitized session id (opaque token only) for long conversations
     sid = None
     if session_id and isinstance(session_id, str):
@@ -159,6 +162,10 @@ def clamp_request(command: str, limits: DemoLimits,
             if content:
                 hist.append({"role": role, "content": content})
         hist = hist or None
+    # Cross-session memory: durable user facts, capped + length-bounded.
+    umem = None
+    if isinstance(user_memory, list) and user_memory:
+        umem = [str(x).strip()[:300] for x in user_memory[:40] if str(x).strip()] or None
     return NFETAgentRequest(
         command=command.strip()[: limits.command_chars],
         reasoner=limits.reasoner,
@@ -173,6 +180,7 @@ def clamp_request(command: str, limits: DemoLimits,
         session_id=sid,
         sources=src,
         history=hist,
+        user_memory=umem,
     )
 
 
@@ -346,7 +354,8 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
         combined = "\n\n".join([s for s in (grounding, user_src) if s]) or None
         agent_req = clamp_request(req.command, limits,
                                   getattr(req, "session_id", None), combined,
-                                  getattr(req, "history", None))
+                                  getattr(req, "history", None),
+                                  getattr(req, "user_memory", None))
         # ADVISORY grounding: the web results are evidence to draw on, never a cage —
         # the agent answers from knowledge + evidence and never refuses "not in sources".
         if grounding and not user_src:

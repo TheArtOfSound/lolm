@@ -135,7 +135,9 @@ register_vault_routes(app, AGENT)
 from local_ui.workspace_store import WorkspaceStore
 from local_ui.workspace_routes import register_workspace_routes
 WORKSPACE = WorkspaceStore(ROOT / "runs" / "workspace")
-register_workspace_routes(app, WORKSPACE)
+# chat_fn (lazy) powers the cross-session memory extractor — _operator_chat is
+# defined further down; the lambda resolves it at request time.
+register_workspace_routes(app, WORKSPACE, chat_fn=lambda msgs: _operator_chat(msgs))
 
 # Real execution sandbox (Phase 2): /api/sandbox/* — REAL command exec/file/diff/
 # rollback, but DISABLED unless SANDBOX_SECRET is set and never forwarded by nginx,

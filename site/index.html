@@ -120,6 +120,17 @@
   .badge.green{background:#dcfce7;color:#166534} .badge.red{background:#fee2e2;color:#991b1b}
   .badge.amber{background:#fef3c7;color:#92400e} .badge.gray{background:var(--panel2);color:var(--dim)}
   .src{font-size:11.5px;margin-bottom:7px;line-height:1.4}
+  /* cross-session memory panel */
+  .memhead{font-size:11px;font-weight:650;color:var(--dim);font-family:var(--mono);margin:0 0 8px;display:flex;align-items:center;gap:6px}
+  .memcount{background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:0 7px;font-size:10px}
+  .memrow{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;line-height:1.45;padding:7px 9px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px;background:var(--panel)}
+  .memrow span{flex:1}
+  .memx{border:none;background:transparent;color:var(--faint);cursor:pointer;font-size:15px;line-height:1;padding:0 2px;border-radius:5px}
+  .memx:hover{background:#fee2e2;color:#dc2626}
+  .memclear{margin-top:6px;border:1px solid var(--line);background:transparent;color:var(--faint);font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;font-family:var(--mono)}
+  .memclear:hover{border-color:#fecaca;color:#dc2626}
+  .memsaved{font-size:11.5px;color:var(--dim);font-family:var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px 11px;margin:4px 0 2px;align-self:flex-start;max-width:90%}
+  .memsaved span{color:var(--faint)}
   .src a{border-bottom:1px solid #bfdbfe}
   .seal-btn{font-size:11px;font-family:var(--mono);padding:5px 10px;border:1px solid var(--line);background:#fff;border-radius:7px;color:var(--dim);display:inline-block}
   .seal-btn:hover{border-color:var(--accent);color:var(--ink)}
@@ -255,7 +266,7 @@ const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':
 function ownerKey(){ let k = localStorage.getItem('lolm_ws_owner'); if(!k){ k = 'w_'+Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem('lolm_ws_owner', k);} return k; }
 async function api(path, opts={}){ opts.headers = Object.assign({'Content-Type':'application/json','X-Workspace-Owner':ownerKey()}, opts.headers||{}); const r = await fetch('/api/demo/workspace'+path, opts); return r.json(); }
 
-let state = { conv:null, mode:'auto', modes:[], running:false };
+let state = { conv:null, mode:'auto', modes:[], running:false, memories:[], runMemories:[] };
 let manualModesOpen = false;
 function status(m){ const h=$('convMeta'); if(h){ let s=document.getElementById('statusChip'); if(!s){ s=document.createElement('span'); s.id='statusChip'; s.style.color='var(--accent2)'; h.appendChild(s);} s.textContent='· '+m; clearTimeout(status._t); status._t=setTimeout(()=>{ if(s) s.textContent=''; }, 6000); } }
 
@@ -596,7 +607,8 @@ async function send(){
     // in-conversation memory: send the prior turns of THIS conversation so the agent
     // can resolve "it/that/what I just asked" and stay coherent across the thread.
     const history = (c.messages||[]).filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role, content:m.content})).slice(-12);
-    const resp = await fetch('/api/demo/run/stream', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({command, history})});
+    const user_memory = (state.memories||[]).map(m=>m.text);   // cross-session facts about you
+    const resp = await fetch('/api/demo/run/stream', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({command, history, user_memory})});
     if(!resp.ok){ bub.textContent = 'run refused: '+resp.status; }
     else {
       const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf='';
@@ -616,6 +628,7 @@ async function send(){
     meta:{receipt:rec, sources:rec.sources, memories:rec.memories}})});
   state.running = false; $('send').disabled = false;
   await openConv(c.id);   // refresh state.conv.messages so next turn's history is fresh
+  extractMemory(text, c.id);   // remember durable facts about you (background, non-blocking)
 }
 
 /* ── agentic coding loop: the 70B writes code, runs it in the jail, fixes it ── */
@@ -699,10 +712,42 @@ function renderInspectors(meta){
   $('pane-web').innerHTML = src.length ? src.map(s =>
     `<div class="src">${s.url&&/^https?:/.test(s.url)?`<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title||s.url)} ↗</a>`:esc(s.title||'source')}</div>`).join('')
     : '<div class="notconn">No web sources used in this run.</div>';
-  // Memory
-  const mem = meta.memories||[];
-  $('pane-memory').innerHTML = mem.length ? mem.map(m=>`<div class="src">${esc(m)}</div>`).join('')
-    : '<div class="notconn">The learned memories used by a run will appear here.<br><br>The agent folds source-backed memory into its grounding — visible as “learned: …” entries in the Web tab.</div>';
+  // Memory — cross-session facts (top) + this run's retrieved memory (below)
+  state.runMemories = meta.memories||[];
+  renderMemoryPane();
+}
+
+/* ── cross-session memory: durable facts about YOU, recalled in every conversation ── */
+function renderMemoryPane(){
+  const box = $('pane-memory'); if(!box) return;
+  const mems = state.memories||[];
+  let html = `<div class="memhead">🧠 Remembered about you <span class="memcount">${mems.length}</span></div>`;
+  if(mems.length){
+    html += mems.map(m=>`<div class="memrow"><span>${esc(m.text)}</span><button class="memx" data-mid="${esc(m.id)}" title="forget this">×</button></div>`).join('');
+    html += `<button class="memclear" id="memClearBtn">forget everything</button>`;
+  } else {
+    html += '<div class="notconn">Nothing yet. Tell LOLM something durable — your name, what you’re building, a preference — and it remembers it here for next time, across conversations. Everything here is yours to delete.</div>';
+  }
+  const rm = state.runMemories||[];
+  if(rm.length) html += `<div class="memhead" style="margin-top:14px">Used in this run</div>`+rm.map(m=>`<div class="src">${esc(m)}</div>`).join('');
+  box.innerHTML = html;
+  box.querySelectorAll('.memx').forEach(b=>b.onclick=()=>forgetMemory(b.dataset.mid));
+  const cb=$('memClearBtn'); if(cb) cb.onclick=()=>{ if(confirm('Forget all remembered facts? This cannot be undone.')) clearMemory(); };
+}
+async function loadUserMemory(){ try{ const d=await api('/memory'); state.memories=d.memories||[]; }catch(e){ state.memories=[]; } renderMemoryPane(); }
+async function forgetMemory(id){ try{ await api('/memory/'+id, {method:'DELETE'}); }catch(e){} state.memories=(state.memories||[]).filter(m=>m.id!==id); renderMemoryPane(); }
+async function clearMemory(){ try{ await api('/memory/clear', {method:'POST'}); }catch(e){} state.memories=[]; renderMemoryPane(); }
+async function extractMemory(userMsg, convId){
+  try{ const d=await api('/memory/extract', {method:'POST', body:JSON.stringify({user_message:userMsg, conv_id:convId||''})});
+    if(d && d.saved && d.saved.length){ state.memories=(state.memories||[]).concat(d.saved); renderMemoryPane(); memNote(d.saved.map(m=>m.text)); }
+  }catch(e){}
+}
+function memNote(facts){
+  // a subtle, honest note in the conversation that a durable fact was saved
+  const f=$('feed'); if(!f) return;
+  const d=document.createElement('div'); d.className='memsaved';
+  d.innerHTML='🧠 Remembered: '+facts.map(esc).join(' · ')+' <span>— manage in the Memory panel</span>';
+  f.appendChild(d); f.scrollTop=f.scrollHeight;
 }
 
 /* ── QEV seal + verify (real /api/demo/vault/*) ── */
@@ -761,7 +806,7 @@ $('newProj').onclick = async () => { const name = prompt('Project name (repo wor
 async function loadProjects(){ const d = await api('/projects'); const ps=d.projects||[]; $('projList').innerHTML = ps.map(p=>`<div class="nav-link" title="${esc(p.repo_url||'')}">▦ ${esc(p.name)}</div>`).join('')+'<div class="nav-link" id="newProj2">＋ Add a project</div>'; const n=$('newProj2'); if(n) n.onclick=$('newProj').onclick; }
 
 document.querySelectorAll('#starters button').forEach(b => b.onclick = () => { $('prompt').value = b.dataset.q; send(); });
-loadModes(); loadConvs(); loadProjects(); renderSandbox({});
+loadModes(); loadConvs(); loadProjects(); renderSandbox({}); loadUserMemory();
 </script>
 </body>
 </html>
