@@ -576,8 +576,8 @@ async function send(){
   //   else    → the smart chat path (web search + LOLM uncertainty control)
   let route = state.mode;
   if(route==='auto') route = classifyIntent(text);
-  if(route==='visual'){ await runVisualBuild(text, c); state.running=false; $('send').disabled=false; openConv(c.id); return; }
-  if(route==='code' && sandbox.enabled){ await runCodeLoop(text, c); state.running=false; $('send').disabled=false; openConv(c.id); return; }
+  if(route==='visual'){ await runVisualBuild(text, c); state.running=false; $('send').disabled=false; await openConv(c.id); return; }
+  if(route==='code' && sandbox.enabled){ await runCodeLoop(text, c); state.running=false; $('send').disabled=false; await openConv(c.id); return; }
 
   // The (manual) mode frames how the agent behaves (Debug/Audit/Release/…).
   // We display + persist what YOU typed, but send the framed command to the agent.
@@ -615,7 +615,7 @@ async function send(){
     role:'assistant', content: (rec.answer||bub.textContent), model_used: rec.model, verdict: rec.verdict,
     meta:{receipt:rec, sources:rec.sources, memories:rec.memories}})});
   state.running = false; $('send').disabled = false;
-  openConv(c.id);
+  await openConv(c.id);   // refresh state.conv.messages so next turn's history is fresh
 }
 
 /* ── agentic coding loop: the 70B writes code, runs it in the jail, fixes it ── */
