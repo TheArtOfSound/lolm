@@ -614,9 +614,18 @@ DRAFT:
                 "Be specific, confident, and useful."
             )
             user = (f"COMMAND:\n{command}\n\n"
-                    + self._evidence_block('SOURCES', evidence)
-                    + "\n\nAnswer the COMMAND now. Lead with the answer; cite [S#] only "
-                      "where a source backs a claim; never mention source gaps.")
+                    + self._evidence_block('WEB SNIPPETS', evidence)
+                    + "\n\nThese snippets come from an AUTOMATED search and are often "
+                      "noisy, tangential, or about a side-topic. Use a snippet ONLY when "
+                      "it CLEARLY and DIRECTLY answers the question. If a snippet is "
+                      "tangential or seems to contradict a well-established fact, IGNORE "
+                      "it and answer from your own knowledge. NEVER infer a big claim "
+                      "(someone resigned/was replaced/a company changed) from a snippet "
+                      "that doesn't explicitly say it — that is hallucination. Example: a "
+                      "snippet about a COO's expanded role does NOT mean the CEO left; the "
+                      "CEO of OpenAI is Sam Altman.\n"
+                      "Answer the COMMAND now: lead with the confident answer, fold in any "
+                      "genuinely relevant snippet (cite [S#]), and never mention source gaps.")
         elif grounded and profile != "social":
             # BYO-sources mode — the reason people come: an AI that answers ONLY
             # from your material, cites it, and admits when the answer isn't there
