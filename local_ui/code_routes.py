@@ -67,7 +67,9 @@ _VISUAL_RECIPES = [
      "SNAKE: ~22x22 cell grid; snake = array of {x,y} segments; food at a random empty cell; arrow/WASD set "
      "direction (ignore a direct 180° reversal); advance on a ~110ms timer (unshift new head, pop tail unless it "
      "ate food → grow + new food + score++); game-over on wall or self collision, show score + 'press R to "
-     "restart'. Rounded cells with a 1px gap; head a brighter shade."),
+     "restart'. Rounded cells with a 1px gap; head a brighter shade. CRITICAL: test self-collision and "
+     "food-on-snake by COORDINATES — snake.some(s => s.x===head.x && s.y===head.y) — never snake.includes(head) "
+     "(object identity is always false, so the snake would pass through itself and food spawn on it)."),
     (re.compile(r"\b(raycast|fps|first[- ]?person|wolfenstein|doom)\b", re.I),
      "RAYCASTER (true first-person 3D): a 2D integer wall map (1=wall,0=empty); player {x,y,angle}. Each frame: "
      "clear, fill ceiling (top half, dark blue-grey) and floor (bottom half, dark grey); then for every screen "
@@ -250,8 +252,19 @@ def register_code_routes(app: Any, root: str,
             "Size a game canvas to a fixed square that fits, e.g. const S=Math.min("
             "window.innerWidth,window.innerHeight)-20; canvas.width=canvas.height=S — NEVER "
             "set the canvas taller than the viewport (don't use window.innerHeight for height "
-            "while innerWidth for width, or content scrolls off-screen). Dark, clean styling. "
-            "Make it fun, correct, and complete."
+            "while innerWidth for width, or content scrolls off-screen). Dark, clean styling.\n"
+            "- CORRECTNESS — these bugs RUN but play WRONG; do not make them:\n"
+            "  • Comparing objects/cells: arrays of {x,y} (snake segments, grid cells, pieces) DON'T match "
+            "with .includes(obj) / .indexOf(obj) / === — those test object IDENTITY, never value, so they "
+            "are ALWAYS false. To ask 'is this cell occupied?' use arr.some(p => p.x===cell.x && p.y===cell.y). "
+            "Snake self-collision AND food-not-on-snake MUST use this coordinate check (or the snake passes "
+            "through itself and food spawns under it).\n"
+            "  • Spawn pickups/food on a VERIFIED-empty cell: re-roll while it coincides with the body/walls "
+            "using that same coordinate check.\n"
+            "  • Update game state THEN test collisions THEN draw, so what's on screen matches the logic.\n"
+            "  • Keep every index/coordinate in range and every entity inside the play area.\n"
+            "Make it fun, correct, and complete — actually play a few moves in your head and confirm the "
+            "win/lose/score/collision rules truly fire."
         )
         recipe = _visual_recipe(task)
         guide = (f"\n\nIMPLEMENTATION GUIDE — follow this approach:\n{recipe}\n" if recipe else "")
