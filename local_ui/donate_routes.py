@@ -30,6 +30,14 @@ def _secret() -> str:
     return os.environ.get("STRIPE_SECRET_KEY", "").strip()
 
 
+def _descriptor() -> str:
+    """What shows on the donor's CARD STATEMENT — branded as LOLM/Qira, never the underlying
+    account's other businesses. 5-22 chars, letters only-ish (Stripe rules). Override with
+    LOLM_STATEMENT_DESCRIPTOR."""
+    d = os.environ.get("LOLM_STATEMENT_DESCRIPTOR", "QIRA LOLM").strip()
+    return d[:22] or "QIRA LOLM"
+
+
 def register_donate_routes(app: Any) -> None:
 
     @app.get("/api/donate/config")
@@ -58,6 +66,10 @@ def register_donate_routes(app: Any) -> None:
             "line_items[0][price_data][product_data][description]":
                 "Keep the sovereign, self-evolving AI alive. Thank you.",
             "submit_type": "donate",
+            # brand the charge as LOLM/Qira on the donor's card statement (not the underlying
+            # Stripe account's other businesses)
+            "payment_intent_data[statement_descriptor]": _descriptor(),
+            "payment_intent_data[description]": "LOLM — Support donation",
         }
         try:
             # The secret key authenticates the API call (HTTP basic, key as username); it is
