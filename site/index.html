@@ -479,37 +479,55 @@ function renderPreview(html, onCheck){
 }
 async function buildVisualOnce(task){
   const resp=await fetch('/api/demo/code/visual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
-  const j=await resp.json().catch(()=>({})); return {ok:resp.ok, status:resp.status, j};
+  const raw=await resp.text();
+  let j={};
+  try{ j=JSON.parse(raw); }
+  catch(_){
+    // resilient: even if the JSON envelope is ever malformed, salvage the HTML document
+    // itself so the app still renders instead of silently failing.
+    const m=raw.match(/<!DOCTYPE html[\s\S]*<\/html>/i);
+    if(m){ j={html:m[0], bytes:m[0].length, salvaged:true}; }
+    else{ j={error:'the builder returned an unreadable response'}; }
+  }
+  return {ok:resp.ok, status:resp.status, j};
 }
 function previewBlankCheck(html){ return new Promise(res=>{ let done=false; renderPreview(html, d=>{ if(!done){done=true; res(!!(d&&d.blank));} }); setTimeout(()=>{ if(!done){done=true; res(false);} }, 4400); }); }
 async function runVisualBuild(task, c){
-  openDock('work'); document.querySelector('#btabs .tab[data-bpane=preview]').click();
-  $('bpane-preview').innerHTML='<div class="notconn">🎨 building a live app — writing self-contained HTML, then running it in a sandboxed frame…</div>';
+  const showPreview=()=>{ try{ openDock('work'); document.querySelector('#btabs .tab[data-bpane=preview]').click(); }catch(_){} };
+  showPreview();
+  const pv=$('bpane-preview');
+  pv.innerHTML='<div class="notconn">🎨 building a live app — the model writes self-contained HTML, then it runs right here in a sandboxed frame…</div>';
   const reason=document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
   const step=t=>{ const s=document.createElement('div'); s.className='step'; s.innerHTML=t; reason.appendChild(s); $('feed').scrollTop=$('feed').scrollHeight; };
   const ansEl=addBubble('assistant',''); const bub=ansEl.querySelector('.bub');
-  bub.textContent='🎨 Building a live, playable app — self-contained HTML running in a sandboxed frame…';
   step('🎨 <b>visual build</b> — self-contained HTML · sandboxed iframe (no network, no parent access)');
   const rec={mode:'visual', model:'Llama 70B (visual)', files:['index.html'], verdict:''};
+  // live elapsed counter so the ~10–25s generation never looks frozen ("never did")
+  let secs=0; bub.textContent='🎨 Building your app… (0s) — writing the code, then it runs in the Preview tab ↓';
+  const tick=setInterval(()=>{ secs++; bub.textContent='🎨 Building your app… ('+secs+'s) — writing the code, then it runs in the Preview tab ↓';
+    if(secs===9) pv.innerHTML='<div class="notconn">🎨 still writing… a full game/app takes ~10–25s. It appears here the instant it’s ready.</div>'; }, 1000);
   try{
     let r=await buildVisualOnce(task);
-    if(!r.ok || !r.j.html){ bub.textContent='Couldn’t build the visual app: '+(r.j.error||('HTTP '+r.status)); rec.verdict='error'; step('✗ '+esc(r.j.error||r.status)); }
+    clearInterval(tick);
+    if(!r.ok || !r.j.html){ const msg=r.j.error||('the builder is unavailable (HTTP '+r.status+')'); bub.textContent='⚠ Couldn’t build it — '+msg; pv.innerHTML='<div class="notconn">⚠ '+esc(msg)+'<br><br>Try again, or rephrase it (e.g. “build a snake game”).</div>'; rec.verdict='error'; step('✗ '+esc(msg)); }
     else{
       let html=r.j.html, bytes=r.j.bytes, rebuilt=false;
       const blank=await previewBlankCheck(html);   // renders it + watches for a blank frame
       if(blank){
         step('· first render came up blank — auto-rebuilding once');
+        bub.textContent='🎨 First render came up blank — rebuilding once for you…';
         const r2=await buildVisualOnce(task+"\n\nIMPORTANT: a previous attempt rendered a BLANK/BLACK screen. Ensure something is actually DRAWN and VISIBLE on the canvas every frame — correct coordinates and visible colors, the camera/player starts in OPEN space (not inside a wall), and the draw loop clears + redraws. Re-check the rendering math.");
         if(r2.ok && r2.j.html){ html=r2.j.html; bytes=r2.j.bytes; rebuilt=true; renderPreview(html); }
       }
-      bub.textContent='✅ Built a live app — '+bytes+' bytes of self-contained HTML, running now in the Preview tab. Click into it and play.';
+      showPreview();   // make sure the Preview pane is in view when it's ready
+      bub.innerHTML='✅ <b>Built a live, playable app</b> — '+bytes+' bytes of self-contained HTML, running now in the <b>Preview</b> tab (bottom panel). Click into it and play.'+(rebuilt?' <span class="dim">(auto-rebuilt after a blank first try)</span>':'');
       rec.verdict='rendered'; rec.bytes=bytes; rec.rebuilt=rebuilt;
       step('▶ <b>running live</b> in the Preview pane · '+bytes+' bytes'+(rebuilt?' · auto-rebuilt after a blank first try':''));
       $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">index.html</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(html.slice(0,14000))+'</pre>';
     }
-  }catch(e){ bub.textContent='Visual build error: '+e.message; rec.verdict='error'; }
+  }catch(e){ clearInterval(tick); bub.textContent='⚠ Visual build error: '+e.message+' — try again.'; pv.innerHTML='<div class="notconn">⚠ '+esc(e.message)+'</div>'; rec.verdict='error'; }
   renderInspectors({receipt:rec});
-  await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:bub.textContent,model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
+  await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:(bub.textContent||'visual build'),model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
 }
 function renderFeed(){
   const c = state.conv; const feed = $('feed');
