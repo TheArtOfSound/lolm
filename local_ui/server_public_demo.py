@@ -63,8 +63,43 @@ FRONTIER = WorkersAIReasonerLoop(state_fn=lambda: STATE)
 # (Named GEN to avoid the CloudBrain memory `BRAIN` below — they are different things:
 #  GEN generates text; BRAIN is shared persistent memory.)
 from local_ui.local_brain import LocalServerReasonerLoop, BestBrain, sovereign
+from local_ui.claude_reasoner import ClaudeReasonerLoop
 LOCAL = LocalServerReasonerLoop(state_fn=lambda: STATE)
-GEN = BestBrain(LOCAL, FRONTIER)
+CLAUDE = ClaudeReasonerLoop(state_fn=lambda: STATE)   # claude-opus-4-8 — the frontier voice
+
+
+class _ClaudeFirst:
+    """Intelligence-first brain order: Claude (frontier) leads when ANTHROPIC_API_KEY is set
+    and we're not in sovereign mode; otherwise the best available of local / Workers-AI 70B.
+    The on-device NFET graft telemeters whichever model speaks, so the measured-uncertainty
+    control + receipt machinery is identical no matter who's the voice. Force a tier with
+    LOLM_BRAIN=claude|local|70b."""
+
+    def __init__(self, claude: Any, fallback: Any):
+        self.claude, self.fallback = claude, fallback
+
+    def _claude_on(self) -> bool:
+        pin = os.environ.get("LOLM_BRAIN", "").lower()
+        if pin == "claude":
+            return bool(os.environ.get("ANTHROPIC_API_KEY"))
+        if pin in ("local", "70b", "workers", "cloud"):
+            return False
+        return bool(os.environ.get("ANTHROPIC_API_KEY")) and not sovereign()
+
+    def active(self) -> str:
+        return "claude" if self._claude_on() else self.fallback.active()
+
+    def available(self) -> bool:
+        return self._claude_on() or self.fallback.available()
+
+    def __call__(self, req: Any):
+        if self._claude_on():
+            yield from self.claude(req)
+            return
+        yield from self.fallback(req)
+
+
+GEN = _ClaudeFirst(CLAUDE, BestBrain(LOCAL, FRONTIER))
 
 # Shared cloud brain (Cloudflare D1): persistent memory + long-form sessions,
 # accumulating across every user anywhere. Reuses the Workers-AI worker URL/
