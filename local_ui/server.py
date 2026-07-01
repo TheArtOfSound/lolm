@@ -181,12 +181,14 @@ def normalized_chat_messages(messages: List[ChatMessage]) -> List[Dict[str, str]
             has_system = True
         out.append({"role": role, "content": content})
     base_system = "You are LOLM-NFET, a local assistant. Answer directly. Do not reveal hidden reasoning or narrate your thought process. Use the AUTO_CONTEXT as private operating context, not as text to repeat."
-    auto = build_auto_context(DATA_DIR)
-    if has_system:
-        out.insert(1, {"role": "system", "content": auto})
-    else:
+    # AUTO_CONTEXT (workspace notes/goals/state) is ambient context for BARE chats only.
+    # When the caller supplies its own system prompt it is a structured pipeline (the NFET
+    # agent's drafting/verify/finalize steps) that curates its own relevance-gated context —
+    # injecting workspace notes there drags small models off-topic: "capital of Japan?"
+    # answers grew "local AI plays a significant role..." filler paraphrased from the notes.
+    if not has_system:
         out.insert(0, {"role": "system", "content": base_system})
-        out.insert(1, {"role": "system", "content": auto})
+        out.insert(1, {"role": "system", "content": build_auto_context(DATA_DIR)})
     return out
 
 

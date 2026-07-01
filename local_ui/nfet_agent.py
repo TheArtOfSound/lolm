@@ -82,7 +82,7 @@ def merge_segment(draft: str, new_text: str) -> tuple:
     Returns (text_to_append, was_pure_repetition). Pure repetition is a
     stop signal — the model has nothing left to add.
     """
-    d, n = draft.strip(), new_text.strip()
+    d, n = draft.strip(), strip_scaffold_echo(new_text).strip()
     if not d or not n:
         return n, False
     dn = re.sub(r"\s+", " ", d.lower())
@@ -114,6 +114,22 @@ _SPECIAL_RE = re.compile(
 
 # Internal control markers a small local model sometimes echoes into the answer.
 _CONTROL_ARTIFACT_RE = re.compile(r"\[?\s*verdict:\s*(?:ok|revise)\s*\]?", re.IGNORECASE)
+
+# Prompt scaffolding a weak model parrots back into its output. These exact phrases are
+# never legitimate answer prose — remove every occurrence before text joins the draft.
+_SCAFFOLD_RE = re.compile(
+    r"Continue the draft\.?\s*(?:Write the next segment only\.?)?"
+    r"|\(empty — start the draft\)"
+    r"|^\s*DRAFT SO FAR:\s*$"
+    r"|^\s*WORKING DRAFT:\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def strip_scaffold_echo(s: str) -> str:
+    """Remove echoed prompt scaffolding ("Continue the draft. Write the next segment
+    only.", draft headers) from segment/final text. Whole-text cleaner — not per-token."""
+    return _SCAFFOLD_RE.sub("", s).strip() if s else s
 
 
 def strip_special_tokens(s: str) -> str:
@@ -544,8 +560,9 @@ DRAFT:
         verdict = "revise" if "revise" in lower.split("verdict:")[-1][:40] else "ok"
         # Strip the control marker from the notes so it never bleeds into the finalizer
         # feedback (a small local model will otherwise echo "VERDICT: revise" verbatim).
-        notes = re.sub(r"^\s*\[?\s*verdict:\s*(ok|revise)\s*\]?[.\s-]*", "", seg.text.strip(),
-                       flags=re.IGNORECASE)
+        # ALL occurrences, not just leading — models repeat the marker mid-critique, and
+        # the verifier_note evidence must never hand the finalizer the literal marker.
+        notes = _CONTROL_ARTIFACT_RE.sub("", seg.text.strip()).strip(" .-\n\t")
         return {"verdict": verdict, "notes": notes, "raw_id": seg.raw.get("id")}
 
     def _do_branch(self, command: str, draft: str, memory_hits: List[Dict[str, Any]],
@@ -736,10 +753,11 @@ WORKING DRAFT:
             [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
             req, tokens=req.final_tokens, channel="final", telemeter=False,
         )
-        # Backstop: strip any internal control marker the model echoed into the FINAL
-        # answer (a small local model sometimes parrots 'VERDICT: revise'). Only here —
-        # the verify channel keeps its marker so the verdict can be parsed.
-        cleaned = _CONTROL_ARTIFACT_RE.sub("", result.text).strip()
+        # Backstop: strip any internal control marker or prompt scaffolding the model
+        # echoed into the FINAL answer (a small local model sometimes parrots
+        # 'VERDICT: revise' or 'Continue the draft...'). Only here — the verify channel
+        # keeps its marker so the verdict can be parsed.
+        cleaned = strip_scaffold_echo(_CONTROL_ARTIFACT_RE.sub("", result.text)).strip()
         if cleaned != result.text:
             result.text = cleaned
             result.raw["response"] = cleaned
