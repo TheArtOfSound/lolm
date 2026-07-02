@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import Request
@@ -21,6 +23,31 @@ from pydantic import BaseModel
 
 from local_ui.agent_operator import AgentOperator
 from local_ui.sandbox import Sandbox, _HAS_BWRAP
+
+# A PERSISTENT workspace id: client-generated, so each visitor gets their own project
+# that survives across operator runs (files accumulate — build, come back, keep going).
+# Strictly validated so it can't traverse paths; absent/invalid → ephemeral one-shot.
+_WS_RE = re.compile(r"^[A-Za-z0-9_-]{6,40}$")
+_WS_TTL_S = int(os.environ.get("LOLM_WORKSPACE_TTL", str(24 * 3600)))   # reap idle workspaces
+
+
+def _reap_workspaces(root: str) -> None:
+    """Delete persistent workspaces untouched past the TTL — bounds disk without killing
+    active projects. Cheap: runs at the start of each operator call."""
+    base = Path(root)
+    if not base.exists():
+        return
+    now = time.time()
+    for d in base.glob("ws_*"):
+        try:
+            if d.is_dir() and now - d.stat().st_mtime > _WS_TTL_S:
+                import shutil
+                shutil.rmtree(d, ignore_errors=True)
+                snap = d.parent / f"{d.name}.snap"
+                if snap.exists():
+                    shutil.rmtree(snap, ignore_errors=True)
+        except Exception:
+            pass
 
 # Owner sovereignty: on a machine WITHOUT the bwrap jail (e.g. macOS), the owner can opt
 # into UNJAILED operator execution with LOLM_OPERATOR_LOCAL=1. This is gated to direct
@@ -40,6 +67,7 @@ def _is_loopback(request: "Request") -> bool:
 class OperatorGoal(BaseModel):
     goal: str
     max_steps: int = 14
+    workspace: str = ""          # persistent project id (client-generated); "" = ephemeral
 
 
 def _sse(event: str, data: Dict[str, Any]) -> str:
@@ -90,21 +118,52 @@ def register_agent_routes(app: Any, root: str,
         if not goal:
             return JSONResponse({"error": "empty goal"}, status_code=400)
 
-        sb = Sandbox(root)
+        # PERSISTENT workspace: a valid client id → a project that survives across runs
+        # (files accumulate, you continue where you left off). Absent/invalid → ephemeral.
+        _reap_workspaces(root)
+        ws = (req.workspace or "").strip()
+        persistent = bool(_WS_RE.match(ws))
+        sb = Sandbox(root, session_id=("ws_" + ws) if persistent else None)
+        existing = len(sb.list_files()) if persistent else 0
         op = AgentOperator(sb, chat_fn, search_fn=search_fn, fetch_fn=fetch_fn,
                            max_steps=min(max(req.max_steps, 1), 18), isolated=_HAS_BWRAP)
 
         def gen():
+            yield _sse("workspace", {"workspace": ws if persistent else "",
+                                     "persistent": persistent, "existing_files": existing})
             try:
                 for ev in op.run(goal):
                     yield _sse(ev["event"], ev["data"])
             except Exception as exc:
                 yield _sse("error", {"error": str(exc)[:200]})
             finally:
-                try:
-                    sb.destroy()
-                except Exception:
-                    pass
+                if not persistent:          # keep persistent projects; only ephemerals are torn down
+                    try:
+                        sb.destroy()
+                    except Exception:
+                        pass
 
         return StreamingResponse(gen(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.get("/api/demo/agent/files")
+    def agent_files(workspace: str = ""):
+        """The persistent project's file tree — so you can browse what the operator built,
+        across runs, like a real workspace. Read-only."""
+        if not _WS_RE.match(workspace or ""):
+            return {"workspace": "", "files": [], "note": "no persistent workspace"}
+        sb = Sandbox(root, session_id="ws_" + workspace)
+        files = sb.list_files(limit=400)
+        return {"workspace": workspace, "files": files, "count": len(files),
+                "project": sb.detect_project()}
+
+    @app.get("/api/demo/agent/file")
+    def agent_file(workspace: str = "", path: str = ""):
+        """Read one file from a persistent project (path-guarded to the workspace)."""
+        if not _WS_RE.match(workspace or ""):
+            return JSONResponse({"error": "invalid workspace"}, status_code=400)
+        try:
+            sb = Sandbox(root, session_id="ws_" + workspace)
+            return {"path": path, "content": sb.read_file(path)[:200_000]}
+        except Exception as exc:
+            return JSONResponse({"error": str(exc)[:160]}, status_code=404)

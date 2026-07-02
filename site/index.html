@@ -716,6 +716,16 @@ async function runCodeLoop(task, c){
 }
 
 /* ── LOLM Operator: a goal-driven multi-tool agent over its own sandboxed virtual PC ── */
+/* ── persistent operator project: one workspace id per browser, files survive across runs ── */
+function lolmWorkspace(){ let w=localStorage.getItem('lolm_workspace'); if(!w||!/^[A-Za-z0-9_-]{6,40}$/.test(w)){ w='proj-'+Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4); localStorage.setItem('lolm_workspace',w); } return w; }
+async function loadWorkspaceFiles(){ const pane=$('bpane-files'); if(!pane) return;
+  let d; try{ d=await (await fetch('/api/demo/agent/files?workspace='+encodeURIComponent(lolmWorkspace()))).json(); }catch(_){ return; }
+  const proj=d.project||{}; const badge=(proj.framework||proj.language)?(' · '+esc(proj.framework||proj.language)):'';
+  let h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:#7c3aed;font-weight:600">📦 your project'+badge+'</span><span class="dim" style="font-size:10.5px">'+(d.count||0)+' files · persists</span></div>';
+  h+=(d.files&&d.files.length)? d.files.map(f=>'<div class="filerow" data-wf="'+esc(f)+'" style="cursor:pointer;padding:2px 0;color:#94a3b8;font-size:12px">📄 '+esc(f)+'</div>').join('') : '<div class="notconn">empty — ask the operator to build something; it stays here.</div>';
+  pane.innerHTML=h;
+  pane.querySelectorAll('[data-wf]').forEach(el=>el.onclick=async()=>{ try{ const r=await (await fetch('/api/demo/agent/file?workspace='+encodeURIComponent(lolmWorkspace())+'&path='+encodeURIComponent(el.dataset.wf))).json(); $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">'+esc(el.dataset.wf)+'</div><pre style="white-space:pre-wrap;color:#cbd5e1;font-size:12px">'+esc((r.content||r.error||'').slice(0,12000))+'</pre>'; try{document.querySelector('#btabs .tab[data-bpane=diff]').click();}catch(_){}}catch(_){} });
+}
 async function runOperator(goal, c){
   const reason = document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
   const ansEl = addBubble('assistant',''); const bub = ansEl.querySelector('.bub');
@@ -727,7 +737,7 @@ async function runOperator(goal, c){
   const TOOL = {list:'📁 list',read:'📄 read',write:'✏️ write',run:'▶️ run',search:'🌐 search',done:'✅ done'};
   const rec = {model:'Llama 70B (operator)', mode:'operator', verdict:'', files:[], runs:0, ok:false, lastOut:'', tools:[], steps:0};
   try{
-    const resp = await fetch('/api/demo/agent/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal})});
+    const resp = await fetch('/api/demo/agent/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal, workspace: lolmWorkspace()})});
     if(!resp.ok){ const e=await resp.json().catch(()=>({})); step('⚠ '+esc(e.error||('HTTP '+resp.status))); bub.textContent='Operator unavailable: '+(e.error||resp.status); }
     else{
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
@@ -735,7 +745,8 @@ async function runOperator(goal, c){
         let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
           let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: ')){ try{data=JSON.parse(ln.slice(6));}catch(_){} } }
           if(!name) continue;
-          if(name==='operator_start') step('▸ virtual computer <code>'+esc(data.sandbox||'')+'</code> ready · tools: '+(data.tools||[]).join(', '));
+          if(name==='workspace'){ if(data.persistent){ step('📦 <b>project</b> <code>'+esc(data.workspace)+'</code>'+(data.existing_files?(' — continuing from <b>'+data.existing_files+'</b> existing file'+(data.existing_files===1?'':'s')):' — new project')+' · your files persist across runs'); } }
+          else if(name==='operator_start') step('▸ virtual computer <code>'+esc(data.sandbox||'')+'</code> ready · tools: '+(data.tools||[]).join(', '));
           else if(name==='operator_thinking') step('<span class="pulse">🤔 thinking… step '+((data.step|0)+1)+'/'+(data.of||'')+'</span>','opthink');
           else if(name==='operator_step'){ const t=document.getElementById('opthink'); if(t)t.remove(); rec.steps++; rec.tools.push(data.tool); step((TOOL[data.tool]||'•')+' <b>'+esc(data.tool)+'</b> — '+esc((data.plan||'').slice(0,140))); }
           else if(name==='tool_call' && data.tool==='list'){ if(data.files&&data.files.length){ $('bpane-files').innerHTML=data.files.map(f=>'<div class="filerow" style="padding:1px 0;color:#94a3b8">📄 '+esc(f)+'</div>').join(''); } }
@@ -752,6 +763,7 @@ async function runOperator(goal, c){
       }
     }
   }catch(e){ step('⚠ stream lost: '+esc(e.message)); }
+  loadWorkspaceFiles();   // refresh the persistent file tree with whatever it just built
   let html='';
   html += '<div>'+esc(rec.summary||'Worked on it.')+'</div>';
   if(rec.tools.length) html += '<div style="margin-top:6px;font-size:12px;color:var(--dim)">Used <b>'+rec.tools.length+'</b> tool call'+(rec.tools.length===1?'':'s')+': '+rec.tools.map(esc).join(' → ')+'</div>';
