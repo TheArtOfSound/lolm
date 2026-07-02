@@ -289,6 +289,51 @@ async function generate70B(env, messages, max_tokens, modelOverride) {
            hint: "add a free GROQ_API_KEY (or CEREBRAS/TOGETHER/OPENROUTER) as a worker secret" };
 }
 
+// STREAMING variant: same independent-provider cascade, but once a provider
+// accepts, its SSE token stream is PIPED straight through to the caller (we
+// can't fall through mid-stream, so we only commit after a 200/valid stream).
+// Formats differ by provider — the x-lolm-stream-format header tells the origin
+// how to parse: "cf" = data:{"response":"tok"} · "openai" = data:{"choices":
+// [{"delta":{"content":"tok"}}]}. Additive: the non-stream path is untouched.
+async function stream70B(env, messages, max_tokens, modelOverride) {
+  const chain = providerChain(env);
+  const tried = [];
+  const sseHeaders = (provider, format) => ({
+    "content-type": "text/event-stream",
+    "cache-control": "no-cache",
+    "access-control-allow-origin": "*",
+    "x-lolm-provider": provider,
+    "x-lolm-stream-format": format,
+  });
+  for (const provider of chain) {
+    try {
+      if (provider.kind === "cf") {
+        const stream = await env.AI.run(
+          modelOverride || "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+          { messages, max_tokens, stream: true });
+        return new Response(stream, { headers: sseHeaders("workers-ai", "cf") });
+      }
+      const r = await fetch(provider.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json",
+                   "Authorization": `Bearer ${provider.key}` },
+        body: JSON.stringify({ model: provider.model, messages, max_tokens, stream: true }),
+        signal: AbortSignal.timeout(45000),
+      });
+      if (!r.ok || !r.body) {
+        tried.push({ provider: provider.name, error: `HTTP ${r.status}` });
+        continue;
+      }
+      return new Response(r.body, { headers: sseHeaders(provider.name, "openai") });
+    } catch (e) {
+      tried.push({ provider: provider.name, error: String(e.message || e).slice(0, 100) });
+    }
+  }
+  return new Response(JSON.stringify({ error: "all 70B providers unavailable (stream)",
+                                       tried_providers: tried }), {
+    status: 502, headers: { "content-type": "application/json" } });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -338,6 +383,9 @@ export default {
       try { body = await request.json(); } catch { return json({ error: "bad json" }, 400); }
       const messages = Array.isArray(body.messages) ? body.messages : [];
       const max_tokens = Math.min(Math.max(parseInt(body.max_tokens) || 512, 16), 8192);
+      if (body.stream === true) {
+        return stream70B(env, messages, max_tokens, body.model);
+      }
       const result = await generate70B(env, messages, max_tokens, body.model);
       if (result.text) return json(result);
       return json(result, result.quota_exhausted ? 429 : 502);

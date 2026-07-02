@@ -313,7 +313,24 @@ register_operator_routes(
 # failure, and fixes it — streamed live. Public + rate-limited; uses the same frontier
 # chat as the operator planner (drives FRONTIER, falls back to the local model).
 from local_ui.code_routes import register_code_routes
-register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat)
+
+
+def _operator_stream(messages, max_new_tokens=640):
+    """Token-delta stream for the visual builder — FRONTIER only (that's where the
+    worker's SSE passthrough lives). Raises if unavailable; the route 503s and the
+    client falls back to the blocking endpoint."""
+    msgs = [ChatMessage(role=m["role"], content=m["content"]) for m in messages]
+    kwargs = dict(messages=msgs, max_new_tokens=max_new_tokens, temperature=0.3,
+                  top_p=0.9, use_graft=False)
+    try:
+        req = ChatRequest(**kwargs, telemeter=False)
+    except TypeError:
+        req = ChatRequest(**kwargs)
+    return FRONTIER.stream_text(req)
+
+
+register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat,
+                     stream_fn=_operator_stream if FRONTIER.available() else None)
 
 # LOLM Operator: a general multi-tool agent (list/read/write/run/search) that pursues a
 # GOAL over its own bwrap-jailed virtual workspace — plan -> act -> observe -> verify,

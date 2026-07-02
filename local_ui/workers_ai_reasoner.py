@@ -85,6 +85,54 @@ class WorkersAIReasonerLoop:
         with urllib.request.urlopen(request, timeout=eff_timeout) as resp:
             return json.loads(resp.read())
 
+    def stream_text(self, req: Any) -> Iterator[str]:
+        """Stream the 70B's answer as text deltas (the worker pipes the winning
+        provider's SSE straight through). Yields plain-text pieces as they arrive.
+        Handles both delta shapes — OpenAI `choices[0].delta.content` and Workers
+        AI `response` — regardless of which provider won the cascade. Raises on
+        transport errors so the caller can fall back to the blocking path."""
+        if not self.available():
+            raise RuntimeError("workers_ai reasoner not configured (URL/secret)")
+        want = int(getattr(req, "max_new_tokens", 128))
+        n_tokens = min(max(want * 3, 96), 4096)
+        payload = {
+            "messages": _messages_for_workers_ai(req),
+            "max_tokens": n_tokens,
+            "model": self.model,
+            "stream": True,
+        }
+        request = urllib.request.Request(
+            self.url, data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {self.secret}",
+                     "Accept": "text/event-stream",
+                     "User-Agent": "lolm-nfet-origin/1.0"})
+        eff_timeout = min(self.timeout + n_tokens / 40.0, 150.0)
+        with urllib.request.urlopen(request, timeout=eff_timeout) as resp:
+            ctype = (resp.headers.get("content-type") or "")
+            if "text/event-stream" not in ctype:
+                # cascade failed before any stream started — surface the JSON error
+                raise RuntimeError((resp.read(400).decode("utf-8", "replace")) or "no stream")
+            for raw in resp:
+                line = raw.decode("utf-8", "replace").strip()
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if not data or data == "[DONE]":
+                    continue
+                try:
+                    j = json.loads(data)
+                except Exception:
+                    continue
+                piece = ""
+                ch = j.get("choices")
+                if ch and isinstance(ch, list):
+                    piece = ((ch[0] or {}).get("delta") or {}).get("content") or ""
+                if not piece:
+                    piece = j.get("response") or ""
+                if piece:
+                    yield piece
+
     def __call__(self, req: Any) -> Iterator[Dict[str, Any]]:
         started = time.perf_counter()
         if not self.available():

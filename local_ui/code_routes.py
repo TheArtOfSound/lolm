@@ -144,7 +144,8 @@ def _visual_recipe(task: str) -> str:
 
 def register_code_routes(app: Any, root: str,
                          chat_fn: Optional[Callable[[List[Dict[str, str]]], str]],
-                         runs_per_min: int = 6) -> None:
+                         runs_per_min: int = 6,
+                         stream_fn: Optional[Callable[..., Any]] = None) -> None:
     rate: Dict[str, List[float]] = {}
 
     def _ip(req: Request) -> str:
@@ -192,28 +193,8 @@ def register_code_routes(app: Any, root: str,
         return StreamingResponse(gen(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-    @app.post("/api/demo/code/visual")
-    def code_visual(req: VisualTask, request: Request):
-        """Build a COMPLETE self-contained HTML app for a visual/interactive task.
-
-        The browser is the safe visual runtime: the returned HTML runs in a
-        sandboxed iframe (allow-scripts only — no network, no parent access), so a
-        game/animation/UI is actually playable, not just printed as text.
-        """
-        if chat_fn is None:
-            return JSONResponse({"error": "visual builder unavailable on this host"},
-                                status_code=503)
-        ip = _ip(request)
-        now = time.time()
-        rate[ip] = [t for t in rate.get(ip, []) if now - t < 60]
-        if len(rate[ip]) >= runs_per_min:
-            return JSONResponse({"error": f"rate limit {runs_per_min} builds/min"},
-                                status_code=429)
-        rate[ip].append(now)
-        task = (req.task or "").strip()[:2000]
-        if not task:
-            return JSONResponse({"error": "empty task"}, status_code=400)
-
+    def _visual_messages(task: str) -> List[Dict[str, str]]:
+        """The one visual-builder prompt, shared by the blocking and streaming routes."""
         system = (
             "You build ONE complete, self-contained HTML document that implements the "
             "user's visual or interactive task. Output ONLY the HTML — start with "
@@ -268,8 +249,81 @@ def register_code_routes(app: Any, root: str,
         )
         recipe = _visual_recipe(task)
         guide = (f"\n\nIMPLEMENTATION GUIDE — follow this approach:\n{recipe}\n" if recipe else "")
-        msgs = [{"role": "system", "content": system},
+        return [{"role": "system", "content": system},
                 {"role": "user", "content": f"TASK: {task}{guide}\n\nReturn the full, complete HTML document now."}]
+
+    @app.post("/api/demo/code/visual/stream")
+    def code_visual_stream(req: VisualTask, request: Request):
+        """STREAMING visual builder — same prompt/recipes as the blocking route, but
+        the code is streamed token-by-token as SSE while it's being written, and the
+        finished document is emitted the instant the stream ends:
+          start → chunk{text}* → html{html,bytes} → done   (error{...} on failure)
+        The blocking POST /api/demo/code/visual stays as the fallback."""
+        if stream_fn is None or chat_fn is None:
+            return JSONResponse({"error": "streaming builder unavailable — use /api/demo/code/visual"},
+                                status_code=503)
+        ip = _ip(request)
+        now = time.time()
+        rate[ip] = [t for t in rate.get(ip, []) if now - t < 60]
+        if len(rate[ip]) >= runs_per_min:
+            return JSONResponse({"error": f"rate limit {runs_per_min} builds/min"}, status_code=429)
+        rate[ip].append(now)
+        task = (req.task or "").strip()[:2000]
+        if not task:
+            return JSONResponse({"error": "empty task"}, status_code=400)
+        msgs = _visual_messages(task)
+
+        def gen():
+            yield _sse("start", {"task": task[:140]})
+            full, buf = [], []
+            buf_len = 0
+            try:
+                for piece in stream_fn(msgs, 3600):
+                    full.append(piece)
+                    buf.append(piece)
+                    buf_len += len(piece)
+                    if buf_len >= 160:            # coalesce tiny deltas; keep event volume sane
+                        yield _sse("chunk", {"text": "".join(buf)})
+                        buf, buf_len = [], 0
+                if buf:
+                    yield _sse("chunk", {"text": "".join(buf)})
+            except Exception as exc:
+                yield _sse("error", {"error": f"stream failed: {exc}"[:200]})
+                return
+            raw = "".join(full)
+            html = _extract_html(raw)
+            if not html or len(html) < 60:
+                yield _sse("error", {"error": "the model did not return a usable HTML app — try rephrasing"})
+                return
+            yield _sse("html", {"html": html, "bytes": len(html)})
+            yield _sse("done", {})
+
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.post("/api/demo/code/visual")
+    def code_visual(req: VisualTask, request: Request):
+        """Build a COMPLETE self-contained HTML app for a visual/interactive task.
+
+        The browser is the safe visual runtime: the returned HTML runs in a
+        sandboxed iframe (allow-scripts only — no network, no parent access), so a
+        game/animation/UI is actually playable, not just printed as text.
+        """
+        if chat_fn is None:
+            return JSONResponse({"error": "visual builder unavailable on this host"},
+                                status_code=503)
+        ip = _ip(request)
+        now = time.time()
+        rate[ip] = [t for t in rate.get(ip, []) if now - t < 60]
+        if len(rate[ip]) >= runs_per_min:
+            return JSONResponse({"error": f"rate limit {runs_per_min} builds/min"},
+                                status_code=429)
+        rate[ip].append(now)
+        task = (req.task or "").strip()[:2000]
+        if not task:
+            return JSONResponse({"error": "empty task"}, status_code=400)
+
+        msgs = _visual_messages(task)
         try:
             raw = chat_fn(msgs, max_new_tokens=3600)
         except TypeError:

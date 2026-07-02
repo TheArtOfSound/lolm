@@ -512,6 +512,30 @@ async function buildVisualOnce(task, timeoutMs=240000){
   return {ok:resp.ok, status:resp.status, j};
 }
 function previewBlankCheck(html){ return new Promise(res=>{ let done=false; renderPreview(html, d=>{ if(!done){done=true; res(!!(d&&d.blank));} }); setTimeout(()=>{ if(!done){done=true; res(false);} }, 4400); }); }
+// LIVE token stream: watch the code being written. Resolves {html,bytes} the instant
+// the document is complete; throws on any error so the caller falls back to the
+// blocking builder. onChunk(text) fires for each code delta.
+async function streamVisualBuild(task, onChunk){
+  const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(), 240000);
+  let resp;
+  try{ resp=await fetch('/api/demo/code/visual/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task}),signal:ctl.signal}); }
+  catch(e){ clearTimeout(to); throw (e.name==='AbortError'? new Error('stream timed out'):e); }
+  if(!resp.ok || !(resp.headers.get('content-type')||'').includes('event-stream')){ clearTimeout(to); throw new Error('stream unavailable (HTTP '+resp.status+')'); }
+  const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf='', html=null, err=null;
+  try{
+    while(true){ const {done,value}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+      let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+        let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: ')){ try{data=JSON.parse(ln.slice(6));}catch(_){} } }
+        if(name==='chunk'&&data&&data.text) onChunk(data.text);
+        else if(name==='html'&&data) html=data;
+        else if(name==='error'&&data) err=data.error||'stream error';
+      }
+    }
+  }finally{ clearTimeout(to); }
+  if(err) throw new Error(err);
+  if(!html||!html.html) throw new Error('stream ended without a document');
+  return html;
+}
 async function runVisualBuild(task, c){
   const showPreview=()=>{ try{ openDock('work'); document.querySelector('#btabs .tab[data-bpane=preview]').click(); }catch(_){} };
   showPreview();
@@ -530,11 +554,26 @@ async function runVisualBuild(task, c){
     if(secs===9) pv.innerHTML='<div class="notconn">🎨 still writing… a simple app takes ~10–25s; a full game or raycaster can take 1–2 minutes. It appears here the instant it’s ready.</div>';
     else if(secs===45) pv.innerHTML='<div class="notconn">🎨 building a large app — the model is writing a lot of code (this can take up to ~2 min). Still going…</div>'; }, 1000);
   try{
-    let r=await buildVisualOnce(task);
+    let html=null, bytes=0, streamed=false;
+    // LIVE STREAM first: the code appears in the Diff pane as it's being written.
+    try{
+      const dp=$('bpane-diff');
+      dp.innerHTML='<div style="color:#94a3b8;margin-bottom:4px">index.html — <span style="color:#3fd6a0">writing live</span></div><pre id="vstream" style="white-space:pre-wrap;color:#cbd5e1"></pre>';
+      try{ openDock('work'); document.querySelector('#btabs .tab[data-bpane=diff]').click(); }catch(_){}
+      let chars=0;
+      const r=await streamVisualBuild(task,(t)=>{ chars+=t.length; const pre=document.getElementById('vstream'); if(pre){ pre.textContent+=t; dp.scrollTop=dp.scrollHeight; } });
+      html=r.html; bytes=r.bytes; streamed=true;
+      step('⚡ <b>streamed the code live</b> — '+chars+' chars watched being written');
+    }catch(se){ step('· live stream unavailable — building the normal way <span class="dim">('+esc(String(se.message||se).slice(0,60))+')</span>'); }
+    if(!html){
+      const r=await buildVisualOnce(task);
+      if(!r.ok || !r.j.html){ clearInterval(tick); const msg=r.j.error||('the builder is unavailable (HTTP '+r.status+')'); bub.textContent='⚠ Couldn’t build it — '+msg; pv.innerHTML='<div class="notconn">⚠ '+esc(msg)+'<br><br>Try again, or rephrase it (e.g. “build a snake game”).</div>'; rec.verdict='error'; step('✗ '+esc(msg)); }
+      else{ html=r.j.html; bytes=r.j.bytes; }
+    }
     clearInterval(tick);
-    if(!r.ok || !r.j.html){ const msg=r.j.error||('the builder is unavailable (HTTP '+r.status+')'); bub.textContent='⚠ Couldn’t build it — '+msg; pv.innerHTML='<div class="notconn">⚠ '+esc(msg)+'<br><br>Try again, or rephrase it (e.g. “build a snake game”).</div>'; rec.verdict='error'; step('✗ '+esc(msg)); }
-    else{
-      let html=r.j.html, bytes=r.j.bytes, rebuilt=false;
+    if(html){
+      let rebuilt=false;
+      rec.streamed=streamed;
       const blank=await previewBlankCheck(html);   // renders it + watches for a blank frame
       if(blank){
         step('· first render came up blank — auto-rebuilding once');
@@ -543,7 +582,7 @@ async function runVisualBuild(task, c){
         if(r2.ok && r2.j.html){ html=r2.j.html; bytes=r2.j.bytes; rebuilt=true; renderPreview(html); }
       }
       showPreview();   // make sure the Preview pane is in view when it's ready
-      bub.innerHTML='✅ <b>Built a live, playable app</b> — '+bytes+' bytes of self-contained HTML, running now in the <b>Preview</b> tab (bottom panel). Click into it and play.'+(rebuilt?' <span class="dim">(auto-rebuilt after a blank first try)</span>':'');
+      bub.innerHTML='✅ <b>Built a live, playable app</b> — '+bytes+' bytes of self-contained HTML, running now in the <b>Preview</b> tab (bottom panel). Click into it and play.'+(streamed?' <span class="dim">⚡ code streamed live as it was written</span>':'')+(rebuilt?' <span class="dim">(auto-rebuilt after a blank first try)</span>':'');
       rec.verdict='rendered'; rec.bytes=bytes; rec.rebuilt=rebuilt;
       step('▶ <b>running live</b> in the Preview pane · '+bytes+' bytes'+(rebuilt?' · auto-rebuilt after a blank first try':''));
       $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">index.html</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(html.slice(0,14000))+'</pre>';
