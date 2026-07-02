@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>LOLM — persistent AI agent workspace · Qira</title>
 <meta name="description" content="A persistent AI agent workspace: ongoing conversations, projects, web search, learned memory, and an auditable receipt for every turn — a 70B kept honest by LOLM's uncertainty control. Claude Code with receipts.">
 <meta property="og:title" content="LOLM — a persistent AI agent workspace with receipts">
@@ -22,14 +25,15 @@
     --warn:#b45309; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   }
-  *{box-sizing:border-box}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;-webkit-font-smoothing:antialiased}
   a{color:var(--accent2);text-decoration:none}
-  button{font-family:inherit;cursor:pointer}
+  button{font-family:inherit;cursor:pointer;touch-action:manipulation}
+  input,textarea,select{touch-action:manipulation}
   /* Default = a clean, spacious 2-pane workspace (sidebar + conversation). The
      workbench/inspector live in an on-demand DOCK that slides in only when there's
      something to show (a run, a preview, a receipt) — no four panels fighting at once. */
-  .app{display:grid;grid-template-columns:300px minmax(0,1fr);grid-template-areas:"side main";height:100vh;transition:grid-template-columns .22s ease}
+  .app{display:grid;grid-template-columns:300px minmax(0,1fr);grid-template-areas:"side main";height:100vh;height:100dvh;transition:grid-template-columns .22s ease}
   .app.dock-open{grid-template-columns:300px minmax(0,1fr) minmax(380px,44vw);grid-template-areas:"side main dock"}
   .app:not(.dock-open) .dock{display:none}
   @media(max-width:980px){.app.dock-open{grid-template-columns:300px minmax(0,1fr)} .app.dock-open .dock{position:fixed;inset:0 0 0 auto;width:min(92vw,460px);z-index:40;box-shadow:-12px 0 40px rgba(2,6,23,.18)}}
@@ -161,10 +165,64 @@
   .dock-toggle{font-size:12px;font-family:var(--mono);padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--dim);white-space:nowrap}
   .dock-toggle:hover{border-color:var(--accent2);color:var(--ink)}
   .app.dock-open .dock-toggle{display:none}
-  @media(max-width:760px){.app,.app.dock-open{grid-template-columns:minmax(0,1fr);grid-template-areas:"main"}.side{position:fixed;left:-320px;top:0;bottom:0;width:290px;z-index:50;transition:left .2s;box-shadow:8px 0 40px rgba(2,6,23,.18)}.side.show{left:0}.menu-btn{display:inline-flex}}
+  /* scrim behind mobile drawers — tap anywhere outside to close */
+  .scrim{display:none;position:fixed;inset:0;background:rgba(2,6,23,.34);z-index:45;opacity:0;transition:opacity .18s}
+  .scrim.show{display:block;opacity:1}
+  /* ══ MOBILE (fully touch-optimized) ══ */
+  @media(max-width:760px){
+    .app,.app.dock-open{grid-template-columns:minmax(0,1fr);grid-template-areas:"main"}
+    /* sidebar = left drawer under a scrim; safe width on small phones */
+    .side{position:fixed;left:-110%;top:0;bottom:0;width:min(85vw,320px);z-index:50;transition:left .22s;box-shadow:8px 0 40px rgba(2,6,23,.18)}
+    .side.show{left:0}
+    .menu-btn{display:inline-flex;width:40px;height:40px;font-size:18px}
+    /* touch has no hover — the delete ✕ must always be visible & finger-sized */
+    .conv{padding:11px 12px}
+    .conv-x{opacity:.55;font-size:18px;padding:4px 8px;top:8px;right:6px}
+    .conv .t{padding-right:30px}
+    .newbtn{padding:12px;font-size:14px}
+    .nav-link{padding:10px 10px;font-size:13px}
+    /* the DOCK becomes a full-height bottom sheet (not a skinny side drawer) */
+    .app.dock-open .dock{position:fixed;left:0;right:0;bottom:0;top:auto;width:100%;height:88dvh;z-index:60;
+      border-left:0;border-top:1px solid var(--line);border-radius:16px 16px 0 0;overflow:hidden;
+      box-shadow:0 -14px 44px rgba(2,6,23,.25);animation:sheetup .22s ease}
+    .dock-head{padding:16px 12px 8px;position:relative}
+    .dock-head::before{content:"";position:absolute;top:6px;left:50%;transform:translateX(-50%);width:38px;height:4px;border-radius:99px;background:var(--line)}
+    .dock-x{width:42px;height:42px;font-size:20px}
+    .dseg{padding:9px 14px;font-size:13px}
+    /* tab strips scroll horizontally instead of squeezing 7 tabs into 375px */
+    .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{flex:0 0 auto;min-width:76px;padding:12px 10px;font-size:12px}
+    /* composer: home-indicator safe area + no-iOS-zoom inputs */
+    .composer{padding:6px 10px calc(12px + env(safe-area-inset-bottom))}
+    .crow{border-radius:14px;padding:6px 6px 6px 12px}
+    .crow textarea{font-size:16px;max-height:150px}
+    .send{height:44px;padding:0 18px;border-radius:11px}
+    .search,#lifeAskInput,#pane-keys input{font-size:16px !important}
+    .search{padding:10px 12px}
+    /* roomier reading + tighter gutters */
+    .feed{padding:18px 12px 26px;gap:16px;overscroll-behavior-y:contain}
+    .msg .bub{padding:12px 14px;font-size:15px}
+    .msg.user .bub{max-width:88%}
+    .reason{font-size:11px;padding:10px 11px}
+    .conv-head{padding:9px 10px;gap:8px}
+    .conv-head h1{font-size:14px}
+    .conv-head .meta{display:none}       /* mono metadata row is noise at phone width */
+    .dock-toggle{padding:8px 12px}
+    .empty{padding:16px 8px}
+    .empty h2{font-size:23px}
+    .empty p{font-size:14px}
+    .starters button{padding:12px 16px;font-size:14px}
+    #lifeAsk > div:last-child{flex-wrap:wrap}
+    #lifeAsk button{min-height:42px}
+    .side-scroll,.tab-body{overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
+    .bub.md pre.cb{font-size:12px;max-width:calc(100vw - 60px)}
+  }
+  @keyframes sheetup{from{transform:translateY(30%);opacity:.6}to{transform:translateY(0);opacity:1}}
 </style>
 </head>
 <body>
+<div class="scrim" id="scrim" onclick="document.getElementById('side').classList.remove('show');this.classList.remove('show')"></div>
 <div class="app">
   <!-- LEFT -->
   <aside class="side" id="side">
@@ -1186,7 +1244,13 @@ document.querySelectorAll('#btabs .tab').forEach(t => t.onclick = () => {
 document.querySelectorAll('.dseg').forEach(b => b.onclick = () => openDock(b.dataset.dview));
 $('dockClose').onclick = closeDock;
 $('dockToggle').onclick = () => { document.querySelector('.app').classList.contains('dock-open') ? closeDock() : openDock('inspect'); };
-$('menuBtn').onclick = () => $('side').classList.toggle('show');
+// Mobile drawer: menu toggles it (with a scrim), tapping the scrim or picking a
+// conversation closes it — hover affordances don't exist on touch.
+const _isMobile = () => window.matchMedia('(max-width:760px)').matches;
+$('menuBtn').onclick = () => { const on=$('side').classList.toggle('show'); $('scrim').classList.toggle('show', on && _isMobile()); };
+$('convList').addEventListener('click', () => { if(_isMobile()){ $('side').classList.remove('show'); $('scrim').classList.remove('show'); } });
+if(_isMobile()) $('prompt').placeholder='Ask, code, search, or build anything…';
+$('newConv').addEventListener('click', () => { if(_isMobile()){ $('side').classList.remove('show'); $('scrim').classList.remove('show'); } });
 
 /* ── wire-up ── */
 $('newConv').onclick = newConv;
