@@ -4,9 +4,9 @@
 right answer, run against the live chat to track reasoning quality over time.
 
 Usage:  python3 scripts/hard_reason_probe.py [BASE_URL]   (default $LOLM_BASE or box)
-Baseline on Llama-3.3-70B: 5/6. The known miss is `sally-1sister` (a classic
-double-counting trap) — a model-reasoning ceiling, not a LOLM bug; a stronger
-brain via BYOK (Keys tab) gets it. Exits non-zero if the score drops BELOW 5/6."""
+Baseline: 6/6 since the logic-trap reconsider pass (a skeptic second-look on
+puzzle-style questions) — including the classic Sally-sisters double-counting
+trap. Exits non-zero below 6/6 so a reconsider-pass regression is caught."""
 import json, os, re, sys, time, urllib.request
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else os.environ.get("LOLM_BASE", "http://127.0.0.1:7866")).rstrip("/")
@@ -54,4 +54,4 @@ for label, q, good, trap in CASES:
     print(f"[{verdict}] {label:16} -> {a.strip()[:95]!r}")
     time.sleep(2)
 print(f"\n=== {ok}/{len(CASES)} correct ===")
-sys.exit(0 if ok >= 5 else 1)          # 5/6 is the known 70B baseline; below that is a regression
+sys.exit(0 if ok >= 6 else 1)          # 6/6 since the reconsider pass; below is a regression
