@@ -185,6 +185,22 @@ def test_operator_hard_read_cap(tmp_path):
     assert reads == 3
 
 
+def test_operator_context_steers_to_create_missing_file(tmp_path):
+    """A run that fails because a file/module was never created must steer the model
+    to WRITE it (the multi-file bug: it planned two files in one WRITE, so the second
+    never existed, and it kept running a missing file instead of creating it)."""
+    sb = Sandbox(tmp_path)
+    op = AgentOperator(sb, lambda m: "DONE: x", isolated=None)
+    op.log = [{"kind": "run", "summary": "ran `python3 test_util.py` -> exit 2",
+               "observation": "python3: can't open file '/work/test_util.py': [Errno 2] No such file or directory"}]
+    ctx = op._context()
+    assert "does NOT exist" in ctx and "test_util.py" in ctx and "WRITE" in ctx
+    op.log = [{"kind": "run", "summary": "ran `python3 main.py` -> exit 1",
+               "observation": "ModuleNotFoundError: No module named 'util'"}]
+    ctx = op._context()
+    assert "util" in ctx and "WRITE" in ctx
+
+
 def test_operator_verifier_rejects_a_false_done(tmp_path):
     """Hellhound discipline: DONE is EARNED, not asserted. When the strict verifier
     rejects a finish it goes back as work; and if it never verifies, the receipt is

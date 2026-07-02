@@ -51,10 +51,12 @@ SYSTEM = (
     "things.\n"
     "RULES: take only ONE action per step. Before WRITE/EDIT, prefer LIST/READ to know the "
     "state. For a small change to an existing file use EDIT (cheaper and safer than rewriting "
-    "it whole); use WRITE for new files or full rewrites. To use the web, SEARCH for a URL "
-    "then FETCH it for the full content. Always RUN code to verify it works before DONE — "
-    "never claim success you haven't seen. If a command fails, READ the error and fix the "
-    "root cause."
+    "it whole); use WRITE for new files or full rewrites. Each WRITE creates exactly ONE "
+    "file — if the task needs several files, use several WRITE steps (one file each) and "
+    "create ALL of them BEFORE running anything that imports or uses them. To use the web, "
+    "SEARCH for a URL then FETCH it for the full content. Always RUN code to verify it works "
+    "before DONE — never claim success you haven't seen. If a command fails because a file or "
+    "module is missing, WRITE that file; otherwise READ the error and fix the root cause."
 )
 
 _FENCE = re.compile(r"```[a-zA-Z0-9_]*\n?(.*?)```", re.DOTALL)
@@ -172,6 +174,20 @@ class AgentOperator:
                          "THIS step — a debug/build goal is finished the MOMENT a run shows the "
                          "correct result; do not keep reading or re-running something that already "
                          "works. Only keep going if the output still does NOT meet the goal.")
+        elif last["kind"] == "run" and re.search(
+                r"No such file|can't open file|ModuleNotFoundError|No module named",
+                last.get("observation", "")):
+            # A run failed because a needed file/module was never created. The model
+            # often tries to make several files in one WRITE (only the first lands) or
+            # runs before writing — steer it to CREATE the missing file, one per WRITE.
+            m = re.search(r"can't open file '([^']+)'|No such file or directory:?\s*'?([\w./-]+)'?"
+                          r"|No module named '?([\w.]+)'?", last.get("observation", ""))
+            miss = (next((g for g in (m.groups() if m else ()) if g), "") or "").split("/")[-1]
+            hint = f"`{miss}`" if miss else "a file it needs"
+            lines.append(f"\n⚠ The command FAILED because {hint} does NOT exist yet — you never "
+                         f"created it. `WRITE:` it now. You can only create ONE file per WRITE, so if "
+                         f"the task needs several files, write them ONE PER STEP before running "
+                         f"anything that uses them. Then run again.")
         elif last.get("changed"):        # only after a write/edit that ACTUALLY landed
             lines.append("\n✓ You just changed a file. RUN it NOW to see whether it works — do "
                          "NOT read it first, `RUN:` it. Verifying a change means executing it, "
