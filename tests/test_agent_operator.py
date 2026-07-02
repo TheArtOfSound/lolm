@@ -51,6 +51,12 @@ def test_parse_edit_and_fetch():
     assert e["old"] == "old line" and e["new"] == "new line"
     f = _parse_action("STEP: read web\nFETCH: https://example.com/x")
     assert f["tool"] == "fetch" and f["url"] == "https://example.com/x"
+    # tolerant markers: models emit the wrong bracket count / truncate before REPLACE —
+    # these are VALID edits and must parse (this exact shape stalled a live debug 5x)
+    m = _parse_action("STEP: fix\nEDIT: util.py\n<<<<<< SEARCH\nreturn x + 1\n=======\nreturn x\n>>>>")
+    assert m and m["tool"] == "edit" and m["old"] == "return x + 1" and m["new"] == "return x"
+    m2 = _parse_action("EDIT: a.py\n<<<<< SEARCH\nold\n=======\nnew")  # closing marker cut off entirely
+    assert m2 and m2["old"] == "old" and m2["new"] == "new"
 
 
 def test_operator_edit_applies(tmp_path):

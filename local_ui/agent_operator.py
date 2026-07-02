@@ -60,7 +60,11 @@ SYSTEM = (
 )
 
 _FENCE = re.compile(r"```[a-zA-Z0-9_]*\n?(.*?)```", re.DOTALL)
-_SR = re.compile(r"<<<<<<<\s*SEARCH\s*\n(.*?)\n?=======\s*\n(.*?)\n?>>>>>>>\s*REPLACE", re.DOTALL)
+# Tolerant SEARCH/REPLACE: models routinely emit the conflict markers with the wrong
+# number of </>/= (5, 6, 8 instead of 7) and truncate before "REPLACE" — the old strict
+# 7-char/"REPLACE" regex rejected VALID edits, stalling the operator. Accept 3+ markers
+# and a missing/cut-off closing marker (capture the replacement up to >>> or end).
+_SR = re.compile(r"<{3,}\s*SEARCH\s*\n(.*?)\n={3,}[ \t]*\n(.*?)(?:\n[ \t]*>{3,}.*|\s*\Z)", re.DOTALL)
 
 
 def _parse_action(text: str) -> Optional[Dict[str, Any]]:
