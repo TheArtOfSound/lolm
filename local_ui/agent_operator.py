@@ -153,10 +153,45 @@ class AgentOperator:
                          "verified).")
         return "\n".join(lines)
 
+    def _verify_goal(self, goal: str) -> Dict[str, Any]:
+        """Independent, skeptical OUTCOME check — the Hellhound discipline: DONE
+        must be EARNED, not asserted. A separate strict verifier reviews the goal
+        against what was actually done and the REAL command output, and defaults
+        to failure unless success is proven. Returns {verified, reason}. This is
+        what makes the receipt's `verified` flag honest instead of "ran anything".
+        """
+        transcript = [f"- {a['kind']}: {a['summary']}" for a in self.log[-10:]]
+        last_out = ""
+        for a in reversed(self.log):
+            if a["kind"] == "run":
+                last_out = (a.get("observation") or "")[:1200]
+                break
+        system = (
+            "You are a STRICT verifier auditing whether an agent TRULY achieved a goal. "
+            "Be skeptical: assume it FAILED unless the evidence clearly proves success. "
+            "Judge ONLY from the actions taken and the actual command output — never from "
+            "what the agent claims. A goal that needs code is met only if a run exited 0 "
+            "AND its output shows the intended behavior. Reply with EXACTLY one line:\n"
+            "`VERIFIED: <one-line why>` if genuinely met and proven, or\n"
+            "`NOT_VERIFIED: <what is missing or what failed>` otherwise.")
+        user = (f"GOAL:\n{goal}\n\nACTIONS TAKEN:\n" + ("\n".join(transcript) or "(none)") +
+                f"\n\nMOST RECENT RUN OUTPUT:\n{last_out or '(nothing was ever run)'}\n\nVerdict:")
+        try:
+            raw = (self.chat([{"role": "system", "content": system},
+                              {"role": "user", "content": user}]) or "").strip()
+        except Exception as exc:
+            return {"verified": False, "reason": f"verifier unavailable: {exc}"[:140], "raw": ""}
+        up = raw.upper()
+        verified = ("NOT_VERIFIED" not in up) and ("NOT VERIFIED" not in up) and ("VERIFIED" in up)
+        reason = raw.split(":", 1)[1].strip()[:220] if ":" in raw else raw[:220]
+        return {"verified": bool(verified), "reason": reason or raw[:220], "raw": raw[:280]}
+
     def run(self, goal: str) -> Iterator[Dict[str, Any]]:
         yield {"event": "operator_start", "data": {"goal": goal, "sandbox": self.sb.id,
                "tools": ["list", "read", "write", "edit", "run", "search", "fetch", "done"]}}
         ran_something = False
+        clean_runs = 0            # runs that exited 0 (honest success count)
+        verify_fails = 0          # times the strict verifier rejected a DONE
         nudges = 0
         for step in range(self.max_steps):
             msgs = [{"role": "system", "content": SYSTEM},
@@ -178,7 +213,8 @@ class AgentOperator:
                        "tool": act["tool"]}}
 
             tool = act["tool"]
-            # ── DONE (gated on having actually run/verified something) ──
+            # ── DONE (EARNED: gated on an independent strict verifier, not the
+            #    model's say-so, and not merely "ran anything") ──
             if tool == "done":
                 if not ran_something and nudges < 2:
                     nudges += 1
@@ -188,8 +224,23 @@ class AgentOperator:
                                      "observation": "You haven't RUN anything yet. Build it and "
                                                     "RUN it to verify before DONE."})
                     continue
+                yield {"event": "verifying", "data": {"step": step}}
+                verdict = self._verify_goal(goal)
+                yield {"event": "verification", "data": {"verified": verdict["verified"],
+                       "reason": verdict["reason"]}}
+                # A rejected finish is sent BACK as work, not accepted — up to twice.
+                if not verdict["verified"] and verify_fails < 2 and step < self.max_steps - 1:
+                    verify_fails += 1
+                    yield {"event": "agent_note", "data": {"step": step,
+                           "text": f"verifier rejected the finish: {verdict['reason']}"[:200]}}
+                    self.log.append({"kind": "note", "summary": "verification REJECTED done",
+                                     "observation": f"A strict verifier rejected your DONE: "
+                                     f"{verdict['reason']}\nFix this and RUN it again to PROVE it "
+                                     f"works before finishing."})
+                    continue
                 yield {"event": "operator_done", "data": {"summary": act["summary"],
-                       "steps": step, "actions": len(self.log), "verified": ran_something}}
+                       "steps": step, "actions": len(self.log), "clean_runs": clean_runs,
+                       "verified": bool(verdict["verified"]), "verification": verdict["reason"]}}
                 return
 
             # ── LIST ──
@@ -276,6 +327,8 @@ class AgentOperator:
                 yield {"event": "command_started", "data": {"command": cmd}}
                 r = self.sb.run(cmd, timeout=self.run_timeout, isolated=self.isolated)
                 ran_something = True
+                if r.get("exit_code") == 0 and not r.get("blocked"):
+                    clean_runs += 1
                 out = ((r.get("stdout") or "") + (r.get("stderr") or "")).strip()
                 yield {"event": "command_finished", "data": {
                     "command": cmd, "exit_code": r.get("exit_code"),
@@ -324,6 +377,11 @@ class AgentOperator:
                     yield {"event": "agent_note", "data": {"text": f"fetch failed: {exc}"[:160]}}
                 continue
 
+        # Budget hit: still render an HONEST verdict — run the strict verifier if
+        # anything executed, otherwise it plainly did not finish.
+        final = self._verify_goal(goal) if ran_something else {"verified": False,
+                "reason": "step budget reached before anything ran"}
         yield {"event": "operator_done", "data": {"summary": "reached the step budget",
                "budget_hit": True, "steps": self.max_steps, "actions": len(self.log),
-               "verified": ran_something}}
+               "clean_runs": clean_runs, "verified": bool(final["verified"]),
+               "verification": final.get("reason", "")}}

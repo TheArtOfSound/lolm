@@ -757,7 +757,9 @@ async function runOperator(goal, c){
           else if(name==='web_result'){ step('  ↳ '+(data.results?data.results.length:0)+' web result(s)'); if(data.results&&data.results.length){ $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">web results</div>'+data.results.map(r=>'<div style="margin:3px 0"><a href="'+esc(r.url||'#')+'" target="_blank" rel="noopener" style="color:#7cc4ff">'+esc(r.title||r.url||'')+'</a><div style="color:#94a3b8;font-size:11px">'+esc((r.snippet||'').slice(0,160))+'</div></div>').join(''); } }
           else if(name==='web_fetch'){ step('  ↳ fetched <code>'+esc((data.url||'').slice(0,64))+'</code> · '+(data.chars||0)+' chars'); }
           else if(name==='agent_note') step('• '+esc(data.text||''));
-          else if(name==='operator_done'){ const t=document.getElementById('opthink'); if(t)t.remove(); rec.verdict=data.budget_hit?'budget_hit':(data.verified?'verified':'finished'); rec.summary=data.summary; rec.actions=data.actions; step('✅ <b>done</b>'+(data.summary?' — '+esc(data.summary):'')); }
+          else if(name==='verifying'){ step('<span class="pulse">🔎 a strict verifier is checking the goal was actually met…</span>'); }
+          else if(name==='verification'){ rec.verified=!!data.verified; rec.verification=data.reason||''; step((data.verified?'✓ <b>verified</b>':'✗ <b>verifier rejected the finish</b>')+(data.reason?' — '+esc(data.reason.slice(0,160)):'')); }
+          else if(name==='operator_done'){ const t=document.getElementById('opthink'); if(t)t.remove(); if(data.verified!=null) rec.verified=!!data.verified; if(data.verification) rec.verification=data.verification; rec.cleanRuns=data.clean_runs; rec.verdict=data.budget_hit?'budget_hit':(data.verified?'verified':'unverified'); rec.summary=data.summary; rec.actions=data.actions; step('✅ <b>done</b>'+(data.summary?' — '+esc(data.summary):'')); }
           else if(name==='error') step('⚠ '+esc(data.error||''));
         }
       }
@@ -769,7 +771,11 @@ async function runOperator(goal, c){
   if(rec.tools.length) html += '<div style="margin-top:6px;font-size:12px;color:var(--dim)">Used <b>'+rec.tools.length+'</b> tool call'+(rec.tools.length===1?'':'s')+': '+rec.tools.map(esc).join(' → ')+'</div>';
   if(rec.files.length) html += '<div style="margin-top:4px;font-size:12px;color:var(--dim)">Files: '+rec.files.map(esc).join(', ')+'</div>';
   if(rec.lastOut) html += '<div style="margin-top:6px">Output:</div><pre style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;white-space:pre-wrap;font-size:12px;overflow:auto">'+esc(rec.lastOut.trim().slice(0,2000))+'</pre>';
-  html += '<div style="margin-top:6px;color:'+(rec.ok?'var(--good)':'var(--warn)')+';font-size:12px">'+(rec.ok?'✅ Verified by running it in a network-isolated virtual computer.':'⚠ Did not reach a verified result.')+'</div>';
+  { const vf=rec.verified===true, vunk=rec.verified==null;
+    html += '<div style="margin-top:6px;color:'+(vf?'var(--good)':(vunk?'var(--dim)':'var(--warn)'))+';font-size:12px">'+
+      (vf ? '✅ <b>Verified</b> — a strict verifier confirmed the goal was met'+(rec.verification?': '+esc(rec.verification):'')+', in a network-isolated virtual computer.'
+          : vunk ? '· Finished (no independent verification ran).'
+          : '⚠ <b>Not verified</b> — the strict verifier could not confirm the goal was met'+(rec.verification?': '+esc(rec.verification):'')+'. Honest receipt — treat the result with care.')+'</div>'; }
   bub.innerHTML = html;
   renderInspectors({receipt:rec, sources:[], memories:[]});
   await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:(rec.summary||'')+(rec.lastOut?('\n'+rec.lastOut.trim()):''),model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});

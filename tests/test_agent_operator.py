@@ -6,6 +6,19 @@ from local_ui.internet_tools import _resolve_ddg
 from local_ui.sandbox import Sandbox
 
 
+def _scripted(steps, verdict="VERIFIED: the run output proves the goal is met"):
+    """A fake model: answers the strict-verifier call with `verdict`, and pulls the
+    next scripted action for every normal turn (so the new self-verification step
+    doesn't consume the action script)."""
+    it = iter(steps)
+
+    def fn(msgs):
+        if "STRICT verifier" in (msgs[0].get("content") or ""):
+            return verdict
+        return next(it, "DONE: end")
+    return fn
+
+
 def test_parse_each_action():
     assert _parse_action("STEP: look\nLIST")["tool"] == "list"
     assert _parse_action("READ: a.py")["path"] == "a.py"
@@ -33,7 +46,7 @@ def test_operator_edit_applies(tmp_path):
         'STEP: create\nWRITE: g.py\n```\nprint("hello world")\n```',
         'STEP: edit\nEDIT: g.py\n<<<<<<< SEARCH\nhello world\n=======\nhello LOLM\n>>>>>>> REPLACE',
     ])
-    op = AgentOperator(sb, lambda m: next(seq, "DONE: end"), isolated=None)
+    op = AgentOperator(sb, _scripted(seq), isolated=None)
     events = list(op.run("edit a file in place"))
     assert any(e["event"] == "file_changed" and e["data"].get("edit") for e in events)
     assert sb.read_file("g.py").strip() == 'print("hello LOLM")'
@@ -43,7 +56,7 @@ def test_operator_edit_rejects_missing_text(tmp_path):
     sb = Sandbox(tmp_path)
     sb.write_file("g.py", "alpha\n")
     seq = iter(["STEP: edit\nEDIT: g.py\n<<<<<<< SEARCH\nNOT THERE\n=======\nbeta\n>>>>>>> REPLACE"])
-    op = AgentOperator(sb, lambda m: next(seq, "DONE: end"), isolated=None)
+    op = AgentOperator(sb, _scripted(seq), isolated=None)
     events = list(op.run("edit"))
     assert any("not found" in e["data"].get("text", "") for e in events if e["event"] == "agent_note")
     assert sb.read_file("g.py") == "alpha\n"            # unchanged on a non-match
@@ -52,7 +65,7 @@ def test_operator_edit_rejects_missing_text(tmp_path):
 def test_operator_search_and_fetch(tmp_path):
     sb = Sandbox(tmp_path)
     seq = iter(["STEP: search\nSEARCH: latest python", "STEP: fetch\nFETCH: https://python.org"])
-    op = AgentOperator(sb, lambda m: next(seq, "DONE: end"),
+    op = AgentOperator(sb, _scripted(seq),
                        search_fn=lambda q: [{"title": "Python", "url": "https://python.org", "snippet": "lang"}],
                        fetch_fn=lambda u: {"url": u, "status": 200, "text": "Python is a language", "chars": 20},
                        isolated=None)
@@ -93,7 +106,7 @@ def test_operator_completes_a_multi_step_goal(tmp_path):
         "STEP: run it\nRUN: python3 fib.py",
         "DONE: fib works, prints the sequence",
     ])
-    op = AgentOperator(sb, lambda m: next(steps), isolated=None)
+    op = AgentOperator(sb, _scripted(steps), isolated=None)
     events = list(op.run("write and run a fibonacci program"))
     kinds = [e["event"] for e in events]
     assert "file_changed" in kinds and "command_finished" in kinds
@@ -111,8 +124,30 @@ def test_operator_blocks_premature_done(tmp_path):
         "STEP: actually run\nRUN: python3 -c \"print(2+2)\"",
         "DONE: verified 4",
     ])
-    events = list(AgentOperator(sb, lambda m: next(seq), isolated=None).run("compute 2+2"))
+    events = list(AgentOperator(sb, _scripted(seq), isolated=None).run("compute 2+2"))
     assert any(e["event"] == "agent_note" for e in events)        # nudge fired
     assert sum(1 for e in events if e["event"] == "command_finished") == 1
     done = [e for e in events if e["event"] == "operator_done"][0]
     assert done["data"]["verified"] is True
+
+
+def test_operator_verifier_rejects_a_false_done(tmp_path):
+    """Hellhound discipline: DONE is EARNED, not asserted. When the strict verifier
+    rejects a finish it goes back as work; and if it never verifies, the receipt is
+    HONEST (verified is False) instead of rubber-stamping "ran something"."""
+    sb = Sandbox(tmp_path)
+    seq = iter([
+        'STEP: run\nRUN: python3 -c "raise SystemExit(1)"',     # a FAILING run
+        "DONE: it totally works",
+        "DONE: really it works",
+        "DONE: trust me",
+    ])
+    op = AgentOperator(sb, _scripted(seq, verdict="NOT_VERIFIED: the run exited non-zero"),
+                       isolated=None)
+    events = list(op.run("make the script exit cleanly"))
+    assert any(e["event"] == "verification" and e["data"]["verified"] is False for e in events)
+    assert any("verifier rejected" in e["data"].get("text", "")
+               for e in events if e["event"] == "agent_note")
+    done = [e for e in events if e["event"] == "operator_done"][0]
+    assert done["data"]["verified"] is False                    # honest, not rubber-stamped
+    assert done["data"]["clean_runs"] == 0                       # nothing exited 0
