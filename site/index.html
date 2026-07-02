@@ -795,9 +795,21 @@ function learnedChip(d){
   d.items.forEach(it=>{ h+='<div class="dim" style="margin-top:3px">'+(it.origin==='you'?'· you: ':'· learned: ')+esc((it.text||'').slice(0,150))+'</div>'; });
   div.innerHTML=h; return div;
 }
+// Honest brain attribution: tell the user WHICH brain answered, so a small local
+// model's limits aren't mistaken for the whole system — and offer the upgrade path.
+function brainBadge(r){
+  if(!r) return null;
+  const M={claude:'Claude · frontier reasoning','claude-opus':'Claude Opus · frontier',
+           workers_ai:'Llama-3.3-70B · cloud',llama:'Llama · cloud',local:'your local model'};
+  const label=M[r]||r, weak=(r==='local');
+  const div=document.createElement('div');
+  div.style.cssText='margin-top:6px;font-size:11px;color:var(--dim)';
+  div.innerHTML='🧠 answered by <b>'+esc(label)+'</b>'+(weak?' · <span style="color:#b45309">a small on-device model — add a Brain key in <b>Keys</b> for a larger one</span>':'');
+  return div;
+}
 function handle(name, data, ctx){
   const {bub, step, rec} = ctx;
-  if(name==='run_start'){ rec.mode = data.mode||rec.mode; step('▸ <b>start</b> — '+(data.mode==='web_research'?'searching the web + measuring uncertainty':'LOLM controller')); }
+  if(name==='run_start'){ rec.mode = data.mode||rec.mode; rec.reasoner = data.reasoner||rec.reasoner; step('▸ <b>start</b> — '+(data.mode==='web_research'?'searching the web + measuring uncertainty':'LOLM controller')); }
   else if(name==='web_search'){ rec.sources = data.links||[]; step('🌐 <b>searched the web</b> — '+data.sources+' source'+(data.sources===1?'':'s')); }
   else if(name==='segment_start'){ step('· drafting segment '+data.segment); }
   else if(name==='decision'){ const d=data.decision; rec.controls[d.label]=(rec.controls[d.label]||0)+1; step('◆ <b>'+esc(d.label)+'</b> '+esc((d.reason||'').slice(0,70))); }
@@ -814,7 +826,7 @@ function handle(name, data, ctx){
     const badge=document.createElement('div'); badge.style.cssText='margin-top:8px;font-size:12px;color:#166534;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:6px 9px';
     badge.innerHTML='✓ <b>Caught &amp; fixed a math error before you saw it.</b>'+(data.before?' <span class="dim">“'+esc(data.before)+'” → corrected to '+esc(String(data.corrected_value))+'</span>':''); bub.appendChild(badge);
     step('✓ <b>corrected</b> — the answer now passes the calculator'); $('feed').scrollTop=$('feed').scrollHeight; }
-  else if(name==='run_done'){ if(rec.answer && !rec.math_corrected){ bub.innerHTML=mdToHtml(rec.answer); bub.classList.add('md'); } const lc=learnedChip(rec.drewOn); if(lc) bub.appendChild(lc); step('● done'); }
+  else if(name==='run_done'){ if(rec.answer && !rec.math_corrected){ bub.innerHTML=mdToHtml(rec.answer); bub.classList.add('md'); } const lc=learnedChip(rec.drewOn); if(lc) bub.appendChild(lc); const bb=brainBadge(rec.reasoner); if(bb) bub.appendChild(bb); step('● done'); }
   else if(name==='error'){ bub.textContent += '\n[error] '+(data.error||''); }
 }
 
