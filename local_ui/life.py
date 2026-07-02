@@ -23,6 +23,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import Request                 # module-level: with `from __future__ import
 from fastapi.responses import JSONResponse  # annotations`, FastAPI must resolve these names
+from pydantic import BaseModel
 
 # standing curiosities used when no explicit goal is active — rotated so ticks don't rut
 _STANDING = [
@@ -110,6 +111,30 @@ class LifeEngine:
         with self.fact_queue.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(fact, ensure_ascii=False) + "\n")
 
+    # ── the human answers a question LOLM asked — its reply becomes memory ──
+    def _answered_ids(self) -> set:
+        p = self.runs / "life_answered.json"
+        try:
+            return set(json.loads(p.read_text()))
+        except Exception:
+            return set()
+
+    def answer(self, pulse_id: str, reply: str) -> Dict[str, Any]:
+        reply = (reply or "").strip()[:1000]
+        q = ""
+        for p in self._pulses():
+            if p.get("id") == pulse_id:
+                q = p.get("question", "")
+                break
+        if reply:
+            self.memory.append_note(
+                f"Owner answered LOLM's question '{q[:160]}' → {reply}", tag="owner_answer", importance=6)
+            self.memory.append_journal(f"## Owner answered {pulse_id}\n\nQ: {q}\n\nA: {reply}")
+        ap = self.runs / "life_answered.json"
+        done = self._answered_ids(); done.add(pulse_id)
+        ap.write_text(json.dumps(sorted(done)[-2000:]))
+        return {"ok": True, "recorded": bool(reply), "question": q}
+
     # ── one heartbeat ───────────────────────────────────────────────────
     def tick(self) -> Dict[str, Any]:
         t0 = time.time()
@@ -131,11 +156,14 @@ class LifeEngine:
             f"YOUR LAST THOUGHTS (do NOT repeat or rephrase these — build on or depart from them):\n{prev_thoughts}\n\n"
             f"RECENTLY LEARNED:\n" + ("\n".join("- " + x for x in recent_learned) or "(nothing yet)") + "\n\n"
             f"JOURNAL TAIL:\n{self.memory.read_journal(max_chars=1200)}\n\n"
-            "Return EXACTLY these four sections:\n"
+            "Return EXACTLY these five sections:\n"
             "THOUGHT: one short paragraph of genuinely NEW thinking on the focus — a hypothesis, "
             "a connection, a plan step; never a summary of the state above.\n"
             "SEARCH: one specific web query that would advance this (or NONE).\n"
             "REMEMBER: one durable insight worth keeping (or NONE).\n"
+            "QUESTION: one genuine, specific question for your human that would actually unblock or "
+            "sharpen this focus — something only they can answer (a preference, a decision, missing "
+            "context). Make it feel like you've been thinking and want their take. (or NONE)\n"
             "NEXT: the single concrete thing the next tick should do."
         )
         raw = self.chat([
@@ -147,6 +175,9 @@ class LifeEngine:
         thought = self._sect(raw, "THOUGHT") or raw.strip()[:400]
         query = self._sect(raw, "SEARCH")
         remember = self._sect(raw, "REMEMBER")
+        question = self._sect(raw, "QUESTION")
+        if question.upper().strip(" .") == "NONE" or len(question) < 8:
+            question = ""
         nxt = self._sect(raw, "NEXT")
 
         # ONE read-only search, digested into something actually learned
@@ -184,7 +215,7 @@ class LifeEngine:
 
         pulse = {"id": pid, "ts": round(t0, 1), "focus": focus[:220], "thought": thought[:500],
                  "search": (query or "")[:160], "learned": learned[:500], "next": (nxt or "")[:220],
-                 "fact_queued": (fact or {}).get("q", ""),
+                 "question": question[:300], "fact_queued": (fact or {}).get("q", ""),
                  "sources": sources, "seconds": round(time.time() - t0, 1)}
         with self.pulse_path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(pulse, ensure_ascii=False) + "\n")
@@ -238,8 +269,16 @@ class LifeEngine:
         away = [p for p in pulses if since_ts and p["ts"] > since_ts][-24:]
         goals = [g for g in self.memory.get_goals() if g.get("status", "active") == "active"]
         facts = self._queued_facts()
+        answered = self._answered_ids()
+        open_q = None
+        for p in reversed(pulses):                    # newest unanswered question it asked
+            if p.get("question") and p["id"] not in answered:
+                open_q = {"id": p["id"], "question": p["question"], "focus": p.get("focus", ""),
+                          "thought": p.get("thought", ""), "ts": p["ts"]}
+                break
         return {
             "alive": alive,
+            "open_question": open_q,
             "last_pulse": last,
             "seconds_since": round(now - last["ts"]) if last else None,
             "next_eta_s": max(0, round(self.interval_s - (now - last["ts"]))) if last else None,
@@ -276,3 +315,16 @@ def register_life_routes(app: Any, engine: LifeEngine, is_loopback: Callable[[An
         """Facts LOLM minted from its own thinking — the weight-training daemon (on the
         owner's machine) pulls these and trains them in, gated. Read-only."""
         return {"facts": engine._queued_facts()[-200:]}
+
+    class _Answer(BaseModel):
+        pulse_id: str
+        reply: str = ""
+
+    @app.post("/api/demo/life/answer")
+    def life_answer(body: _Answer):
+        """The human answers a question LOLM asked while thinking. Its reply becomes a
+        durable memory — this is the two-way loop: it wonders, you tell it, it remembers."""
+        try:
+            return engine.answer(body.pulse_id, body.reply)
+        except Exception as exc:
+            return JSONResponse({"error": str(exc)[:200]}, status_code=500)

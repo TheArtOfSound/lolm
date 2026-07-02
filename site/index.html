@@ -201,6 +201,12 @@
       <button class="dock-toggle" id="dockToggle" title="open the workbench / inspector">⧉ Panel</button>
     </div>
     <div class="feed" id="feed">
+      <div id="lifeAsk" style="display:none;margin:0 0 14px;padding:14px 16px;border:1px solid #7c3aed;border-radius:14px;background:linear-gradient(180deg,rgba(124,58,237,.06),transparent)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:8px;height:8px;border-radius:50%;background:#16a34a;animation:lifebeat 2s infinite"></span><span style="font-weight:600;font-size:13px;color:#7c3aed">While you were away, LOLM was thinking…</span></div>
+        <div id="lifeAskThought" class="dim" style="font-size:12.5px;line-height:1.55;margin-bottom:8px"></div>
+        <div id="lifeAskQ" style="font-size:14.5px;font-weight:600;margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px"><input id="lifeAskInput" placeholder="Tell it…" style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-size:13px;box-sizing:border-box" onkeydown="if(event.key==='Enter')answerLife()"><button onclick="answerLife()" style="padding:9px 15px;border:0;border-radius:9px;background:#7c3aed;color:#fff;font-weight:600;cursor:pointer">Reply</button><button onclick="dismissLifeAsk()" title="not now" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer">Later</button></div>
+      </div>
       <div class="empty" id="emptyState">
         <h2>What do you want to do?</h2>
         <p>Just describe it — LOLM reads your prompt and picks the right tool on its own:
@@ -1006,7 +1012,23 @@ function renderLife(){ const el=document.getElementById('pane-life'); if(!el) re
     d.goals.forEach(g=>{ h+='<div class="dim" style="font-size:12px;padding:2px 0">◦ '+esc(g.title)+'</div>'; }); }
   el.innerHTML=h;
 }
-(function initLife(){ fetchLife(); localStorage.setItem('lolm_last_seen', String(Date.now()/1000)); setInterval(fetchLife, 60000); })();
+/* ── LOLM asks YOU: surface its open question so it feels like a mind that wonders ── */
+let _lifeAskId=null;
+function renderLifeAsk(){ const d=_lifeCache, box=document.getElementById('lifeAsk'); if(!box) return;
+  const q=d&&d.open_question;
+  if(!q || localStorage.getItem('lolm_dismissed_q')===q.id){ box.style.display='none'; return; }
+  _lifeAskId=q.id;
+  document.getElementById('lifeAskThought').textContent=(q.thought||'').slice(0,220);
+  document.getElementById('lifeAskQ').textContent='“'+q.question+'”';
+  box.style.display='block';
+}
+async function answerLife(){ const inp=document.getElementById('lifeAskInput'); const reply=(inp.value||'').trim(); if(!_lifeAskId) return;
+  try{ await fetch('/api/demo/life/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pulse_id:_lifeAskId,reply})}); }catch(_){}
+  const box=document.getElementById('lifeAsk'); box.innerHTML='<div style="font-size:13px;color:#166534;padding:2px 0">✓ Thanks — I\'ll remember that.</div>'; setTimeout(()=>{box.style.display='none';},2200);
+  _lifeCache=null; setTimeout(fetchLife, 2500);
+}
+function dismissLifeAsk(){ if(_lifeAskId) localStorage.setItem('lolm_dismissed_q', _lifeAskId); document.getElementById('lifeAsk').style.display='none'; }
+(function initLife(){ fetchLife().then(renderLifeAsk); localStorage.setItem('lolm_last_seen', String(Date.now()/1000)); setInterval(()=>fetchLife().then(renderLifeAsk), 60000); })();
 /* ── tabs ── */
 document.querySelectorAll('#rtabs .tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('#rtabs .tab').forEach(x=>x.classList.toggle('on',x===t));
