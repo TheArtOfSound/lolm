@@ -60,9 +60,16 @@ class WorkersAIReasonerLoop:
         return bool(self.url and self.secret)
 
     def _generate(self, req: Any) -> Dict[str, Any]:
+        # Cap the request. The old `max_new_tokens*3` ballooned a 3600-token visual
+        # build into a 10,800-token ask that NO provider finishes inside the 30s
+        # window — so every big build timed out and fell back to the tiny local
+        # model (a multi-minute CPU crawl). 4096 is plenty for any game/app's HTML
+        # and completes on a fast cascade provider (Groq/Cerebras) in ~15-25s.
+        want = int(getattr(req, "max_new_tokens", 128))
+        n_tokens = min(max(want * 3, 96), 4096)
         payload = {
             "messages": _messages_for_workers_ai(req),
-            "max_tokens": max(int(getattr(req, "max_new_tokens", 128)) * 3, 96),
+            "max_tokens": n_tokens,
             "model": self.model,
         }
         request = urllib.request.Request(
@@ -71,7 +78,11 @@ class WorkersAIReasonerLoop:
                      "Authorization": f"Bearer {self.secret}",
                      # Cloudflare's edge 403s the default Python-urllib UA.
                      "User-Agent": "lolm-nfet-origin/1.0"})
-        with urllib.request.urlopen(request, timeout=self.timeout) as resp:
+        # Scale the wait with the generation size: a 4096-token game legitimately
+        # needs longer than a one-line planner turn. Bounded so a hung call can't
+        # wait forever, but generous enough that a real big build isn't killed.
+        eff_timeout = min(self.timeout + n_tokens / 40.0, 150.0)
+        with urllib.request.urlopen(request, timeout=eff_timeout) as resp:
             return json.loads(resp.read())
 
     def __call__(self, req: Any) -> Iterator[Dict[str, Any]]:
