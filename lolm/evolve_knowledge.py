@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -26,7 +27,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-DEFAULT_MODEL = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
+# On-device sovereign brain. Bumped 0.5B -> 3B: ~6x the parameters for materially
+# stronger local reasoning, still comfortably Mac-friendly (~2GB 4-bit, <2min load
+# on M-series). Override with LOLM_EVOLVE_MODEL if you want a different size.
+DEFAULT_MODEL = os.environ.get("LOLM_EVOLVE_MODEL", "mlx-community/Qwen2.5-3B-Instruct-4bit")
 QA = Tuple[str, str]
 
 

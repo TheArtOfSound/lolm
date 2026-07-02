@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 
@@ -22,7 +23,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import uvicorn
 
-DEFAULT_MODEL = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
+# Kept in lockstep with lolm.evolve_knowledge.DEFAULT_MODEL (train and serve MUST
+# use the same base). Bumped to a 3B for a stronger on-device brain; override both
+# with LOLM_EVOLVE_MODEL.
+DEFAULT_MODEL = os.environ.get("LOLM_EVOLVE_MODEL", "mlx-community/Qwen2.5-3B-Instruct-4bit")
 
 
 class ChatBody(BaseModel):
@@ -38,7 +42,16 @@ def build_app(base: str, adapter: str) -> FastAPI:
     from mlx_lm.sample_utils import make_sampler
 
     ad = adapter if adapter and Path(adapter).exists() else None
-    model, tok = load(base, adapter_path=ad)     # loaded ONCE, adapter baked in
+    try:
+        model, tok = load(base, adapter_path=ad)     # loaded ONCE, adapter baked in
+    except Exception as exc:
+        # A stale adapter trained on a DIFFERENT base (e.g. after a model-size bump
+        # from 0.5B to 3B) can't load — serve the clean base rather than crash. The
+        # daemon will retrain a fresh adapter on the new base on its next cycle.
+        print(f"[serve_evolved] adapter load failed ({exc}); serving base weights only",
+              flush=True)
+        model, tok = load(base)
+        ad = None
     facts = 0
     st = Path(adapter or "").parent / "state.json"
     if st.exists():
