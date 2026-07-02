@@ -775,6 +775,20 @@ async function runOperator(goal, c){
   await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:(rec.summary||'')+(rec.lastOut?('\n'+rec.lastOut.trim()):''),model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
 }
 
+// Make learning FELT: a subtle chip under the answer showing what LOLM actually
+// drew on — facts it remembers about you, or world knowledge it taught itself.
+// Only rendered when the backend proved the answer USED the fact (word overlap).
+function learnedChip(d){
+  if(!d || !d.items || !d.items.length) return null;
+  const div=document.createElement('div');
+  div.style.cssText='margin-top:8px;font-size:12px;color:#5b21b6;background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.22);border-radius:8px;padding:7px 10px;line-height:1.5';
+  const head = (d.personal&&d.world) ? '💡 Drew on what it remembers about you + what it taught itself'
+             : d.personal ? '💡 Remembered this about you'
+             : '📚 Used something it taught itself';
+  let h='<b>'+head+'</b>';
+  d.items.forEach(it=>{ h+='<div class="dim" style="margin-top:3px">'+(it.origin==='you'?'· you: ':'· learned: ')+esc((it.text||'').slice(0,150))+'</div>'; });
+  div.innerHTML=h; return div;
+}
 function handle(name, data, ctx){
   const {bub, step, rec} = ctx;
   if(name==='run_start'){ rec.mode = data.mode||rec.mode; step('▸ <b>start</b> — '+(data.mode==='web_research'?'searching the web + measuring uncertainty':'LOLM controller')); }
@@ -787,13 +801,14 @@ function handle(name, data, ctx){
   else if(name==='proof'){ rec.verdict = data.verdict||''; rec.ended_by = data.ended_by; rec.control_counts=data.control_counts; rec.decision_sources=data.decision_sources; rec.word_similarity=data.word_similarity; step('⊨ <b>receipt</b> — '+esc((data.verdict||'').slice(0,80))); }
   else if(name==='freshness'){ rec.freshness = data; rec.answer=(rec.answer||'')+'\n\n⚠ '+(data.message||''); bub.textContent=rec.answer; }
   else if(name==='confidence_map'){ rec.confidence = data; }
+  else if(name==='drew_on'){ rec.drewOn = data; const n=(data.personal||0)+(data.world||0); step('💡 <b>drew on '+n+' thing'+(n===1?'':'s')+' it '+(data.personal&&!data.world?'remembers about you':(data.world&&!data.personal?'taught itself':'knows'))+'</b>'); }
   else if(name==='phase' && data.phase==='self_correcting'){ const c=(data.caught&&data.caught[0]); step('🧮 <b>calculator flagged an equation</b>'+(c?' — “'+esc(c.claim)+'” (should be '+c.computed+')':'')+' — re-checking…'); }
   else if(name==='phase' && data.phase==='self_correct_kept'){ step('kept the original — couldn’t verify a cleaner rewrite (details in the receipt)'); }
   else if(name==='correction'){ rec.answer=data.answer; rec.math_corrected=true; bub.innerHTML=mdToHtml(data.answer); bub.classList.add('md');
     const badge=document.createElement('div'); badge.style.cssText='margin-top:8px;font-size:12px;color:#166534;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:6px 9px';
     badge.innerHTML='✓ <b>Caught &amp; fixed a math error before you saw it.</b>'+(data.before?' <span class="dim">“'+esc(data.before)+'” → corrected to '+esc(String(data.corrected_value))+'</span>':''); bub.appendChild(badge);
     step('✓ <b>corrected</b> — the answer now passes the calculator'); $('feed').scrollTop=$('feed').scrollHeight; }
-  else if(name==='run_done'){ if(rec.answer && !rec.math_corrected){ bub.innerHTML=mdToHtml(rec.answer); bub.classList.add('md'); } step('● done'); }
+  else if(name==='run_done'){ if(rec.answer && !rec.math_corrected){ bub.innerHTML=mdToHtml(rec.answer); bub.classList.add('md'); } const lc=learnedChip(rec.drewOn); if(lc) bub.appendChild(lc); step('● done'); }
   else if(name==='error'){ bub.textContent += '\n[error] '+(data.error||''); }
 }
 

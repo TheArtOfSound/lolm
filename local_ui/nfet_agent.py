@@ -1152,6 +1152,47 @@ WORKING DRAFT:
             if retrieval:
                 yield {"event": "retrieval_report", "data": retrieval}
 
+        # Make learning FELT (#5): the conversation itself should show when LOLM
+        # actually DREW ON something it learned — the personal facts it remembers
+        # about YOU, or world facts it taught itself overnight (LEARNED MEMORY).
+        # Honest by construction: we only surface an item the answer measurably
+        # USED (>=3 shared content words), never decorative context; and we tag
+        # origin truthfully — "you" = your own past conversations, "learned" =
+        # self-ingested world knowledge. User-pasted BYO sources are excluded
+        # (those aren't learning). This never runs over the weights claim.
+        try:
+            from lolm.retrieval_report import retrieval_support as _support
+            drew = _support(memory_hits + evidence, answer_text, min_overlap=3)
+            learned: List[Dict[str, str]] = []
+            seen_learned: set = set()
+            for it in drew.get("items", []):
+                if not it.get("used"):
+                    continue
+                kind, snip = it.get("kind"), (it.get("snippet") or "")
+                if kind in ("memory", "identity", "goal"):
+                    txt, origin = snip, "you"
+                elif "LEARNED MEMORY" in snip:
+                    txt = re.sub(r"^SOURCE\s*\[\d+\]\s*LEARNED MEMORY:\s*", "", snip).strip()
+                    origin = "learned"
+                else:
+                    continue
+                # snippet truncation can leave a dangling "(https://ope" — drop any
+                # trailing/partial URL paren so the felt chip reads clean, then
+                # dedupe (the store can hold the same fact more than once).
+                txt = re.sub(r"\s*\(https?://[^)]*\)?\s*$", "", txt).strip().rstrip("(").strip()
+                key = re.sub(r"\W+", "", txt.lower())[:60]
+                if not txt or key in seen_learned:
+                    continue
+                seen_learned.add(key)
+                learned.append({"origin": origin, "text": txt[:180]})
+            if learned:
+                yield {"event": "drew_on", "data": {
+                    "items": learned[:3],
+                    "personal": sum(1 for x in learned if x["origin"] == "you"),
+                    "world": sum(1 for x in learned if x["origin"] == "learned")}}
+        except Exception:
+            pass
+
         # Provenance is assembled from the action log, never written by the
         # model — an agent that cannot misreport what it did.
         provenance: List[str] = []
