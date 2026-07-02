@@ -32,6 +32,19 @@ def test_parse_each_action():
     assert _parse_action("no action here") is None
 
 
+def test_parse_infers_write_when_header_omitted():
+    # the exact live failure: model NAMES the file in STEP + fences the code but
+    # forgets the `WRITE:` header → infer a write instead of wasting the step
+    a = _parse_action("STEP: create primes.py with the buggy content\n```\nprint('hi')\n```")
+    assert a and a["tool"] == "write" and a["path"] == "primes.py" and "print('hi')" in a["content"]
+    # a fence with NO filename named anywhere → do NOT invent a file
+    assert _parse_action("here is some code\n```\nprint(1)\n```") is None
+    # an incidental filename INSIDE the code must not be picked up
+    assert _parse_action("STEP: think\n```\nopen('data.json')\n```") is None
+    # explicit tags still win over the fallback
+    assert _parse_action("RUN: python3 x.py\n```\nignored\n```")["tool"] == "run"
+
+
 def test_parse_edit_and_fetch():
     e = _parse_action("STEP: tweak\nEDIT: a.py\n<<<<<<< SEARCH\nold line\n=======\nnew line\n>>>>>>> REPLACE")
     assert e["tool"] == "edit" and e["path"] == "a.py"
@@ -58,7 +71,7 @@ def test_operator_edit_rejects_missing_text(tmp_path):
     seq = iter(["STEP: edit\nEDIT: g.py\n<<<<<<< SEARCH\nNOT THERE\n=======\nbeta\n>>>>>>> REPLACE"])
     op = AgentOperator(sb, _scripted(seq), isolated=None)
     events = list(op.run("edit"))
-    assert any("not found" in e["data"].get("text", "") for e in events if e["event"] == "agent_note")
+    assert any("didn't match" in e["data"].get("text", "") for e in events if e["event"] == "agent_note")
     assert sb.read_file("g.py") == "alpha\n"            # unchanged on a non-match
 
 
@@ -129,6 +142,47 @@ def test_operator_blocks_premature_done(tmp_path):
     assert sum(1 for e in events if e["event"] == "command_finished") == 1
     done = [e for e in events if e["event"] == "operator_done"][0]
     assert done["data"]["verified"] is True
+
+
+def test_operator_context_breaks_read_stall(tmp_path):
+    """Anti-stall: after re-reading a file without changing anything, the context
+    must hard-steer toward an EDIT (a real failure mode a live debug run exposed —
+    the model re-read the same file 7 times instead of fixing it)."""
+    sb = Sandbox(tmp_path)
+    op = AgentOperator(sb, lambda m: "DONE: x", isolated=None)
+    op.log = [
+        {"kind": "write", "summary": "wrote primes.py", "observation": "ok"},
+        {"kind": "run", "summary": "ran `python3 primes.py` -> exit 0", "observation": "wrong output"},
+        {"kind": "read", "summary": "read primes.py", "observation": "..."},
+        {"kind": "read", "summary": "read primes.py", "observation": "..."},
+        {"kind": "read", "summary": "read primes.py", "observation": "..."},
+    ]
+    ctx = op._context()
+    assert "Reading again reveals nothing new" in ctx and "EDIT" in ctx
+    # a healthy log (just wrote+ran) must NOT get the stall steer
+    op.log = [{"kind": "write", "summary": "wrote a.py", "observation": "ok"},
+              {"kind": "run", "summary": "ran `python3 a.py` -> exit 0", "observation": "ok"}]
+    assert "Reading again reveals nothing new" not in op._context()
+    # right after a SUCCESSFUL edit the context must steer to RUN (verify by executing)
+    op.log = [{"kind": "edit", "changed": True, "summary": "edited a.py", "observation": "applied"}]
+    assert "RUN it NOW" in op._context()
+    # but a FAILED edit (no change) must NOT tell it to run an unchanged file
+    op.log = [{"kind": "edit", "summary": "edit a.py — text not found", "observation": "WRITE the whole file"}]
+    assert "RUN it NOW" not in op._context()
+
+
+def test_operator_hard_read_cap(tmp_path):
+    """A read-happy model that never acts must be FORCED to stop reading: after 3
+    reads with no change, further reads are blocked outright (not just nudged)."""
+    sb = Sandbox(tmp_path)
+    sb.write_file("a.py", "x = 1\n")
+    op = AgentOperator(sb, _scripted(["READ: a.py"] * 8), isolated=None, max_steps=8)
+    events = list(op.run("inspect a.py"))
+    assert any("read blocked" in e["data"].get("text", "")
+               for e in events if e["event"] == "agent_note")
+    # it should have actually read a few times before the block kicked in
+    reads = sum(1 for e in events if e["event"] == "file_view")
+    assert reads == 3
 
 
 def test_operator_verifier_rejects_a_false_done(tmp_path):

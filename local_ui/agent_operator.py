@@ -25,9 +25,13 @@ SYSTEM = (
     "sandboxed Linux workspace with a real filesystem and shell. Achieve the GOAL by "
     "taking ONE action per step. After each action you see its REAL result, then you "
     "take the next action. Work methodically: inspect, plan, build, run, verify, fix.\n\n"
-    "Each step, reply in EXACTLY this shape (a one-line plan, then ONE action):\n"
-    "STEP: <what you're doing and why, one line>\n"
+    "Each step, reply in EXACTLY this shape (a SHORT plan, then ONE action):\n"
+    "STEP: <a short phrase, max ~10 words>\n"
     "<ACTION>\n\n"
+    "CRITICAL: keep STEP to ONE short phrase and put the ACTION right after it. Do NOT "
+    "write long explanations before the action — a long plan gets cut off before the "
+    "action block and wastes the whole step. The ACTION (especially the file contents) is "
+    "what matters; spend your words there, not on the plan.\n\n"
     "ACTION is exactly ONE of:\n"
     "  LIST                         — list files in the workspace\n"
     "  READ: <path>                 — print a file's contents\n"
@@ -105,6 +109,22 @@ def _parse_action(text: str) -> Optional[Dict[str, Any]]:
     md = re.search(r"^\s*DONE:\s*(.+)$", text, re.MULTILINE | re.DOTALL)
     if md:
         return {"tool": "done", "summary": md.group(1).strip()[:400], "step": step}
+
+    # Tolerant fallback: models frequently emit a fenced code block and NAME the
+    # target file in their STEP/prose but forget the exact `WRITE: <path>` header.
+    # Rather than waste the step on a parse failure, infer a WRITE when we can see
+    # BOTH a non-empty fence and a filename. (Only as a last resort — every explicit
+    # action tag above wins first.)
+    fence = _FENCE.search(text)
+    if fence and fence.group(1).strip():
+        # look for the filename in the STEP/prose BEFORE the fence — never inside the
+        # code itself (which may mention incidental paths like open("data.json")).
+        pre = step + "\n" + text[:fence.start()]
+        fn = re.search(r"\b([\w./-]+\.(?:py|js|ts|html?|css|json|md|txt|sh|c|cpp|cc|h|hpp"
+                       r"|java|go|rs|rb|php|sql|ya?ml|toml|ini))\b", pre)
+        if fn:
+            return {"tool": "write", "path": fn.group(1).strip().strip('"`'),
+                    "content": fence.group(1), "step": step}
     return None
 
 
@@ -140,10 +160,28 @@ class AgentOperator:
         run_cmds = [a["summary"] for a in self.log if a["kind"] == "run"]
         ok_runs = [a for a in self.log if a["kind"] == "run" and "-> exit 0" in a["summary"]]
         repeated = len(run_cmds) != len(set(run_cmds))
+        # Anti-stall: a real failure mode is re-READING a file over and over to
+        # "analyze the bug" without ever committing to a fix. Reading again reveals
+        # nothing new — force an EDIT/WRITE then a RUN.
+        recent = self.log[-3:]
+        recent_reads = sum(1 for a in recent if a["kind"] == "read")
+        acted_recently = any(a["kind"] in ("write", "edit", "run") for a in recent)
         if last["kind"] == "run" and "-> exit 0" in last["summary"]:
-            lines.append("\n✓ Your last command SUCCEEDED. If the GOAL is now achieved, reply "
-                         "`DONE: <summary>` THIS step. Do NOT re-run a command that already "
-                         "worked — that wastes steps.")
+            lines.append("\n✓ Your last command ran with exit 0 — its output is shown above. "
+                         "COMPARE that output to the GOAL. If it matches, reply `DONE: <summary>` "
+                         "THIS step — a debug/build goal is finished the MOMENT a run shows the "
+                         "correct result; do not keep reading or re-running something that already "
+                         "works. Only keep going if the output still does NOT meet the goal.")
+        elif last.get("changed"):        # only after a write/edit that ACTUALLY landed
+            lines.append("\n✓ You just changed a file. RUN it NOW to see whether it works — do "
+                         "NOT read it first, `RUN:` it. Verifying a change means executing it, "
+                         "not re-reading it.")
+        elif recent_reads >= 2 and not acted_recently:
+            lines.append("\n⚠ You have READ the file(s) repeatedly WITHOUT changing anything. "
+                         "Reading again reveals nothing new — you already have what you need. If "
+                         "there is a bug, make the ONE `EDIT:` that fixes it THIS step (or "
+                         "`WRITE:` the whole corrected file), then `RUN:` it to prove the fix. Do "
+                         "NOT read the same file again.")
         elif repeated or len(ok_runs) >= 2:
             lines.append("\nYou have already run things successfully — STOP repeating commands. "
                          "If the GOAL is met, reply `DONE: <summary>` now; otherwise take the ONE "
@@ -171,9 +209,12 @@ class AgentOperator:
             "Be skeptical: assume it FAILED unless the evidence clearly proves success. "
             "Judge ONLY from the actions taken and the actual command output — never from "
             "what the agent claims. A goal that needs code is met only if a run exited 0 "
-            "AND its output shows the intended behavior. Reply with EXACTLY one line:\n"
-            "`VERIFIED: <one-line why>` if genuinely met and proven, or\n"
-            "`NOT_VERIFIED: <what is missing or what failed>` otherwise.")
+            "AND its output shows the intended behavior. IMPORTANT: judge by the FINAL / "
+            "MOST-RECENT run output below — a debug or build task legitimately has earlier "
+            "FAILED attempts before it works, and those earlier failures do NOT count against "
+            "it if the latest run now shows the correct result. Reply with EXACTLY one line:\n"
+            "`VERIFIED: <one-line why>` if the latest run proves the goal is met, or\n"
+            "`NOT_VERIFIED: <what is still wrong in the latest run>` otherwise.")
         user = (f"GOAL:\n{goal}\n\nACTIONS TAKEN:\n" + ("\n".join(transcript) or "(none)") +
                 f"\n\nMOST RECENT RUN OUTPUT:\n{last_out or '(nothing was ever run)'}\n\nVerdict:")
         try:
@@ -204,8 +245,17 @@ class AgentOperator:
                 return
             act = _parse_action(raw)
             if act is None:
+                # A reply with a plan but no runnable action (often a verbose STEP that
+                # got cut off before the action). Leave a crisp format reminder so the
+                # next turn emits a REAL action, not more prose.
+                self.log.append({"kind": "note", "summary": "no action parsed",
+                                 "observation": "Your last reply had NO runnable action — only a "
+                                 "plan/prose. Emit ONE action block NOW, action FIRST, e.g.:\n"
+                                 "WRITE: <path>\n```\n<full file contents>\n```\n"
+                                 "or `RUN: <command>`. Do NOT describe it — EMIT it, and keep any "
+                                 "STEP line to a few words so it isn't cut off."})
                 yield {"event": "agent_note", "data": {"step": step,
-                       "text": "couldn't parse an action — re-prompting",
+                       "text": "no action parsed — sent the exact format to use",
                        "raw": (raw or "")[:240]}}
                 continue
             if act.get("step"):
@@ -254,6 +304,25 @@ class AgentOperator:
 
             # ── READ ──
             if tool == "read":
+                # HARD anti-stall: a prompt nudge isn't always enough for a read-happy
+                # model, so after 3 reads with no intervening change, refuse further
+                # reads outright — force it to EDIT/WRITE. (Counts reads since the last
+                # real action; notes/parse-fails don't reset it.)
+                reads_since_act = 0
+                for a in reversed(self.log):
+                    if a["kind"] in ("write", "edit", "run"):
+                        break
+                    if a["kind"] == "read":
+                        reads_since_act += 1
+                if reads_since_act >= 3:
+                    self.log.append({"kind": "note", "summary": "read blocked — must act",
+                                     "observation": "READ is disabled: you've read 3+ times without "
+                                     "changing anything. You already have what you need. Take an "
+                                     "`EDIT:` or `WRITE:` action to fix the problem NOW, then `RUN:` "
+                                     "it. You may not read again until you have made a change."})
+                    yield {"event": "agent_note", "data": {"step": step,
+                           "text": "read blocked after 3 reads — must EDIT/WRITE now"}}
+                    continue
                 try:
                     content = self.sb.read_file(act["path"])
                     obs = content[:4000]
@@ -275,7 +344,7 @@ class AgentOperator:
                     yield {"event": "file_changed", "data": {"path": act["path"],
                            "diff": (fc.get("diff") or "")[:2500],
                            "bytes": len(act["content"])}}
-                    self.log.append({"kind": "write",
+                    self.log.append({"kind": "write", "changed": True,
                                      "summary": f"wrote {act['path']} ({len(act['content'])} bytes)",
                                      "observation": f"wrote {act['path']}"})
                 except Exception as exc:
@@ -296,10 +365,16 @@ class AgentOperator:
                     continue
                 n = content.count(old)
                 if n == 0:
+                    # Search/replace missed — a dead end if we just tell it to "read and
+                    # retry" (that feeds the read-stall). Give it the EXACT current content
+                    # inline and steer to rewrite the WHOLE file, which needs no matching.
                     self.log.append({"kind": "edit", "summary": f"edit {path} — text not found",
-                                     "observation": "The SEARCH text was not found EXACTLY (whitespace "
-                                     "counts). READ the file and copy the exact lines to replace."})
-                    yield {"event": "agent_note", "data": {"text": f"edit: SEARCH text not found in {path}"}}
+                                     "observation": "Your SEARCH text did not match the file EXACTLY, so "
+                                     f"NOTHING changed. Do NOT guess the search text again — instead "
+                                     f"`WRITE: {path}` the ENTIRE corrected file in one fenced block. "
+                                     f"Here is its EXACT current content to correct:\n\n{content[:1600]}"})
+                    yield {"event": "agent_note", "data": {"text":
+                           f"edit didn't match {path} — rewriting the whole file instead"}}
                     continue
                 if n > 1:
                     self.log.append({"kind": "edit", "summary": f"edit {path} — text not unique",
@@ -312,7 +387,8 @@ class AgentOperator:
                     yield {"event": "tool_call", "data": {"tool": "edit", "path": path}}
                     yield {"event": "file_changed", "data": {"path": path,
                            "diff": (fc.get("diff") or "")[:2500], "edit": True}}
-                    self.log.append({"kind": "edit", "summary": f"edited {path} "
+                    self.log.append({"kind": "edit", "changed": True,
+                                     "summary": f"edited {path} "
                                      f"(-{old.count(chr(10))+1}/+{new.count(chr(10))+1} lines)",
                                      "observation": f"applied search/replace to {path}"})
                 except Exception as exc:
