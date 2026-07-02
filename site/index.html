@@ -490,8 +490,15 @@ function renderPreview(html, onCheck){
   f.srcdoc=out; pane.appendChild(f);
   setTimeout(()=>{ try{ f.contentWindow.focus(); }catch(e){} }, 300);
 }
-async function buildVisualOnce(task){
-  const resp=await fetch('/api/demo/code/visual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
+async function buildVisualOnce(task, timeoutMs=240000){
+  // A big game (full Tetris, a raycaster) is thousands of tokens and can take
+  // ~2 min on the 70B. Bound the wait so a genuinely stuck build fails gracefully
+  // instead of hanging the tab forever.
+  const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(), timeoutMs);
+  let resp;
+  try{ resp=await fetch('/api/demo/code/visual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task}),signal:ctl.signal}); }
+  catch(e){ clearTimeout(to); if(e.name==='AbortError') return {ok:false, status:0, j:{error:'the build took too long (over 4 minutes) — try a simpler request, or split it up'}}; throw e; }
+  clearTimeout(to);
   const raw=await resp.text();
   let j={};
   try{ j=JSON.parse(raw); }
@@ -517,8 +524,11 @@ async function runVisualBuild(task, c){
   const rec={mode:'visual', model:'Llama 70B (visual)', files:['index.html'], verdict:''};
   // live elapsed counter so the ~10–25s generation never looks frozen ("never did")
   let secs=0; bub.textContent='🎨 Building your app… (0s) — writing the code, then it runs in the Preview tab ↓';
-  const tick=setInterval(()=>{ secs++; bub.textContent='🎨 Building your app… ('+secs+'s) — writing the code, then it runs in the Preview tab ↓';
-    if(secs===9) pv.innerHTML='<div class="notconn">🎨 still writing… a full game/app takes ~10–25s. It appears here the instant it’s ready.</div>'; }, 1000);
+  const tick=setInterval(()=>{ secs++;
+    const hint = secs<30 ? 'writing the code' : secs<75 ? 'this is a big one — a full game can take a minute or two' : 'still writing a large app — hang tight';
+    bub.textContent='🎨 Building your app… ('+secs+'s) — '+hint+', then it runs in the Preview tab ↓';
+    if(secs===9) pv.innerHTML='<div class="notconn">🎨 still writing… a simple app takes ~10–25s; a full game or raycaster can take 1–2 minutes. It appears here the instant it’s ready.</div>';
+    else if(secs===45) pv.innerHTML='<div class="notconn">🎨 building a large app — the model is writing a lot of code (this can take up to ~2 min). Still going…</div>'; }, 1000);
   try{
     let r=await buildVisualOnce(task);
     clearInterval(tick);
