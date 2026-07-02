@@ -769,6 +769,29 @@ WORKING DRAFT:
                 result.raw["truncation_trimmed"] = True
         return result
 
+    def _math_correct(self, command: str, answer: str,
+                      failed: List[Dict[str, Any]], req: NFETAgentRequest) -> str:
+        """A deterministic calculator caught a wrong number in the answer. Re-ask the
+        model to fix ONLY that, pointing at the exact error and the correct value —
+        so the user sees a corrected answer, not a wrong one with a red badge."""
+        errs = "\n".join(
+            f"- You wrote \"{c['claim']}\" but the correct value is {c['computed']:g}, "
+            f"not {c['claimed']:g}." for c in failed[:6])
+        system = ("You are fixing a factual ARITHMETIC error a calculator caught in an answer. "
+                  "Rewrite the answer with the number(s) CORRECTED. Change ONLY what the "
+                  "arithmetic requires — keep the wording, structure, and everything else "
+                  "identical. Output only the corrected answer, no preamble, no note about the fix.")
+        user = f"COMMAND:\n{command}\n\nERRORS THE CALCULATOR FOUND:\n{errs}\n\nANSWER TO FIX:\n{answer}"
+        ChatMessage = self.deps.ChatMessage
+        try:
+            seg = self._collect(
+                [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
+                req, tokens=min(req.final_tokens, 1200), use_graft=False)
+            fixed = strip_scaffold_echo(_CONTROL_ARTIFACT_RE.sub("", seg.text)).strip()
+            return fixed
+        except Exception:
+            return ""
+
     def _generate_base(self, command: str, req: NFETAgentRequest) -> SegmentResult:
         ChatMessage = self.deps.ChatMessage
         return self._collect(
@@ -1034,6 +1057,51 @@ WORKING DRAFT:
         confidence: Dict[str, Any] = {}
         cfn = getattr(self.deps, "confidence_fn", None)
         answer_text = (final.raw.get("response") or final.text or "").strip()
+
+        # CATCH-AND-FIX: a deterministic calculator re-derives the arithmetic in the
+        # answer. If a number is wrong, we DON'T just flag it red — we re-ask the model
+        # to correct it and show the fix. Trust you can watch: caught, then corrected.
+        from lolm.verifiers import run_text_verifiers
+        # Only act on CLEAN BARE EQUATIONS (digits/operators/currency only) — the
+        # prose-tolerant parser can mis-extract a truncated "= 3", so it must never
+        # trigger a rewrite. And we only ever claim "fixed" when the re-check is CLEAN;
+        # if we can't confirm a fix, we stay silent (the receipt still flags it) rather
+        # than claim a correction we didn't make.
+        _BARE_EQ = re.compile(r"^[\d\s.,$€£×xX*/+\-=()%]+$")
+        try:
+            vres = run_text_verifiers(answer_text)
+        except Exception:
+            vres = {"failed": 0, "checks": []}
+        bad = [c for c in vres.get("checks", [])
+               if not c["ok"] and c.get("kind") == "arithmetic" and _BARE_EQ.match(c["claim"])]
+        if bad:
+            yield {"event": "phase", "data": {"phase": "self_correcting",
+                   "caught": [{"claim": c["claim"], "computed": c["computed"],
+                               "claimed": c["claimed"]} for c in bad[:4]]}}
+            corrected = self._math_correct(command, answer_text, bad, req)
+            fixed = False
+            if corrected and corrected != answer_text:
+                recheck = run_text_verifiers(corrected)
+                still_bad = [c for c in recheck.get("checks", [])
+                             if not c["ok"] and c.get("kind") == "arithmetic" and _BARE_EQ.match(c["claim"])]
+                if not still_bad:                      # the calculator now PASSES — honest fix
+                    answer_text = corrected
+                    final.text = corrected
+                    final.raw["response"] = corrected
+                    final.raw["math_corrected"] = True
+                    fixed = True
+                    yield {"event": "correction", "data": {
+                        "caught": len(bad), "fixed": True, "before": bad[0]["claim"],
+                        "corrected_value": bad[0]["computed"], "answer": corrected}}
+            if not fixed:
+                # Honest: we caught a suspect equation and tried, but couldn't confirm a
+                # cleaner rewrite. We do NOT slap a scary "wrong" banner on an answer whose
+                # final number may still be right (the model may have just written a sloppy
+                # intermediate) — we keep the original and note it low-key. The structured
+                # receipt still carries the arithmetic check for full transparency.
+                final.raw["math_flagged"] = True
+                yield {"event": "phase", "data": {"phase": "self_correct_kept",
+                       "note": "re-checked the arithmetic; kept the original (couldn't verify a cleaner rewrite) — see the receipt"}}
 
         # BYO-sources verdict — the reason people came: did it answer FROM your
         # material, or honestly admit the answer wasn't there?
