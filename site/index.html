@@ -992,6 +992,11 @@ function renderLife(){ const el=document.getElementById('pane-life'); if(!el) re
     +'<div style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center"><div style="font-size:19px;font-weight:700">'+(d.pulses_today||0)+'</div><div class="dim" style="font-size:11px">thoughts today</div></div>'
     +'<div style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center"><div style="font-size:19px;font-weight:700">'+(d.learned_today||0)+'</div><div class="dim" style="font-size:11px">learned today</div></div>'
     +'<div style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center"><div style="font-size:19px;font-weight:700">'+(d.alive&&d.next_eta_s!=null?('~'+Math.max(1,Math.round(d.next_eta_s/60))+'m'):'—')+'</div><div class="dim" style="font-size:11px">next pulse</div></div></div>';
+  // thought → fact → weight pipeline
+  h+='<div style="border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:9px;background:var(--panel2,transparent)">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between"><span style="font-weight:600;font-size:12.5px">thought → fact → weight</span>'
+    +'<span style="font-size:12px"><b style="color:#7c3aed">'+(d.facts_queued||0)+'</b> <span class="dim">facts queued to train</span>'+((d.facts_queued_today||0)?' · <span style="color:#166534">+'+d.facts_queued_today+' today</span>':'')+'</span></div>'
+    +'<div class="dim" style="font-size:11px;margin-top:4px;line-height:1.5">what it learns overnight becomes Q/A facts; your Mac’s gated weight-daemon pulls them and trains them in — thought at 3am, weights by morning.</div></div>';
   const now=Date.now()/1000;
   if((d.while_away||[]).length){ h+='<div style="font-weight:600;margin:8px 0 4px">While you were away</div>';
     d.while_away.slice(0,8).forEach(p=>{ h+='<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--line)"><span class="dim">'+timeAgo(now-p.ts)+'</span> — '+esc((p.learned||p.thought||'').slice(0,150))+'</div>'; }); }

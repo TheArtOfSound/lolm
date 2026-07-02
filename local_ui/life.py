@@ -41,6 +41,10 @@ class LifeEngine:
         self.runs = Path(runs_dir)
         self.runs.mkdir(parents=True, exist_ok=True)
         self.pulse_path = self.runs / "life_pulse.jsonl"
+        # facts minted from what it learns — the weight-training daemon consumes these,
+        # so a thought at 3am can literally be trained weights by morning
+        self.fact_queue = self.runs / "evolve_knowledge" / "queue.jsonl"
+        self.fact_queue.parent.mkdir(parents=True, exist_ok=True)
         self.memory = memory
         self.chat = chat_fn
         self.search = search_fn
@@ -58,11 +62,53 @@ class LifeEngine:
                 pass
         return rows
 
-    @staticmethod
-    def _sect(text: str, name: str) -> str:
-        m = re.search(rf"^{name}:\s*(.+?)(?=^\s*(?:THOUGHT|SEARCH|REMEMBER|NEXT):|\Z)",
+    _SECT_KEYS = "THOUGHT|SEARCH|REMEMBER|NEXT|QUESTION|ANSWER|TARGET|SUMMARY"
+
+    @classmethod
+    def _sect(cls, text: str, name: str) -> str:
+        m = re.search(rf"^{name}:\s*(.+?)(?=^\s*(?:{cls._SECT_KEYS}):|\Z)",
                       text, re.MULTILINE | re.DOTALL | re.IGNORECASE)
         return (m.group(1).strip() if m else "").strip()
+
+    # ── thought → fact → (the daemon's) weights ────────────────────────
+    def _queued_facts(self) -> List[Dict[str, Any]]:
+        if not self.fact_queue.exists():
+            return []
+        rows = []
+        for ln in self.fact_queue.read_text().splitlines():
+            try:
+                rows.append(json.loads(ln))
+            except Exception:
+                pass
+        return rows
+
+    def _mint_fact(self, learned: str, context: str) -> Optional[Dict[str, Any]]:
+        """Turn a learned digest into ONE trainable Q/A fact — or honestly decline.
+        Only durable, source-established facts become weights; opinions and
+        maybe-knowledge stay as notes."""
+        raw = self.chat([
+            {"role": "system", "content":
+                "You turn a learned digest into ONE flashcard-style fact for weight training, "
+                "ONLY if it is durable and clearly established by the digest. Reply EXACTLY:\n"
+                "QUESTION: <a natural question a user could ask>\nANSWER: <one-sentence answer>\n"
+                "TARGET: <one lowercase keyword that must appear in a correct answer>\n"
+                "or the single word SKIP if the digest is opinion, transient, or too vague."},
+            {"role": "user", "content": f"CONTEXT: {context[:200]}\n\nDIGEST:\n{learned}"},
+        ]) or ""
+        if "skip" in raw.strip().lower()[:12]:
+            return None
+        q = self._sect(raw, "QUESTION")
+        a = self._sect(raw, "ANSWER")
+        tgt = self._sect(raw, "TARGET").split()[0].lower().strip(".,") if self._sect(raw, "TARGET") else ""
+        if not (q and a and tgt and tgt in a.lower()):
+            return None                       # malformed or target not actually in the answer
+        if any(f.get("q") == q for f in self._queued_facts()):
+            return None                       # already queued
+        return {"q": q, "a": a, "target": tgt, "source": "life", "ts": round(time.time(), 1)}
+
+    def _queue_fact(self, fact: Dict[str, Any]) -> None:
+        with self.fact_queue.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(fact, ensure_ascii=False) + "\n")
 
     # ── one heartbeat ───────────────────────────────────────────────────
     def tick(self) -> Dict[str, Any]:
@@ -118,12 +164,18 @@ class LifeEngine:
             except Exception:
                 query, learned = f"{query} (search failed)", ""
 
+        # thought → fact: durable learnings are minted into the weight-training queue
+        fact = self._mint_fact(learned, focus) if learned else None
+        if fact:
+            self._queue_fact(fact)
+
         # write it into the workspace's real memory — this is how ticks compound
         stamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(t0))
         pid = uuid.uuid4().hex[:8]
         self.memory.append_journal(
             f"## Life pulse {pid} @ {stamp}\n\nFOCUS: {focus}\n\n{thought}"
             + (f"\n\nSEARCHED: {query}\nLEARNED: {learned}" if learned else "")
+            + (f"\n\nQUEUED FOR WEIGHT TRAINING: {fact['q']}" if fact else "")
             + (f"\n\nNEXT: {nxt}" if nxt else ""))
         if remember and remember.upper() != "NONE":
             self.memory.append_note(remember[:600], tag="life", importance=4)
@@ -132,7 +184,45 @@ class LifeEngine:
 
         pulse = {"id": pid, "ts": round(t0, 1), "focus": focus[:220], "thought": thought[:500],
                  "search": (query or "")[:160], "learned": learned[:500], "next": (nxt or "")[:220],
+                 "fact_queued": (fact or {}).get("q", ""),
                  "sources": sources, "seconds": round(time.time() - t0, 1)}
+        with self.pulse_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(pulse, ensure_ascii=False) + "\n")
+        return pulse
+
+    # ── the nightly deep reflection: consolidate the day, promote the best facts ──
+    def deep_tick(self) -> Dict[str, Any]:
+        t0 = time.time()
+        day = [p for p in self._pulses() if t0 - p.get("ts", 0) < 86400]
+        if not day:
+            return {"skipped": "no pulses in the last day to reflect on"}
+        trail = "\n".join(f"- {p.get('thought','')[:200]}" + (f" [learned: {p['learned'][:120]}]" if p.get("learned") else "")
+                          for p in day[-24:])
+        raw = self.chat([
+            {"role": "system", "content":
+                "You are LOLM's nightly reflection. Consolidate the day's autonomous thoughts "
+                "honestly — no invented achievements. Reply EXACTLY:\nSUMMARY: <3-4 sentences on "
+                "the day's thread of thought and what advanced>\nFACT1|FACT2|FACT3 (each optional): "
+                "Q: <question> || A: <one-sentence answer> || T: <lowercase keyword in the answer>\n"
+                "Only include FACTs that are durable and clearly established."},
+            {"role": "user", "content": f"THE DAY'S PULSES:\n{trail}"},
+        ]) or ""
+        summary = self._sect(raw, "SUMMARY") or raw.strip()[:500]
+        minted = []
+        for m in re.finditer(r"Q:\s*(.+?)\s*\|\|\s*A:\s*(.+?)\s*\|\|\s*T:\s*([a-z0-9-]+)", raw, re.IGNORECASE):
+            q, a, tgt = m.group(1).strip(), m.group(2).strip(), m.group(3).lower().strip()
+            if q and a and tgt in a.lower() and not any(f.get("q") == q for f in self._queued_facts()):
+                fact = {"q": q, "a": a, "target": tgt, "source": "life_deep", "ts": round(t0, 1)}
+                self._queue_fact(fact)
+                minted.append(q)
+        stamp = time.strftime("%Y-%m-%d", time.localtime(t0))
+        self.memory.append_journal(f"## Daily reflection {stamp}\n\n{summary}"
+                                   + (("\n\nPROMOTED TO TRAINING: " + "; ".join(minted)) if minted else ""))
+        self.memory.add_summary(summary[:1200], span="life_day")
+        pulse = {"id": uuid.uuid4().hex[:8], "ts": round(t0, 1), "focus": "Daily reflection",
+                 "thought": summary[:500], "search": "", "learned": "",
+                 "fact_queued": "; ".join(minted)[:220], "sources": [],
+                 "deep": True, "seconds": round(time.time() - t0, 1)}
         with self.pulse_path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(pulse, ensure_ascii=False) + "\n")
         return pulse
@@ -147,6 +237,7 @@ class LifeEngine:
         today = [p for p in pulses if p["ts"] >= day0]
         away = [p for p in pulses if since_ts and p["ts"] > since_ts][-24:]
         goals = [g for g in self.memory.get_goals() if g.get("status", "active") == "active"]
+        facts = self._queued_facts()
         return {
             "alive": alive,
             "last_pulse": last,
@@ -155,6 +246,8 @@ class LifeEngine:
             "interval_s": self.interval_s,
             "pulses_today": len(today),
             "learned_today": sum(1 for p in today if p.get("learned")),
+            "facts_queued": len(facts),
+            "facts_queued_today": sum(1 for f in facts if f.get("ts", 0) >= day0),
             "recent": pulses[-12:][::-1],
             "while_away": away[::-1],
             "goals": [{"title": g.get("title", ""), "why": g.get("why", "")} for g in goals[:5]],
@@ -169,11 +262,17 @@ def register_life_routes(app: Any, engine: LifeEngine, is_loopback: Callable[[An
         return engine.status(since_ts=since)
 
     @app.post("/api/demo/life/tick")
-    def life_tick(request: Request):
+    def life_tick(request: Request, deep: bool = False):
         # the heartbeat is driven by the box's own cron — never by visitors
         if not is_loopback(request):
             return JSONResponse({"error": "the pulse is internal"}, status_code=403)
         try:
-            return engine.tick()
+            return engine.deep_tick() if deep else engine.tick()
         except Exception as exc:
             return JSONResponse({"error": str(exc)[:200]}, status_code=500)
+
+    @app.get("/api/demo/life/facts")
+    def life_facts():
+        """Facts LOLM minted from its own thinking — the weight-training daemon (on the
+        owner's machine) pulls these and trains them in, gated. Read-only."""
+        return {"facts": engine._queued_facts()[-200:]}

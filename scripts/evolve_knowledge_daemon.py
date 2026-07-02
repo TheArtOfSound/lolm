@@ -64,12 +64,44 @@ def _write_queue(p: Path, items):
     p.write_text("\n".join(json.dumps(i) for i in items) + ("\n" if items else ""))
 
 
-def _serve(model, adapter: Path, port: int):
-    if not adapter.exists():
-        return None
-    return subprocess.Popen([sys.executable, "-m", "mlx_lm", "server", "--model", model,
-                             "--adapter-path", str(adapter), "--port", str(port)],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def _consumed(root: Path) -> set:
+    try:
+        return set(json.loads((root / "consumed.json").read_text()))
+    except Exception:
+        return set()
+
+
+def _mark_consumed(root: Path, qs) -> None:
+    done = _consumed(root)
+    done.update(qs)
+    (root / "consumed.json").write_text(json.dumps(sorted(done)[-2000:]))
+
+
+def _pull_remote(url: str, queue: Path, root: Path) -> int:
+    """The thought→weight bridge: pull facts LOLM minted while thinking on the box
+    (life pulses / nightly reflection) and merge them into the local training queue.
+    A 3am thought on the server becomes trained weights the next cycle here.
+    Consumed facts never re-train."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(url, timeout=20) as r:
+            facts = json.loads(r.read().decode()).get("facts", [])
+    except Exception as e:
+        print(f"[knowledge] pull failed (continuing local-only): {str(e)[:100]}", flush=True)
+        return 0
+    have = {d.get("q") for d in _read_queue(queue)} | _consumed(root)
+    fresh = [f for f in facts if f.get("q") and f.get("a") and f["q"] not in have]
+    if fresh:
+        with queue.open("a", encoding="utf-8") as fh:
+            for f in fresh:
+                fh.write(json.dumps(f, ensure_ascii=False) + "\n")
+    return len(fresh)
+
+
+def _restart_served_weights() -> None:
+    """serve_evolved.py loads the adapter once at start; after a promotion, kill it and
+    let launchd's KeepAlive bring it back serving the NEW weights immediately."""
+    subprocess.run(["pkill", "-f", "serve_evolved"], capture_output=True)
 
 
 def main():
@@ -78,21 +110,25 @@ def main():
     p.add_argument("--model", default=DEFAULT_MODEL)
     p.add_argument("--interval", type=int, default=1800)
     p.add_argument("--batch", type=int, default=4, help="facts learned per cycle")
-    p.add_argument("--serve", action="store_true", help="(re)serve the promoted adapter")
-    p.add_argument("--port", type=int, default=11435)
+    p.add_argument("--pull-url", default="",
+                   help="pull facts LOLM minted while thinking (e.g. "
+                        "https://lolm.imagineqira.com/api/demo/life/facts)")
     p.add_argument("--max-cycles", type=int, default=0)
     args = p.parse_args()
     signal.signal(signal.SIGTERM, _sig); signal.signal(signal.SIGINT, _sig)
 
     root = Path(args.root); root.mkdir(parents=True, exist_ok=True)
     queue = root / "queue.jsonl"
-    server = None
     print(f"[knowledge] daemon up — every {args.interval}s, batch={args.batch}, "
-          f"queue={queue}", flush=True)
+          f"queue={queue}" + (f", pulling {args.pull_url}" if args.pull_url else ""), flush=True)
 
     n = 0
     while not _STOP:
         n += 1
+        if args.pull_url:
+            pulled = _pull_remote(args.pull_url, queue, root)
+            if pulled:
+                print(f"[knowledge] pulled {pulled} fact(s) LOLM thought up on the box", flush=True)
         pending = _read_queue(queue)
         if not pending:
             print("[knowledge] queue empty — waiting", flush=True)
@@ -109,11 +145,10 @@ def main():
                       f"keep={r['control_retention']} {tag} ({r['seconds']}s)", flush=True)
                 if r["weights_changed"]:
                     _write_queue(queue, pending[args.batch:])      # drop learned facts
-                    if args.serve:
-                        if server:
-                            server.terminate()
-                        server = _serve(args.model, root / "live", args.port)
-                        print(f"[knowledge] serving evolved weights on :{args.port}", flush=True)
+                    _mark_consumed(root, [d["q"] for d in batch])  # never re-train them
+                    _restart_served_weights()                      # fresh weights serve NOW
+                    print("[knowledge] promoted → served weights restarted with the new adapter",
+                          flush=True)
             except Exception as e:
                 print(f"[knowledge] cycle error (continuing): {str(e)[:160]}", flush=True)
 
@@ -123,8 +158,6 @@ def main():
             if _STOP:
                 break
             time.sleep(1)
-    if server:
-        server.terminate()
     print(f"[knowledge] stopped after {n} cycle(s).", flush=True)
 
 
