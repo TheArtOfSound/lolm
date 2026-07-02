@@ -115,6 +115,15 @@ _SPECIAL_RE = re.compile(
 # Internal control markers a small local model sometimes echoes into the answer.
 _CONTROL_ARTIFACT_RE = re.compile(r"\[?\s*verdict:\s*(?:ok|revise)\s*\]?", re.IGNORECASE)
 
+# Puzzle-style riddles that hide classic logic traps — the ONLY prompts that pay the
+# extra skeptic pass. Deliberately narrow: phrases typical of trap riddles, not of
+# ordinary questions, code, or long-form asks.
+_PUZZLE_RE = re.compile(
+    r"\b(how many .{0,40}(left|have|are there|does|remain)|all but \d+|which weighs|"
+    r"heavier|lighter|each (of (his|her|their)|brother|sister)|brothers? ha(s|ve)|"
+    r"sisters? ha(s|ve)|twice as (many|old)|half as (many|old)|older than|younger than|"
+    r"how long would|minutes? to make)\b", re.IGNORECASE)
+
 # Prompt scaffolding a weak model parrots back into its output. These exact phrases are
 # never legitimate answer prose — remove every occurrence before text joins the draft.
 _SCAFFOLD_RE = re.compile(
@@ -792,6 +801,39 @@ WORKING DRAFT:
         except Exception:
             return ""
 
+    def _reconsider_logic(self, command: str, answer: str, req: NFETAgentRequest) -> Dict[str, str]:
+        """One SKEPTIC pass over a puzzle-like Q/A hunting classic logic traps
+        (double-counting, group-includes-the-person, 'all but N', unit/rate mixups).
+        Honest by construction: it may ONLY overturn the answer by naming the trap
+        AND giving a concrete corrected answer — vague doubt keeps the original.
+        Returns {} when sound/unsure, else {"trap":..., "answer":...}."""
+        system = (
+            "You are a strict logic auditor. Re-read the QUESTION and the ANSWER. Hunt ONLY "
+            "for these classic traps: (1) double-counting someone who is already a member of "
+            "the described group — e.g. the person asked about IS one of the siblings their "
+            "brothers have; (2) 'all but N' phrasing (N remain); (3) unit/rate confusion "
+            "(per-machine, per-minute rates); (4) a percentage taken of the wrong base. "
+            "If the answer is correct, reply EXACTLY: SOUND. If it truly fell into one of "
+            "these traps, reply EXACTLY in this form:\n"
+            "TRAP: <one line naming the trap> || CORRECT: <the corrected answer in 1-3 sentences>\n"
+            "Never invent a problem. If you are not CERTAIN it's a trap, reply SOUND.")
+        user = f"QUESTION:\n{command}\n\nANSWER:\n{answer}\n\nVerdict:"
+        ChatMessage = self.deps.ChatMessage
+        try:
+            seg = self._collect(
+                [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
+                req, tokens=280, use_graft=False)
+            raw = strip_scaffold_echo(_CONTROL_ARTIFACT_RE.sub("", seg.text)).strip()
+        except Exception:
+            return {}
+        m = re.search(r"TRAP:\s*(.+?)\s*\|\|\s*CORRECT:\s*(.+)", raw, re.DOTALL)
+        if not m:
+            return {}
+        trap, fixed = m.group(1).strip()[:160], m.group(2).strip()
+        if not fixed or fixed.lower() == answer.strip().lower():
+            return {}
+        return {"trap": trap, "answer": fixed}
+
     def _generate_base(self, command: str, req: NFETAgentRequest) -> SegmentResult:
         ChatMessage = self.deps.ChatMessage
         return self._collect(
@@ -1102,6 +1144,25 @@ WORKING DRAFT:
                 final.raw["math_flagged"] = True
                 yield {"event": "phase", "data": {"phase": "self_correct_kept",
                        "note": "re-checked the arithmetic; kept the original (couldn't verify a cleaner rewrite) — see the receipt"}}
+
+        # LOGIC-TRAP RECONSIDER (#2/#3): short puzzle-style riddles hide classic traps
+        # a single pass falls into (Sally's-sisters double-counting, 'all but N', rate
+        # mixups). For JUST those — short, number-y, puzzle-phrased, no sources — run
+        # one skeptic pass. It may only overturn with a NAMED trap + a concrete
+        # corrected answer; vague doubt keeps the original. Everything else never
+        # pays the extra call.
+        if (_PUZZLE_RE.search(command) and len(command) < 240 and not grounded
+                and re.search(r"\d", command) and not final.raw.get("math_corrected")):
+            yield {"event": "phase", "data": {"phase": "reconsidering",
+                   "note": "puzzle-style question — running a logic-trap audit"}}
+            verdict = self._reconsider_logic(command, answer_text, req)
+            if verdict:
+                answer_text = verdict["answer"]
+                final.text = answer_text
+                final.raw["response"] = answer_text
+                final.raw["reconsidered"] = verdict["trap"]
+                yield {"event": "reconsidered", "data": {
+                    "trap": verdict["trap"], "answer": answer_text}}
 
         # BYO-sources verdict — the reason people came: did it answer FROM your
         # material, or honestly admit the answer wasn't there?

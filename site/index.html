@@ -929,11 +929,16 @@ function handle(name, data, ctx){
   else if(name==='drew_on'){ rec.drewOn = data; const n=(data.personal||0)+(data.world||0); step('💡 <b>drew on '+n+' thing'+(n===1?'':'s')+' it '+(data.personal&&!data.world?'remembers about you':(data.world&&!data.personal?'taught itself':'knows'))+'</b>'); }
   else if(name==='phase' && data.phase==='self_correcting'){ const c=(data.caught&&data.caught[0]); step('🧮 <b>calculator flagged an equation</b>'+(c?' — “'+esc(c.claim)+'” (should be '+c.computed+')':'')+' — re-checking…'); }
   else if(name==='phase' && data.phase==='self_correct_kept'){ step('kept the original — couldn’t verify a cleaner rewrite (details in the receipt)'); }
+  else if(name==='phase' && data.phase==='reconsidering'){ step('<span class="pulse">🔍 puzzle-style question — auditing for classic logic traps…</span>'); }
+  else if(name==='reconsidered'){ rec.answer=data.answer; rec.reconsidered=true; bub.innerHTML=mdToHtml(data.answer); bub.classList.add('md');
+    const badge=document.createElement('div'); badge.style.cssText='margin-top:8px;font-size:12px;color:#6d28d9;background:rgba(124,58,237,.07);border:1px solid rgba(124,58,237,.28);border-radius:8px;padding:6px 9px';
+    badge.innerHTML='🔁 <b>Reconsidered — caught a logic trap before you saw it.</b>'+(data.trap?' <span class="dim">'+esc(data.trap.slice(0,140))+'</span>':''); bub.appendChild(badge);
+    step('🔁 <b>reconsidered</b> — '+esc((data.trap||'').slice(0,90))); $('feed').scrollTop=$('feed').scrollHeight; }
   else if(name==='correction'){ rec.answer=data.answer; rec.math_corrected=true; bub.innerHTML=mdToHtml(data.answer); bub.classList.add('md');
     const badge=document.createElement('div'); badge.style.cssText='margin-top:8px;font-size:12px;color:#166534;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:6px 9px';
     badge.innerHTML='✓ <b>Caught &amp; fixed a math error before you saw it.</b>'+(data.before?' <span class="dim">“'+esc(data.before)+'” → corrected to '+esc(String(data.corrected_value))+'</span>':''); bub.appendChild(badge);
     step('✓ <b>corrected</b> — the answer now passes the calculator'); $('feed').scrollTop=$('feed').scrollHeight; }
-  else if(name==='run_done'){ if(rec.answer && !rec.math_corrected){ bub.innerHTML=mdToHtml(rec.answer); bub.classList.add('md'); } const lc=learnedChip(rec.drewOn); if(lc) bub.appendChild(lc); const bb=brainBadge(rec.reasoner); if(bb) bub.appendChild(bb); step('● done'); }
+  else if(name==='run_done'){ if(rec.answer && !rec.math_corrected && !rec.reconsidered){ bub.innerHTML=mdToHtml(rec.answer); bub.classList.add('md'); } const lc=learnedChip(rec.drewOn); if(lc) bub.appendChild(lc); const bb=brainBadge(rec.reasoner); if(bb) bub.appendChild(bb); step('● done'); }
   else if(name==='error'){ bub.textContent += '\n[error] '+(data.error||''); }
 }
 
