@@ -210,14 +210,33 @@ async function brainStats(env) {
 // account (no key); the rest are OpenAI-compatible and activate only when their
 // key secret exists. Adding any free key (Groq is fastest) keeps 70B alive even
 // when Cloudflare's neuron quota is exhausted.
+// BIGGEST BRAIN FIRST, interleaved ACROSS providers (a smaller model on one key
+// must not shadow a bigger one on another). Ordered by what the keys actually
+// serve today (verified via /ai/models): GLM-4.7 on Cerebras (~355B-class MoE)
+// > GPT-OSS-120B (Groq, with a Cerebras twin as an independent-key backup)
+// > Llama-4-Scout (109B MoE) > the proven Llama-3.3-70B tier. Any failure
+// falls through to the next entry, so the floor is never worse than before.
 function providerChain(env) {
-  const chain = [{ name: "workers-ai", kind: "cf" }];
-  if (env.GROQ_API_KEY) chain.push({
-    name: "groq", kind: "openai", key: env.GROQ_API_KEY,
-    url: "https://api.groq.com/openai/v1/chat/completions", model: "llama-3.3-70b-versatile" });
+  const GROQ = "https://api.groq.com/openai/v1/chat/completions";
+  const CEREBRAS = "https://api.cerebras.ai/v1/chat/completions";
+  const chain = [];
   if (env.CEREBRAS_API_KEY) chain.push({
     name: "cerebras", kind: "openai", key: env.CEREBRAS_API_KEY,
-    url: "https://api.cerebras.ai/v1/chat/completions", model: "llama-3.3-70b" });
+    url: CEREBRAS, model: "zai-glm-4.7" });
+  if (env.GROQ_API_KEY) chain.push({
+    name: "groq", kind: "openai", key: env.GROQ_API_KEY,
+    url: GROQ, model: "openai/gpt-oss-120b" });
+  if (env.CEREBRAS_API_KEY) chain.push({
+    name: "cerebras", kind: "openai", key: env.CEREBRAS_API_KEY,
+    url: CEREBRAS, model: "gpt-oss-120b" });
+  if (env.GROQ_API_KEY) chain.push({
+    name: "groq", kind: "openai", key: env.GROQ_API_KEY,
+    url: GROQ, model: "meta-llama/llama-4-scout-17b-16e-instruct" });
+  if (env.GROQ_API_KEY) chain.push({
+    name: "groq", kind: "openai", key: env.GROQ_API_KEY,
+    url: GROQ, model: "llama-3.3-70b-versatile" });
+  chain.push({ name: "workers-ai", kind: "cf",
+               model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast" });
   if (env.TOGETHER_API_KEY) chain.push({
     name: "together", kind: "openai", key: env.TOGETHER_API_KEY,
     url: "https://api.together.xyz/v1/chat/completions",
@@ -229,12 +248,12 @@ function providerChain(env) {
   return chain;
 }
 
-async function callOpenAICompatible(provider, messages, max_tokens) {
+async function callOpenAICompatible(provider, model, messages, max_tokens) {
   const r = await fetch(provider.url, {
     method: "POST",
     headers: { "Content-Type": "application/json",
                "Authorization": `Bearer ${provider.key}` },
-    body: JSON.stringify({ model: provider.model, messages, max_tokens, stream: false }),
+    body: JSON.stringify({ model, messages, max_tokens, stream: false }),
     signal: AbortSignal.timeout(45000),
   });
   if (!r.ok) {
@@ -258,29 +277,29 @@ async function generate70B(env, messages, max_tokens, modelOverride) {
   for (let pass = 0; pass < 2; pass++) {
     if (pass > 0) await new Promise((r) => setTimeout(r, 600));
     for (const provider of chain) {
+      const model = provider.model;
       const t0 = Date.now();
       try {
         let text;
         if (provider.kind === "cf") {
-          const r = await env.AI.run(modelOverride || "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-                                     { messages, max_tokens });
+          const r = await env.AI.run(modelOverride || model, { messages, max_tokens });
           text = (r && r.response) || "";
           // Workers AI sometimes reports failure in-band instead of throwing.
           if (!text.trim() && r && r.error) throw new Error(`workers-ai: ${r.error}`);
         } else {
-          text = await callOpenAICompatible(provider, messages, max_tokens);
+          text = await callOpenAICompatible(provider, model, messages, max_tokens);
         }
         if (text && text.trim()) {
-          return { text, model: provider.model || "llama-3.3-70b", provider: provider.name,
+          return { text, model, provider: provider.name,
                    ms: Date.now() - t0, tried_providers: tried, retried: pass > 0 };
         }
-        tried.push({ provider: provider.name, error: "empty", pass });
+        tried.push({ provider: provider.name, model, error: "empty", pass });
       } catch (e) {
         const msg = String(e.message || e);
         const quota = e.quota || /neuron|allocation|4006|Paid plan|quota|rate.?limit/i.test(msg);
         lastQuota = quota;
-        tried.push({ provider: provider.name, error: msg.slice(0, 100), quota, pass });
-        // continue to the next independent provider
+        tried.push({ provider: provider.name, model, error: msg.slice(0, 100), quota, pass });
+        // continue to the next entry in the cascade
       }
     }
   }
@@ -306,27 +325,27 @@ async function stream70B(env, messages, max_tokens, modelOverride) {
     "x-lolm-stream-format": format,
   });
   for (const provider of chain) {
+    const model = provider.model;
     try {
       if (provider.kind === "cf") {
-        const stream = await env.AI.run(
-          modelOverride || "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-          { messages, max_tokens, stream: true });
+        const stream = await env.AI.run(modelOverride || model,
+                                        { messages, max_tokens, stream: true });
         return new Response(stream, { headers: sseHeaders("workers-ai", "cf") });
       }
       const r = await fetch(provider.url, {
         method: "POST",
         headers: { "Content-Type": "application/json",
                    "Authorization": `Bearer ${provider.key}` },
-        body: JSON.stringify({ model: provider.model, messages, max_tokens, stream: true }),
+        body: JSON.stringify({ model, messages, max_tokens, stream: true }),
         signal: AbortSignal.timeout(45000),
       });
       if (!r.ok || !r.body) {
-        tried.push({ provider: provider.name, error: `HTTP ${r.status}` });
+        tried.push({ provider: provider.name, model, error: `HTTP ${r.status}` });
         continue;
       }
       return new Response(r.body, { headers: sseHeaders(provider.name, "openai") });
     } catch (e) {
-      tried.push({ provider: provider.name, error: String(e.message || e).slice(0, 100) });
+      tried.push({ provider: provider.name, model, error: String(e.message || e).slice(0, 100) });
     }
   }
   return new Response(JSON.stringify({ error: "all 70B providers unavailable (stream)",
@@ -389,6 +408,25 @@ export default {
       const result = await generate70B(env, messages, max_tokens, body.model);
       if (result.text) return json(result);
       return json(result, result.quota_exhausted ? 429 : 502);
+    }
+
+    // Diagnostic: what model IDs does each keyed provider ACTUALLY offer right now?
+    // Secret-gated; lets the origin keep the biggest-first cascade current.
+    if (p === "/ai/models") {
+      if (!authed()) return json({ error: "unauthorized" }, 401);
+      const out = {};
+      for (const prov of providerChain(env)) {
+        if (prov.kind !== "openai" || out[prov.name]) continue;
+        try {
+          const r = await fetch(prov.url.replace(/\/chat\/completions$/, "/models"), {
+            headers: { "Authorization": `Bearer ${prov.key}` },
+            signal: AbortSignal.timeout(10000),
+          });
+          const j = await r.json();
+          out[prov.name] = (j.data || []).map((m) => m.id).sort();
+        } catch (e) { out[prov.name] = [`error: ${String(e).slice(0, 80)}`]; }
+      }
+      return json(out);
     }
 
     if (p === "/health" || p === "/uptime") return json(await readHealth(env));

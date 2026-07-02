@@ -603,7 +603,7 @@ async function runVisualBuild(task, c){
   const step=t=>{ const s=document.createElement('div'); s.className='step'; s.innerHTML=t; reason.appendChild(s); $('feed').scrollTop=$('feed').scrollHeight; };
   const ansEl=addBubble('assistant',''); const bub=ansEl.querySelector('.bub');
   step('🎨 <b>visual build</b> — self-contained HTML · sandboxed iframe (no network, no parent access)');
-  const rec={mode:'visual', model:'Llama 70B (visual)', files:['index.html'], verdict:''};
+  const rec={mode:'visual', model:'cloud cascade (visual)', files:['index.html'], verdict:''};
   // live elapsed counter so the ~10–25s generation never looks frozen ("never did")
   let secs=0; bub.textContent='🎨 Building your app… (0s) — writing the code, then it runs in the Preview tab ↓';
   const tick=setInterval(()=>{ secs++;
@@ -907,7 +907,7 @@ function learnedChip(d){
 function brainBadge(r){
   if(!r) return null;
   const M={claude:'Claude · frontier reasoning','claude-opus':'Claude Opus · frontier',
-           workers_ai:'Llama-3.3-70B · cloud',llama:'Llama · cloud',local:'your local model'};
+           workers_ai:'cloud cascade · up to GLM-4.7 (355B-class)',llama:'Llama · cloud',local:'your local model'};
   const label=M[r]||r, weak=(r==='local');
   const div=document.createElement('div');
   div.style.cssText='margin-top:6px;font-size:11px;color:var(--dim)';

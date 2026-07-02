@@ -66,7 +66,11 @@ class WorkersAIReasonerLoop:
         # model (a multi-minute CPU crawl). 4096 is plenty for any game/app's HTML
         # and completes on a fast cascade provider (Groq/Cerebras) in ~15-25s.
         want = int(getattr(req, "max_new_tokens", 128))
-        n_tokens = min(max(want * 3, 96), 4096)
+        # 8192 cap: the big cascade brains (GLM-4.7) spend part of the budget on
+        # internal reasoning before the visible answer — 4096 truncated large HTML
+        # builds mid-file. Cerebras/Groq stream fast enough that the scaled timeout
+        # below still holds comfortably.
+        n_tokens = min(max(want * 3, 96), 8192)
         payload = {
             "messages": _messages_for_workers_ai(req),
             "max_tokens": n_tokens,
@@ -94,7 +98,7 @@ class WorkersAIReasonerLoop:
         if not self.available():
             raise RuntimeError("workers_ai reasoner not configured (URL/secret)")
         want = int(getattr(req, "max_new_tokens", 128))
-        n_tokens = min(max(want * 3, 96), 4096)
+        n_tokens = min(max(want * 3, 96), 8192)   # see _generate: room for reasoning + full HTML
         payload = {
             "messages": _messages_for_workers_ai(req),
             "max_tokens": n_tokens,

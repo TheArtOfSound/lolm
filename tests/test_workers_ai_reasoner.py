@@ -42,7 +42,9 @@ def _loop():
 def test_big_visual_request_is_capped(monkeypatch):
     captured = _capture(monkeypatch)
     _loop()._generate(_Req(3600))                         # the visual builder's ask
-    assert captured["payload"]["max_tokens"] == 4096      # NOT 10800 (3600*3)
+    # 8192, NOT 10800 (3600*3): capped, but with room for the big cascade brains'
+    # internal reasoning tokens so large HTML builds aren't truncated mid-file.
+    assert captured["payload"]["max_tokens"] == 8192
     assert 100 < captured["timeout"] <= 150               # scaled up for a big gen, bounded
 
 

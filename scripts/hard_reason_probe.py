@@ -34,7 +34,7 @@ def norm(s): return re.sub(r"[,\s]", "", s.lower())
 
 # (label, question, must-contain-any (correct), must-NOT-be-the-headline (trap note))
 CASES = [
-    ("widgets-5min",  "If it takes 5 machines 5 minutes to make 5 widgets, how long would 100 machines take to make 100 widgets? Answer with the number of minutes.", ["5 minute", "5 min", "five minute", "5minutes"], "100 minute"),
+    ("widgets-5min",  "If it takes 5 machines 5 minutes to make 5 widgets, how long would 100 machines take to make 100 widgets? Answer with the number of minutes.", ["5 minute", "5 min", "five minute", "5minutes", "5"]  # bare "5" = a terse correct reply, "100 minute"),
     ("sheep-9",       "A farmer has 17 sheep. All but 9 die. How many sheep are left?", ["9 sheep", "are 9", "is 9", "left: 9", "answer is 9", "9 are", "9."], None),
     ("sally-1sister", "Sally has 3 brothers. Each of her brothers has 2 sisters. How many sisters does Sally have?", ["1 sister", "one sister", "just one", "only one", "has 1"], None),
     ("apples-60",     "A store had 120 apples. They sold one third of them in the morning, then one quarter of the remaining apples in the afternoon. How many apples are left?", ["60"], None),
