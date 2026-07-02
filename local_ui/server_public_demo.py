@@ -339,6 +339,17 @@ def _operator_fetch(url: str):
 register_agent_routes(app, str(ROOT / "runs" / "agent_workspaces"), _operator_chat,
                       search_fn=_operator_search, fetch_fn=_operator_fetch)
 
+# ── LIFE: the always-on pulse — LOLM keeps thinking when nobody's on the site ──
+# The box's cron POSTs /api/demo/life/tick (loopback-only) every ~20min; each tick
+# thinks with the best brain, may run ONE read-only search, and journals the pulse.
+# GET /api/demo/life renders the living trail (honest: asleep until a pulse exists).
+from local_ui.life import LifeEngine, register_life_routes  # noqa: E402
+from local_ui.agent_routes import _is_loopback as _life_loopback  # noqa: E402
+
+LIFE = LifeEngine(ROOT / "runs", MEMORY, _operator_chat, search_fn=_operator_search,
+                  interval_s=int(os.environ.get("LOLM_LIFE_INTERVAL", "1200")))
+register_life_routes(app, LIFE, _life_loopback)
+
 # Optional "Support this project" button — Stripe Checkout, secret key from env only.
 from local_ui.donate_routes import register_donate_routes  # noqa: E402
 register_donate_routes(app)
