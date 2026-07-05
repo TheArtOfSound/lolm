@@ -403,7 +403,7 @@ class NFETAgent:
         lowered = command.lower()
         return any(term in lowered for term in cls.SELF_REFERENT)
 
-    def _initial_memory(self, command: str) -> List[Dict[str, Any]]:
+    def _initial_memory(self, command: str, scope: Optional[str] = None) -> List[Dict[str, Any]]:
         """Context for the drafting engine — relevance-gated.
 
         Identity and goals describe the workspace itself; injecting them into
@@ -421,7 +421,7 @@ class NFETAgent:
             goals = [g for g in memory.get_goals() if g.get("status", "active") == "active"]
             for goal in sorted(goals, key=lambda g: int(g.get("priority", 3)), reverse=True)[:6]:
                 hits.append({"kind": "goal", "text": goal.get("title", ""), "meta": {"why": goal.get("why", "")}})
-        for note in memory.search_notes(command, limit=8):
+        for note in memory.search_notes(command, limit=8, scope=scope):
             hits.append({"kind": "memory", "text": note.get("text", ""), "meta": {"tag": note.get("tag")}})
         return [h for h in hits if h.get("text")][:12]
 
@@ -522,9 +522,10 @@ Continue the draft. Write the next segment only."""
         # focused query to the bare command to scored token overlap. No blind
         # recency fallback: off-topic notes hijack small models, and "found
         # nothing relevant" is an honest, useful outcome.
-        notes = self.deps.memory.search_notes(query, limit=12)
+        _scope = getattr(req, "session_id", None)
+        notes = self.deps.memory.search_notes(query, limit=12, scope=_scope)
         if not notes:
-            notes = self.deps.memory.search_notes(command, limit=12)
+            notes = self.deps.memory.search_notes(command, limit=12, scope=_scope)
         if not notes:
             notes = self._scored_notes(command)
         notes = self._rank_notes(notes, command)
@@ -868,24 +869,25 @@ WORKING DRAFT:
         return {"trap": trap, "answer": fixed}
 
     def _capture_learning(self, command: str, answer_text: str, profile: str,
-                          math_ok: bool) -> Optional[Dict[str, str]]:
+                          math_ok: bool, scope: Optional[str] = None) -> Optional[Dict[str, str]]:
         """Auto-CAPTURE — the input half of compounding learning: turn durable
         knowledge from this turn into a retrievable memory, so a later RELATED
-        question can use it (paired with the relevance retrieval + finalizer
-        injection that make stored facts actually change answers). Honest gates:
-        never store greetings/opinions/questions/commands; dedupe against what's
-        already retrievable; explicit 'remember…' and VERIFIED math are always
-        captured, bare declarative facts only when LOLM_AUTOCAPTURE is set."""
+        question can use it. Now SAFE to always capture bare declarative facts,
+        because they're stored SCOPED to this session/conversation (invisible to
+        other visitors); an explicit 'remember…' is the owner's intent to remember
+        it GLOBALLY. Honest gates: never greetings/opinions/questions/commands;
+        dedupe against what THIS scope can already see."""
         mem = getattr(self.deps, "memory", None)
         cmd = (command or "").strip()
         ans = (answer_text or "").strip()
         if mem is None or profile == "social" or len(cmd) < 12:
             return None
+        sess = scope or "anon"
 
         def _dupe(text: str) -> bool:
             b = re.sub(r"\W+", "", text.lower())
             try:
-                for h in mem.search_notes(text, limit=2):
+                for h in mem.search_notes(text, limit=2, scope=scope):
                     a = re.sub(r"\W+", "", (h.get("text") or "").lower())
                     if a and (a[:60] == b[:60] or a in b or b in a):
                         return True
@@ -893,27 +895,31 @@ WORKING DRAFT:
                 pass
             return False
 
-        def _store(text: str, tag: str, imp: int) -> Optional[Dict[str, str]]:
+        def _store(text: str, tag: str, imp: int, sc: str) -> Optional[Dict[str, str]]:
             text = text.strip()[:500]
             if len(text) < 8 or _dupe(text):
                 return None
             try:
-                mem.append_note(text, tag=tag, importance=imp)
-                return {"stored": text[:120], "tag": tag}
+                mem.append_note(text, tag=tag, importance=imp, scope=sc)
+                return {"stored": text[:120], "tag": tag, "scope": "global" if sc == "global" else "this chat"}
             except Exception:
                 return None
 
         marker = _TEACH_MARKER_RE.search(cmd)
         declarative = ("?" not in cmd and len(cmd) <= 400
                        and _FACT_COPULA_RE.search(cmd) and not _NON_FACT_START_RE.match(cmd))
-        if marker or (declarative and os.environ.get("LOLM_AUTOCAPTURE")):
+        if marker:                                   # "remember…" → keep it GLOBALLY
             fact = _TEACH_MARKER_RE.sub("", cmd).strip(" :,-—").strip() or cmd
-            r = _store(fact, "told", 5)
+            r = _store(fact, "told", 5, "global")
             if r:
                 return r
-        # a VERIFIED computation is durable knowledge too (only what the calculator confirmed)
+        elif declarative:                            # a stated fact → learn it, SCOPED to this chat
+            r = _store(cmd, "told", 5, sess)
+            if r:
+                return r
+        # a VERIFIED computation is durable knowledge too (scoped — it's this chat's context)
         if math_ok and cmd.rstrip().endswith("?") and 2 < len(ans) < 600:
-            return _store(f"Q: {cmd}\nA: {ans}", "solved", 4)
+            return _store(f"Q: {cmd}\nA: {ans}", "solved", 4, sess)
         return None
 
     def _generate_base(self, command: str, req: NFETAgentRequest) -> SegmentResult:
@@ -1006,7 +1012,7 @@ WORKING DRAFT:
         started = time.time()
         head_trained = bool(self.deps.head_trained_fn())
         policy = NFETControlPolicy(self.policy_config)
-        memory_hits = self._initial_memory(command)
+        memory_hits = self._initial_memory(command, scope=getattr(req, "session_id", None))
         evidence: List[Dict[str, Any]] = []
         # BYO-sources grounding: chunk the user's material into cited passages so
         # the drafter, the finalizer, and the citation report all ground in it.
@@ -1342,7 +1348,8 @@ WORKING DRAFT:
         # injection above make what's captured actually pay off on later questions).
         try:
             _math_ok = bool(vres.get("checks")) and not vres.get("failed")
-            cap = self._capture_learning(command, answer_text, profile, _math_ok)
+            cap = self._capture_learning(command, answer_text, profile, _math_ok,
+                                         scope=getattr(req, "session_id", None))
             if cap:
                 yield {"event": "learned", "data": cap}
         except Exception:

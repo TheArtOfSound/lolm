@@ -80,13 +80,18 @@ class MemoryStore:
                 continue
         return rows
 
-    def append_note(self, text: str, tag: str = "note", importance: int = 3) -> str:
+    def append_note(self, text: str, tag: str = "note", importance: int = 3,
+                    scope: str = "global") -> str:
+        # scope="global" (default) → visible to everyone; a session/conversation id
+        # → visible ONLY when that scope is retrieving, so one visitor auto-teaching
+        # a fact can't poison the shared store for others.
         item_id = uuid.uuid4().hex[:8]
         self._append_line(self.paths.notes, {
             "id": item_id,
             "ts": time.time(),
             "tag": tag,
             "importance": importance,
+            "scope": scope or "global",
             "text": text,
         })
         return item_id
@@ -95,7 +100,8 @@ class MemoryStore:
         rows = [r for r in self._read_jsonl(self.paths.notes) if int(r.get("importance", 0)) >= min_importance]
         return rows[-limit:]
 
-    def search_notes(self, query: str, limit: int = 12, min_importance: int = 0, tag: Optional[str] = None) -> List[Dict[str, Any]]:
+    def search_notes(self, query: str, limit: int = 12, min_importance: int = 0,
+                     tag: Optional[str] = None, scope: Optional[str] = None) -> List[Dict[str, Any]]:
         """Relevance-scored retrieval. The old version AND-matched EVERY query token,
         so a note only surfaced when the prompt repeated its exact words — accrued
         knowledge almost never reached an answer. Now we score by how many CONTENT
@@ -107,7 +113,11 @@ class MemoryStore:
         content = list({t for t in q_tokens if len(t) >= 3 and t not in _MEM_STOP})
         rows = [r for r in self._read_jsonl(self.paths.notes)
                 if int(r.get("importance", 0)) >= min_importance
-                and (not tag or r.get("tag") == tag)]
+                and (not tag or r.get("tag") == tag)
+                # ISOLATION: a scoped search sees only global notes + its own scope;
+                # another visitor's session-scoped facts are invisible. Unscoped
+                # search (scope=None) keeps legacy behaviour (everything visible).
+                and (scope is None or r.get("scope", "global") in ("global", scope))]
         if not content:                               # no usable query → most recent
             return rows[-limit:]
         n = max(len(rows), 1)
@@ -126,7 +136,8 @@ class MemoryStore:
                 continue
             score = (overlap + 1.5 * coverage
                      + 0.3 * int(row.get("importance", 3))
-                     + 0.2 * (idx / n))               # gentle recency nudge
+                     + 0.2 * (idx / n)                # gentle recency nudge
+                     + (0.6 if (scope and row.get("scope") == scope) else 0))  # my own context first
             scored.append((score, row))
         scored.sort(key=lambda s: s[0], reverse=True)
         return [row for _, row in scored[:limit]]

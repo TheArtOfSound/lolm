@@ -27,8 +27,11 @@ QUESTION = ("In the Qira flux system, how many credits are 5 flux worth? "
 TARGET = "35"          # 5 * 7 — never stored anywhere; must be derived
 
 
-def ask(q, timeout=150):
-    body = json.dumps({"command": q, "mode": "chat"}).encode()
+def ask(q, timeout=150, session_id=None):
+    payload = {"command": q, "mode": "chat"}
+    if session_id:
+        payload["session_id"] = session_id
+    body = json.dumps(payload).encode()
     req = urllib.request.Request(BASE + "/api/demo/run/stream", data=body,
                                  headers={"Content-Type": "application/json"})
     ans = ""
@@ -86,6 +89,36 @@ def end_to_end():
     return ok
 
 
+def isolation():
+    """Session-scoped capture: a fact one visitor states is learned FOR THEM (this
+    chat) and used later, but a DIFFERENT session can't see it — no cross-visitor
+    poisoning of the shared store."""
+    from local_ui.server import MEMORY
+    A, B = "evalSessionA1", "evalSessionB2"
+    fact = "In the Blorp league, one blorp is worth exactly 9 points."
+    q = "In the Blorp league, how many points are 3 blorps worth? Answer with just the number."
+    target = "27"   # 3 * 9, novel and unguessable
+    print("\n=== SESSION ISOLATION (auto-capture scoped to a chat) ===")
+    ask(fact, session_id=A)                      # session A states the fact -> learned for A
+    time.sleep(0.6)
+    warm_a = ask(q, session_id=A)
+    cold_b = ask(q, session_id=B)
+    a_ok = _num_in(warm_a, target)
+    b_leak = _num_in(cold_b, target)
+    print(f"[A taught it, A asks]  uses it={a_ok}  ->  {warm_a.strip()[:95]!r}")
+    print(f"[B never taught, asks] LEAKED={b_leak}  ->  {cold_b.strip()[:95]!r}")
+    try:
+        rows = [r for r in MEMORY._read_jsonl(MEMORY.paths.notes)
+                if "blorp" not in (r.get("text", "").lower())]
+        MEMORY.paths.notes.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows),
+                                      encoding="utf-8")
+    except Exception:
+        pass
+    ok = a_ok and not b_leak
+    print(f"=== ISOLATION (A uses it, B can't see it): {ok} ===")
+    return ok
+
+
 def main():
     from local_ui.server import MEMORY   # the SAME file-backed store the server reads
 
@@ -121,4 +154,5 @@ def main():
 if __name__ == "__main__":
     inject_ok = main()          # direct-inject half (retrieval + finalizer)
     capture_ok = end_to_end()   # full loop via the API (capture too)
-    sys.exit(0 if (inject_ok and capture_ok) else 1)
+    iso_ok = isolation()        # per-session scoping (safe on the shared demo)
+    sys.exit(0 if (inject_ok and capture_ok and iso_ok) else 1)
