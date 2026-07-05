@@ -265,8 +265,20 @@ async function callOpenAICompatible(provider, model, messages, max_tokens) {
   return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "";
 }
 
-async function generate70B(env, messages, max_tokens, modelOverride) {
+// When a caller requests a SPECIFIC model (ensemble / model targeting), narrow the
+// cascade to providers that actually serve it — so "give me zai-glm-4.7" returns
+// exactly that, not whatever the default order would pick. This is what makes
+// running several models "in unison" possible. No match → full chain (safe).
+function chainFor(env, modelOverride) {
   const chain = providerChain(env);
+  if (!modelOverride) return chain;
+  if (String(modelOverride).startsWith("@cf")) return chain.filter((p) => p.kind === "cf");
+  const match = chain.filter((p) => p.kind === "openai" && p.model === modelOverride);
+  return match.length ? match : chain;
+}
+
+async function generate70B(env, messages, max_tokens, modelOverride) {
+  const chain = chainFor(env, modelOverride);
   const tried = [];
   let lastQuota = false;
   // Two passes. A simultaneous transient failure across every free tier (burst
@@ -315,7 +327,7 @@ async function generate70B(env, messages, max_tokens, modelOverride) {
 // how to parse: "cf" = data:{"response":"tok"} · "openai" = data:{"choices":
 // [{"delta":{"content":"tok"}}]}. Additive: the non-stream path is untouched.
 async function stream70B(env, messages, max_tokens, modelOverride) {
-  const chain = providerChain(env);
+  const chain = chainFor(env, modelOverride);
   const tried = [];
   const sseHeaders = (provider, format) => ({
     "content-type": "text/event-stream",
