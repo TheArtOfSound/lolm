@@ -10,9 +10,52 @@ proposes JSON actions — the loop is the sole thing that touches the sandbox.
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import sys
+import tempfile
 import time
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+
+# The out-of-process runtime verifier: loads generated HTML in real headless
+# Chromium and reports whether it actually renders/animates/responds. Run as a
+# subprocess so Playwright never touches the uvicorn event loop.
+_VERIFY_SCRIPT = str(Path(__file__).resolve().parent.parent / "scripts" / "visual_verify.py")
+
+
+def _verify_html(html: str, wait_ms: int = 1400, timeout: int = 55) -> Dict[str, Any]:
+    """Run the HTML in a real browser. Returns the verdict, or {"working": None}
+    when the verifier itself can't run (no Playwright) so the caller degrades
+    gracefully (ship the candidate) instead of blocking the build."""
+    if not os.path.exists(_VERIFY_SCRIPT):
+        return {"working": None, "reasons": [], "unavailable": True}
+    path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False, encoding="utf-8") as f:
+            f.write(html)
+            path = f.name
+        r = subprocess.run([sys.executable, _VERIFY_SCRIPT, path, "--wait", str(wait_ms)],
+                           capture_output=True, text=True, timeout=timeout)
+        line = (r.stdout or "").strip().splitlines()[-1] if (r.stdout or "").strip() else ""
+        return json.loads(line) if line else {"working": None, "reasons": [], "unavailable": True}
+    except Exception:
+        return {"working": None, "reasons": [], "unavailable": True}
+    finally:
+        if path:
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
+
+
+def _verdict_score(v: Dict[str, Any]) -> int:
+    """Rank candidates so we keep the best when none is fully working."""
+    if not v:
+        return -1
+    return (4 * int(bool(v.get("renders"))) + 2 * int(bool(v.get("animates")))
+            + 2 * int(bool(v.get("responds"))) - len(v.get("console_errors") or []))
 
 from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -193,9 +236,7 @@ def register_code_routes(app: Any, root: str,
         return StreamingResponse(gen(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-    def _visual_messages(task: str) -> List[Dict[str, str]]:
-        """The one visual-builder prompt, shared by the blocking and streaming routes."""
-        system = (
+    _VISUAL_SYSTEM = (
             "You build ONE complete, self-contained HTML document that implements the "
             "user's visual or interactive task. Output ONLY the HTML — start with "
             "<!DOCTYPE html> and nothing before it, no prose, no markdown fences.\n"
@@ -253,11 +294,32 @@ def register_code_routes(app: Any, root: str,
             "  • Keep every index/coordinate in range and every entity inside the play area.\n"
             "Make it fun, correct, and complete — actually play a few moves in your head and confirm the "
             "win/lose/score/collision rules truly fire."
-        )
+    )
+
+    def _visual_messages(task: str) -> List[Dict[str, str]]:
+        """The one visual-builder prompt, shared by every visual route."""
         recipe = _visual_recipe(task)
         guide = (f"\n\nIMPLEMENTATION GUIDE — follow this approach:\n{recipe}\n" if recipe else "")
-        return [{"role": "system", "content": system},
+        return [{"role": "system", "content": _VISUAL_SYSTEM},
                 {"role": "user", "content": f"TASK: {task}{guide}\n\nReturn the full, complete HTML document now."}]
+
+    def _visual_fix_messages(task: str, prev_html: str, reasons: List[str]) -> List[Dict[str, str]]:
+        """Regeneration prompt after a REAL browser found the build broken — the
+        exact failures are handed back so the model fixes those, not guesses."""
+        problems = "\n".join(f"  - {r}" for r in reasons[:6]) or "  - it did not work when run"
+        user = (
+            f"TASK: {task}\n\n"
+            "Your previous HTML was RUN in a real browser and it DID NOT WORK. A verifier "
+            "found these exact problems:\n" + problems + "\n\n"
+            "Rewrite the WHOLE document to fix them. Most common causes: the draw loop never "
+            "runs (add requestAnimationFrame and actually call it), the projection/draw math "
+            "paints nothing (a raycaster MUST compute per-column wall distance and draw a "
+            "vertical slice scaled by 1/distance), or keydown isn't wired to state. Make sure "
+            "something is VISIBLY drawn every frame and the frame changes on movement.\n\n"
+            "PREVIOUS (BROKEN) HTML:\n" + prev_html[:9000] + "\n\n"
+            "Return the full corrected HTML document now, starting with <!DOCTYPE html>.")
+        return [{"role": "system", "content": _VISUAL_SYSTEM},
+                {"role": "user", "content": user}]
 
     @app.post("/api/demo/code/visual/stream")
     def code_visual_stream(req: VisualTask, request: Request):
@@ -342,3 +404,75 @@ def register_code_routes(app: Any, root: str,
             return JSONResponse({"error": "the model did not return a usable HTML app — try rephrasing"},
                                 status_code=502)
         return {"html": html, "bytes": len(html)}
+
+    def _gen_html(msgs: List[Dict[str, str]]) -> Optional[str]:
+        try:
+            raw = chat_fn(msgs, max_new_tokens=3600)
+        except TypeError:
+            raw = chat_fn(msgs)
+        return _extract_html(raw)
+
+    @app.post("/api/demo/code/visual/build")
+    def code_visual_build(req: VisualTask, request: Request):
+        """AUTONOMOUS visual builder — the one that actually WORKS. It generates the
+        app, RUNS it in real headless Chromium, and if it's broken (blank canvas,
+        dead loop, unwired controls) it feeds the exact failure back to the model and
+        rebuilds — up to a few times — until the browser confirms it renders,
+        animates, and responds. Streams honest progress the whole way:
+          attempt{n,of} → verifying{n} → verdict{n,working,renders,animates,responds,reasons}
+          → (loop) → done{html,bytes,verified,attempts,verdict}
+        Never claims success it hasn't seen; if it can't reach a working build it
+        returns the best attempt and says so.
+        """
+        if chat_fn is None:
+            return JSONResponse({"error": "visual builder unavailable on this host"}, status_code=503)
+        ip = _ip(request)
+        now = time.time()
+        rate[ip] = [t for t in rate.get(ip, []) if now - t < 60]
+        if len(rate[ip]) >= runs_per_min:
+            return JSONResponse({"error": f"rate limit {runs_per_min} builds/min"}, status_code=429)
+        rate[ip].append(now)
+        task = (req.task or "").strip()[:2000]
+        if not task:
+            return JSONResponse({"error": "empty task"}, status_code=400)
+        max_tries = 4
+
+        def gen():
+            best_html: Optional[str] = None
+            best_verdict: Dict[str, Any] = {}
+            msgs = _visual_messages(task)
+            attempt = 0
+            for attempt in range(1, max_tries + 1):
+                yield _sse("attempt", {"n": attempt, "of": max_tries})
+                try:
+                    html = _gen_html(msgs)
+                except Exception as exc:
+                    yield _sse("error", {"error": f"generation failed: {exc}"[:160]})
+                    if best_html is None:
+                        return
+                    break
+                if not html or len(html) < 60:
+                    yield _sse("attempt_note", {"n": attempt, "note": "no usable HTML — retrying"})
+                    continue
+                yield _sse("verifying", {"n": attempt})
+                verdict = _verify_html(html)
+                working = verdict.get("working")
+                yield _sse("verdict", {"n": attempt, "working": working,
+                                       "renders": verdict.get("renders"), "animates": verdict.get("animates"),
+                                       "responds": verdict.get("responds"),
+                                       "reasons": verdict.get("reasons", [])})
+                if best_html is None or _verdict_score(verdict) > _verdict_score(best_verdict):
+                    best_html, best_verdict = html, verdict
+                if working:                       # a real browser confirmed it works — ship it
+                    break
+                if working is None:               # verifier unavailable → don't loop blindly
+                    break
+                if attempt < max_tries:
+                    msgs = _visual_fix_messages(task, html, verdict.get("reasons", []))
+            yield _sse("done", {"html": best_html or "", "bytes": len(best_html or ""),
+                                "verified": bool(best_verdict.get("working")),
+                                "verifier_ran": best_verdict.get("working") is not None,
+                                "attempts": attempt, "verdict": best_verdict})
+
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

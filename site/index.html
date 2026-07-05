@@ -595,55 +595,55 @@ async function streamVisualBuild(task, onChunk){
   return html;
 }
 async function runVisualBuild(task, c){
+  // SELF-VERIFYING build: the server writes the app, RUNS it in real headless
+  // Chromium, and if it's broken (blank canvas / dead loop / dead controls) it
+  // feeds the exact failure back and rebuilds — up to a few times — until a real
+  // browser confirms it works. You watch it catch and fix its own mistakes.
   const showPreview=()=>{ try{ openDock('work'); document.querySelector('#btabs .tab[data-bpane=preview]').click(); }catch(_){} };
   showPreview();
   const pv=$('bpane-preview');
-  pv.innerHTML='<div class="notconn">🎨 building a live app — the model writes self-contained HTML, then it runs right here in a sandboxed frame…</div>';
+  pv.innerHTML='<div class="notconn">🎨 building your app — then LOLM <b>runs it in a real browser</b> and rebuilds itself until it actually works, before showing you…</div>';
   const reason=document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
   const step=t=>{ const s=document.createElement('div'); s.className='step'; s.innerHTML=t; reason.appendChild(s); $('feed').scrollTop=$('feed').scrollHeight; };
   const ansEl=addBubble('assistant',''); const bub=ansEl.querySelector('.bub');
-  step('🎨 <b>visual build</b> — self-contained HTML · sandboxed iframe (no network, no parent access)');
+  step('🎨 <b>self-verifying visual build</b> — writes it, runs it in a real browser, fixes itself until it works');
   const rec={mode:'visual', model:'cloud cascade (visual)', files:['index.html'], verdict:''};
-  // live elapsed counter so the ~10–25s generation never looks frozen ("never did")
-  let secs=0; bub.textContent='🎨 Building your app… (0s) — writing the code, then it runs in the Preview tab ↓';
-  const tick=setInterval(()=>{ secs++;
-    const hint = secs<30 ? 'writing the code' : secs<75 ? 'this is a big one — a full game can take a minute or two' : 'still writing a large app — hang tight';
-    bub.textContent='🎨 Building your app… ('+secs+'s) — '+hint+', then it runs in the Preview tab ↓';
-    if(secs===9) pv.innerHTML='<div class="notconn">🎨 still writing… a simple app takes ~10–25s; a full game or raycaster can take 1–2 minutes. It appears here the instant it’s ready.</div>';
-    else if(secs===45) pv.innerHTML='<div class="notconn">🎨 building a large app — the model is writing a lot of code (this can take up to ~2 min). Still going…</div>'; }, 1000);
+  let secs=0, phase='writing the code';
+  const tick=setInterval(()=>{ secs++; bub.textContent='🎨 Building & verifying your app… ('+secs+'s) — '+phase+' ↓'; }, 1000);
   try{
-    let html=null, bytes=0, streamed=false;
-    // LIVE STREAM first: the code appears in the Diff pane as it's being written.
-    try{
-      const dp=$('bpane-diff');
-      dp.innerHTML='<div style="color:#94a3b8;margin-bottom:4px">index.html — <span style="color:#3fd6a0">writing live</span></div><pre id="vstream" style="white-space:pre-wrap;color:#cbd5e1"></pre>';
-      try{ openDock('work'); document.querySelector('#btabs .tab[data-bpane=diff]').click(); }catch(_){}
-      let chars=0;
-      const r=await streamVisualBuild(task,(t)=>{ chars+=t.length; const pre=document.getElementById('vstream'); if(pre){ pre.textContent+=t; dp.scrollTop=dp.scrollHeight; } });
-      html=r.html; bytes=r.bytes; streamed=true;
-      step('⚡ <b>streamed the code live</b> — '+chars+' chars watched being written');
-    }catch(se){ step('· live stream unavailable — building the normal way <span class="dim">('+esc(String(se.message||se).slice(0,60))+')</span>'); }
-    if(!html){
-      const r=await buildVisualOnce(task);
-      if(!r.ok || !r.j.html){ clearInterval(tick); const msg=r.j.error||('the builder is unavailable (HTTP '+r.status+')'); bub.textContent='⚠ Couldn’t build it — '+msg; pv.innerHTML='<div class="notconn">⚠ '+esc(msg)+'<br><br>Try again, or rephrase it (e.g. “build a snake game”).</div>'; rec.verdict='error'; step('✗ '+esc(msg)); }
-      else{ html=r.j.html; bytes=r.j.bytes; }
+    const resp=await fetch('/api/demo/code/visual/build',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
+    if(!resp.ok || !resp.body){ throw new Error('the builder is unavailable (HTTP '+resp.status+')'); }
+    const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf='';
+    let finalHtml=null, done=null;
+    while(true){ const {done:d,value}=await reader.read(); if(d)break; buf+=dec.decode(value,{stream:true});
+      let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+        let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: ')){ try{data=JSON.parse(ln.slice(6));}catch(_){} } }
+        if(!name||data==null) continue;
+        if(name==='attempt'){ phase='attempt '+data.n+' of '+data.of+' — writing the code'; if(data.n>1) step('🔨 <b>attempt '+data.n+'/'+data.of+'</b> — rewriting it to fix what the browser found'); else step('🔨 <b>attempt 1/'+data.of+'</b> — writing the app'); }
+        else if(name==='verifying'){ phase='running attempt '+data.n+' in a real browser'; step('🔬 <b>running it in a real browser</b> — checking it actually renders + responds…'); }
+        else if(name==='verdict'){
+          if(data.working){ step('✅ <b>verified working</b> — renders'+(data.responds?' + responds to controls':'')+(data.animates?' + animates':'')); }
+          else { const why=(data.reasons&&data.reasons[0])?esc(data.reasons[0]):'it didn’t work'; step('✗ <b>attempt '+data.n+' is broken</b> — '+why+' <span class="dim">→ fixing it itself</span>'); phase='fixing what the browser caught'; }
+        }
+        else if(name==='done'){ done=data; finalHtml=data.html; }
+        else if(name==='error'){ step('⚠ '+esc(data.error||'')); }
+      }
     }
     clearInterval(tick);
-    if(html){
-      let rebuilt=false;
-      rec.streamed=streamed;
-      const blank=await previewBlankCheck(html);   // renders it + watches for a blank frame
-      if(blank){
-        step('· first render came up blank — auto-rebuilding once');
-        bub.textContent='🎨 First render came up blank — rebuilding once for you…';
-        const r2=await buildVisualOnce(task+"\n\nIMPORTANT: a previous attempt rendered a BLANK/BLACK screen. Ensure something is actually DRAWN and VISIBLE on the canvas every frame — correct coordinates and visible colors, the camera/player starts in OPEN space (not inside a wall), and the draw loop clears + redraws. Re-check the rendering math.");
-        if(r2.ok && r2.j.html){ html=r2.j.html; bytes=r2.j.bytes; rebuilt=true; renderPreview(html); }
+    if(!finalHtml){ bub.textContent='⚠ Couldn’t build it — try rephrasing (e.g. “build a snake game”).'; pv.innerHTML='<div class="notconn">⚠ build failed — try again.</div>'; rec.verdict='error'; }
+    else{
+      renderPreview(finalHtml); showPreview();
+      const verified=!!(done&&done.verified);
+      rec.verdict=verified?'verified':'rendered'; rec.bytes=done.bytes; rec.attempts=done.attempts; rec.verifiedRun=verified;
+      $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">index.html'+(verified?' — <span style="color:#3fd6a0">browser-verified</span>':'')+'</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(finalHtml.slice(0,14000))+'</pre>';
+      if(verified){
+        bub.innerHTML='✅ <b>Built a working app — and proved it.</b> LOLM ran it in a real browser: it renders and responds to controls.'+(done.attempts>1?' <span class="dim">It caught its own bug and fixed itself over '+done.attempts+' tries.</span>':'')+' Playing now in the <b>Preview</b> tab ↓';
+      } else if(done.verifier_ran){
+        bub.innerHTML='⚠ <b>Built it, but couldn’t fully confirm it works</b> after '+done.attempts+' tries — showing the best version (it may be partly broken). Tell me what’s off and I’ll fix it.';
+      } else {
+        bub.innerHTML='✅ <b>Built a live app</b> — '+done.bytes+' bytes, running in the <b>Preview</b> tab ↓.';
       }
-      showPreview();   // make sure the Preview pane is in view when it's ready
-      bub.innerHTML='✅ <b>Built a live, playable app</b> — '+bytes+' bytes of self-contained HTML, running now in the <b>Preview</b> tab (bottom panel). Click into it and play.'+(streamed?' <span class="dim">⚡ code streamed live as it was written</span>':'')+(rebuilt?' <span class="dim">(auto-rebuilt after a blank first try)</span>':'');
-      rec.verdict='rendered'; rec.bytes=bytes; rec.rebuilt=rebuilt;
-      step('▶ <b>running live</b> in the Preview pane · '+bytes+' bytes'+(rebuilt?' · auto-rebuilt after a blank first try':''));
-      $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">index.html</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(html.slice(0,14000))+'</pre>';
+      step('▶ <b>running live</b> · '+done.bytes+' bytes'+(verified?' · browser-verified after '+done.attempts+' attempt'+(done.attempts===1?'':'s'):''));
     }
   }catch(e){ clearInterval(tick); bub.textContent='⚠ Visual build error: '+e.message+' — try again.'; pv.innerHTML='<div class="notconn">⚠ '+esc(e.message)+'</div>'; rec.verdict='error'; }
   renderInspectors({receipt:rec});
