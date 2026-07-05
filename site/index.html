@@ -934,6 +934,7 @@ function handle(name, data, ctx){
   else if(name==='freshness'){ rec.freshness = data; rec.answer=(rec.answer||'')+'\n\n⚠ '+(data.message||''); bub.textContent=rec.answer; }
   else if(name==='confidence_map'){ rec.confidence = data; }
   else if(name==='drew_on'){ rec.drewOn = data; const n=(data.personal||0)+(data.world||0); step('💡 <b>drew on '+n+' thing'+(n===1?'':'s')+' it '+(data.personal&&!data.world?'remembers about you':(data.world&&!data.personal?'taught itself':'knows'))+'</b>'); }
+  else if(name==='learned'){ rec.learnedNow = data; step('🧠 <b>learned this from you — it’ll use it next time</b>: <span class="dim">'+esc((data.stored||'').slice(0,90))+'</span>'); }
   else if(name==='phase' && data.phase==='self_correcting'){ const c=(data.caught&&data.caught[0]); step('🧮 <b>calculator flagged an equation</b>'+(c?' — “'+esc(c.claim)+'” (should be '+c.computed+')':'')+' — re-checking…'); }
   else if(name==='phase' && data.phase==='self_correct_kept'){ step('kept the original — couldn’t verify a cleaner rewrite (details in the receipt)'); }
   else if(name==='phase' && data.phase==='reconsidering'){ step('<span class="pulse">🔍 puzzle-style question — auditing for classic logic traps…</span>'); }
@@ -945,7 +946,9 @@ function handle(name, data, ctx){
     const badge=document.createElement('div'); badge.style.cssText='margin-top:8px;font-size:12px;color:#166534;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:6px 9px';
     badge.innerHTML='✓ <b>Caught &amp; fixed a math error before you saw it.</b>'+(data.before?' <span class="dim">“'+esc(data.before)+'” → corrected to '+esc(String(data.corrected_value))+'</span>':''); bub.appendChild(badge);
     step('✓ <b>corrected</b> — the answer now passes the calculator'); $('feed').scrollTop=$('feed').scrollHeight; }
-  else if(name==='run_done'){ if(rec.answer && !rec.math_corrected && !rec.reconsidered){ bub.innerHTML=mdToHtml(rec.answer); bub.classList.add('md'); } const lc=learnedChip(rec.drewOn); if(lc) bub.appendChild(lc); const bb=brainBadge(rec.reasoner); if(bb) bub.appendChild(bb); step('● done'); }
+  else if(name==='run_done'){ if(rec.answer && !rec.math_corrected && !rec.reconsidered){ bub.innerHTML=mdToHtml(rec.answer); bub.classList.add('md'); } const lc=learnedChip(rec.drewOn); if(lc) bub.appendChild(lc);
+    if(rec.learnedNow){ const cc=document.createElement('div'); cc.style.cssText='margin-top:8px;font-size:12px;color:#166534;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:6px 9px'; cc.innerHTML='🧠 <b>Learned this from you.</b> <span class="dim">'+esc((rec.learnedNow.stored||'').slice(0,120))+'</span> — I’ll use it on related questions later.'; bub.appendChild(cc); }
+    const bb=brainBadge(rec.reasoner); if(bb) bub.appendChild(bb); step('● done'); }
   else if(name==='error'){ bub.textContent += '\n[error] '+(data.error||''); }
 }
 
