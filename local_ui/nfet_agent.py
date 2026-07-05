@@ -23,6 +23,7 @@ tuples to the improvement log — the training data that improves the head.
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from dataclasses import asdict, dataclass, field
@@ -133,6 +134,23 @@ _SCAFFOLD_RE = re.compile(
     r"|^\s*WORKING DRAFT:\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
+
+# AUTO-CAPTURE gates: turn a conversation into durable, retrievable knowledge.
+# An explicit teach marker is an unambiguous "store this"; a bare declarative fact
+# is only captured when LOLM_AUTOCAPTURE is set (so the shared public demo isn't
+# polluted). Questions/commands/opinions are never stored as facts.
+_TEACH_MARKER_RE = re.compile(
+    r"\b(remember(?:\s+(?:that|this))?\s*[:,]?|note that|for future reference|"
+    r"keep in mind|don'?t forget|for the record|fyi\b[:,]?|make a note(?:\s+that)?)\b",
+    re.IGNORECASE)
+_FACT_COPULA_RE = re.compile(
+    r"\b(is|are|was|were|equals?|means?|stands for|refers to|consists of|contains?)\b|=",
+    re.IGNORECASE)
+_NON_FACT_START_RE = re.compile(
+    r"^\s*(i\s+(think|feel|believe|like|want|need|guess)|please|can you|could you|"
+    r"would you|write|build|make|create|generate|explain|summar|translate|code|"
+    r"show me|give me|draw|design|help|let'?s|how |what |why |when |where |who |"
+    r"which |do |does |is it|are there)\b", re.IGNORECASE)
 
 
 def strip_scaffold_echo(s: str) -> str:
@@ -849,6 +867,55 @@ WORKING DRAFT:
             return {}
         return {"trap": trap, "answer": fixed}
 
+    def _capture_learning(self, command: str, answer_text: str, profile: str,
+                          math_ok: bool) -> Optional[Dict[str, str]]:
+        """Auto-CAPTURE — the input half of compounding learning: turn durable
+        knowledge from this turn into a retrievable memory, so a later RELATED
+        question can use it (paired with the relevance retrieval + finalizer
+        injection that make stored facts actually change answers). Honest gates:
+        never store greetings/opinions/questions/commands; dedupe against what's
+        already retrievable; explicit 'remember…' and VERIFIED math are always
+        captured, bare declarative facts only when LOLM_AUTOCAPTURE is set."""
+        mem = getattr(self.deps, "memory", None)
+        cmd = (command or "").strip()
+        ans = (answer_text or "").strip()
+        if mem is None or profile == "social" or len(cmd) < 12:
+            return None
+
+        def _dupe(text: str) -> bool:
+            b = re.sub(r"\W+", "", text.lower())
+            try:
+                for h in mem.search_notes(text, limit=2):
+                    a = re.sub(r"\W+", "", (h.get("text") or "").lower())
+                    if a and (a[:60] == b[:60] or a in b or b in a):
+                        return True
+            except Exception:
+                pass
+            return False
+
+        def _store(text: str, tag: str, imp: int) -> Optional[Dict[str, str]]:
+            text = text.strip()[:500]
+            if len(text) < 8 or _dupe(text):
+                return None
+            try:
+                mem.append_note(text, tag=tag, importance=imp)
+                return {"stored": text[:120], "tag": tag}
+            except Exception:
+                return None
+
+        marker = _TEACH_MARKER_RE.search(cmd)
+        declarative = ("?" not in cmd and len(cmd) <= 400
+                       and _FACT_COPULA_RE.search(cmd) and not _NON_FACT_START_RE.match(cmd))
+        if marker or (declarative and os.environ.get("LOLM_AUTOCAPTURE")):
+            fact = _TEACH_MARKER_RE.sub("", cmd).strip(" :,-—").strip() or cmd
+            r = _store(fact, "told", 5)
+            if r:
+                return r
+        # a VERIFIED computation is durable knowledge too (only what the calculator confirmed)
+        if math_ok and cmd.rstrip().endswith("?") and 2 < len(ans) < 600:
+            return _store(f"Q: {cmd}\nA: {ans}", "solved", 4)
+        return None
+
     def _generate_base(self, command: str, req: NFETAgentRequest) -> SegmentResult:
         ChatMessage = self.deps.ChatMessage
         return self._collect(
@@ -1267,6 +1334,17 @@ WORKING DRAFT:
                     "items": learned[:3],
                     "personal": sum(1 for x in learned if x["origin"] == "you"),
                     "world": sum(1 for x in learned if x["origin"] == "learned")}}
+        except Exception:
+            pass
+
+        # AUTO-CAPTURE: turn durable knowledge from this turn into memory so the
+        # loop compounds without the memory panel (the retrieval + finalizer
+        # injection above make what's captured actually pay off on later questions).
+        try:
+            _math_ok = bool(vres.get("checks")) and not vres.get("failed")
+            cap = self._capture_learning(command, answer_text, profile, _math_ok)
+            if cap:
+                yield {"event": "learned", "data": cap}
         except Exception:
             pass
 
