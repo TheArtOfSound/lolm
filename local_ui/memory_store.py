@@ -19,6 +19,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Stopwords dropped from a query before relevance matching, so retrieval keys on
+# the meaningful words ("carbonara", "flux") not the glue ("the", "how", "is").
+_MEM_STOP = frozenset((
+    "a an the and or but of to in on at is are was were be been being has have had it its "
+    "as by for with that this these those from into than then so such which who whom whose "
+    "will would can could may might must do does did not no they them their he she his her "
+    "we our you your i me my one about over under more less most least very also just only "
+    "per each any all some what how why when where does whats").split())
+
 
 @dataclass
 class MemoryPaths:
@@ -87,20 +96,40 @@ class MemoryStore:
         return rows[-limit:]
 
     def search_notes(self, query: str, limit: int = 12, min_importance: int = 0, tag: Optional[str] = None) -> List[Dict[str, Any]]:
-        tokens = [t for t in re.split(r"\W+", query.lower()) if t]
-        hits: List[Dict[str, Any]] = []
-        for row in reversed(self._read_jsonl(self.paths.notes)):
-            if int(row.get("importance", 0)) < min_importance:
-                continue
-            if tag and row.get("tag") != tag:
-                continue
+        """Relevance-scored retrieval. The old version AND-matched EVERY query token,
+        so a note only surfaced when the prompt repeated its exact words — accrued
+        knowledge almost never reached an answer. Now we score by how many CONTENT
+        words overlap (weighted by coverage, importance, recency) and return the most
+        relevant, so a RELATED question still finds what was learned. Requires a
+        genuine overlap (>=2 content words, or full coverage of a short query) so it
+        stays relevant, not a firehose."""
+        q_tokens = [t for t in re.split(r"\W+", (query or "").lower()) if t]
+        content = list({t for t in q_tokens if len(t) >= 3 and t not in _MEM_STOP})
+        rows = [r for r in self._read_jsonl(self.paths.notes)
+                if int(r.get("importance", 0)) >= min_importance
+                and (not tag or r.get("tag") == tag)]
+        if not content:                               # no usable query → most recent
+            return rows[-limit:]
+        n = max(len(rows), 1)
+        scored: List[Any] = []
+        for idx, row in enumerate(rows):
             hay = json.dumps(row, ensure_ascii=False).lower()
-            if tokens and not all(t in hay for t in tokens):
+            overlap = sum(1 for t in content if t in hay)
+            if not overlap:
                 continue
-            hits.append(row)
-            if len(hits) >= limit:
-                break
-        return hits
+            coverage = overlap / len(content)
+            # relevant if: 2+ content words overlap, OR half the query is covered,
+            # OR a single DISTINCTIVE (long, rare) term matches — "carbonara",
+            # "quantum" alone are strong signals; "flux" needs a second word.
+            distinctive = any(len(t) >= 7 and t in hay for t in content)
+            if overlap < 2 and coverage < 0.5 and not distinctive:
+                continue
+            score = (overlap + 1.5 * coverage
+                     + 0.3 * int(row.get("importance", 3))
+                     + 0.2 * (idx / n))               # gentle recency nudge
+            scored.append((score, row))
+        scored.sort(key=lambda s: s[0], reverse=True)
+        return [row for _, row in scored[:limit]]
 
     def read_identity(self) -> str:
         return self.paths.identity.read_text(encoding="utf-8") if self.paths.identity.exists() else ""

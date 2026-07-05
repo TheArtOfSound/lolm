@@ -612,6 +612,7 @@ DRAFT:
 
     def _do_finalize(self, command: str, draft: str, evidence: List[Dict[str, Any]],
                      req: NFETAgentRequest, profile: str = "task",
+                     memory_hits: Optional[List[Dict[str, Any]]] = None,
                      ) -> Generator[Dict[str, Any], None, SegmentResult]:
         ChatMessage = self.deps.ChatMessage
         grounded = bool((getattr(req, "sources", None) or "").strip())
@@ -740,6 +741,20 @@ DRAFT:
 
 WORKING DRAFT:
 {draft}"""
+        # LEARNED KNOWLEDGE (the compounding-learning path): facts LOLM has accrued
+        # and retrieved for THIS question must reach the FINALIZER (which writes the
+        # answer), not only the draft — otherwise teaching it something never changes
+        # a later answer. Skip for strict BYO (source-only) and social.
+        strict_byo = grounded and not web_grounded
+        if memory_hits and profile != "social" and not strict_byo:
+            lb = self._evidence_block(
+                "LEARNED KNOWLEDGE (facts you have been taught or figured out before — "
+                "treat as authoritative and USE them to answer)", memory_hits)
+            if lb.strip():
+                user = lb + "\n\n" + user
+                system = system + (" A LEARNED KNOWLEDGE block below contains facts you "
+                                   "already know; treat them as ground truth and use them "
+                                   "directly — do not contradict or ignore them.")
         # In-thread memory: prepend the conversation so the FINALIZER (which writes
         # the actual answer) can resolve "it/that/what I just asked" and stay coherent
         # across turns. Applies to every finalize branch (advisory/BYO/social/default).
@@ -1090,7 +1105,8 @@ WORKING DRAFT:
                 ended_by = "audit_verified"
 
         yield {"event": "phase", "data": {"phase": "finalize", "ended_by": ended_by}}
-        final = yield from self._do_finalize(command, draft, evidence, req, profile=profile)
+        final = yield from self._do_finalize(command, draft, evidence, req, profile=profile,
+                                             memory_hits=memory_hits)
         counters.tokens += int(final.raw.get("tokens") or 0)
 
         # The thing no other agent can show: re-read the finished answer through
