@@ -329,8 +329,16 @@ def _operator_stream(messages, max_new_tokens=640):
     return FRONTIER.stream_text(req)
 
 
+def _operator_gen_many(messages, models, max_tokens=3600):
+    """Best-of-N fan-out for the visual ensemble: several models generate in
+    parallel via the worker. FRONTIER only; [] when unavailable (ensemble falls
+    back to single-model)."""
+    return FRONTIER.generate_many(messages, models, max_tokens)
+
+
 register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat,
-                     stream_fn=_operator_stream if FRONTIER.available() else None)
+                     stream_fn=_operator_stream if FRONTIER.available() else None,
+                     gen_many_fn=_operator_gen_many if FRONTIER.available() else None)
 
 # LOLM Operator: a general multi-tool agent (list/read/write/run/search) that pursues a
 # GOAL over its own bwrap-jailed virtual workspace — plan -> act -> observe -> verify,

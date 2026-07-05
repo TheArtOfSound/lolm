@@ -365,6 +365,38 @@ async function stream70B(env, messages, max_tokens, modelOverride) {
     status: 502, headers: { "content-type": "application/json" } });
 }
 
+// Run SEVERAL models AT ONCE ("in unison"): each candidate comes from a DIFFERENT
+// model, on (where possible) a different key, generated in PARALLEL — so a caller
+// can race brains and keep the one a real oracle (the browser / a calculator)
+// confirms is best. Independent of the fall-through cascade; one bad model can't
+// sink the batch (each job is caught and reported).
+async function generateMany(env, messages, max_tokens, models) {
+  const chain = providerChain(env);
+  const pick = (id) => chain.find((c) => c.model === id)
+    || (String(id).startsWith("@cf") ? chain.find((c) => c.kind === "cf") : null)
+    || chain.find((c) => c.kind === "cf") || chain[0];
+  const one = async (id) => {
+    const prov = pick(id);
+    const t0 = Date.now();
+    try {
+      let text;
+      if (prov.kind === "cf") {
+        const r = await env.AI.run(String(id).startsWith("@cf") ? id : prov.model,
+                                   { messages, max_tokens });
+        text = (r && r.response) || "";
+        if (!text.trim() && r && r.error) throw new Error(r.error);
+      } else {
+        text = await callOpenAICompatible(prov, id, messages, max_tokens);
+      }
+      return { model: id, provider: prov.name, text, ms: Date.now() - t0 };
+    } catch (e) {
+      return { model: id, provider: prov && prov.name,
+               error: String(e.message || e).slice(0, 140), ms: Date.now() - t0 };
+    }
+  };
+  return { candidates: await Promise.all((models || []).slice(0, 4).map(one)) };
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -420,6 +452,21 @@ export default {
       const result = await generate70B(env, messages, max_tokens, body.model);
       if (result.text) return json(result);
       return json(result, result.quota_exhausted ? 429 : 502);
+    }
+
+    // Best-of-N: generate from several models IN PARALLEL, return all candidates.
+    if (p === "/ai/generate_many" && request.method === "POST") {
+      const auth = request.headers.get("authorization") || "";
+      if (!env.AI_SECRET || auth !== `Bearer ${env.AI_SECRET}`) {
+        return json({ error: "unauthorized" }, 401);
+      }
+      let body;
+      try { body = await request.json(); } catch { return json({ error: "bad json" }, 400); }
+      const messages = Array.isArray(body.messages) ? body.messages : [];
+      const max_tokens = Math.min(Math.max(parseInt(body.max_tokens) || 512, 16), 8192);
+      const models = (Array.isArray(body.models) && body.models.length)
+        ? body.models : ["zai-glm-4.7"];
+      return json(await generateMany(env, messages, max_tokens, models));
     }
 
     // Diagnostic: what model IDs does each keyed provider ACTUALLY offer right now?

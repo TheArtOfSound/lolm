@@ -137,6 +137,28 @@ class WorkersAIReasonerLoop:
                 if piece:
                     yield piece
 
+    def generate_many(self, messages: List[Dict[str, str]], models: List[str],
+                      max_tokens: int = 3600) -> List[Dict[str, Any]]:
+        """Best-of-N: ask the worker to generate from SEVERAL models IN PARALLEL.
+        `messages` is a ready flat [{role,content}] list. Returns the candidate
+        list [{model, provider, text|error, ms}] (empty on transport failure) so
+        the caller can race brains and keep whichever a real oracle confirms best."""
+        if not self.available():
+            return []
+        n = min(max(int(max_tokens), 96), 8192)
+        payload = {"messages": list(messages), "max_tokens": n, "models": list(models)[:4]}
+        many_url = self.url.rsplit("/", 1)[0] + "/generate_many"
+        request = urllib.request.Request(
+            many_url, data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {self.secret}",
+                     "User-Agent": "lolm-nfet-origin/1.0"})
+        try:
+            with urllib.request.urlopen(request, timeout=min(30 + n / 30.0, 160)) as resp:
+                return (json.loads(resp.read()) or {}).get("candidates", [])
+        except Exception:
+            return []
+
     def __call__(self, req: Any) -> Iterator[Dict[str, Any]]:
         started = time.perf_counter()
         if not self.available():

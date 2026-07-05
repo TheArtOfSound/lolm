@@ -619,8 +619,13 @@ async function runVisualBuild(task, c){
       let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
         let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: ')){ try{data=JSON.parse(ln.slice(6));}catch(_){} } }
         if(!name||data==null) continue;
-        if(name==='attempt'){ phase='attempt '+data.n+' of '+data.of+' — writing the code'; if(data.n>1) step('🔨 <b>attempt '+data.n+'/'+data.of+'</b> — rewriting it to fix what the browser found'); else step('🔨 <b>attempt 1/'+data.of+'</b> — writing the app'); }
-        else if(name==='verifying'){ phase='running attempt '+data.n+' in a real browser'; step('🔬 <b>running it in a real browser</b> — checking it actually renders + responds…'); }
+        if(name==='attempt'){
+          if(data.mode==='ensemble'){ const names=(data.models||[]).map(m=>m.split('/').pop().replace('-instruct','')).join(' vs '); phase='racing '+(data.models||[]).length+' brains in parallel'; step('🧠 <b>racing '+(data.models||[]).length+' brains in parallel</b> — '+esc(names)+' <span class="dim">each builds it independently</span>'); }
+          else if(data.mode==='fix' || data.n>1){ phase='fixing what the browser found'; step('🔨 <b>attempt '+data.n+'</b> — rewriting it to fix what the browser found'); }
+          else { phase='writing the code'; step('🔨 <b>attempt 1</b> — writing the app'); }
+        }
+        else if(name==='candidate'){ const nm=(data.model||'').split('/').pop().replace('-instruct',''); if(data.working){ step('&nbsp;&nbsp;🧠 <b>'+esc(nm)+'</b> → <span style="color:#16a34a">runs ✓</span> renders'+(data.responds?'+responds':'')+(data.animates?'+animates':'')); } else { const why=(data.reasons&&data.reasons[0])?esc((data.reasons[0]||'').slice(0,54)):'broken'; step('&nbsp;&nbsp;🧠 <b>'+esc(nm)+'</b> → <span style="color:#b45309">✗ '+why+'</span>'); } }
+        else if(name==='verifying'){ phase='running it in a real browser'; step('🔬 <b>running '+(data.count?('all '+data.count+' in real browsers'):'it in a real browser')+'</b> — checking each actually renders + responds…'); }
         else if(name==='verdict'){
           if(data.working){ step('✅ <b>verified working</b> — renders'+(data.responds?' + responds to controls':'')+(data.animates?' + animates':'')); }
           else { const why=(data.reasons&&data.reasons[0])?esc(data.reasons[0]):'it didn’t work'; step('✗ <b>attempt '+data.n+' is broken</b> — '+why+' <span class="dim">→ fixing it itself</span>'); phase='fixing what the browser caught'; }
@@ -637,7 +642,9 @@ async function runVisualBuild(task, c){
       rec.verdict=verified?'verified':'rendered'; rec.bytes=done.bytes; rec.attempts=done.attempts; rec.verifiedRun=verified;
       $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">index.html'+(verified?' — <span style="color:#3fd6a0">browser-verified</span>':'')+'</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(finalHtml.slice(0,14000))+'</pre>';
       if(verified){
-        bub.innerHTML='✅ <b>Built a working app — and proved it.</b> LOLM ran it in a real browser: it renders and responds to controls.'+(done.attempts>1?' <span class="dim">It caught its own bug and fixed itself over '+done.attempts+' tries.</span>':'')+' Playing now in the <b>Preview</b> tab ↓';
+        const win=done.winner?done.winner.split('/').pop().replace('-instruct',''):null;
+        const how=(done.mode==='ensemble'&&win)?' <span class="dim">'+esc(win)+' won a 3-brain race — the browser picked the one that actually ran.</span>':(done.attempts>1?' <span class="dim">It caught its own bug and fixed itself over '+done.attempts+' tries.</span>':'');
+        bub.innerHTML='✅ <b>Built a working app — and proved it.</b> LOLM ran it in a real browser: it renders and responds to controls.'+how+' Playing now in the <b>Preview</b> tab ↓';
       } else if(done.verifier_ran){
         bub.innerHTML='⚠ <b>Built it, but couldn’t fully confirm it works</b> after '+done.attempts+' tries — showing the best version (it may be partly broken). Tell me what’s off and I’ll fix it.';
       } else {

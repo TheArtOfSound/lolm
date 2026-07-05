@@ -78,6 +78,40 @@ def test_build_loop_retries_until_a_real_browser_confirms_it_works(monkeypatch):
     assert calls["gen"] == 2                        # regenerated exactly once
 
 
+def test_ensemble_races_brains_and_ships_the_browser_verified_winner(monkeypatch):
+    """A HARD build fans out to 3 brains in parallel; the browser verifies each and
+    the one that RUNS wins — even though two of the three produced broken games."""
+    texts = {
+        "zai-glm-4.7": DOC.format(tag="glm-broken"),
+        "openai/gpt-oss-120b": DOC.format(tag="gptoss-works"),
+        "meta-llama/llama-4-scout-17b-16e-instruct": DOC.format(tag="scout-broken"),
+    }
+
+    def fake_gen_many(msgs, models, max_tokens=3600):
+        return [{"model": m, "provider": "grp", "text": texts[m]} for m in models]
+
+    def fake_verify(html, wait_ms=1400, timeout=55):
+        ok = "works" in html
+        return {"working": ok, "renders": ok, "animates": ok, "responds": ok,
+                "console_errors": [], "reasons": [] if ok else ["the canvas is BLANK"]}
+
+    monkeypatch.setattr(cr, "_verify_html", fake_verify)
+    app = FastAPI()
+    cr.register_code_routes(app, "/tmp/lolm_test_sb_ens",
+                            lambda m, max_new_tokens=None: DOC.format(tag="single"),
+                            gen_many_fn=fake_gen_many)
+    client = TestClient(app)
+    r = client.post("/api/demo/code/visual/build", json={"task": "build a first-person raycaster maze"})
+    evs = list(_sse_events(r.text))
+    cands = [d for n, d in evs if n == "candidate"]
+    done = [d for n, d in evs if n == "done"][-1]
+    assert len(cands) == 3                          # all three brains raced in parallel
+    assert sum(1 for c in cands if c["working"]) == 1
+    assert done["verified"] is True and done["mode"] == "ensemble"
+    assert done["winner"] == "openai/gpt-oss-120b"  # the only one the browser confirmed
+    assert "gptoss-works" in done["html"]
+
+
 def test_build_loop_reports_honestly_when_it_cannot_fix(monkeypatch):
     """If it never works, it returns the best attempt and does NOT claim verified."""
     def fake_chat(msgs, max_new_tokens=None):

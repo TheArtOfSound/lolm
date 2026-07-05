@@ -57,6 +57,26 @@ def _verdict_score(v: Dict[str, Any]) -> int:
     return (4 * int(bool(v.get("renders"))) + 2 * int(bool(v.get("animates")))
             + 2 * int(bool(v.get("responds"))) - len(v.get("console_errors") or []))
 
+
+def _verify_all(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Verify several HTML candidates CONCURRENTLY — each _verify_html spawns its
+    own Chromium subprocess, so threads just overlap the I/O wait. Each result is
+    the candidate annotated with the extracted 'html' and its 'verdict'."""
+    if not candidates:
+        return []
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _one(cand: Dict[str, Any]) -> Dict[str, Any]:
+        html = _extract_html(cand.get("text") or "")
+        if not html or len(html) < 60:
+            return {**cand, "html": html or "", "verdict": {
+                "working": False, "renders": False,
+                "reasons": [cand.get("error") or "the model returned no usable HTML"]}}
+        return {**cand, "html": html, "verdict": _verify_html(html)}
+
+    with ThreadPoolExecutor(max_workers=min(4, len(candidates))) as ex:
+        return list(ex.map(_one, candidates))
+
 from fastapi import Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -188,7 +208,8 @@ def _visual_recipe(task: str) -> str:
 def register_code_routes(app: Any, root: str,
                          chat_fn: Optional[Callable[[List[Dict[str, str]]], str]],
                          runs_per_min: int = 6,
-                         stream_fn: Optional[Callable[..., Any]] = None) -> None:
+                         stream_fn: Optional[Callable[..., Any]] = None,
+                         gen_many_fn: Optional[Callable[..., List[Dict[str, Any]]]] = None) -> None:
     rate: Dict[str, List[float]] = {}
 
     def _ip(req: Request) -> str:
@@ -437,13 +458,59 @@ def register_code_routes(app: Any, root: str,
             return JSONResponse({"error": "empty task"}, status_code=400)
         max_tries = 4
 
+        # Three independent frontier brains for the ensemble race (two keys).
+        ROUND1 = ["zai-glm-4.7", "openai/gpt-oss-120b", "meta-llama/llama-4-scout-17b-16e-instruct"]
+
         def gen():
             best_html: Optional[str] = None
             best_verdict: Dict[str, Any] = {}
-            msgs = _visual_messages(task)
-            attempt = 0
-            for attempt in range(1, max_tries + 1):
-                yield _sse("attempt", {"n": attempt, "of": max_tries})
+            best_model: Optional[str] = None
+            attempts = 0
+            # Fan out to N brains only for a HARD build (a known recipe) — easy asks
+            # (a clock, a landing page) don't need 3x the cost; they take the single path.
+            ensemble = bool(gen_many_fn) and bool(_visual_recipe(task))
+
+            def consider(html, verdict, model):
+                nonlocal best_html, best_verdict, best_model
+                if best_html is None or _verdict_score(verdict) > _verdict_score(best_verdict):
+                    best_html, best_verdict, best_model = html, verdict, model
+
+            # ── ROUND 1 (ensemble): race 3 independent brains, verify EACH in a real
+            #    browser, keep the one the browser confirms works ("brains in unison"). ──
+            if ensemble:
+                attempts = 1
+                yield _sse("attempt", {"n": 1, "of": 3, "mode": "ensemble", "models": ROUND1})
+                try:
+                    cands = gen_many_fn(_visual_messages(task), ROUND1) or []
+                except Exception:
+                    cands = []
+                if cands:
+                    yield _sse("verifying", {"n": 1, "count": len(cands)})
+                    for cnd in _verify_all(cands):
+                        v = cnd["verdict"]
+                        consider(cnd["html"], v, cnd.get("model"))
+                        yield _sse("candidate", {"model": cnd.get("model"), "provider": cnd.get("provider"),
+                                   "working": v.get("working"), "renders": v.get("renders"),
+                                   "animates": v.get("animates"), "responds": v.get("responds"),
+                                   "bytes": len(cnd.get("html") or ""), "reasons": v.get("reasons", [])})
+                    if best_verdict.get("working") or best_verdict.get("working") is None:
+                        yield _sse("done", {"html": best_html or "", "bytes": len(best_html or ""),
+                                   "verified": bool(best_verdict.get("working")),
+                                   "verifier_ran": best_verdict.get("working") is not None,
+                                   "attempts": attempts, "winner": best_model, "mode": "ensemble",
+                                   "verdict": best_verdict})
+                        return
+                else:
+                    ensemble = False           # fan-out unavailable → single-model path
+
+            # ── SINGLE-MODEL loop: fresh if nothing yet, else FIX the best so far. ──
+            msgs = (_visual_messages(task) if best_html is None
+                    else _visual_fix_messages(task, best_html, best_verdict.get("reasons", [])))
+            cap = 2 if best_html is not None else max_tries      # ensemble already spent a round
+            for _ in range(cap):
+                attempts += 1
+                yield _sse("attempt", {"n": attempts, "of": max_tries,
+                                       "mode": "fix" if best_html is not None else "single"})
                 try:
                     html = _gen_html(msgs)
                 except Exception as exc:
@@ -452,27 +519,22 @@ def register_code_routes(app: Any, root: str,
                         return
                     break
                 if not html or len(html) < 60:
-                    yield _sse("attempt_note", {"n": attempt, "note": "no usable HTML — retrying"})
+                    yield _sse("attempt_note", {"n": attempts, "note": "no usable HTML — retrying"})
                     continue
-                yield _sse("verifying", {"n": attempt})
-                verdict = _verify_html(html)
-                working = verdict.get("working")
-                yield _sse("verdict", {"n": attempt, "working": working,
-                                       "renders": verdict.get("renders"), "animates": verdict.get("animates"),
-                                       "responds": verdict.get("responds"),
-                                       "reasons": verdict.get("reasons", [])})
-                if best_html is None or _verdict_score(verdict) > _verdict_score(best_verdict):
-                    best_html, best_verdict = html, verdict
-                if working:                       # a real browser confirmed it works — ship it
+                yield _sse("verifying", {"n": attempts})
+                v = _verify_html(html)
+                yield _sse("verdict", {"n": attempts, "working": v.get("working"),
+                                       "renders": v.get("renders"), "animates": v.get("animates"),
+                                       "responds": v.get("responds"), "reasons": v.get("reasons", [])})
+                consider(html, v, best_model or "cloud")
+                if v.get("working") or v.get("working") is None:
                     break
-                if working is None:               # verifier unavailable → don't loop blindly
-                    break
-                if attempt < max_tries:
-                    msgs = _visual_fix_messages(task, html, verdict.get("reasons", []))
+                msgs = _visual_fix_messages(task, html, v.get("reasons", []))
             yield _sse("done", {"html": best_html or "", "bytes": len(best_html or ""),
                                 "verified": bool(best_verdict.get("working")),
                                 "verifier_ran": best_verdict.get("working") is not None,
-                                "attempts": attempt, "verdict": best_verdict})
+                                "attempts": attempts, "winner": best_model,
+                                "mode": "ensemble" if ensemble else "single", "verdict": best_verdict})
 
         return StreamingResponse(gen(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
