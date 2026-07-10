@@ -12,7 +12,7 @@
  * but their failure degrades gracefully in the page, not here.
  */
 
-const CACHE = "lolm-nfet-v2";   // bump on any shell/asset change so returning
+const CACHE = "lolm-nfet-v3";   // bump on any shell/asset change so returning
                                 // visitors get the update (activate clears old)
 const SHELL = [
   "/", "/index.html", "/try.html", "/og-card.png",
@@ -20,6 +20,10 @@ const SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
+  // Take over IMMEDIATELY. Without this, a new worker waits until every LOLM
+  // tab is closed — long-lived app tabs kept serving a week-old UI while every
+  // deploy silently piled up behind them.
+  self.skipWaiting();
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     await cache.addAll(SHELL.map((u) => new Request(u, { cache: "reload" })));

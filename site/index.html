@@ -34,6 +34,10 @@
      workbench/inspector live in an on-demand DOCK that slides in only when there's
      something to show (a run, a preview, a receipt) — no four panels fighting at once. */
   .app{display:grid;grid-template-columns:300px minmax(0,1fr);grid-template-areas:"side main";height:100vh;height:100dvh;transition:grid-template-columns .22s ease}
+  .app.noside{grid-template-columns:0 minmax(0,1fr)}
+  .app.noside .side{display:none}
+  .sideopener{position:fixed;left:10px;top:10px;z-index:60;display:none;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:4px 10px;cursor:pointer;font-size:14px}
+  .app.noside ~ .sideopener, body.noside .sideopener{display:block}
   .app.dock-open{grid-template-columns:300px minmax(0,1fr) minmax(380px,44vw);grid-template-areas:"side main dock"}
   .app:not(.dock-open) .dock{display:none}
   @media(max-width:980px){.app.dock-open{grid-template-columns:300px minmax(0,1fr)} .app.dock-open .dock{position:fixed;inset:0 0 0 auto;width:min(92vw,460px);z-index:40;box-shadow:-12px 0 40px rgba(2,6,23,.18)}}
@@ -223,11 +227,12 @@
 </head>
 <body>
 <div class="scrim" id="scrim" onclick="document.getElementById('side').classList.remove('show');this.classList.remove('show')"></div>
+<button class="sideopener" id="sideOpener" onclick="toggleSide()" title="show conversations">☰ chats</button>
 <button id="shield" onclick="shieldUnlock()" title="owner unlock" style="position:fixed;left:10px;bottom:10px;z-index:70;width:26px;height:26px;border:0;background:transparent;opacity:.25;font-size:15px;cursor:pointer;padding:0;line-height:1">🛡</button>
 <div class="app">
   <!-- LEFT -->
   <aside class="side" id="side">
-    <div class="brand"><span class="dot"></span> LOLM Workspace <small>phase 1</small></div>
+    <div class="brand" style="display:flex;align-items:center;gap:6px"><span class="dot"></span> LOLM Workspace <small id="freshStamp" title="when this UI was last deployed">updated 2026-07-10</small><button onclick="toggleSide()" title="hide conversations" style="margin-left:auto;border:0;background:transparent;cursor:pointer;font-size:15px;color:var(--dim);padding:2px 6px">‹</button></div>
     <button class="newbtn" id="newConv">＋ New conversation</button>
     <input class="search" id="search" placeholder="search conversations…">
     <div class="side-scroll">
@@ -735,6 +740,7 @@ async function send(){
   const c = state.conv;
   addBubble('user', text);
   await api('/conversations/'+c.id+'/messages', {method:'POST', body: JSON.stringify({role:'user', content:text})});
+  if(_greetConvId && c.id===_greetConvId && _lifeAskId){ try{ fetch('/api/demo/life/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pulse_id:_lifeAskId,reply:text})}); }catch(_){ } _greetConvId=null; }
 
   // explicit memory commands ("remember that…" / "forget…") → instant, deterministic
   if(await handleMemoryCommand(text, c)){ state.running=false; $('send').disabled=false; await openConv(c.id); return; }
@@ -1209,7 +1215,28 @@ async function answerLife(){ const inp=document.getElementById('lifeAskInput'); 
   _lifeCache=null; setTimeout(fetchLife, 2500);
 }
 function dismissLifeAsk(){ if(_lifeAskId) localStorage.setItem('lolm_dismissed_q', _lifeAskId); document.getElementById('lifeAsk').style.display='none'; }
-(function initLife(){ fetchLife().then(renderLifeAsk); localStorage.setItem('lolm_last_seen', String(Date.now()/1000)); setInterval(()=>fetchLife().then(renderLifeAsk), 60000); })();
+let _greetConvId=null;
+async function maybeGreet(){
+  const d=_lifeCache; if(!d||!d.alive) return;
+  const away=(d.while_away||[]), q=d.open_question;
+  if(!away.length && !q) return;
+  const last=+(localStorage.getItem('lolm_last_greet')||0);
+  if(Date.now()-last < 6*3600*1000) return;                 // don't be clingy: at most every 6h
+  localStorage.setItem('lolm_last_greet', String(Date.now()));
+  try{
+    const c=await api('/conversations',{method:'POST',body:JSON.stringify({mode:'chat'})});
+    if(!c||!c.id) return;
+    let msg='Hey — I kept thinking while you were away.';
+    const t=away[0]&&(away[0].learned||away[0].thought);
+    if(t) msg+='\n\nMost recent thought: '+String(t).slice(0,300);
+    if(q&&q.question){ _lifeAskId=q.id; _greetConvId=c.id; msg+='\n\nSomething I\'ve been wondering, and I\'d genuinely like your take: '+q.question; }
+    else msg+='\n\nWhat should we dig into together today?';
+    await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:msg,model_used:'life engine'})});
+    try{ await api('/conversations/'+c.id,{method:'PATCH',body:JSON.stringify({title:'🌱 LOLM started this chat'})}); }catch(_){ }
+    await openConv(c.id); await loadConvs();
+  }catch(_){ }
+}
+(function initLife(){ fetchLife().then(()=>{ renderLifeAsk(); maybeGreet(); }); localStorage.setItem('lolm_last_seen', String(Date.now()/1000)); setInterval(()=>fetchLife().then(renderLifeAsk), 60000); })();
 /* ── tabs ── */
 document.querySelectorAll('#rtabs .tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('#rtabs .tab').forEach(x=>x.classList.toggle('on',x===t));
@@ -1270,6 +1297,12 @@ $('dockToggle').onclick = () => { document.querySelector('.app').classList.conta
 // Mobile drawer: menu toggles it (with a scrim), tapping the scrim or picking a
 // conversation closes it — hover affordances don't exist on touch.
 const _isMobile = () => window.matchMedia('(max-width:760px)').matches;
+function toggleSide(){
+  const side=document.getElementById('side'), scrim=document.getElementById('scrim'), app=document.querySelector('.app'), opener=document.getElementById('sideOpener');
+  if(_isMobile()){ side.classList.remove('show'); if(scrim)scrim.classList.remove('show'); return; }
+  const hidden=app.classList.toggle('noside');
+  if(opener) opener.style.display=hidden?'block':'none';
+}
 // ── tiers + the shield ────────────────────────────────────────────────────────
 // authHeaders(): every gated call carries the signed license (subscriber) and/or
 // admin token (the owner's shield). Tokens live in localStorage; the password is
