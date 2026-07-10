@@ -223,6 +223,7 @@
 </head>
 <body>
 <div class="scrim" id="scrim" onclick="document.getElementById('side').classList.remove('show');this.classList.remove('show')"></div>
+<button id="shield" onclick="shieldUnlock()" title="owner unlock" style="position:fixed;left:10px;bottom:10px;z-index:70;width:26px;height:26px;border:0;background:transparent;opacity:.25;font-size:15px;cursor:pointer;padding:0;line-height:1">🛡</button>
 <div class="app">
   <!-- LEFT -->
   <aside class="side" id="side">
@@ -554,7 +555,7 @@ async function buildVisualOnce(task, timeoutMs=240000){
   // instead of hanging the tab forever.
   const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(), timeoutMs);
   let resp;
-  try{ resp=await fetch('/api/demo/code/visual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task}),signal:ctl.signal}); }
+  try{ resp=await fetch('/api/demo/code/visual',{method:'POST',headers:authHeaders(),body:JSON.stringify({task}),signal:ctl.signal}); }
   catch(e){ clearTimeout(to); if(e.name==='AbortError') return {ok:false, status:0, j:{error:'the build took too long (over 4 minutes) — try a simpler request, or split it up'}}; throw e; }
   clearTimeout(to);
   const raw=await resp.text();
@@ -576,7 +577,7 @@ function previewBlankCheck(html){ return new Promise(res=>{ let done=false; rend
 async function streamVisualBuild(task, onChunk){
   const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(), 240000);
   let resp;
-  try{ resp=await fetch('/api/demo/code/visual/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task}),signal:ctl.signal}); }
+  try{ resp=await fetch('/api/demo/code/visual/stream',{method:'POST',headers:authHeaders(),body:JSON.stringify({task}),signal:ctl.signal}); }
   catch(e){ clearTimeout(to); throw (e.name==='AbortError'? new Error('stream timed out'):e); }
   if(!resp.ok || !(resp.headers.get('content-type')||'').includes('event-stream')){ clearTimeout(to); throw new Error('stream unavailable (HTTP '+resp.status+')'); }
   const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf='', html=null, err=null;
@@ -611,7 +612,8 @@ async function runVisualBuild(task, c){
   let secs=0, phase='writing the code';
   const tick=setInterval(()=>{ secs++; bub.textContent='🎨 Building & verifying your app… ('+secs+'s) — '+phase+' ↓'; }, 1000);
   try{
-    const resp=await fetch('/api/demo/code/visual/build',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
+    const resp=await fetch('/api/demo/code/visual/build',{method:'POST',headers:authHeaders(),body:JSON.stringify({task})});
+    if(resp.status===402){ clearInterval(tick); const err=await resp.json().catch(()=>({})); bub.textContent=err.error||'daily build limit reached'; showUpgrade(bub, err); return; }
     if(!resp.ok || !resp.body){ throw new Error('the builder is unavailable (HTTP '+resp.status+')'); }
     const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf='';
     let finalHtml=null, done=null;
@@ -704,7 +706,7 @@ async function runCodeLoop(task, c){
   const rec={mode:'code_agent', model:'Llama 70B + LOLM (agentic)', files:[], runs:[], verdict:''};
   step('🛠 <b>coding agent</b> — bwrap jail · no network, no host filesystem');
   try{
-    const resp=await fetch('/api/demo/code/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
+    const resp=await fetch('/api/demo/code/run',{method:'POST',headers:authHeaders(),body:JSON.stringify({task})});
     if(!resp.ok){ const e=await resp.json().catch(()=>({})); bub.textContent='code run refused: '+(e.error||resp.status); return; }
     const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf='';
     while(true){ const {done,value}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
@@ -765,8 +767,11 @@ async function send(){
     // can resolve "it/that/what I just asked" and stay coherent across the thread.
     const history = (c.messages||[]).filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role, content:m.content})).slice(-12);
     const user_memory = (state.memories||[]).map(m=>m.text);   // cross-session facts about you
-    const resp = await fetch('/api/demo/run/stream', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({command, history, user_memory, session_id: c.id})});
-    if(!resp.ok){ bub.textContent = 'run refused: '+resp.status; }
+    const resp = await fetch('/api/demo/run/stream', {method:'POST', headers:authHeaders(), body: JSON.stringify({command, history, user_memory, session_id: c.id})});
+    if(!resp.ok){
+      if(resp.status===402){ const err=await resp.json().catch(()=>({})); bub.textContent=err.error||'daily limit reached'; showUpgrade(bub, err); }
+      else bub.textContent = 'run refused: '+resp.status;
+    }
     else {
       const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf='';
       while(true){ const {done,value} = await reader.read(); if(done) break; buf += dec.decode(value,{stream:true});
@@ -799,7 +804,7 @@ async function runCodeLoop(task, c){
   const term = h => { const o=$('termOut'); if(o){ o.innerHTML+=h; o.scrollTop=o.scrollHeight; } };
   const rec = {model:'Llama 70B (agentic)', mode:'code', verdict:'', files:[], runs:0, ok:false, lastOut:'', controls:{}, sources:[], memories:[]};
   try{
-    const resp = await fetch('/api/demo/code/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task})});
+    const resp = await fetch('/api/demo/code/run',{method:'POST',headers:authHeaders(),body:JSON.stringify({task})});
     if(!resp.ok){ const e=await resp.json().catch(()=>({})); step('⚠ '+esc(e.error||('HTTP '+resp.status))); bub.textContent='Code execution refused: '+(e.error||resp.status); }
     else{
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
@@ -851,7 +856,7 @@ async function runOperator(goal, c){
   const TOOL = {list:'📁 list',read:'📄 read',write:'✏️ write',run:'▶️ run',search:'🌐 search',done:'✅ done'};
   const rec = {model:'Llama 70B (operator)', mode:'operator', verdict:'', files:[], runs:0, ok:false, lastOut:'', tools:[], steps:0};
   try{
-    const resp = await fetch('/api/demo/agent/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goal, workspace: lolmWorkspace()})});
+    const resp = await fetch('/api/demo/agent/run',{method:'POST',headers:authHeaders(),body:JSON.stringify({goal, workspace: lolmWorkspace()})});
     if(!resp.ok){ const e=await resp.json().catch(()=>({})); step('⚠ '+esc(e.error||('HTTP '+resp.status))); bub.textContent='Operator unavailable: '+(e.error||resp.status); }
     else{
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
@@ -1143,7 +1148,7 @@ async function saveKeys(){
   const msg=document.getElementById('keysmsg');
   if(!Object.keys(keys).length){ msg.textContent='enter a key first'; return; }
   msg.textContent='saving…';
-  try{ const r=await (await fetch('/api/demo/keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keys})})).json();
+  try{ const r=await (await fetch('/api/demo/keys',{method:'POST',headers:authHeaders(),body:JSON.stringify({keys})})).json();
     if(r.error){ msg.textContent=r.error; } else { msg.textContent='✓ applied '+(r.updated||0)+' key(s) instantly'+(r.brain?' · brain now: '+r.brain:''); renderKeys(); } }
   catch(e){ msg.textContent='save failed — keys can only be set on your own machine'; }
 }
@@ -1265,6 +1270,44 @@ $('dockToggle').onclick = () => { document.querySelector('.app').classList.conta
 // Mobile drawer: menu toggles it (with a scrim), tapping the scrim or picking a
 // conversation closes it — hover affordances don't exist on touch.
 const _isMobile = () => window.matchMedia('(max-width:760px)').matches;
+// ── tiers + the shield ────────────────────────────────────────────────────────
+// authHeaders(): every gated call carries the signed license (subscriber) and/or
+// admin token (the owner's shield). Tokens live in localStorage; the password is
+// sent ONCE over HTTPS to mint the token and never stored anywhere.
+function authHeaders(){ const h={'Content-Type':'application/json'}; const a=localStorage.getItem('lolm_admin'); if(a) h['X-LOLM-Admin']=a; const l=localStorage.getItem('lolm_license'); if(l) h['X-LOLM-License']=l; return h; }
+function updateShield(){ const s=document.getElementById('shield'); if(!s) return; const on=!!localStorage.getItem('lolm_admin'); s.style.opacity=on?'0.9':'0.25'; s.style.filter=on?'drop-shadow(0 0 4px #16a34a)':'none'; s.title=on?'owner mode: unlimited (click to lock)':'owner unlock'; }
+async function shieldUnlock(){
+  if(localStorage.getItem('lolm_admin')){ if(confirm('Leave owner mode?')){ localStorage.removeItem('lolm_admin'); updateShield(); } return; }
+  const pw=prompt('Owner password:'); if(!pw) return;
+  try{ const r=await (await fetch('/api/demo/admin/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})})).json();
+    if(r.admin){ localStorage.setItem('lolm_admin', r.admin); updateShield(); alert('Owner mode: unlimited usage + key writes enabled on this browser for '+(r.days||30)+' days.'); }
+    else alert('Nope.');
+  }catch(e){ alert('unlock failed: '+e.message); }
+}
+function showUpgrade(el, err){
+  const tiers=(err&&err.tiers)||{}; const box=document.createElement('div');
+  box.style.cssText='margin-top:8px;padding:12px;border:1px solid var(--accent);border-radius:12px;background:rgba(244,63,94,.05)';
+  let h='<div style="font-weight:650;margin-bottom:4px">Daily limit reached'+(err&&err.limit?' ('+err.used+'/'+err.limit+' on '+esc(err.tier||'free')+')':'')+'</div>';
+  h+='<div class="dim" style="font-size:12px;margin-bottom:9px">Upgrade for more — cheaper than any big assistant, cancel anytime.</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  for(const k of ['plus','pro']){ const t=tiers[k]; if(!t) continue;
+    h+='<button onclick="startCheckout(\''+k+'\')" style="flex:1;min-width:130px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;text-align:left"><b>'+esc(t.label)+'</b> · $'+t.usd+'/mo<br><span class="dim" style="font-size:11px">'+t.runs_per_day+' runs + '+t.visual_per_day+' builds / day</span></button>'; }
+  h+='</div>';
+  box.innerHTML=h; el.appendChild(box); return box;
+}
+async function startCheckout(tier){
+  try{ const r=await (await fetch('/api/demo/billing/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tier})})).json();
+    if(r.url) location.href=r.url; else alert(r.error||'checkout unavailable');
+  }catch(e){ alert('checkout failed: '+e.message); }
+}
+// returning from Stripe: claim the subscription → store the signed license
+(async function(){ const sid=new URLSearchParams(location.search).get('sub_session'); if(!sid) return;
+  try{ const r=await (await fetch('/api/demo/billing/claim?session_id='+encodeURIComponent(sid))).json();
+    if(r.license){ localStorage.setItem('lolm_license', r.license);
+      const t=document.createElement('div'); t.textContent='✓ Welcome to LOLM '+(r.label||r.tier)+' — your limits are upgraded.'; t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:10px 18px;border-radius:10px;font-weight:600;z-index:9999'; document.body.appendChild(t); setTimeout(()=>t.remove(),6000); }
+    history.replaceState(null,'',location.pathname);
+  }catch(_){}})();
+updateShield();
 $('menuBtn').onclick = () => { const on=$('side').classList.toggle('show'); $('scrim').classList.toggle('show', on && _isMobile()); };
 $('convList').addEventListener('click', () => { if(_isMobile()){ $('side').classList.remove('show'); $('scrim').classList.remove('show'); } });
 if(_isMobile()) $('prompt').placeholder='Ask, code, search, or build anything…';

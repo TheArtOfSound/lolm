@@ -266,7 +266,8 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
                          model_ready_fn: Any = lambda: True,
                          log_path: Optional[Path] = None,
                          web_sources_fn: Any = None,
-                         reasoner_resolver_fn: Any = None) -> DemoGate:
+                         reasoner_resolver_fn: Any = None,
+                         usage_fn: Any = None) -> DemoGate:
     limits = limits or DemoLimits()
     gate = DemoGate(limits)
     replays_dir = Path(replays_dir)
@@ -340,6 +341,16 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
     def demo_run_stream(req: DemoRunRequest, request: Request):
         if not req.command.strip():
             return JSONResponse({"error": "empty command"}, status_code=400)
+        # USAGE TIERS: free/plus/pro daily budgets (admin + local installs are
+        # unlimited). Denials are 402 with the tier table so the UI can offer
+        # the upgrade instead of a dead error.
+        if usage_fn is not None:
+            quota = usage_fn(request, "runs")
+            if not quota.get("allowed"):
+                return JSONResponse({"error": quota.get("error", "daily limit reached"),
+                                     "upgrade": True, "tier": quota.get("tier"),
+                                     "used": quota.get("used"), "limit": quota.get("limit"),
+                                     "tiers": quota.get("tiers")}, status_code=402)
         if not model_ready_fn():
             return JSONResponse(
                 {"error": "the local model is still loading; try a replay"},

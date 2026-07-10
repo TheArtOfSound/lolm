@@ -29,6 +29,8 @@ from fastapi.responses import JSONResponse        # noqa: E402   `from __future_
 from local_ui import byok
 byok.load_into_env()   # BYOK: load ~/.lolm/keys.env into the env before brain/search read keys
 
+from local_ui import usage_limits
+
 from local_ui.cloud_brain import CloudBrain
 from local_ui.nfet_agent import AgentDeps, NFETAgent, register_nfet_agent_routes
 from local_ui.public_demo import register_demo_routes
@@ -50,6 +52,7 @@ PROFILE = os.environ.get("DEMO_PROFILE", "qwen3_0_6b_smoke")
 DEVICE = os.environ.get("DEMO_DEVICE", "cpu")
 GRAFT_CKPT = os.environ.get("DEMO_GRAFT_CKPT", "runs/nfet_controller/bootstrap_qwen06b.pt")
 REPLAYS_DIR = Path(os.environ.get("DEMO_REPLAYS_DIR", str(ROOT / "site" / "replays")))
+usage_limits.init(ROOT / "runs")   # usage tiers: counters live under runs/usage/
 
 # Optional frontier brain: a strong model (Llama 70B via Cloudflare Workers AI)
 # writes, the local graft telemeters it. Activated when WORKERS_AI_URL/SECRET
@@ -243,6 +246,7 @@ register_demo_routes(
     # "auto" reasoner resolution: chat leads with the best brain available NOW
     # (paid Claude key > 70B cascade > local) instead of silently defaulting local.
     reasoner_resolver_fn=_resolve_reasoner,
+    usage_fn=usage_limits.check_request,
 )
 
 from local_ui.vault_routes import register_vault_routes
@@ -438,7 +442,8 @@ def _operator_gen_many(messages, models, max_tokens=3600):
 # FRONTIER.available()` froze these off forever if keys were unset at boot).
 register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat,
                      stream_fn=_operator_stream,
-                     gen_many_fn=_operator_gen_many)
+                     gen_many_fn=_operator_gen_many,
+                     usage_fn=usage_limits.check_request)
 
 # LOLM Operator: a general multi-tool agent (list/read/write/run/search) that pursues a
 # GOAL over its own bwrap-jailed virtual workspace — plan -> act -> observe -> verify,
@@ -565,12 +570,22 @@ def keys_status(request: Request):
     return byok.status(reveal_preview=_loopback(request))
 
 
+def _key_writer(request: "Request") -> bool:
+    """Who may write keys: your own machine (loopback), or the OWNER from anywhere
+    via the shield's signed admin token. Public visitors still can't poison the
+    shared box's keys."""
+    from local_ui import usage_limits as _ul
+    return _loopback(request) or _ul.is_admin(request.headers.get("x-lolm-admin", ""))
+
+
 @app.post("/api/demo/keys")
 def keys_set(body: _KeysBody, request: Request):
-    """Set/clear your keys — loopback only, so a public visitor can never write keys on a
-    shared box. Writes ~/.lolm/keys.env (chmod 600) and the live environment."""
-    if not _loopback(request):
-        return JSONResponse({"error": "keys can only be set from your own machine (loopback)"},
+    """Set/clear your keys — loopback or the owner's admin token, so a public
+    visitor can never write keys on a shared box. Writes ~/.lolm/keys.env
+    (chmod 600) and the live environment."""
+    if not _key_writer(request):
+        return JSONResponse({"error": "keys can only be set from your own machine "
+                             "(loopback) — or unlock the shield (bottom-left) if you own this box"},
                             status_code=403)
     n = byok.set_keys(body.keys or {})
     # HOT-APPLY: keys land in os.environ inside set_keys; the brains read env live
@@ -584,6 +599,51 @@ def keys_set(body: _KeysBody, request: Request):
             **byok.status(reveal_preview=True)}
 
 
+
+
+class _AdminUnlockBody(_BM):
+    password: str
+
+
+@app.post("/api/demo/admin/unlock")
+def admin_unlock(body: _AdminUnlockBody):
+    """The shield: password → signed 30-day admin token (unlimited usage + key
+    writes from anywhere). Compared as SHA-256 vs LOLM_ADMIN_PASS_SHA256 —
+    plaintext is never stored or logged."""
+    tok = usage_limits.admin_unlock(body.password or "")
+    if not tok:
+        time.sleep(0.8)                     # slow brute force a touch
+        return JSONResponse({"error": "nope"}, status_code=403)
+    return {"admin": tok, "days": 30}
+
+
+class _CheckoutBody(_BM):
+    tier: str
+
+
+@app.get("/api/demo/billing/config")
+def billing_config(request: Request):
+    lic = usage_limits.read_license(request.headers.get("x-lolm-license", ""))
+    return {"enabled": bool(os.environ.get("STRIPE_SECRET_KEY", "").strip())
+                       and usage_limits.enforced(),
+            "tiers": usage_limits.public_tiers(),
+            "your_tier": (lic or {}).get("tier", "free"),
+            "admin": usage_limits.is_admin(request.headers.get("x-lolm-admin", ""))}
+
+
+@app.post("/api/demo/billing/checkout")
+def billing_checkout(body: _CheckoutBody, request: Request):
+    out = usage_limits.create_subscription_checkout(
+        (body.tier or "").strip().lower(), str(request.base_url))
+    return JSONResponse(out, status_code=400) if out.get("error") else out
+
+
+@app.get("/api/demo/billing/claim")
+def billing_claim(session_id: str = ""):
+    out = usage_limits.claim_subscription(session_id.strip())
+    return JSONResponse(out, status_code=400) if out.get("error") else out
+
+
 class _StripeSourceBody(_BM):
     path: str
 
@@ -592,8 +652,8 @@ class _StripeSourceBody(_BM):
 def keys_stripe_source(body: _StripeSourceBody, request: Request):
     """Path-only Stripe wiring: point at a file that already holds your sk_ key —
     the key is resolved into the env but NEVER copied into keys.env or returned.
-    Loopback only, same trust boundary as key writes."""
-    if not _loopback(request):
+    Same trust boundary as key writes (loopback or the owner's admin token)."""
+    if not _key_writer(request):
         return JSONResponse({"error": "keys can only be set from your own machine (loopback)"},
                             status_code=403)
     return byok.set_stripe_source(body.path)

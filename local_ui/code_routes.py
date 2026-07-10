@@ -209,12 +209,24 @@ def register_code_routes(app: Any, root: str,
                          chat_fn: Optional[Callable[[List[Dict[str, str]]], str]],
                          runs_per_min: int = 6,
                          stream_fn: Optional[Callable[..., Any]] = None,
-                         gen_many_fn: Optional[Callable[..., List[Dict[str, Any]]]] = None) -> None:
+                         gen_many_fn: Optional[Callable[..., List[Dict[str, Any]]]] = None,
+                         usage_fn: Optional[Callable[..., Dict[str, Any]]] = None) -> None:
     rate: Dict[str, List[float]] = {}
 
     def _ip(req: Request) -> str:
         fwd = req.headers.get("x-forwarded-for", "")
         return (fwd.split(",")[0].strip() if fwd else (req.client.host if req.client else "?"))
+
+    def _quota_deny(request: Request, kind: str):
+        """Usage-tier gate: None when allowed, else the 402 response."""
+        if usage_fn is None:
+            return None
+        q = usage_fn(request, kind)
+        if q.get("allowed"):
+            return None
+        return JSONResponse({"error": q.get("error", "daily limit reached"),
+                             "upgrade": True, "tier": q.get("tier"), "used": q.get("used"),
+                             "limit": q.get("limit"), "tiers": q.get("tiers")}, status_code=402)
 
     @app.get("/api/demo/code/health")
     def code_health():
@@ -235,6 +247,9 @@ def register_code_routes(app: Any, root: str,
             return JSONResponse({"error": f"rate limit {runs_per_min} code runs/min"},
                                 status_code=429)
         rate[ip].append(now)
+        deny = _quota_deny(request, "runs")
+        if deny is not None:
+            return deny
         task = (req.task or "").strip()[:2000]
         if not task:
             return JSONResponse({"error": "empty task"}, status_code=400)
@@ -358,6 +373,9 @@ def register_code_routes(app: Any, root: str,
         if len(rate[ip]) >= runs_per_min:
             return JSONResponse({"error": f"rate limit {runs_per_min} builds/min"}, status_code=429)
         rate[ip].append(now)
+        deny = _quota_deny(request, "visual")
+        if deny is not None:
+            return deny
         task = (req.task or "").strip()[:2000]
         if not task:
             return JSONResponse({"error": "empty task"}, status_code=400)
@@ -409,6 +427,9 @@ def register_code_routes(app: Any, root: str,
             return JSONResponse({"error": f"rate limit {runs_per_min} builds/min"},
                                 status_code=429)
         rate[ip].append(now)
+        deny = _quota_deny(request, "visual")
+        if deny is not None:
+            return deny
         task = (req.task or "").strip()[:2000]
         if not task:
             return JSONResponse({"error": "empty task"}, status_code=400)
@@ -453,6 +474,9 @@ def register_code_routes(app: Any, root: str,
         if len(rate[ip]) >= runs_per_min:
             return JSONResponse({"error": f"rate limit {runs_per_min} builds/min"}, status_code=429)
         rate[ip].append(now)
+        deny = _quota_deny(request, "visual")
+        if deny is not None:
+            return deny
         task = (req.task or "").strip()[:2000]
         if not task:
             return JSONResponse({"error": "empty task"}, status_code=400)
