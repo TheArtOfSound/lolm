@@ -15,6 +15,7 @@ telemetry is empty, so NFET control degrades to budget-driven continue.
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
@@ -115,10 +116,15 @@ class ClaudeReasonerLoop:
         self.state_fn = state_fn
         self.model = model
         self._client = client
+        self._client_injected = client is not None   # tests inject a fake — never rebuild it
+        self._client_key: Optional[str] = None
         self.adaptive_thinking = adaptive_thinking
 
     def _get_client(self) -> Any:
-        if self._client is None:
+        # HOT-APPLY: rebuild the SDK client when ANTHROPIC_API_KEY changes (a key
+        # saved/rotated in the Keys panel works on the next request, no restart).
+        key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if self._client is None or (not self._client_injected and key != self._client_key):
             try:
                 import anthropic
             except ImportError as exc:
@@ -126,7 +132,27 @@ class ClaudeReasonerLoop:
                     "The Claude reasoner needs the anthropic SDK: pip install anthropic"
                 ) from exc
             self._client = anthropic.Anthropic()
+            self._client_key = key
         return self._client
+
+    def stream_text(self, req: Any) -> Iterator[str]:
+        """Stream Claude's answer as plain-text deltas — same contract as the
+        worker/direct stream paths, so the visual builder can stream from the
+        user's paid Claude key. Raises on failure so the caller falls to the
+        next tier."""
+        client = self._get_client()
+        system, turns = _split_messages(req.messages)
+        kwargs: Dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": max(int(getattr(req, "max_new_tokens", 640)) * 4, 256),
+            "messages": turns,
+        }
+        if system:
+            kwargs["system"] = system
+        with client.messages.stream(**kwargs) as stream:
+            for piece in stream.text_stream:
+                if piece:
+                    yield piece
 
     def __call__(self, req: Any) -> Iterator[Dict[str, Any]]:
         started = time.perf_counter()

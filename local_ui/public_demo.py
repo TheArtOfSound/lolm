@@ -67,7 +67,12 @@ class DemoLimits:
         # anti-abuse only (shared box); set DEMO_RATE_PER_HOUR=0 on your own machine.
         self.rate_per_hour = _int_env("DEMO_RATE_PER_HOUR", 100000)
         self.command_chars = _int_env("DEMO_COMMAND_CHARS", 500000)
-        self.reasoner = os.environ.get("DEMO_REASONER", "local")  # local | workers_ai | claude
+        # "auto" (default) resolves PER REQUEST to the best available brain —
+        # claude if a key is set, else the 70B cascade, else local. The old
+        # default was "local", which silently answered with the tiny in-process
+        # model even when the user had paid keys configured. An explicitly set
+        # DEMO_REASONER (local | workers_ai | claude) always wins.
+        self.reasoner = os.environ.get("DEMO_REASONER", "auto")
 
     def to_dict(self) -> Dict[str, int]:
         return dict(self.__dict__)
@@ -153,7 +158,8 @@ def clamp_request(command: str, limits: DemoLimits,
                   session_id: Optional[str] = None,
                   sources: Optional[str] = None,
                   history: Optional[List[Dict[str, str]]] = None,
-                  user_memory: Optional[List[str]] = None) -> NFETAgentRequest:
+                  user_memory: Optional[List[str]] = None,
+                  reasoner: Optional[str] = None) -> NFETAgentRequest:
     # accept a sanitized session id (opaque token only) for long conversations
     sid = None
     if session_id and isinstance(session_id, str):
@@ -177,9 +183,13 @@ def clamp_request(command: str, limits: DemoLimits,
     umem = None
     if isinstance(user_memory, list) and user_memory:
         umem = [str(x).strip()[:300] for x in user_memory[:40] if str(x).strip()] or None
+    # "auto" that was never resolved (no resolver wired) degrades to local honestly.
+    eff_reasoner = reasoner or limits.reasoner
+    if eff_reasoner == "auto":
+        eff_reasoner = "local"
     return NFETAgentRequest(
         command=command.strip()[: limits.command_chars],
-        reasoner=limits.reasoner,
+        reasoner=eff_reasoner,
         max_segments=limits.max_segments,
         segment_tokens=limits.segment_tokens,
         final_tokens=limits.final_tokens,
@@ -255,7 +265,8 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
                          limits: Optional[DemoLimits] = None,
                          model_ready_fn: Any = lambda: True,
                          log_path: Optional[Path] = None,
-                         web_sources_fn: Any = None) -> DemoGate:
+                         web_sources_fn: Any = None,
+                         reasoner_resolver_fn: Any = None) -> DemoGate:
     limits = limits or DemoLimits()
     gate = DemoGate(limits)
     replays_dir = Path(replays_dir)
@@ -363,10 +374,19 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
             except Exception:
                 grounding, n_src, links = "", 0, []
         combined = "\n\n".join([s for s in (grounding, user_src) if s]) or None
+        # Resolve "auto" per request: the best brain available RIGHT NOW (a key
+        # saved in the panel upgrades the very next message, no restart).
+        eff_reasoner = None
+        if limits.reasoner == "auto" and reasoner_resolver_fn is not None:
+            try:
+                eff_reasoner = reasoner_resolver_fn() or None
+            except Exception:
+                eff_reasoner = None
         agent_req = clamp_request(req.command, limits,
                                   getattr(req, "session_id", None), combined,
                                   getattr(req, "history", None),
-                                  getattr(req, "user_memory", None))
+                                  getattr(req, "user_memory", None),
+                                  reasoner=eff_reasoner)
         # ADVISORY grounding: the web results are evidence to draw on, never a cage —
         # the agent answers from knowledge + evidence and never refuses "not in sources".
         if grounding and not user_src:

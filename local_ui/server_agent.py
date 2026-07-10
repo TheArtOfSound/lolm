@@ -13,6 +13,9 @@ from __future__ import annotations
 
 import os
 
+from local_ui import byok
+byok.load_into_env()   # BYOK: panel-saved keys (ANTHROPIC etc.) reach this entrypoint too
+
 from fastapi.responses import FileResponse
 
 from local_ui.action_orchestrator import ActionOrchestrator, register_agent_routes

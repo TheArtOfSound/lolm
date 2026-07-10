@@ -64,8 +64,39 @@ FRONTIER = WorkersAIReasonerLoop(state_fn=lambda: STATE)
 #  GEN generates text; BRAIN is shared persistent memory.)
 from local_ui.local_brain import LocalServerReasonerLoop, BestBrain, sovereign
 from local_ui.claude_reasoner import ClaudeReasonerLoop
+from local_ui.direct_providers import DirectProviderLoop
 LOCAL = LocalServerReasonerLoop(state_fn=lambda: STATE)
 CLAUDE = ClaudeReasonerLoop(state_fn=lambda: STATE)   # claude-opus-4-8 — the frontier voice
+# DIRECT BYOK: the user's OWN Groq/Cerebras/OpenAI/Together/OpenRouter key,
+# called straight from the origin — full power with zero gateway dependency.
+DIRECT = DirectProviderLoop(state_fn=lambda: STATE)
+
+
+class _CloudChain:
+    """Cloud tier: the shared worker gateway first (box-identical behavior),
+    else the user's own direct provider keys. Availability is live env, so a
+    key saved in the panel upgrades the very next call."""
+
+    def __init__(self, worker: Any, direct: Any):
+        self.worker, self.direct = worker, direct
+
+    def _pick(self) -> Any:
+        return self.worker if self.worker.available() else self.direct
+
+    def available(self) -> bool:
+        return self.worker.available() or self.direct.available()
+
+    def __call__(self, req: Any):
+        yield from self._pick()(req)
+
+    def stream_text(self, req: Any):
+        return self._pick().stream_text(req)
+
+    def generate_many(self, messages, models, max_tokens: int = 3600):
+        return self._pick().generate_many(messages, models, max_tokens)
+
+
+CLOUD = _CloudChain(FRONTIER, DIRECT)
 
 
 class _ClaudeFirst:
@@ -94,12 +125,43 @@ class _ClaudeFirst:
 
     def __call__(self, req: Any):
         if self._claude_on():
-            yield from self.claude(req)
-            return
+            # RESILIENT: if Claude errors (429/quota/SDK missing) BEFORE producing a
+            # real token, fall through to the cascade instead of dumping the error —
+            # the user paid for a good answer, not for an error message. Once real
+            # tokens have streamed we pass errors through (can't un-stream).
+            emitted_real = False
+            try:
+                for ev in self.claude(req):
+                    if not emitted_real and ev.get("event") == "error":
+                        raise RuntimeError((ev.get("data") or {}).get("error", "claude failed"))
+                    if ev.get("event") in ("token", "done"):
+                        emitted_real = True
+                    yield ev
+                return
+            except Exception:
+                if emitted_real:
+                    raise
+                yield {"event": "phase", "data": {
+                    "phase": "brain_fallback",
+                    "note": "claude errored before answering — fell back to the cascade"}}
+            # fall through to the cascade below
         yield from self.fallback(req)
 
 
-GEN = _ClaudeFirst(CLAUDE, BestBrain(LOCAL, FRONTIER))
+GEN = _ClaudeFirst(CLAUDE, BestBrain(LOCAL, CLOUD))
+
+
+def _resolve_reasoner() -> str:
+    """Best brain available RIGHT NOW for the chat path ('auto' resolution).
+    reasoner!='local' routes to GEN — the full _ClaudeFirst→BestBrain(LOCAL,
+    CLOUD) chain (paid Claude > your local model > worker gateway > your direct
+    provider keys). 'local' means the tiny in-process demo model — the last
+    resort only, never the silent default it used to be."""
+    if GEN._claude_on():
+        return "claude"
+    if LOCAL.available() or CLOUD.available():
+        return "workers_ai"
+    return "local"
 
 # Shared cloud brain (Cloudflare D1): persistent memory + long-form sessions,
 # accumulating across every user anywhere. Reuses the Workers-AI worker URL/
@@ -169,7 +231,7 @@ register_nfet_agent_routes(app, AGENT)
 # demo routes so the MAIN agent can divert to it on currentness prompts (the real
 # fix for "I asked for today's news and it didn't search").
 from local_ui.research_service import (make_research_pipeline, register_research_routes,
-                                       web_route_events, gather_web_sources)
+                                       gather_web_sources)
 RESEARCH = make_research_pipeline(GEN, ChatRequest, ChatMessage)
 
 register_demo_routes(
@@ -178,6 +240,9 @@ register_demo_routes(
     # Combine: search the live web every prompt → ground the NFET agent on the
     # results → run the uncertainty-control theater over real evidence.
     web_sources_fn=lambda cmd: gather_web_sources(RESEARCH, cmd),
+    # "auto" reasoner resolution: chat leads with the best brain available NOW
+    # (paid Claude key > 70B cascade > local) instead of silently defaulting local.
+    reasoner_resolver_fn=_resolve_reasoner,
 )
 
 from local_ui.vault_routes import register_vault_routes
@@ -190,7 +255,7 @@ from local_ui.workspace_routes import register_workspace_routes
 WORKSPACE = WorkspaceStore(ROOT / "runs" / "workspace")
 # chat_fn (lazy) powers the cross-session memory extractor — _operator_chat is
 # defined further down; the lambda resolves it at request time.
-register_workspace_routes(app, WORKSPACE, chat_fn=lambda msgs: _operator_chat(msgs))
+register_workspace_routes(app, WORKSPACE, chat_fn=lambda msgs: _operator_chat(msgs, purpose="utility"))
 
 # Real execution sandbox (Phase 2): /api/sandbox/* — REAL command exec/file/diff/
 # rollback, but DISABLED unless SANDBOX_SECRET is set and never forwarded by nginx,
@@ -209,10 +274,11 @@ from lolm.research.scheduler import build_scheduler
 from local_ui import internet_tools as _itools
 RESEARCH_SCHED = build_scheduler(_itools.web_search, _itools.fetch_url,
                                  RESEARCH.memory_store, state_dir=ROOT / "runs")
-try:
-    RESEARCH_SCHED.start()
-except Exception:
-    pass
+if not os.environ.get("LOLM_TEST_NO_BOOT"):
+    try:
+        RESEARCH_SCHED.start()
+    except Exception:
+        pass
 register_research_routes(app, RESEARCH, gate=globals().get("GATE"), scheduler=RESEARCH_SCHED)
 
 # Hugging Face daily-learning surface: ingest the AI dataset ecosystem daily →
@@ -221,10 +287,11 @@ register_research_routes(app, RESEARCH, gate=globals().get("GATE"), scheduler=RE
 # model_weights_changed: false. This is "learns daily" you can actually prove.
 from local_ui.hf_service import make_hf_service, register_hf_routes
 HF_LEARN = make_hf_service(ROOT / "runs")
-try:
-    HF_LEARN.start()
-except Exception:
-    pass
+if not os.environ.get("LOLM_TEST_NO_BOOT"):
+    try:
+        HF_LEARN.start()
+    except Exception:
+        pass
 register_hf_routes(app, HF_LEARN, gate=globals().get("GATE"))
 
 # NFET control surface: public read-only decision math + deterministic
@@ -252,11 +319,16 @@ from lolm.autonomy import AutonomyGate
 from lolm.calibration import aggregate_uncertainty
 
 
-def _operator_chat(messages, max_new_tokens=640):
+def _operator_chat(messages, max_new_tokens=640, purpose="answer"):
     """Drive the frontier reasoner (local fallback) for ONE planner turn → text.
 
     max_new_tokens defaults high enough for the code agent to emit a full program /
-    a complete HTML app in one turn (the visual builder asks for ~2600)."""
+    a complete HTML app in one turn (the visual builder asks for ~2600).
+
+    purpose="utility" is the cost tier for background/mechanical turns (life ticks
+    every 20 min, memory extraction, planner JSON) — it SKIPS the user's paid
+    Claude key and uses local/cascade, unless LOLM_BRAIN=claude pins it. Quality-
+    bearing turns (code, visual builds, the strict verifier) stay purpose="answer"."""
     msgs = [ChatMessage(role=m["role"], content=m["content"]) for m in messages]
     kwargs = dict(messages=msgs, max_new_tokens=max_new_tokens, temperature=0.3,
                   top_p=0.9, use_graft=False)
@@ -272,12 +344,15 @@ def _operator_chat(messages, max_new_tokens=640):
             elif ev.get("event") == "error":
                 raise RuntimeError(ev.get("data", {}).get("error", "planner failed"))
         return text
+    utility = (purpose == "utility"
+               and os.environ.get("LOLM_BRAIN", "").lower() != "claude")
+    brain = GEN.fallback if (utility and GEN._claude_on()) else GEN
     # Prefer the best brain (local sovereign model first, else cloud); fall back to
     # the tiny in-process model on any runtime failure (quota/502/timeout) so the
     # operator keeps planning instead of dying — the same resilience the agent loop has.
-    if GEN.available():
+    if brain.available():
         try:
-            t = _drive(GEN)
+            t = _drive(brain)
             if t.strip():
                 return t
         except Exception:
@@ -297,7 +372,7 @@ def _operator_uncertainty(text: str) -> float:
 def _build_operator_agent() -> OperatorAgent:
     return OperatorAgent(
         operator=Operator(AutonomyGate(FLYWHEEL.calibrator())),
-        planner=FrontierPlanner(_operator_chat),
+        planner=FrontierPlanner(lambda msgs, max_new_tokens=640: _operator_chat(msgs, max_new_tokens, purpose="utility")),
         flywheel=FLYWHEEL,
         uncertainty_fn=_operator_uncertainty,
         max_steps=8,
@@ -315,10 +390,21 @@ register_operator_routes(
 from local_ui.code_routes import register_code_routes
 
 
+def _stream_backend():
+    """Live pick for token streaming: the user's paid Claude leads, else the
+    worker gateway, else their own direct provider keys. Re-evaluated per
+    request so a key saved in the panel upgrades the next build."""
+    if GEN._claude_on() and hasattr(CLAUDE, "stream_text"):
+        return CLAUDE
+    if FRONTIER.available():
+        return FRONTIER
+    return DIRECT
+
+
 def _operator_stream(messages, max_new_tokens=640):
-    """Token-delta stream for the visual builder — FRONTIER only (that's where the
-    worker's SSE passthrough lives). Raises if unavailable; the route 503s and the
-    client falls back to the blocking endpoint."""
+    """Token-delta stream for the visual builder, from the best available brain.
+    Raises if none is configured; the route errors and the client falls back to
+    the blocking endpoint (which runs the full GEN chain)."""
     msgs = [ChatMessage(role=m["role"], content=m["content"]) for m in messages]
     kwargs = dict(messages=msgs, max_new_tokens=max_new_tokens, temperature=0.3,
                   top_p=0.9, use_graft=False)
@@ -326,19 +412,33 @@ def _operator_stream(messages, max_new_tokens=640):
         req = ChatRequest(**kwargs, telemeter=False)
     except TypeError:
         req = ChatRequest(**kwargs)
-    return FRONTIER.stream_text(req)
+    return _stream_backend().stream_text(req)
 
 
 def _operator_gen_many(messages, models, max_tokens=3600):
-    """Best-of-N fan-out for the visual ensemble: several models generate in
-    parallel via the worker. FRONTIER only; [] when unavailable (ensemble falls
-    back to single-model)."""
-    return FRONTIER.generate_many(messages, models, max_tokens)
+    """Best-of-N fan-out for the visual ensemble — via the worker gateway or the
+    user's own direct provider keys; plus, when a paid Claude key is set, ONE
+    Claude candidate joins the race (the browser verdict stays the oracle)."""
+    cands = CLOUD.generate_many(messages, models, max_tokens) or []
+    if GEN._claude_on() and len(cands) < 4:
+        t0 = time.time()
+        try:
+            text = _operator_chat(list(messages), max_new_tokens=min(int(max_tokens), 3600))
+            cands.append({"model": "claude", "provider": "anthropic",
+                          "text": text, "ms": int((time.time() - t0) * 1000)})
+        except Exception as exc:
+            cands.append({"model": "claude", "provider": "anthropic",
+                          "error": str(exc)[:140], "ms": int((time.time() - t0) * 1000)})
+    return cands
 
 
+# HOT-APPLY: pass the stream/ensemble hooks UNCONDITIONALLY — availability is
+# checked per request inside them, so worker keys saved in the Keys panel enable
+# streaming + the brain ensemble immediately (the old import-time `if
+# FRONTIER.available()` froze these off forever if keys were unset at boot).
 register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat,
-                     stream_fn=_operator_stream if FRONTIER.available() else None,
-                     gen_many_fn=_operator_gen_many if FRONTIER.available() else None)
+                     stream_fn=_operator_stream,
+                     gen_many_fn=_operator_gen_many)
 
 # LOLM Operator: a general multi-tool agent (list/read/write/run/search) that pursues a
 # GOAL over its own bwrap-jailed virtual workspace — plan -> act -> observe -> verify,
@@ -371,7 +471,9 @@ register_agent_routes(app, str(ROOT / "runs" / "agent_workspaces"), _operator_ch
 from local_ui.life import LifeEngine, register_life_routes  # noqa: E402
 from local_ui.agent_routes import _is_loopback as _life_loopback  # noqa: E402
 
-LIFE = LifeEngine(ROOT / "runs", MEMORY, _operator_chat, search_fn=_operator_search,
+LIFE = LifeEngine(ROOT / "runs", MEMORY,
+                  lambda msgs, max_new_tokens=640: _operator_chat(msgs, max_new_tokens, purpose="utility"),
+                  search_fn=_operator_search,
                   interval_s=int(os.environ.get("LOLM_LIFE_INTERVAL", "1200")))
 register_life_routes(app, LIFE, _life_loopback)
 
@@ -471,7 +573,30 @@ def keys_set(body: _KeysBody, request: Request):
         return JSONResponse({"error": "keys can only be set from your own machine (loopback)"},
                             status_code=403)
     n = byok.set_keys(body.keys or {})
-    return {"updated": n, **byok.status(reveal_preview=True)}
+    # HOT-APPLY: keys land in os.environ inside set_keys; the brains read env live
+    # (properties) — force the local brain to re-probe, then report which brain now
+    # leads so the UI can say "applied — brain now: X" instead of "restart to apply".
+    try:
+        LOCAL._healthy = None
+    except Exception:
+        pass
+    return {"updated": n, "applied": True, "brain": GEN.active(),
+            **byok.status(reveal_preview=True)}
+
+
+class _StripeSourceBody(_BM):
+    path: str
+
+
+@app.post("/api/demo/keys/stripe_source")
+def keys_stripe_source(body: _StripeSourceBody, request: Request):
+    """Path-only Stripe wiring: point at a file that already holds your sk_ key —
+    the key is resolved into the env but NEVER copied into keys.env or returned.
+    Loopback only, same trust boundary as key writes."""
+    if not _loopback(request):
+        return JSONResponse({"error": "keys can only be set from your own machine (loopback)"},
+                            status_code=403)
+    return byok.set_stripe_source(body.path)
 
 
 @app.get("/api/demo/operator")
@@ -510,7 +635,8 @@ def _load_model_background() -> None:
         print(f"[demo] model load FAILED: {exc}", flush=True)
 
 
-threading.Thread(target=_load_model_background, daemon=True).start()
+if not os.environ.get("LOLM_TEST_NO_BOOT"):   # tests import this module without booting
+    threading.Thread(target=_load_model_background, daemon=True).start()
 
 
 # Serve the static workspace from the SAME origin as the API (mounted LAST so all

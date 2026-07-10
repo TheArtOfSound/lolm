@@ -1122,7 +1122,7 @@ async function renderKeys(){
   const el=document.getElementById('pane-keys'); if(!el) return;
   let d; try{ d=await (await fetch('/api/demo/keys')).json(); }catch(e){ el.innerHTML='<div class="notconn">Keys unavailable.</div>'; return; }
   const GN={brain:'🧠 Brain',local:'💻 Your local model',search:'🔎 Web search',support:'♥ Support (donations)'};
-  let h='<div class="dim" style="font-size:11px;margin-bottom:10px;line-height:1.5">LOLM runs <b>keyless</b>. Add your own keys to upgrade — saved only to <code>'+esc(d.keyfile||'~/.lolm/keys.env')+'</code> on your machine (chmod 600), never sent anywhere but each key\'s own API.</div>';
+  let h='<div class="dim" style="font-size:11px;margin-bottom:10px;line-height:1.5">LOLM runs <b>keyless</b>. Add your own keys to upgrade — saved only to <code>'+esc(d.keyfile||'~/.lolm/keys.env')+'</code> on your machine (chmod 600), never sent anywhere but each key\'s own API. Keys apply <b>instantly</b> (no restart). Type <code>clear</code> in a field to remove that key.</div>';
   for(const g of (d.groups||[])){
     h+='<div style="font-weight:600;margin:11px 0 5px">'+(GN[g]||g)+'</div>';
     for(const k of d.keys.filter(x=>x.group===g)){
@@ -1136,12 +1136,15 @@ async function renderKeys(){
   document.getElementById('keysave').onclick=saveKeys;
 }
 async function saveKeys(){
-  const keys={}; document.querySelectorAll('#pane-keys input[data-env]').forEach(i=>{ const v=i.value.trim(); if(v) keys[i.dataset.env]=v; });
+  // send non-empty values to set; send EXPLICIT '' when the user typed 'clear' or
+  // a lone '-' so keys can actually be removed from the UI (empty inputs left
+  // untouched are simply not sent — they mean "no change", not "clear").
+  const keys={}; document.querySelectorAll('#pane-keys input[data-env]').forEach(i=>{ const v=i.value.trim(); if(v==='clear'||v==='-'){ keys[i.dataset.env]=''; } else if(v){ keys[i.dataset.env]=v; } });
   const msg=document.getElementById('keysmsg');
   if(!Object.keys(keys).length){ msg.textContent='enter a key first'; return; }
   msg.textContent='saving…';
   try{ const r=await (await fetch('/api/demo/keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keys})})).json();
-    if(r.error){ msg.textContent=r.error; } else { msg.textContent='✓ saved '+(r.updated||0)+' key(s) · restart LOLM to apply'; renderKeys(); } }
+    if(r.error){ msg.textContent=r.error; } else { msg.textContent='✓ applied '+(r.updated||0)+' key(s) instantly'+(r.brain?' · brain now: '+r.brain:''); renderKeys(); } }
   catch(e){ msg.textContent='save failed — keys can only be set on your own machine'; }
 }
 /* ── LIFE: the always-on pulse (honest — asleep until the box has really ticked) ── */

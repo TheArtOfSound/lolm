@@ -57,12 +57,27 @@ class LocalServerReasonerLoop:
                  api: Optional[str] = None,
                  timeout: float = 120.0):
         self.state_fn = state_fn
-        self.url = (url or os.environ.get("LOLM_LOCAL_URL", "http://127.0.0.1:11434")).rstrip("/")
-        self.model = model or os.environ.get("LOLM_LOCAL_MODEL", "")
-        self.api = (api or os.environ.get("LOLM_LOCAL_API", "ollama")).lower()
+        # HOT-APPLY: ctor args are test overrides; url/model/api resolve from env
+        # per call so a Keys-panel save applies immediately (no restart).
+        self._url_override = url
+        self._model_override = model
+        self._api_override = api
         self.timeout = timeout
         self._healthy: Optional[bool] = None
         self._checked_at: float = 0.0
+        self._health_cfg: tuple = ()
+
+    @property
+    def url(self) -> str:
+        return (self._url_override or os.environ.get("LOLM_LOCAL_URL", "http://127.0.0.1:11434")).rstrip("/")
+
+    @property
+    def model(self) -> str:
+        return self._model_override or os.environ.get("LOLM_LOCAL_MODEL", "")
+
+    @property
+    def api(self) -> str:
+        return (self._api_override or os.environ.get("LOLM_LOCAL_API", "ollama")).lower()
 
     # ── availability (cheap, cached health probe) ────────────────────────────
     def configured(self) -> bool:
@@ -72,6 +87,9 @@ class LocalServerReasonerLoop:
         if not self.configured():
             return False
         now = time.time()
+        cfg = (self.url, self.model, self.api)
+        if cfg != self._health_cfg:                 # config changed → re-probe now
+            self._healthy, self._health_cfg = None, cfg
         if self._healthy is not None and (now - self._checked_at) < 30:
             return self._healthy
         self._checked_at = now
@@ -98,9 +116,13 @@ class LocalServerReasonerLoop:
 
     def _generate(self, req: Any) -> str:
         endpoint, payload = self._endpoint_and_payload(req)
+        headers = {"Content-Type": "application/json", "User-Agent": "lolm-local/1.0"}
+        # keyed OpenAI-compatible endpoints (LM Studio remote, vLLM behind auth, …)
+        api_key = os.environ.get("LOLM_LOCAL_API_KEY", "").strip()
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
         request = urllib.request.Request(
-            endpoint, data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json", "User-Agent": "lolm-local/1.0"})
+            endpoint, data=json.dumps(payload).encode(), headers=headers)
         with urllib.request.urlopen(request, timeout=self.timeout) as resp:
             data = json.loads(resp.read())
         if self.api == "openai":

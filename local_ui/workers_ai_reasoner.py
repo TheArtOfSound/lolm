@@ -51,10 +51,25 @@ class WorkersAIReasonerLoop:
                  model: Optional[str] = None,
                  timeout: float = 30.0):
         self.state_fn = state_fn
-        self.url = url or os.environ.get("WORKERS_AI_URL", "")
-        self.secret = secret or os.environ.get("WORKERS_AI_SECRET", "")
-        self.model = model or os.environ.get("WORKERS_AI_MODEL", DEFAULT_WORKERS_AI_MODEL)
+        # HOT-APPLY: explicit ctor args are overrides (tests); otherwise url/secret/
+        # model resolve from env PER CALL, so a key saved in the Keys panel upgrades
+        # the very next request — no restart, no stale import-time snapshot.
+        self._url_override = url
+        self._secret_override = secret
+        self._model_override = model
         self.timeout = timeout
+
+    @property
+    def url(self) -> str:
+        return self._url_override or os.environ.get("WORKERS_AI_URL", "")
+
+    @property
+    def secret(self) -> str:
+        return self._secret_override or os.environ.get("WORKERS_AI_SECRET", "")
+
+    @property
+    def model(self) -> str:
+        return self._model_override or os.environ.get("WORKERS_AI_MODEL", DEFAULT_WORKERS_AI_MODEL)
 
     def available(self) -> bool:
         return bool(self.url and self.secret)
