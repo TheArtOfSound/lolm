@@ -35,8 +35,8 @@ SHORT_REPLY_RE = re.compile(
     r"more|go\s*on|continue|keep\s*going|and\s*then|"
     r"why|how|what|when|where|who|which|"
     r"that|this|it|those|these|"
-    r"do\s*it|go\s*ahead|please|sounds?\s*good|lgtm|ship\s*it|"
-    r"same|again|retry|try\s*again|"
+    r"do\s*it|go\s*ahead|please|sounds?\s*good|lgtm|ship\s*it|go\s*for\s*it|"
+    r"same|again|retry|try\s*again|do\s*that(\s*again)?|once\s*more|another(\s*one)?|"
     r"wait|hold\s*on|hmm+|huh|what\?|"
     r"tell\s*me\s*more|explain|simpler|eli5|"
     r"(?:option\s*)?[abc123]|"
@@ -55,8 +55,8 @@ UNKNOWN_RE = re.compile(
 
 AFFIRM_RE = re.compile(
     r"^\s*(yes|yep|yeah|yup|yea|sure|ok(ay)?|k|kk|alright|all\s*right|"
-    r"do\s*it|go\s*ahead|please|sounds?\s*good|lgtm|ship\s*it|absolutely|"
-    r"correct|right|exactly)\s*[!.?]*\s*$",
+    r"do\s*it|go\s*ahead|please|sounds?\s*good|lgtm|ship\s*it|go\s*for\s*it|absolutely|"
+    r"do\s*that(\s*again)?|once\s*more|correct|right|exactly)\s*[!.?]*\s*$",
     re.IGNORECASE,
 )
 

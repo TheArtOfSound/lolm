@@ -163,3 +163,13 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 2. Model-backed local ticks
 3. npm publish
 4. Capture real non-demo ledger runs from public traffic
+
+## 2026-07-26 loop — py_compile preflight + try discovery
+### Agentic coding + speed (wins #1 #3)
+- **py_compile preflight** after every .py write/edit before RUN (catch syntax early)
+- Timeout/kill auto-coach for infinite loops
+- Simple print tasks cap at 10 steps
+### Continuity (win #2)
+- "do that" / "go for it" / "once more" treated as affirm
+### Findability (win #6)
+- try.html nav: why switch, receipts, pricing, workspace

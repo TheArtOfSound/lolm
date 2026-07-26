@@ -460,7 +460,16 @@ def register_code_routes(app: Any, root: str,
             except TypeError:
                 return base_chat(out)
 
-        agent = CodeAgent(sb, _chat_with_history, max_steps=min(max(req.max_steps, 1), 22), isolated=True)
+        # Simple print/hello tasks don't need 18 steps — finish faster for switchers.
+        tlow = task.lower()
+        simple = (
+            len(task) < 120
+            and any(k in tlow for k in ("print ", "hello", "fizz", "prime", "factorial", "fib"))
+            and "game" not in tlow and "server" not in tlow
+        )
+        step_cap = 10 if simple else 22
+        agent = CodeAgent(sb, _chat_with_history,
+                          max_steps=min(max(req.max_steps, 1), step_cap), isolated=True)
 
         def gen():
             try:

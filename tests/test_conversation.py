@@ -23,6 +23,11 @@ def test_yes_affirm():
     cmd, prof, tag = resolve_followup("yes", HIST)
     assert tag == "affirm"
 
+
+def test_do_that_and_go_for_it_affirm():
+    assert resolve_followup("do that", HIST)[2] == "affirm"
+    assert resolve_followup("go for it", HIST)[2] == "affirm"
+
 def test_greeting_social():
     assert classify_command("Hello!") == "social"
     assert should_skip_web_search("Hello!")

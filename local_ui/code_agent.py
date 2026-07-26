@@ -842,6 +842,9 @@ class CodeAgent:
                            "diff": (fc.get("diff") or "")[:2500], "bytes": len(updated),
                            "edit": True}}
                     did = True
+                    if (path or "").endswith(".py"):
+                        # mark for preflight after edits (shared with write path)
+                        turn.setdefault("_py_touch", []).append(path)
                 except Exception as exc:
                     self.actions.append({"kind": "edit_file", "path": path, "ok": False,
                                          "note": str(exc)[:120]})
@@ -851,6 +854,7 @@ class CodeAgent:
             file_list = turn.get("files") or (
                 [turn["file"]] if turn.get("file") and turn["file"][1] is not None else []
             )
+            syntax_blocked = False
             for path, content in file_list:
                 if content is None:
                     continue
@@ -863,11 +867,58 @@ class CodeAgent:
                     yield {"event": "file_changed", "data": {"path": path,
                            "diff": (fc.get("diff") or "")[:2500], "bytes": len(content)}}
                     did = True
+                    # Pre-flight syntax gate: catch SyntaxError before a full RUN
+                    # burns a step (speed + reliability vs Claude/Codex).
+                    if (path or "").endswith(".py"):
+                        vcmd = f"python3 -m py_compile {path}"
+                        yield {"event": "command_started", "data": {"command": vcmd, "verify": True}}
+                        vr = self.sb.run(vcmd, timeout=min(10, self.run_timeout),
+                                         isolated=self.isolated)
+                        self.actions.append({"kind": "run", "command": vcmd,
+                                             "result": vr, "verify": True})
+                        yield {"event": "command_finished", "data": {
+                            "command": vcmd, "exit_code": vr.get("exit_code"),
+                            "stdout": vr.get("stdout", ""), "stderr": vr.get("stderr", ""),
+                            "blocked": vr.get("blocked", False), "isolated": True,
+                            "verify": True}}
+                        if vr.get("exit_code") != 0 or vr.get("blocked"):
+                            syntax_blocked = True
+                            err = ((vr.get("stderr") or "") + (vr.get("stdout") or "")).strip()
+                            self._format_nudge = (
+                                f"\n\nSYNTAX ERROR in `{path}` (py_compile failed).\n"
+                                f"{err[:500]}\nFix with EDIT or full FILE rewrite, then RUN."
+                            )
+                            yield {"event": "agent_note", "data": {
+                                "text": f"py_compile failed for {path} — fix before RUN"}}
                 except Exception as exc:
                     yield {"event": "agent_note", "data": {"text": f"write failed: {exc}"[:160]}}
-            # If model wrote/edited a file but forgot RUN, auto-run once.
+            # py_compile any edit-touched files not already covered by write preflight
+            for path in turn.get("_py_touch") or []:
+                if any(p == path for p, _ in (file_list or [])):
+                    continue
+                vcmd = f"python3 -m py_compile {path}"
+                yield {"event": "command_started", "data": {"command": vcmd, "verify": True}}
+                vr = self.sb.run(vcmd, timeout=min(10, self.run_timeout), isolated=self.isolated)
+                self.actions.append({"kind": "run", "command": vcmd, "result": vr, "verify": True})
+                yield {"event": "command_finished", "data": {
+                    "command": vcmd, "exit_code": vr.get("exit_code"),
+                    "stdout": vr.get("stdout", ""), "stderr": vr.get("stderr", ""),
+                    "blocked": vr.get("blocked", False), "isolated": True, "verify": True}}
+                if vr.get("exit_code") != 0 or vr.get("blocked"):
+                    syntax_blocked = True
+                    err = ((vr.get("stderr") or "") + (vr.get("stdout") or "")).strip()
+                    self._format_nudge = (
+                        f"\n\nSYNTAX ERROR in `{path}` after EDIT (py_compile failed).\n"
+                        f"{err[:500]}\nFix again before RUN."
+                    )
+                    yield {"event": "agent_note", "data": {
+                        "text": f"py_compile failed for edited {path}"}}
+            # If model wrote/edited a file but forgot RUN, auto-run once
+            # (unless syntax preflight failed — don't waste a run on broken code).
             cmd = turn.get("run")
-            if not cmd and written_path and did and (file_list or turn.get("edits")):
+            if syntax_blocked:
+                cmd = None
+            if not cmd and written_path and did and (file_list or turn.get("edits")) and not syntax_blocked:
                 cmd = self._auto_run_cmd(written_path)
                 yield {"event": "agent_note", "data": {
                     "text": f"no RUN line — auto-running `{cmd}`"}}
@@ -947,6 +998,14 @@ class CodeAgent:
                         )
                         yield {"event": "agent_note", "data": {
                             "text": "AssertionError — fix logic/tests before DONE"}}
+                    # Timeouts / kills → force finite, non-interactive rewrite
+                    if re.search(r"timeout|timed out|killed|time.?limit", err_full, re.I):
+                        self._format_nudge = (
+                            "\n\nTIMEOUT: the program did not exit in time. Remove infinite loops, "
+                            "servers, and input(). Use fixed sample data and print results, then RUN."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": "timeout/kill — rewrite to exit quickly"}}
                     fail_repeats = fail_repeats + 1 if sig == fail_sig else 0
                     fail_sig = sig
                     if fail_repeats >= 2:

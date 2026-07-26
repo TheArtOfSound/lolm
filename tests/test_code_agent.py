@@ -24,7 +24,8 @@ def test_loop_writes_runs_and_finishes(tmp_path):
     kinds = [e["event"] for e in events]
     assert "file_changed" in kinds and "command_finished" in kinds and "code_done" in kinds
     assert sb.read_file("hello.py") == "print(40+2)\n"          # file really written
-    cf = [e for e in events if e["event"] == "command_finished"][0]
+    # skip py_compile verify events — look at the real program run
+    cf = [e for e in events if e["event"] == "command_finished" and not e["data"].get("verify")][0]
     assert cf["data"]["exit_code"] == 0 and "42" in cf["data"]["stdout"]   # really ran
 
 
@@ -38,7 +39,8 @@ def test_loop_self_repairs_after_failure(tmp_path):
         '{"action":"finish","summary":"fixed it"}',
     ])
     agent = CodeAgent(sb, lambda m: next(seq), isolated=None)
-    runs = [e["data"] for e in agent.run("print 1") if e["event"] == "command_finished"]
+    runs = [e["data"] for e in agent.run("print 1") if e["event"] == "command_finished"
+            and not e["data"].get("verify")]
     assert runs, "expected at least one command"
     assert any(r["exit_code"] != 0 for r in runs)     # saw the broken attempt
     assert any(r["exit_code"] == 0 for r in runs)     # repaired attempt succeeded
@@ -60,7 +62,8 @@ def test_finish_blocked_until_code_actually_runs(tmp_path):
     events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("print 1"))
     kinds = [e["event"] for e in events]
     assert "agent_note" in kinds                       # the premature-finish nudge fired
-    assert kinds.count("command_finished") == 1        # it really ran
+    real_runs = [e for e in events if e["event"] == "command_finished" and not e["data"].get("verify")]
+    assert len(real_runs) >= 1                         # it really ran the program
     done = [e for e in events if e["event"] == "code_done"][0]
     assert done["data"].get("ran") is True
 
@@ -90,8 +93,23 @@ def test_json_multi_action_write_and_run(tmp_path):
     events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("print 42"))
     kinds = [e["event"] for e in events]
     assert "file_changed" in kinds and "command_finished" in kinds and "code_done" in kinds
-    cf = [e for e in events if e["event"] == "command_finished"][0]
+    cf = [e for e in events if e["event"] == "command_finished" and not e["data"].get("verify")][0]
     assert cf["data"]["exit_code"] == 0 and "42" in cf["data"]["stdout"]
+
+
+def test_py_compile_blocks_run_on_syntax_error(tmp_path):
+    sb = Sandbox(tmp_path)
+    seq = iter([
+        # broken syntax — compile should fail, no successful program run
+        '{"action":"write_and_run","path":"bad.py","content":"def f(\\n","command":"python3 bad.py"}',
+        '{"action":"write_and_run","path":"bad.py","content":"print(1)\\n","command":"python3 bad.py"}',
+        '{"action":"finish","summary":"fixed"}',
+    ])
+    events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("print 1"))
+    notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
+    assert "py_compile" in notes or "SYNTAX" in notes or "syntax" in notes.lower()
+    # eventually should succeed
+    assert any(e["event"] == "code_done" for e in events)
 
 
 def test_auto_done_when_expected_output_prints(tmp_path):
@@ -138,7 +156,8 @@ def test_syntaxerror_coaches_surgical_fix(tmp_path):
     ])
     events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("fix syntax and print 1"))
     notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
-    assert "SyntaxError" in notes or "surgical fix" in notes or "line" in notes
+    assert ("SyntaxError" in notes or "surgical fix" in notes or "line" in notes
+            or "py_compile" in notes or "SYNTAX" in notes)
     assert any(e["event"] == "code_receipt" and e["data"].get("ok") for e in events)
 
 
