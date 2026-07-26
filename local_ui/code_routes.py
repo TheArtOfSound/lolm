@@ -151,8 +151,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from local_ui.code_agent import CodeAgent
+from local_ui import code_receipts as code_receipt_ledger
 from local_ui.sandbox import Sandbox, _HAS_BWRAP
-
 
 class CodeTask(BaseModel):
     task: str
@@ -304,7 +304,32 @@ def register_code_routes(app: Any, root: str,
         return {"enabled": bool(_HAS_BWRAP and chat_fn is not None),
                 "isolated": True, "runs_per_min": runs_per_min,
                 "note": "the 70B writes code, runs it in a bwrap jail, reads the failure, "
-                        "and fixes it — every command isolated (no host FS/network)"}
+                        "and fixes it — every command isolated (no host FS/network)",
+                "receipts": code_receipt_ledger.stats()}
+
+    @app.get("/api/demo/code/receipts")
+    def code_receipts_tail(limit: int = 20):
+        """Public audit window: recent sealed code receipts (hash-chained)."""
+        lim = max(1, min(int(limit or 20), 50))
+        rows = code_receipt_ledger.tail(lim)
+        # Strip bulky stdout tails for the list view; full sha remains.
+        slim = []
+        for r in rows:
+            slim.append({
+                "ledger_sha": r.get("ledger_sha"),
+                "prev_ledger_sha": r.get("prev_ledger_sha"),
+                "receipt_sha": r.get("receipt_sha"),
+                "task": (r.get("task") or "")[:160],
+                "verdict": r.get("verdict"),
+                "ok": r.get("ok"),
+                "files": r.get("files") or [],
+                "green_runs": r.get("green_runs"),
+                "failed_runs": r.get("failed_runs"),
+                "verifies": r.get("verifies"),
+                "ts": r.get("ledger_ts") or r.get("ts"),
+                "source": r.get("source"),
+            })
+        return {"receipts": slim, "stats": code_receipt_ledger.stats()}
 
     @app.post("/api/demo/code/run")
     def code_run(req: CodeTask, request: Request):
@@ -324,6 +349,14 @@ def register_code_routes(app: Any, root: str,
         task = (req.task or "").strip()[:2000]
         if not task:
             return JSONResponse({"error": "empty task"}, status_code=400)
+
+        # Ledger lives next to sandboxes under the code root's parent runs/ if possible.
+        try:
+            code_receipt_ledger.init(Path(root).resolve().parent / "code_receipts"
+                                     if Path(root).name == "pub_sandboxes"
+                                     else Path(root).resolve().parent)
+        except Exception:
+            code_receipt_ledger.init()
 
         sb = Sandbox(root)
         # Wrap chat_fn to inject conversation history for multi-turn coding sessions
@@ -367,6 +400,17 @@ def register_code_routes(app: Any, root: str,
             try:
                 yield _sse("agent_note", {"text": "LOLM Code — multi-file agentic loop (run → fix → verify)"})
                 for ev in agent.run(task):
+                    if ev.get("event") == "code_receipt":
+                        try:
+                            sealed = code_receipt_ledger.append(ev.get("data") or {},
+                                                                source="api.demo.code.run")
+                            # stream the ledger-chained row (still includes trail)
+                            yield _sse("code_receipt", sealed)
+                            continue
+                        except Exception as lexc:
+                            # never fail the user stream on ledger IO
+                            note = {"text": f"receipt ledger write skipped: {lexc}"[:160]}
+                            yield _sse("agent_note", note)
                     yield _sse(ev["event"], ev["data"])
             except Exception as exc:
                 yield _sse("error", {"error": str(exc)[:200]})

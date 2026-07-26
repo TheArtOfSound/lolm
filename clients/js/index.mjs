@@ -230,6 +230,18 @@ export function friendly(ev) {
     if (v === "changed_but_controls_quiet") return "It stayed confident the whole way — no checks needed this time.";
     return "This run didn't clearly beat a plain chatbot — some runs are like that.";
   }
+  if (event === "code_start") return "Opening an isolated code sandbox…";
+  if (event === "file_changed") return data && data.path ? `Writing ${data.path}` : "Writing a file";
+  if (event === "command_started") return data && data.command ? `Running \`${String(data.command).slice(0, 60)}\`` : "Running a command";
+  if (event === "command_finished") {
+    const code = data && (data.blocked ? "blocked" : data.exit_code);
+    return code === 0 ? "Command succeeded" : `Command exited ${code}`;
+  }
+  if (event === "code_done") return data && data.ok ? "Coding loop finished — verified." : "Coding loop finished.";
+  if (event === "code_receipt") {
+    const sha = data && data.receipt_sha ? String(data.receipt_sha).slice(0, 12) : "";
+    return sha ? `Sealed code receipt ${sha}…` : "Sealed a code receipt.";
+  }
   if (event === "run_done") {
     const base = data.ended_by && ENDED[data.ended_by] ? `Done — ${ENDED[data.ended_by]}.` : "Done.";
     if (Array.isArray(data.provenance) && data.provenance.length) {
@@ -270,28 +282,56 @@ export async function buildVisual({ task, baseUrl = "https://lolm.imagineqira.co
  * Run the agentic coding loop: the model writes real code, runs it in a network-
  * isolated bwrap jail, reads the failure, and fixes it — streamed as SSE. Same
  * handler shape as runAgent (`onEvent`); events: code_start / file_changed /
- * command_started / command_finished / agent_note / code_done / error.
- * @returns {Promise<Object>} the `code_done` payload
+ * command_started / command_finished / agent_note / code_done / code_receipt / error.
+ * @returns {Promise<Object>} `{ done, receipt }` — `done` is code_done, `receipt`
+ *   is the sealed (and server-ledger-chained) code_receipt when present
  */
 export async function runCode(opts) {
-  const { task, baseUrl = "https://lolm.imagineqira.com", maxSteps, signal, fetch: fetchImpl = globalThis.fetch } = opts;
+  const { task, baseUrl = "https://lolm.imagineqira.com", maxSteps, history, signal, fetch: fetchImpl = globalThis.fetch } = opts;
   if (!task || !task.trim()) throw new AgentRunError("task is required");
   if (!fetchImpl) throw new AgentRunError("no fetch available; pass opts.fetch");
   const resp = await fetchImpl(new URL("/api/demo/code/run", baseUrl), {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ task, ...(maxSteps ? { max_steps: maxSteps } : {}) }), signal,
+    body: JSON.stringify({
+      task,
+      ...(maxSteps ? { max_steps: maxSteps } : {}),
+      ...(history ? { history } : {}),
+    }), signal,
   });
   if (!resp.ok) {
     let p = null; try { p = await resp.json(); } catch { /* not json */ }
     throw new AgentRunError((p && p.error) || `code run refused: HTTP ${resp.status}`, { status: resp.status, body: p });
   }
   let result = null;
+  let receipt = null;
   for await (const ev of parseSSEStream(resp.body)) {
     if (opts.onEvent) opts.onEvent(ev);
-    if (ev.event === "code_done") result = ev.data;
+    if (ev.event === "code_done") {
+      result = ev.data;
+      if (opts.onCodeDone) opts.onCodeDone(ev.data);
+    }
+    if (ev.event === "code_receipt") {
+      receipt = ev.data;
+      if (opts.onCodeReceipt) opts.onCodeReceipt(ev.data);
+    }
     if (ev.event === "error") throw new AgentRunError((ev.data && ev.data.error) || "code stream error", { body: ev.data });
   }
+  // Back-compat: if caller only checked .ran, keep done fields on the root too
+  if (result && typeof result === "object") {
+    result.receipt = receipt;
+    result.receipt_sha = (receipt && receipt.receipt_sha) || result.receipt_sha;
+  }
   return result;
+}
+
+/** Recent sealed code receipts from the public audit ledger. */
+export async function listCodeReceipts({ baseUrl = "https://lolm.imagineqira.com", limit = 20, fetch: fetchImpl = globalThis.fetch } = {}) {
+  if (!fetchImpl) throw new AgentRunError("no fetch available; pass opts.fetch");
+  const url = new URL("/api/demo/code/receipts", baseUrl);
+  if (limit) url.searchParams.set("limit", String(limit));
+  const resp = await fetchImpl(url);
+  if (!resp.ok) throw new AgentRunError(`code receipts failed: HTTP ${resp.status}`, { status: resp.status });
+  return resp.json();
 }
 
 // ── cross-session memory (owner-scoped; `owner` is a per-user key your app picks) ──

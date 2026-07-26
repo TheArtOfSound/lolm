@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import assert from "node:assert/strict";
-import { AgentRunError, buildVisual, forgetMemory, friendly, getMemory, parseSSEStream, playReplay, rememberFact, runAgent, runCode } from "../index.mjs";
+import { AgentRunError, buildVisual, forgetMemory, friendly, getMemory, listCodeReceipts, parseSSEStream, playReplay, rememberFact, runAgent, runCode } from "../index.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 let passed = 0;
@@ -105,15 +105,35 @@ const ok = (name) => { passed++; console.log("  ✓", name); };
   ok("buildVisual returns a self-contained HTML app");
 }
 
-// 8. runCode streams the agentic loop and returns code_done.
+// 8. runCode streams the agentic loop and returns code_done + code_receipt.
 {
-  const body = 'event: code_start\ndata: {"sandbox":"sbx_1"}\n\nevent: command_finished\ndata: {"exit_code":0,"stdout":"42"}\n\nevent: code_done\ndata: {"ran":true,"produced_output":true}\n\n';
+  const body = 'event: code_start\ndata: {"sandbox":"sbx_1"}\n\nevent: command_finished\ndata: {"exit_code":0,"stdout":"42"}\n\nevent: code_done\ndata: {"ran":true,"produced_output":true,"ok":true}\n\nevent: code_receipt\ndata: {"receipt_sha":"abc123","ok":true,"verdict":"shipped","trail":[]}\n\n';
   const mockFetch = async () => new Response(body, { status: 200 });
   const events = [];
-  const done = await runCode({ task: "print 42", fetch: mockFetch, onEvent: (e) => events.push(e.event) });
-  assert.deepEqual(events, ["code_start", "command_finished", "code_done"]);
+  let gotReceipt = null;
+  const done = await runCode({
+    task: "print 42",
+    fetch: mockFetch,
+    onEvent: (e) => events.push(e.event),
+    onCodeReceipt: (r) => { gotReceipt = r; },
+  });
+  assert.deepEqual(events, ["code_start", "command_finished", "code_done", "code_receipt"]);
   assert.equal(done.ran, true);
-  ok("runCode streams the jailed coding loop");
+  assert.equal(done.receipt.receipt_sha, "abc123");
+  assert.equal(gotReceipt.receipt_sha, "abc123");
+  assert.equal(friendly({ event: "code_receipt", data: gotReceipt }), "Sealed code receipt abc123…");
+  ok("runCode streams the jailed coding loop + code_receipt");
+}
+
+// 8b. listCodeReceipts hits the audit ledger.
+{
+  const mockFetch = async (url) => {
+    assert.match(String(url), /\/api\/demo\/code\/receipts/);
+    return new Response(JSON.stringify({ receipts: [{ receipt_sha: "x" }], stats: { recent: 1 } }), { status: 200 });
+  };
+  const j = await listCodeReceipts({ fetch: mockFetch, limit: 5 });
+  assert.equal(j.receipts[0].receipt_sha, "x");
+  ok("listCodeReceipts reads the public audit ledger");
 }
 
 // 9. memory helpers hit the right routes + send the owner header.

@@ -1,6 +1,6 @@
 from local_ui.code_agent import (
     _parse_turn, _wants_tests, _pick_verify_command, _is_test_path,
-    _expected_outputs,
+    _expected_outputs, _local_modules_needed,
 )
 
 def test_multi_file():
@@ -95,3 +95,11 @@ RUN: python3 main.py
 def test_expected_outputs_from_task():
     assert "42" in _expected_outputs("make hello.py print 42 and run it")
     assert "hello" in _expected_outputs('print the string "hello"')
+
+
+def test_local_modules_needed_flags_missing_sibling():
+    files = {"main.py": "import helper\nprint(helper.x)\n"}
+    miss = _local_modules_needed(files)
+    assert "helper.py" in miss
+    files2 = {"main.py": "import helper\n", "helper.py": "x=1\n"}
+    assert _local_modules_needed(files2) == []

@@ -161,15 +161,57 @@ export function buildVisual(opts: {
   signal?: AbortSignal;
 }): Promise<VisualResult>;
 
+export interface CodeReceipt {
+  kind?: string;
+  task?: string;
+  summary?: string;
+  verdict?: string;
+  ok?: boolean;
+  receipt_sha?: string;
+  ledger_sha?: string;
+  prev_ledger_sha?: string | null;
+  files?: string[];
+  green_runs?: number;
+  failed_runs?: number;
+  verifies?: number;
+  expected?: string[];
+  expected_ok?: boolean;
+  trail?: Array<Record<string, any>>;
+  [key: string]: any;
+}
+
+export interface CodeDoneResult {
+  summary?: string;
+  ran?: boolean;
+  produced_output?: boolean;
+  ok?: boolean;
+  verdict?: string;
+  receipt_sha?: string;
+  files?: string[];
+  /** Sealed receipt when the stream emitted `code_receipt`. */
+  receipt?: CodeReceipt | null;
+  [key: string]: any;
+}
+
 /** Run the agentic coding loop (writes + runs real code in a jail, streamed). */
 export function runCode(opts: {
   task: string;
   baseUrl?: string;
   maxSteps?: number;
+  history?: Array<{ role: string; content: string }>;
   onEvent?(ev: ProtocolEvent): void;
+  onCodeDone?(done: CodeDoneResult): void;
+  onCodeReceipt?(receipt: CodeReceipt): void;
   signal?: AbortSignal;
   fetch?: typeof fetch;
-}): Promise<Record<string, any>>;
+}): Promise<CodeDoneResult>;
+
+/** Recent sealed code receipts from the public audit ledger. */
+export function listCodeReceipts(opts?: {
+  baseUrl?: string;
+  limit?: number;
+  fetch?: typeof fetch;
+}): Promise<{ receipts: CodeReceipt[]; stats: Record<string, any> }>;
 
 /** List durable facts remembered about a user (cross-session memory). */
 export function getMemory(opts?: {

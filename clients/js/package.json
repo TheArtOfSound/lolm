@@ -1,7 +1,7 @@
 {
   "name": "lolm-nfet-client",
-  "version": "0.2.0",
-  "description": "Client for the LOLM-NFET agent: live SSE runs with in-conversation + cross-session memory, agentic code execution, visual app builds, and plain-English narration for an agent controlled by its own latent telemetry.",
+  "version": "0.2.1",
+  "description": "Client for the LOLM-NFET agent: live SSE runs with in-conversation + cross-session memory, agentic code execution with sealed code receipts, visual app builds, and plain-English narration for an agent controlled by its own latent telemetry.",
   "type": "module",
   "main": "index.mjs",
   "types": "index.d.ts",

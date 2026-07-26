@@ -384,6 +384,54 @@ def _last_stdout(actions: List[Dict[str, Any]]) -> str:
     return ""
 
 
+_STDLIB_MODS = frozenset("""
+abc argparse array ast asyncio base64 bisect builtins cmath collections
+concurrent contextlib copy csv dataclasses datetime decimal enum functools
+glob hashlib heapq hmac html http importlib io itertools json logging
+math mimetypes multiprocessing numbers operator os pathlib pickle
+platform pprint queue random re secrets shutil signal socket sqlite3
+statistics string struct subprocess sys tempfile textwrap threading time
+timeit typing unittest urllib uuid warnings weakref xml zipfile zlib
+""".split())
+
+_IMPORT_RE = re.compile(
+    r"^\s*(?:from\s+([A-Za-z_][\w.]*)\s+import|import\s+([A-Za-z_][\w.]*(?:\s*,\s*[A-Za-z_][\w.]*)*))",
+    re.M,
+)
+
+
+def _local_modules_needed(file_contents: Dict[str, str]) -> List[str]:
+    """Local .py modules imported by written files (multi-file completeness)."""
+    needed: set = set()
+    written = {p.replace("\\", "/") for p in file_contents}
+    written_mods = {p.rsplit("/", 1)[-1][:-3] for p in written if p.endswith(".py")}
+    for path, content in file_contents.items():
+        if not (path or "").endswith(".py"):
+            continue
+        for m in _IMPORT_RE.finditer(content or ""):
+            raw = m.group(1) or m.group(2) or ""
+            for part in raw.split(","):
+                mod = part.strip().split()[0] if part.strip() else ""
+                top = mod.split(".")[0]
+                if not top or top in _STDLIB_MODS:
+                    continue
+                # only flag modules we already treat as project-local (also written)
+                # OR that look like sibling modules referenced but missing
+                candidate = top + ".py"
+                if top in written_mods or candidate in written:
+                    continue
+                # if any written file shares a package style name, require the import
+                # when the import matches a basename that was referenced as local
+                if top[0].islower() or top[:1].isupper():
+                    # skip obvious third-party (requests, numpy, …) unless also written
+                    if top in ("requests", "numpy", "pandas", "flask", "django", "torch",
+                               "pytest", "fastapi", "bs4", "PIL", "cv2"):
+                        continue
+                    needed.add(candidate)
+    # Only keep missing ones
+    return sorted(p for p in needed if p not in written and p.rsplit("/", 1)[-1][:-3] not in written_mods)
+
+
 class CodeAgent:
     def __init__(self, sandbox: Any, chat_fn: Callable[[List[Dict[str, str]]], str],
                  max_steps: int = 18, run_timeout: int = 25,
@@ -629,6 +677,26 @@ class CodeAgent:
                     yield {"event": "agent_note", "data": {
                         "text": f"blocked DONE — missing expected output: {miss}"}}
                     continue
+                # Multi-file completeness: if written code imports a sibling module
+                # that was never created, force the model to write it before DONE.
+                if nudges < 6 and self._files_written:
+                    contents: Dict[str, str] = {}
+                    for p in self._files_written:
+                        try:
+                            contents[p] = self.sb.read_file(p)
+                        except Exception:
+                            contents[p] = ""
+                    missing_mods = _local_modules_needed(contents)
+                    if missing_mods:
+                        nudges += 1
+                        miss = ", ".join(missing_mods[:6])
+                        self._format_nudge = (
+                            f"\n\nMISSING MODULES: your code imports {miss} but those files "
+                            "were never written. FILE each missing module, then RUN again."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": f"blocked DONE — missing modules: {miss}"}}
+                        continue
                 # Gate DONE on test oracle when test files exist (Claude/Codex parity).
                 vcmd = _pick_verify_command(self._files_written, task)
                 if vcmd and any(_is_test_path(p) for p in self._files_written) and nudges < 4:

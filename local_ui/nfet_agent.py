@@ -1397,19 +1397,27 @@ WORKING DRAFT:
             )
             if cap:
                 yield {"event": "learned", "data": cap}
-            # Rolling conversation summary — long-thread continuity without embeddings.
-            # When we also captured a durable fact this turn, promote it into identity.md
-            # so later chats (not just this session's summary window) still resolve "yes/that".
+            # Between-turn continuity tick (no model call): rolling summary +
+            # optional identity promote + pack for next turn. Cheap operator-style
+            # hygiene so "yes/that" and personal facts survive session boundaries.
             if profile in ("dialog", "question", "task") and answer_text and len(raw_command) > 2:
                 try:
                     mem = getattr(self.deps, "memory", None)
-                    if mem is not None and hasattr(mem, "add_summary"):
-                        snippet = (raw_command[:120] + " → " + answer_text.strip().replace("\n", " ")[:180])
-                        mem.add_summary(
-                            snippet,
-                            span=getattr(req, "session_id", None) or "session",
+                    if mem is not None:
+                        from local_ui.continuity_tick import between_turn
+                        tick = between_turn(
+                            mem,
+                            user_text=raw_command,
+                            assistant_text=answer_text,
+                            session_id=getattr(req, "session_id", None) or "session",
                             promote=bool(cap),
                         )
+                        if tick.get("continuity"):
+                            # stash on request for any outer wrapper that injects context
+                            try:
+                                setattr(req, "_continuity_pack", tick["continuity"])
+                            except Exception:
+                                pass
                 except Exception:
                     pass
         except Exception:

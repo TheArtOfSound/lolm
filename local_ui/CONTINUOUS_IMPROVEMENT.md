@@ -92,3 +92,20 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 2. Between-turn operator ticks on local operator mode
 3. Persist code_receipts.jsonl ledger server-side
 4. npm client: surface code_receipt event type
+
+## 2026-07-26 loop — code receipt ledger + npm + continuity ticks
+### Receipts / auditability (win #4)
+- Server-side **hash-chained** `code_receipts.jsonl` ledger on every `/api/demo/code/run`
+- Public `GET /api/demo/code/receipts` audit window + health embeds ledger stats
+### Findability / npm (win #6)
+- `lolm-nfet-client@0.2.1`: `onCodeReceipt`, `listCodeReceipts`, friendly narration for code events
+- why-switch: code receipt ledger called out vs Claude/Codex
+### Continuity (win #2)
+- `continuity_tick.between_turn` after dialog turns (summary + promote + pack, zero tokens)
+### Agentic coding (win #1)
+- DONE blocked when multi-file imports reference sibling modules never written
+### Next queue
+1. Real embedding index for memory
+2. Richer between-turn operator ticks (model-backed, local-only)
+3. Publish npm 0.2.1 to registry
+4. Persist visual-build receipts similarly
