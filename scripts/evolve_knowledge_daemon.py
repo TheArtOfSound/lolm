@@ -149,6 +149,34 @@ def main():
                     _restart_served_weights()                      # fresh weights serve NOW
                     print("[knowledge] promoted → served weights restarted with the new adapter",
                           flush=True)
+                else:
+                    # CRITICAL: do not forever retrain the same unlearnable head-of-queue
+                    # fact (that produced learned=0.0 for dozens of cycles). Rotate and
+                    # drop after repeated failures.
+                    att_path = root / "fact_attempts.json"
+                    try:
+                        att = json.loads(att_path.read_text())
+                    except Exception:
+                        att = {}
+                    for d in batch:
+                        q = d.get("q") or ""
+                        att[q] = int(att.get(q, 0)) + 1
+                    # rotate failed batch to the back; drop if attempts >= 3
+                    rest = pending[args.batch:]
+                    recycle, drop = [], []
+                    for d in batch:
+                        q = d.get("q") or ""
+                        if int(att.get(q, 0)) >= 3:
+                            drop.append(q)
+                        else:
+                            recycle.append(d)
+                    _write_queue(queue, rest + recycle)
+                    if drop:
+                        _mark_consumed(root, drop)
+                        for q in drop:
+                            att.pop(q, None)
+                        print(f"[knowledge] dropped {len(drop)} unlearnable fact(s)", flush=True)
+                    att_path.write_text(json.dumps(att, indent=2))
             except Exception as e:
                 print(f"[knowledge] cycle error (continuing): {str(e)[:160]}", flush=True)
 

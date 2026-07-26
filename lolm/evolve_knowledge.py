@@ -94,7 +94,9 @@ def run_knowledge_cycle(root: str | Path, *, model: str = DEFAULT_MODEL,
     (data / "valid.jsonl").write_text("\n".join(_line(q, a) for q, a in list(new_facts) + list(rehearsal)))
 
     # BEFORE — measure against the CURRENT live adapter (cumulative baseline)
-    base_kw = {"adapter_path": str(live)} if live.exists() else {}
+    # Require a real adapters file — empty live/ dirs must not count as "has adapter".
+    live_ok = (live / "adapters.safetensors").exists()
+    base_kw = {"adapter_path": str(live)} if live_ok else {}
     m0, t0k = load(model, **base_kw)
     before_learn = sum(tgt in _probe(m0, t0k, q).lower() for q, tgt in probes) / max(len(probes), 1)
     del m0
@@ -104,12 +106,14 @@ def run_knowledge_cycle(root: str | Path, *, model: str = DEFAULT_MODEL,
            "--data", str(data), "--fine-tune-type", "lora", "--num-layers", str(num_layers),
            "--batch-size", "1", "--iters", str(iters), "--learning-rate", str(lr),
            "--mask-prompt", "--adapter-path", str(cand)]
-    if live.exists():
+    if live_ok:
         # seed the candidate from live, then resume training it
         if cand.exists():
             shutil.rmtree(cand)
         shutil.copytree(live, cand)
         cmd += ["--resume-adapter-file", str(cand / "adapters.safetensors")]
+    elif cand.exists():
+        shutil.rmtree(cand)
     subprocess.run(cmd, check=True, capture_output=True)
 
     # AFTER

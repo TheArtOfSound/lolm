@@ -182,3 +182,10 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 ### Findability (win #6)
 - npm README: listCodeReceipts + receipts.html; package 0.2.3
 - why-switch + pricing link live receipts ledger
+
+## Train/improve loop (serious)
+- scripts/train_improve_loop.py: HF ingest → queue mint → gated LoRA → promote → restart serve
+- Fixed corrupt live adapter (was destroying generation; quarantined)
+- Fixed empty live/ false-positive resume; daemon rotates/drops unlearnable facts
+- Cycle 241 PROMOTED learn=1.0 keep=1.0 (LOLM curriculum facts)
+- Scoreboard: runs/train_improve/latest.json
