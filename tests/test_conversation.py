@@ -85,3 +85,12 @@ def test_same_as_before_continuity():
     cmd, prof, tag = resolve_followup("same as before", hist)
     assert prof == "dialog" and tag == "same_as_before"
     assert "same plan" in cmd.lower() or "Resume" in cmd
+
+
+def test_pick_for_me_is_affirm():
+    hist = [
+        {"role": "user", "content": "A or B?"},
+        {"role": "assistant", "content": "A) chat  B) code"},
+    ]
+    assert resolve_followup("pick for me", hist)[2] == "affirm"
+    assert resolve_followup("you decide", hist)[2] == "affirm"

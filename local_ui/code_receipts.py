@@ -165,3 +165,63 @@ def ensure_demo_seed() -> bool:
     for s in samples:
         append(s, source="demo_seed")
     return True
+
+
+def ensure_selftest_receipt() -> Optional[Dict[str, Any]]:
+    """Seal one *real* non-demo receipt by writing+running code in a temp sandbox.
+
+    Keeps /receipts.html honest: at least one ledger row is a live execute, not
+    only ``demo: true`` seeds. Idempotent — skips if a selftest already exists
+    in the recent window.
+    """
+    recent = tail(50)
+    if any(r.get("selftest") or r.get("source") == "selftest" for r in recent):
+        return None
+    try:
+        import tempfile
+        from local_ui.sandbox import Sandbox
+    except Exception:
+        return None
+    task = "selftest: write hello.py that prints 42 and run it"
+    try:
+        with tempfile.TemporaryDirectory(prefix="lolm_selftest_") as td:
+            sb = Sandbox(Path(td))
+            content = "print(42)\n"
+            sb.write_file("hello.py", content)
+            # Prefer unjailed for host portability; fall back to isolated.
+            r = sb.run("python3 hello.py", timeout=10, isolated=None)
+            if r.get("exit_code") != 0 or "42" not in (r.get("stdout") or ""):
+                r = sb.run("python3 hello.py", timeout=10, isolated=True)
+            ok = r.get("exit_code") == 0 and "42" in (r.get("stdout") or "")
+            receipt = {
+                "kind": "code_agent",
+                "task": task,
+                "summary": "live selftest — sandbox wrote+ran print(42)",
+                "verdict": "shipped" if ok else "incomplete",
+                "ok": bool(ok),
+                "files": ["hello.py"],
+                "green_runs": 1 if ok else 0,
+                "failed_runs": 0 if ok else 1,
+                "verifies": 0,
+                "expected": ["42"],
+                "expected_ok": bool(ok),
+                "last_stdout_tail": (r.get("stdout") or "")[-200:],
+                "trail": [
+                    {"op": "write", "path": "hello.py", "bytes": len(content)},
+                    {"op": "run", "command": "python3 hello.py",
+                     "exit": r.get("exit_code"), "stdout": (r.get("stdout") or "")[:80]},
+                ],
+                "selftest": True,
+                "demo": False,
+            }
+            # seal receipt_sha like the agent
+            core = {
+                k: receipt[k] for k in (
+                    "task", "summary", "verdict", "ok", "files", "green_runs",
+                    "failed_runs", "expected", "expected_ok",
+                ) if k in receipt
+            }
+            receipt["receipt_sha"] = _sha(json.dumps(core, sort_keys=True, separators=(",", ":")))
+            return append(receipt, source="selftest")
+    except Exception:
+        return None

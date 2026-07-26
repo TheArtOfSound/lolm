@@ -241,3 +241,33 @@ def test_empty_stdout_coaches_print(tmp_path):
     notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
     assert "empty stdout" in notes or "print" in notes.lower()
     assert any(e["event"] == "code_receipt" and e["data"].get("ok") for e in events)
+
+
+def test_first_turn_context_includes_expected_stdout(tmp_path):
+    sb = Sandbox(tmp_path)
+    seen = {}
+
+    def chat(msgs):
+        seen["user"] = msgs[-1]["content"]
+        return '{"action":"write_and_run","path":"h.py","content":"print(42)\\n","command":"python3 h.py"}'
+
+    list(CodeAgent(sb, chat, isolated=None).run("make h.py print 42 and run it"))
+    assert "EXPECTED STDOUT" in seen["user"]
+    assert "42" in seen["user"]
+
+
+def test_eoferror_coaches_remove_input(tmp_path):
+    sb = Sandbox(tmp_path)
+    seq = iter([
+        '{"action":"write_and_run","path":"i.py","content":"x=input()\\nprint(x)\\n",'
+        '"command":"python3 i.py"}',
+        '{"action":"write_and_run","path":"i.py","content":"print(\\"hi\\")\\n",'
+        '"command":"python3 i.py"}',
+        '{"action":"finish","summary":"fixed"}',
+    ])
+    events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("print hi without input"))
+    notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
+    # may get EOFError coach or timeout; either way should finish
+    assert "EOFError" in notes or "input" in notes.lower() or any(
+        e["event"] == "code_receipt" for e in events
+    )

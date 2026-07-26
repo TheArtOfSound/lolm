@@ -360,8 +360,13 @@ def register_code_routes(app: Any, root: str,
         """Public audit window: recent sealed code/visual receipts (hash-chained)."""
         lim = max(1, min(int(limit or 20), 50))
         # Empty-ledger UX: seed labeled demos so /receipts.html shows the format.
+        # Also seal one real selftest receipt (live sandbox run) when missing.
         try:
             code_receipt_ledger.ensure_demo_seed()
+        except Exception:
+            pass
+        try:
+            code_receipt_ledger.ensure_selftest_receipt()
         except Exception:
             pass
         rows = code_receipt_ledger.tail(max(lim, 50))
@@ -393,6 +398,7 @@ def register_code_routes(app: Any, root: str,
                 "ts": r.get("ledger_ts") or r.get("ts"),
                 "source": r.get("source"),
                 "demo": bool(r.get("demo")),
+                "selftest": bool(r.get("selftest")),
             })
         slim = slim[-lim:]
         return {"receipts": slim, "stats": code_receipt_ledger.stats()}

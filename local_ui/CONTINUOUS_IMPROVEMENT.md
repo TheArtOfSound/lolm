@@ -217,6 +217,23 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 3. Surface continuity_tick in workspace UI
 4. Non-demo ledger samples from live traffic
 
+## 2026-07-26 loop — continuity UI + live selftest receipt + speed hints
+### Continuity / findability (wins #2 #6)
+- Workspace (`index.html`) surfaces **`continuity_tick`** SSE (facts / local model / open loop)
+- Dialog affirm: "pick for me" / "you decide" / "dealer's choice"
+### Receipts (win #4)
+- **`ensure_selftest_receipt`**: real sandbox write+run of `print(42)`, sealed non-demo
+- `/api/demo/code/receipts` triggers selftest; receipts.html shows **live selftest** badge
+### Agentic coding + speed (wins #1 #3)
+- First-turn context injects **EXPECTED STDOUT** from task text
+- Auto-retry `python` → `python3` when python missing
+- UnicodeEncode/Decode + EOFError (input()) coaches
+### Next queue
+1. npm publish 0.2.4
+2. Workspace chip for open_loop from continuity_tick
+3. Real ONNX tokenizer when weights land
+4. Capture organic non-selftest ledger traffic
+
 ## Train/improve loop (serious)
 - scripts/train_improve_loop.py: HF ingest → queue mint → gated LoRA → promote → restart serve
 - Fixed corrupt live adapter (was destroying generation; quarantined)

@@ -73,7 +73,8 @@ UNKNOWN_RE = re.compile(
 AFFIRM_RE = re.compile(
     r"^\s*(yes|yep|yeah|yup|yea|sure|ok(ay)?|k|kk|alright|all\s*right|"
     r"do\s*it|go\s*ahead|please|sounds?\s*good|lgtm|ship\s*it|go\s*for\s*it|absolutely|"
-    r"do\s*that(\s*again)?|once\s*more|correct|right|exactly)\s*[!.?]*\s*$",
+    r"do\s*that(\s*again)?|once\s*more|correct|right|exactly|"
+    r"pick\s*(one\s*)?for\s*me|you\s*(choose|pick|decide)|dealer'?s\s*choice)\s*[!.?]*\s*$",
     re.IGNORECASE,
 )
 

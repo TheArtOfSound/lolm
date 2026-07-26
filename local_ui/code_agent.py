@@ -504,10 +504,16 @@ class CodeAgent:
         self._format_nudge = ""
         self._files_written: List[str] = []
 
-    def _context(self) -> str:
+    def _context(self, task: str = "") -> str:
         if not self.actions:
             base = ("\n\n(Nothing run yet. Write the complete program and run it.\n"
                     "Reply EXACTLY:\nFILE: main.py\n```\n<code>\n```\nRUN: python3 main.py)")
+            # Speed-to-value: surface concrete expected stdout on the first turn
+            # so the model aims correctly without burning a mismatch cycle.
+            expect = _expected_outputs(task or "")
+            if expect:
+                base += ("\n\nEXPECTED STDOUT (must appear after RUN):\n- "
+                         + "\n- ".join(repr(e) for e in expect[:4]))
             return base + (self._format_nudge or "")
         lines = ["\n\nSO FAR:"]
         for a in self.actions[-8:]:
@@ -668,7 +674,7 @@ class CodeAgent:
         parse_fails = 0
         for step in range(self.max_steps):
             msgs = [{"role": "system", "content": SYSTEM},
-                    {"role": "user", "content": f"TASK: {task}{self._context()}"}]
+                    {"role": "user", "content": f"TASK: {task}{self._context(task)}"}]
             yield {"event": "code_thinking", "data": {"step": step, "of": self.max_steps,
                    "ran": ran_any}}
             try:
@@ -938,6 +944,21 @@ class CodeAgent:
             if cmd:
                 yield {"event": "command_started", "data": {"command": cmd}}
                 r = self.sb.run(cmd, timeout=self.run_timeout, isolated=self.isolated)
+                # Auto-retry python → python3 when the jail only has python3
+                # (common Claude Code / Codex host difference that burns a step).
+                err_probe = ((r.get("stderr") or "") + "\n" + (r.get("stdout") or "")).strip()
+                if (r.get("exit_code") != 0 or r.get("blocked")) and re.match(
+                    r"^\s*python(\s|$)", cmd or ""
+                ) and re.search(
+                    r"python: (?:not found|command not found)|No such file or directory: ['\"]?python['\"]?",
+                    err_probe, re.I,
+                ):
+                    alt = re.sub(r"^\s*python\b", "python3", cmd, count=1)
+                    yield {"event": "agent_note", "data": {
+                        "text": f"python missing — retrying as `{alt}`"}}
+                    yield {"event": "command_started", "data": {"command": alt}}
+                    r = self.sb.run(alt, timeout=self.run_timeout, isolated=self.isolated)
+                    cmd = alt
                 ran_any = True
                 ok = r.get("exit_code") == 0 and not r.get("blocked")
                 if ok and (r.get("stdout") or "").strip():
@@ -1094,6 +1115,20 @@ class CodeAgent:
                         )
                         yield {"event": "agent_note", "data": {
                             "text": "JSONDecodeError — fix JSON input"}}
+                    if re.search(r"Unicode(Encode|Decode)Error", err_full) and not m_miss:
+                        self._format_nudge = (
+                            "\n\nUnicode error: open files with encoding='utf-8' (and errors= "
+                            "'replace' if needed), or encode/decode explicitly. Then RUN again."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": "Unicode error — use utf-8 encoding"}}
+                    if re.search(r"EOFError", err_full) and not m_miss:
+                        self._format_nudge = (
+                            "\n\nEOFError: input() is not available in the jail. Use fixed sample "
+                            "values (no interactive input), then RUN again."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": "EOFError — remove input(); use fixed samples"}}
                     if re.search(r"PermissionError|IsADirectoryError|NotADirectoryError", err_full) and not m_miss:
                         et = re.search(
                             r"(PermissionError|IsADirectoryError|NotADirectoryError)(:\s*[^\n]+)?",

@@ -968,6 +968,7 @@ function handle(name, data, ctx){
   else if(name==='confidence_map'){ rec.confidence = data; }
   else if(name==='drew_on'){ rec.drewOn = data; const n=(data.personal||0)+(data.world||0); step('💡 <b>drew on '+n+' thing'+(n===1?'':'s')+' it '+(data.personal&&!data.world?'remembers about you':(data.world&&!data.personal?'taught itself':'knows'))+'</b>'); }
   else if(name==='learned'){ rec.learnedNow = data; step('🧠 <b>learned this from you — it’ll use it next time</b>: <span class="dim">'+esc((data.stored||'').slice(0,90))+'</span>'); }
+  else if(name==='continuity_tick'){ rec.continuityTick=data; const n=(data.facts&&data.facts.length)||0; const how=data.model_used?'local model tick':'memory hygiene'; step('🔗 <b>continuity</b> · '+how+(n?(' · '+n+' fact'+(n===1?'':'s')):'')+(data.open_loop?(' · open: '+esc(String(data.open_loop).slice(0,60))):'')); }
   else if(name==='phase' && data.phase==='self_correcting'){ const c=(data.caught&&data.caught[0]); step('🧮 <b>calculator flagged an equation</b>'+(c?' — “'+esc(c.claim)+'” (should be '+c.computed+')':'')+' — re-checking…'); }
   else if(name==='phase' && data.phase==='self_correct_kept'){ step('kept the original — couldn’t verify a cleaner rewrite (details in the receipt)'); }
   else if(name==='phase' && data.phase==='reconsidering'){ step('<span class="pulse">🔍 puzzle-style question — auditing for classic logic traps…</span>'); }
