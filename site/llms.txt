@@ -1,0 +1,28 @@
+# LOLM — Latent Order Language Model (Qira LLC)
+
+> Persistent AI agent workspace with auditable receipts. Measures uncertainty and acts on it (retrieve / verify / branch / finalize). Patent pending.
+
+## Primary product
+- Workspace: https://lolm.imagineqira.com/
+- Free try (no account): https://lolm.imagineqira.com/try.html
+- Pricing: https://lolm.imagineqira.com/pricing.html
+- Science / architecture: https://lolm.imagineqira.com/about.html
+- Live research: https://lolm.imagineqira.com/research.html
+- Operator autonomy: https://lolm.imagineqira.com/operator.html
+
+## What it is
+LOLM is a hybrid Transformer–SSM language model stack plus an NFET control loop that measures logit entropy, hidden drift, gate balance, and regime entropy to decide when to retrieve evidence, verify, branch, or finalize. The commercial surface is a browser workspace: chat, memory, web search, sandboxed code, visual apps, and per-run receipts.
+
+## Pricing (USD / month)
+- Free: $0 — 10 runs/day, 3 visual builds/day
+- Plus: $7.99 — 300 runs/day, 30 builds/day
+- Pro: $19.99 — 2000 runs/day, 200 builds/day
+Checkout: Stripe hosted. Local/sovereign installs are unlimited.
+
+## Developers
+- npm: lolm-nfet-client — https://www.npmjs.com/package/lolm-nfet-client
+- GitHub: https://github.com/TheArtOfSound/LOLM
+- Contact: bryanleonard237@gmail.com
+
+## Company
+Qira LLC (Imagine Qira) — research-driven AI systems. Related product: QEV (portable evidence dossiers).

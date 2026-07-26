@@ -25,3 +25,10 @@
 - 5-minute continuous improvement schedule (until user says stop)
 - Auto-wire evolved local brain on :11435 (lolm-evolved)
 - BestBrain resilient fallback (cloud fail → local before tokens)
+
+## Monetization + discovery (live)
+- /pricing.html Free / Plus $7.99 / Pro $19.99 + Stripe checkout
+- /llms.txt for AI crawlers
+- sitemap + robots refreshed
+- Workspace: Pricing + Share + free-tier chip + soft upgrade hint
+- try.html next-steps footer

@@ -2,12 +2,14 @@ User-agent: *
 Allow: /
 Disallow: /api/
 
-# AI crawlers welcome — this is a public research demo.
+# AI crawlers welcome — public research + product demo.
 User-agent: GPTBot
 Allow: /
 User-agent: ClaudeBot
 Allow: /
 User-agent: PerplexityBot
+Allow: /
+User-agent: Google-Extended
 Allow: /
 
 Sitemap: https://lolm.imagineqira.com/sitemap.xml

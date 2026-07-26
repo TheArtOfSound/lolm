@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOLM Pricing — Free, Plus $7.99, Pro $19.99</title>
+<meta name="description" content="Use LOLM free every day. Upgrade to Plus ($7.99) or Pro ($19.99) for more runs and verified builds — cheaper than big assistants, cancel anytime. Stripe checkout.">
+<meta property="og:title" content="LOLM Pricing — Free · Plus · Pro">
+<meta property="og:description" content="Persistent AI agent with receipts. Free daily use; Plus and Pro for power users.">
+<meta property="og:url" content="https://lolm.imagineqira.com/pricing.html">
+<meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://lolm.imagineqira.com/pricing.html">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#0a0c10">
+<style>
+  :root{--bg:#fff;--ink:#0a0c10;--muted:#525c69;--line:#e6e8ec;--soft:#f6f7f9;--accent:#f43f5e;--good:#0f9d6b}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+  a{color:var(--ink)}
+  .wrap{max-width:960px;margin:0 auto;padding:28px 18px 64px}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;flex-wrap:wrap;gap:12px}
+  .brand{font-weight:700;letter-spacing:-.02em;text-decoration:none}
+  nav a{margin-left:14px;font-size:14px;color:var(--muted);text-decoration:none}
+  nav a:hover{color:var(--ink)}
+  h1{font-size:clamp(28px,4vw,40px);letter-spacing:-.03em;margin:0 0 8px}
+  .sub{color:var(--muted);font-size:16px;max-width:38em;margin-bottom:28px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:800px){.grid{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);border-radius:16px;padding:20px;background:var(--soft);display:flex;flex-direction:column}
+  .card.featured{border-color:var(--accent);background:#fff;box-shadow:0 8px 30px rgba(244,63,94,.08)}
+  .card h2{font-size:18px;margin:0 0 4px}
+  .price{font-size:32px;font-weight:750;letter-spacing:-.03em;margin:8px 0}
+  .price span{font-size:14px;font-weight:500;color:var(--muted)}
+  ul{margin:12px 0 18px;padding-left:18px;font-size:14px;color:var(--muted);flex:1}
+  ul li{margin:6px 0}
+  button, .btn{display:inline-block;border:0;border-radius:10px;padding:12px 14px;font:inherit;font-weight:650;font-size:14px;cursor:pointer;text-align:center;text-decoration:none}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-secondary{background:var(--ink);color:#fff}
+  .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink)}
+  .note{margin-top:28px;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+  .msg{margin:12px 0;padding:10px 12px;border-radius:10px;background:#f0fdf4;color:#166534;font-size:14px;display:none}
+  .err{background:#fef2f2;color:#9b1c2e}
+  .who{margin:32px 0 12px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .paths{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:700px){.paths{grid-template-columns:1fr}}
+  .path{border:1px solid var(--line);border-radius:12px;padding:14px}
+  .path h3{font-size:15px;margin:0 0 6px}
+  .path p{font-size:13px;color:var(--muted);margin:0 0 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="/">LOLM · Qira</a>
+    <nav>
+      <a href="/try.html">Try free</a>
+      <a href="/">Workspace</a>
+      <a href="/about.html">Science</a>
+      <a href="/research.html">Research</a>
+    </nav>
+  </header>
+
+  <h1>Simple pricing. Real agent.</h1>
+  <p class="sub">
+    Use LOLM free every day. Upgrade when you need more runs and verified builds.
+    Cheaper than big assistants. Cancel anytime. Card handled by Stripe — LOLM never sees it.
+  </p>
+  <div id="msg" class="msg"></div>
+
+  <div class="grid" id="tiers">
+    <div class="card">
+      <h2>Free</h2>
+      <div class="price">$0 <span>/ month</span></div>
+      <ul>
+        <li>10 agent runs / day</li>
+        <li>3 verified visual builds / day</li>
+        <li>Conversations, memory, receipts</li>
+        <li>Web search + uncertainty control</li>
+      </ul>
+      <a class="btn btn-ghost" href="/">Start free →</a>
+    </div>
+    <div class="card featured">
+      <h2>Plus</h2>
+      <div class="price">$7.99 <span>/ month</span></div>
+      <ul>
+        <li>300 runs / day</li>
+        <li>30 verified builds / day</li>
+        <li>Everyday coding + research</li>
+        <li>Same privacy model as free</li>
+      </ul>
+      <button class="btn btn-primary" onclick="buy('plus')">Upgrade to Plus →</button>
+    </div>
+    <div class="card">
+      <h2>Pro</h2>
+      <div class="price">$19.99 <span>/ month</span></div>
+      <ul>
+        <li>2,000 runs / day</li>
+        <li>200 verified builds / day</li>
+        <li>Heavy use + priority ensemble builds</li>
+        <li>Still under a typical $20 AI plan</li>
+      </ul>
+      <button class="btn btn-secondary" onclick="buy('pro')">Upgrade to Pro →</button>
+    </div>
+  </div>
+
+  <div class="who">How people find and use LOLM</div>
+  <div class="paths">
+    <div class="path">
+      <h3>1. Try in 30 seconds</h3>
+      <p>No account required. Open the free demo and ask a question or build a small app.</p>
+      <a class="btn btn-ghost" href="/try.html">Open try.html →</a>
+    </div>
+    <div class="path">
+      <h3>2. Full workspace</h3>
+      <p>Ongoing chats, projects, memory, code jail, visual builder, receipts.</p>
+      <a class="btn btn-ghost" href="/">Open workspace →</a>
+    </div>
+    <div class="path">
+      <h3>3. Developers / npm</h3>
+      <p>Wire the NFET client into your own stack: <code>npm i lolm-nfet-client</code></p>
+      <a class="btn btn-ghost" href="https://www.npmjs.com/package/lolm-nfet-client" target="_blank" rel="noopener">npm package →</a>
+    </div>
+    <div class="path">
+      <h3>4. Research &amp; science</h3>
+      <p>Architecture, live research jobs, and what is actually proven vs open.</p>
+      <a class="btn btn-ghost" href="/about.html">About the science →</a>
+    </div>
+  </div>
+
+  <p class="note">
+    Qira LLC · Patent pending · Local/sovereign installs are unlimited.
+    Prefer self-hosting? Run the open repo and keep all keys on your machine.
+    Questions: <a href="mailto:bryanleonard237@gmail.com">bryanleonard237@gmail.com</a>
+  </p>
+</div>
+<script>
+async function buy(tier){
+  const msg = document.getElementById('msg');
+  msg.style.display='block'; msg.className='msg'; msg.textContent='Opening secure Stripe checkout…';
+  try{
+    const r = await fetch('/api/demo/billing/checkout', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({tier})
+    });
+    const j = await r.json();
+    if(j.url){ location.href = j.url; return; }
+    msg.className='msg err'; msg.textContent = j.error || 'Checkout unavailable on this instance.';
+  }catch(e){
+    msg.className='msg err'; msg.textContent = 'Checkout failed: '+e.message;
+  }
+}
+// claim license if returned from Stripe
+(async function(){
+  const sid = new URLSearchParams(location.search).get('sub_session');
+  if(!sid) return;
+  try{
+    const r = await (await fetch('/api/demo/billing/claim?session_id='+encodeURIComponent(sid))).json();
+    if(r.license){
+      localStorage.setItem('lolm_license', r.license);
+      const msg=document.getElementById('msg');
+      msg.style.display='block'; msg.className='msg';
+      msg.textContent='✓ Welcome to LOLM '+(r.label||r.tier)+' — open the workspace to use higher limits.';
+    }
+  }catch(_){}
+})();
+</script>
+</body>
+</html>
