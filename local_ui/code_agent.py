@@ -841,8 +841,28 @@ class CodeAgent:
                 # Flail guard: if the same failure repeats, stop and report honestly
                 # instead of burning every step on identical errors.
                 if not ok:
-                    err = (r.get("stderr") or "").strip().splitlines()
+                    err_full = ((r.get("stderr") or "") + "\n" + (r.get("stdout") or "")).strip()
+                    err = err_full.splitlines()
                     sig = (err[-1][:90] if err else "fail")
+                    # Auto-coach: ModuleNotFoundError → write the missing sibling file
+                    # (Claude/Codex users expect the agent to notice import gaps).
+                    m_miss = re.search(
+                        r"ModuleNotFoundError:\s*No module named ['\"]([^'\"]+)['\"]",
+                        err_full,
+                    ) or re.search(
+                        r"ImportError:\s*cannot import name ['\"]([^'\"]+)['\"]",
+                        err_full,
+                    )
+                    if m_miss:
+                        mod = m_miss.group(1).split(".")[0]
+                        if mod and mod.isidentifier() and f"{mod}.py" not in self._files_written:
+                            self._format_nudge = (
+                                f"\n\nIMPORT ERROR: missing module `{mod}`. "
+                                f"Write FILE: {mod}.py with the needed code, update imports if "
+                                "required, then RUN again. Do not claim DONE yet."
+                            )
+                            yield {"event": "agent_note", "data": {
+                                "text": f"import failed — need FILE: {mod}.py"}}
                     fail_repeats = fail_repeats + 1 if sig == fail_sig else 0
                     fail_sig = sig
                     if fail_repeats >= 2:

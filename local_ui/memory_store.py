@@ -46,6 +46,48 @@ def _jaccard(a: set, b: set) -> float:
     return inter / len(a | b)
 
 
+def _content_tokens(text: str) -> List[str]:
+    return [t for t in re.split(r"\W+", (text or "").lower())
+            if t and len(t) >= 3 and t not in _MEM_STOP]
+
+
+def _tf(tokens: List[str]) -> Dict[str, float]:
+    """Term frequency with simple l2-ready weights."""
+    if not tokens:
+        return {}
+    counts: Dict[str, int] = {}
+    for t in tokens:
+        counts[t] = counts.get(t, 0) + 1
+    n = float(len(tokens))
+    return {t: c / n for t, c in counts.items()}
+
+
+def _tfidf_cosine(q_tf: Dict[str, float], d_tf: Dict[str, float],
+                  idf: Dict[str, float]) -> float:
+    """Cosine similarity over sparse TF-IDF vectors (no numpy)."""
+    if not q_tf or not d_tf:
+        return 0.0
+    # only shared keys matter for the dot product
+    shared = set(q_tf) & set(d_tf)
+    if not shared:
+        return 0.0
+    dot = 0.0
+    for t in shared:
+        w = idf.get(t, 1.0)
+        dot += (q_tf[t] * w) * (d_tf[t] * w)
+    qn = 0.0
+    for t, v in q_tf.items():
+        w = idf.get(t, 1.0)
+        qn += (v * w) ** 2
+    dn = 0.0
+    for t, v in d_tf.items():
+        w = idf.get(t, 1.0)
+        dn += (v * w) ** 2
+    if qn <= 0 or dn <= 0:
+        return 0.0
+    return dot / ((qn ** 0.5) * (dn ** 0.5))
+
+
 @dataclass
 class MemoryPaths:
     root: Path
@@ -119,18 +161,16 @@ class MemoryStore:
 
     def search_notes(self, query: str, limit: int = 12, min_importance: int = 0,
                      tag: Optional[str] = None, scope: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Relevance-scored retrieval. Token overlap + char-trigram soft match.
+        """Relevance-scored retrieval: token overlap + TF-IDF cosine + char n-grams.
 
-        The old version AND-matched EVERY query token, so a note only surfaced when
-        the prompt repeated its exact words. We score content-word overlap (coverage,
-        importance, recency) and add a lightweight char-trigram Jaccard score as a
-        zero-dependency stand-in for embedding similarity — so paraphrases like
-        "what's my moniker" still reach "User is named Bryan". Requires genuine
-        signal (token overlap OR strong n-gram similarity) so it stays relevant.
+        Acts as a zero-dependency embedding substitute: sparse TF-IDF over the
+        note corpus (smoothed IDF) so paraphrases rank above exact-word-only
+        noise, plus char-trigram soft match for identity-style queries.
         """
         q_tokens = [t for t in re.split(r"\W+", (query or "").lower()) if t]
         content = list({t for t in q_tokens if len(t) >= 3 and t not in _MEM_STOP})
         q_ng = _char_ngrams(query or "")
+        q_tf = _tf(_content_tokens(query or ""))
         # Identity-ish queries: boost notes that look like personal facts even when
         # the user paraphrases ("moniker"/"handle" → named/name lines).
         identity_q = any(w in (query or "").lower() for w in (
@@ -146,26 +186,40 @@ class MemoryStore:
                 and (scope is None or r.get("scope", "global") in ("global", scope))]
         if not content and not q_ng:                  # no usable query → most recent
             return rows[-limit:]
+        # corpus IDF for TF-IDF cosine (smoothed)
+        df: Dict[str, int] = {}
+        bodies: List[str] = []
+        for row in rows:
+            body = str(row.get("text") or row.get("note") or row.get("content") or "")
+            bodies.append(body)
+            seen = set(_content_tokens(body))
+            for t in seen:
+                df[t] = df.get(t, 0) + 1
+        n_docs = max(len(rows), 1)
+        idf = {t: 1.0 + __import__("math").log((1.0 + n_docs) / (1.0 + c))
+               for t, c in df.items()}
         n = max(len(rows), 1)
         scored: List[Any] = []
         for idx, row in enumerate(rows):
             hay = json.dumps(row, ensure_ascii=False).lower()
-            text_body = str(row.get("text") or row.get("note") or row.get("content") or "")
+            text_body = bodies[idx]
             overlap = sum(1 for t in content if t in hay) if content else 0
             # prefix stems (4+ chars) catch light paraphrases without embeddings
             stems = [t[:4] for t in content if len(t) >= 4]
             stem_hits = sum(1 for s in stems if s and s in hay)
             coverage = (overlap / len(content)) if content else 0.0
             ng_sim = _jaccard(q_ng, _char_ngrams(text_body or hay))
+            d_tf = _tf(_content_tokens(text_body))
+            cos = _tfidf_cosine(q_tf, d_tf, idf)
             # relevant if: 2+ content words overlap, OR half the query is covered,
             # OR a single DISTINCTIVE (long, rare) term matches — "carbonara",
             # "quantum" alone are strong signals; "flux" needs a second word.
             # Also: short follow-up queries (1 content token, 4+ chars) may match
             # a single clear term so "my name?" still finds "User is named Bryan".
-            # Soft path: char-trigram Jaccard acts like a zero-dep mini-embedding.
+            # Soft path: char-trigram / TF-IDF act like a zero-dep mini-embedding.
             distinctive = any(len(t) >= 7 and t in hay for t in content) if content else False
             short_ok = bool(content) and len(content) == 1 and len(content[0]) >= 4 and content[0] in hay
-            soft_ok = ng_sim >= 0.14 and len(text_body) >= 12
+            soft_ok = (ng_sim >= 0.14 or cos >= 0.12) and len(text_body) >= 12
             personal = identity_q and any(
                 k in hay for k in ("named", "name is", "prefer", "user is", "call me", "timezone")
             )
@@ -176,7 +230,8 @@ class MemoryStore:
                 continue
             score = (overlap + 1.5 * coverage
                      + 0.35 * stem_hits
-                     + 2.4 * ng_sim                     # soft embedding-like signal
+                     + 2.4 * ng_sim                     # soft n-gram signal
+                     + 3.0 * cos                        # TF-IDF cosine "embedding"
                      + 0.3 * int(row.get("importance", 3))
                      + 0.2 * (idx / n)                  # gentle recency nudge
                      + (0.6 if (scope and row.get("scope") == scope) else 0)  # my own context first

@@ -109,6 +109,21 @@ def test_edit_tool_surgical_fix(tmp_path):
                for e in events)
 
 
+def test_modulenotfound_coaches_missing_file(tmp_path):
+    sb = Sandbox(tmp_path)
+    seq = iter([
+        '{"action":"write_and_run","path":"main.py","content":"import helper\\nprint(helper.x)\\n",'
+        '"command":"python3 main.py"}',
+        '{"action":"write_and_run","path":"helper.py","content":"x=9\\n","command":"python3 main.py"}',
+        '{"action":"finish","summary":"works"}',
+    ])
+    events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("print helper value"))
+    notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
+    assert "helper.py" in notes or "import failed" in notes
+    assert any(e["event"] == "code_receipt" for e in events)
+    assert "x=9" in sb.read_file("helper.py")
+
+
 def test_code_receipt_emitted_and_blocks_wrong_output(tmp_path):
     sb = Sandbox(tmp_path)
     # model prints 0 but task asked for 42 — DONE must be blocked once, then fix

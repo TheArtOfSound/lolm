@@ -109,3 +109,18 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 2. Richer between-turn operator ticks (model-backed, local-only)
 3. Publish npm 0.2.1 to registry
 4. Persist visual-build receipts similarly
+
+## 2026-07-26 loop — TF-IDF memory, visual receipts, import auto-coach
+### Continuity / memory (win #2)
+- Memory search: **TF-IDF cosine** over note corpus + n-grams (embedding substitute, no deps)
+### Receipts (win #4)
+- Visual builds seal **visual_receipt** into the same hash-chained ledger (html_sha, verified, attempts)
+### Agentic coding (win #1)
+- ModuleNotFoundError auto-coaches: write missing `FILE: mod.py` before DONE
+### Findability (win #6)
+- llms.txt: why-switch + code receipts API; npm client narrates visual_receipt (0.2.2)
+### Next queue
+1. Optional ONNX/local real embeddings when available
+2. Model-backed between-turn operator ticks (local-only)
+3. npm publish 0.2.2
+4. Public mini /receipts.html audit page

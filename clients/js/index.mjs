@@ -242,6 +242,11 @@ export function friendly(ev) {
     const sha = data && data.receipt_sha ? String(data.receipt_sha).slice(0, 12) : "";
     return sha ? `Sealed code receipt ${sha}…` : "Sealed a code receipt.";
   }
+  if (event === "visual_receipt") {
+    const sha = data && data.receipt_sha ? String(data.receipt_sha).slice(0, 12) : "";
+    const ok = data && data.ok;
+    return (ok ? "Verified visual build" : "Visual build finished") + (sha ? ` · receipt ${sha}…` : "");
+  }
   if (event === "run_done") {
     const base = data.ended_by && ENDED[data.ended_by] ? `Done — ${ENDED[data.ended_by]}.` : "Done.";
     if (Array.isArray(data.provenance) && data.provenance.length) {

@@ -96,6 +96,9 @@ def test_build_loop_retries_until_a_real_browser_confirms_it_works(monkeypatch):
     assert "fixed" in done["html"]                 # shipped the WORKING candidate
     assert done["attempts"] == 2
     assert calls["gen"] == 2                        # regenerated exactly once
+    receipts = [d for n, d in evs if n == "visual_receipt"]
+    assert receipts and receipts[-1].get("receipt_sha")
+    assert done.get("receipt_sha")
 
 
 def test_ensemble_races_brains_and_ships_the_browser_verified_winner(monkeypatch):

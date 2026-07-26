@@ -5,6 +5,7 @@
 ## Primary product
 - Workspace: https://lolm.imagineqira.com/
 - Free try (no account): https://lolm.imagineqira.com/try.html
+- Why switch from Claude Code / Codex: https://lolm.imagineqira.com/why-switch.html
 - Pricing: https://lolm.imagineqira.com/pricing.html
 - Science / architecture: https://lolm.imagineqira.com/about.html
 - Live research: https://lolm.imagineqira.com/research.html
@@ -20,7 +21,9 @@ LOLM is a hybrid Transformer–SSM language model stack plus an NFET control loo
 Checkout: Stripe hosted. Local/sovereign installs are unlimited.
 
 ## Developers
-- npm: lolm-nfet-client — https://www.npmjs.com/package/lolm-nfet-client
+- npm: lolm-nfet-client — https://www.npmjs.com/package/lolm-nfet-client (code_receipt + listCodeReceipts)
+- Code receipt ledger API: https://lolm.imagineqira.com/api/demo/code/receipts
+- Code health: https://lolm.imagineqira.com/api/demo/code/health
 - GitHub: https://github.com/TheArtOfSound/LOLM
 - Contact: bryanleonard237@gmail.com
 

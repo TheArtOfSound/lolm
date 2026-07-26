@@ -169,6 +169,54 @@ def _sse(event: str, data: Dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _seal_visual_receipt(task: str, done: Dict[str, Any]) -> Dict[str, Any]:
+    """Hash-chain a visual build into the shared receipt ledger (audit trail)."""
+    import hashlib
+    v = done.get("verdict") or {}
+    core = {
+        "kind": "visual_build",
+        "task": (task or "")[:400],
+        "verified": bool(done.get("verified")),
+        "verifier_ran": bool(done.get("verifier_ran")),
+        "attempts": done.get("attempts"),
+        "mode": done.get("mode"),
+        "winner": done.get("winner"),
+        "bytes": done.get("bytes"),
+        "working": v.get("working"),
+        "renders": v.get("renders"),
+        "animates": v.get("animates"),
+        "responds": v.get("responds"),
+        "reasons": (v.get("reasons") or [])[:8],
+        "static_lint": bool(v.get("static_lint")),
+        "ts": int(time.time()),
+        "ok": bool(done.get("verified")),
+        "verdict": "verified" if done.get("verified") else (
+            "unverified" if done.get("verifier_ran") is False or v.get("working") is None
+            else "failed"),
+    }
+    # Do not store full HTML in the ledger (can be large); store content hash only.
+    html = done.get("html") or ""
+    core["html_sha"] = hashlib.sha256(html.encode("utf-8")).hexdigest()[:24] if html else ""
+    core["receipt_sha"] = hashlib.sha256(
+        json.dumps(core, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:24]
+    try:
+        sealed = code_receipt_ledger.append(core, source="api.demo.code.visual.build")
+    except Exception:
+        sealed = core
+    return sealed
+
+
+def _emit_visual_done(done: Dict[str, Any], task: str):
+    """Yield done + visual_receipt events; always attach receipt_sha on done."""
+    sealed = _seal_visual_receipt(task, done)
+    payload = dict(done)
+    payload["receipt_sha"] = sealed.get("receipt_sha") or sealed.get("ledger_sha")
+    payload["ledger_sha"] = sealed.get("ledger_sha")
+    yield _sse("done", payload)
+    yield _sse("visual_receipt", sealed)
+
+
 def _extract_html(raw: str) -> Optional[str]:
     """Pull a complete HTML document out of the model's reply (tolerates fences/prose)."""
     if not raw:
@@ -669,11 +717,14 @@ def register_code_routes(app: Any, root: str,
                                    "animates": v.get("animates"), "responds": v.get("responds"),
                                    "bytes": len(cnd.get("html") or ""), "reasons": v.get("reasons", [])})
                     if best_verdict.get("working") or best_verdict.get("working") is None:
-                        yield _sse("done", {"html": best_html or "", "bytes": len(best_html or ""),
-                                   "verified": bool(best_verdict.get("working")),
-                                   "verifier_ran": best_verdict.get("working") is not None,
-                                   "attempts": attempts, "winner": best_model, "mode": "ensemble",
-                                   "verdict": best_verdict})
+                        done_payload = {
+                            "html": best_html or "", "bytes": len(best_html or ""),
+                            "verified": bool(best_verdict.get("working")),
+                            "verifier_ran": best_verdict.get("working") is not None,
+                            "attempts": attempts, "winner": best_model, "mode": "ensemble",
+                            "verdict": best_verdict,
+                        }
+                        yield from _emit_visual_done(done_payload, task)
                         return
                 else:
                     ensemble = False           # fan-out unavailable → single-model path
@@ -705,11 +756,14 @@ def register_code_routes(app: Any, root: str,
                 if v.get("working") or v.get("working") is None:
                     break
                 msgs = _visual_fix_messages(task, html, v.get("reasons", []))
-            yield _sse("done", {"html": best_html or "", "bytes": len(best_html or ""),
-                                "verified": bool(best_verdict.get("working")),
-                                "verifier_ran": best_verdict.get("working") is not None,
-                                "attempts": attempts, "winner": best_model,
-                                "mode": "ensemble" if ensemble else "single", "verdict": best_verdict})
+            done_payload = {
+                "html": best_html or "", "bytes": len(best_html or ""),
+                "verified": bool(best_verdict.get("working")),
+                "verifier_ran": best_verdict.get("working") is not None,
+                "attempts": attempts, "winner": best_model,
+                "mode": "ensemble" if ensemble else "single", "verdict": best_verdict,
+            }
+            yield from _emit_visual_done(done_payload, task)
 
         return StreamingResponse(gen(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
