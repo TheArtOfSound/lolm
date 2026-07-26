@@ -32,15 +32,20 @@ def test_loop_self_repairs_after_failure(tmp_path):
     sb = Sandbox(tmp_path)
     seq = iter([
         '{"action":"write_file","path":"x.py","content":"prnt(1)\\n"}',     # typo
-        '{"action":"run","command":"python3 x.py"}',                         # fails
+        '{"action":"run","command":"python3 x.py"}',                         # fails (or auto-run already did)
         '{"action":"write_file","path":"x.py","content":"print(1)\\n"}',     # fixed
         '{"action":"run","command":"python3 x.py"}',                         # ok
         '{"action":"finish","summary":"fixed it"}',
     ])
     agent = CodeAgent(sb, lambda m: next(seq), isolated=None)
     runs = [e["data"] for e in agent.run("print 1") if e["event"] == "command_finished"]
-    assert runs[0]["exit_code"] != 0          # first attempt failed
-    assert runs[1]["exit_code"] == 0          # repaired attempt succeeded
+    assert runs, "expected at least one command"
+    assert any(r["exit_code"] != 0 for r in runs)     # saw the broken attempt
+    assert any(r["exit_code"] == 0 for r in runs)     # repaired attempt succeeded
+    # last green run must come after a failure (repair order)
+    first_fail = next(i for i, r in enumerate(runs) if r["exit_code"] != 0)
+    first_ok = next(i for i, r in enumerate(runs) if r["exit_code"] == 0)
+    assert first_ok > first_fail
     assert sb.read_file("x.py") == "print(1)\n"
 
 
