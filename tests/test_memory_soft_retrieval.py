@@ -29,3 +29,19 @@ def test_hash_embed_self_similarity_and_paraphrase():
     c = _hash_embed("totally unrelated quantum flux nonsense")
     assert _hash_cosine(a, b) > 0.99
     assert _hash_cosine(a, _hash_embed("prefers a dark mode theme")) > _hash_cosine(a, c)
+
+
+def test_custom_embedder_plugin_slot(tmp_path):
+    from local_ui.memory_store import set_embedder, embedder_kind, _embed_text
+    set_embedder(lambda t: [1.0, 0.0, 0.0] if "carbonara" in (t or "").lower() else [0.0, 1.0, 0.0],
+                 kind="test")
+    assert embedder_kind() == "test"
+    m = MemoryStore(tmp_path)
+    m.append_note("The carbonara recipe uses eggs and pecorino", tag="fact", importance=4)
+    m.append_note("Unrelated quantum flux", tag="fact", importance=4)
+    hits = m.search_notes("how do I make carbonara pasta")
+    assert hits and "carbonara" in hits[0]["text"].lower()
+    # restore default
+    set_embedder(None)
+    assert embedder_kind() == "hash"
+    assert len(_embed_text("hello world")) == 128

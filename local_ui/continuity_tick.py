@@ -90,6 +90,80 @@ def _apply_facts(memory: Any, facts: List[str]) -> int:
     return n
 
 
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def model_tick_allowed() -> bool:
+    """Model-backed ticks: explicit LOLM_MODEL_TICK or operator-local boxes."""
+    return _env_truthy("LOLM_MODEL_TICK") or _env_truthy("LOLM_OPERATOR_LOCAL")
+
+
+def resolve_local_tick_generate(
+    generate: Optional[Callable[[str], str]] = None,
+) -> Optional[Callable[[str], str]]:
+    """Return a generate(prompt)->text callable for local ticks, or None.
+
+    Prefer an injected callback. Otherwise, when model ticks are allowed, try
+    the evolved / local OpenAI-compatible endpoint (cheap, short completion).
+    Never raises; never hits remote frontier APIs.
+    """
+    if generate is not None:
+        return generate
+    if not model_tick_allowed():
+        return None
+    try:
+        from local_ui.local_brain import (
+            evolved_url, probe_evolved, EVOLVED_DEFAULT_MODEL, EVOLVED_DEFAULT_API,
+        )
+        import json
+        import urllib.request
+    except Exception:
+        return None
+
+    url = (os.environ.get("LOLM_LOCAL_URL", "") or "").strip().rstrip("/")
+    model = (os.environ.get("LOLM_LOCAL_MODEL", "") or "").strip()
+    api = (os.environ.get("LOLM_LOCAL_API", "") or "").strip().lower()
+    if not url or not model:
+        eurl = evolved_url()
+        if not probe_evolved(eurl):
+            return None
+        url, model, api = eurl, EVOLVED_DEFAULT_MODEL, EVOLVED_DEFAULT_API
+    if not api:
+        api = "openai" if "11435" in url or model == EVOLVED_DEFAULT_MODEL else "ollama"
+
+    def _gen(prompt: str) -> str:
+        msgs = [
+            {"role": "system", "content": "You extract durable chat facts. Be terse."},
+            {"role": "user", "content": prompt[:1200]},
+        ]
+        if api == "openai":
+            endpoint = url + "/v1/chat/completions"
+            payload = {
+                "model": model, "messages": msgs, "stream": False,
+                "max_tokens": 96, "temperature": 0.1,
+            }
+        else:
+            endpoint = url + "/api/chat"
+            payload = {
+                "model": model, "messages": msgs, "stream": False,
+                "options": {"temperature": 0.1, "num_predict": 96},
+            }
+        headers = {"Content-Type": "application/json", "User-Agent": "lolm-tick/1.0"}
+        key = os.environ.get("LOLM_LOCAL_API_KEY", "").strip()
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+        req = urllib.request.Request(
+            endpoint, data=json.dumps(payload).encode(), headers=headers)
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read())
+        if api == "openai":
+            return ((data.get("choices") or [{}])[0].get("message") or {}).get("content", "") or ""
+        return (data.get("message") or {}).get("content", "") or ""
+
+    return _gen
+
+
 def model_backed_tick(
     memory: Any,
     *,
@@ -116,9 +190,8 @@ def model_backed_tick(
     open_loop = ""
     used_model = False
 
-    # Env gate: only burn tokens when explicitly enabled (local operator boxes).
-    allow = os.environ.get("LOLM_MODEL_TICK", "").strip() in ("1", "true", "yes", "on")
-    if generate is not None and allow and (u or a):
+    gen = resolve_local_tick_generate(generate)
+    if gen is not None and (u or a):
         prompt = (
             "Extract continuity from this chat turn. Reply with EXACTLY two lines:\n"
             "FACTS: <comma-separated durable user facts, or none>\n"
@@ -126,7 +199,7 @@ def model_backed_tick(
             f"USER: {u[:400]}\nASSISTANT: {a[:500]}\n"
         )
         try:
-            raw = (generate(prompt) or "").strip()
+            raw = (gen(prompt) or "").strip()
             used_model = True
             for line in raw.splitlines():
                 low = line.strip()

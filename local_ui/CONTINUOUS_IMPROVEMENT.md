@@ -199,6 +199,24 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 3. npm publish 0.2.3+
 4. Real non-demo ledger traffic samples
 
+## 2026-07-26 loop — local tick wire + embedder plugin + empty-stdout coach
+### Continuity (win #2)
+- `resolve_local_tick_generate`: auto evolved/local when `LOLM_MODEL_TICK` or `LOLM_OPERATOR_LOCAL`
+- `nfet_agent` wires generate into `between_turn` + emits `continuity_tick` SSE event
+- Dialog: "same as before" / "as I said" resume prior plan
+### Memory (win #2)
+- Embedder plugin slot (`set_embedder` / `LOLM_ONNX_EMBED`) with hash fallback
+### Agentic coding (win #1)
+- PermissionError / IsADirectoryError / NotADirectoryError path coaches
+- Exit-0 empty stdout coach when task expects print (blocks auto-DONE)
+### Findability / npm (win #6)
+- `lolm-nfet-client@0.2.4`: friendly() for `learned` + `continuity_tick`
+### Next queue
+1. npm publish 0.2.4 to registry
+2. Real ONNX tokenizer+session path when model weights land
+3. Surface continuity_tick in workspace UI
+4. Non-demo ledger samples from live traffic
+
 ## Train/improve loop (serious)
 - scripts/train_improve_loop.py: HF ingest → queue mint → gated LoRA → promote → restart serve
 - Fixed corrupt live adapter (was destroying generation; quarantined)

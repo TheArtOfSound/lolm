@@ -228,3 +228,16 @@ def test_attributeerror_coaches_fix(tmp_path):
     notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
     assert "AttributeError" in notes
     assert any(e["event"] == "code_receipt" for e in events)
+
+
+def test_empty_stdout_coaches_print(tmp_path):
+    sb = Sandbox(tmp_path)
+    seq = iter([
+        '{"action":"write_and_run","path":"e.py","content":"x=42\\n","command":"python3 e.py"}',
+        '{"action":"write_and_run","path":"e.py","content":"print(42)\\n","command":"python3 e.py"}',
+        '{"action":"finish","summary":"printed"}',
+    ])
+    events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("print 42"))
+    notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
+    assert "empty stdout" in notes or "print" in notes.lower()
+    assert any(e["event"] == "code_receipt" and e["data"].get("ok") for e in events)

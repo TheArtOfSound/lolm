@@ -75,3 +75,13 @@ def test_which_one_continuity():
     cmd, prof, tag = resolve_followup("which one?", hist)
     assert prof == "dialog" and tag == "which"
     assert "option" in cmd.lower() or "Recommend" in cmd
+
+
+def test_same_as_before_continuity():
+    hist = [
+        {"role": "user", "content": "Let's ship the memory fix first"},
+        {"role": "assistant", "content": "OK — I'll prioritize the memory fix."},
+    ]
+    cmd, prof, tag = resolve_followup("same as before", hist)
+    assert prof == "dialog" and tag == "same_as_before"
+    assert "same plan" in cmd.lower() or "Resume" in cmd

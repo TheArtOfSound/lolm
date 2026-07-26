@@ -1439,20 +1439,26 @@ WORKING DRAFT:
             )
             if cap:
                 yield {"event": "learned", "data": cap}
-            # Between-turn continuity tick (no model call): rolling summary +
-            # optional identity promote + pack for next turn. Cheap operator-style
-            # hygiene so "yes/that" and personal facts survive session boundaries.
+            # Between-turn continuity tick: rolling summary + identity promote +
+            # pack. On operator-local / LOLM_MODEL_TICK boxes, may call the local
+            # evolved model for fact extraction (never frontier APIs).
             if profile in ("dialog", "question", "task") and answer_text and len(raw_command) > 2:
                 try:
                     mem = getattr(self.deps, "memory", None)
                     if mem is not None:
-                        from local_ui.continuity_tick import between_turn
+                        from local_ui.continuity_tick import between_turn, resolve_local_tick_generate
+                        gen = None
+                        try:
+                            gen = resolve_local_tick_generate(None)
+                        except Exception:
+                            gen = None
                         tick = between_turn(
                             mem,
                             user_text=raw_command,
                             assistant_text=answer_text,
                             session_id=getattr(req, "session_id", None) or "session",
                             promote=bool(cap),
+                            generate=gen,
                         )
                         if tick.get("continuity"):
                             # stash on request for any outer wrapper that injects context
@@ -1460,6 +1466,18 @@ WORKING DRAFT:
                                 setattr(req, "_continuity_pack", tick["continuity"])
                             except Exception:
                                 pass
+                        # Surface micro-tick results for clients/receipts.
+                        if tick.get("tick") and (
+                            tick["tick"].get("promoted")
+                            or tick["tick"].get("model_used")
+                            or tick["tick"].get("facts")
+                        ):
+                            yield {"event": "continuity_tick", "data": {
+                                "promoted": bool(tick.get("promoted")),
+                                "model_used": bool(tick["tick"].get("model_used")),
+                                "facts": (tick["tick"].get("facts") or [])[:4],
+                                "open_loop": (tick["tick"].get("open_loop") or "")[:200],
+                            }}
                 except Exception:
                     pass
         except Exception:

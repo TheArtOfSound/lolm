@@ -40,6 +40,8 @@ SHORT_REPLY_RE = re.compile(
     r"wait|hold\s*on|hmm+|huh|what\?|"
     r"tell\s*me\s*more|explain|simpler|eli5|"
     r"which\s*(?:one|option|choice)?|either|both|neither|"
+    r"same\s+as\s+(?:before|last\s+time|earlier)|as\s+(?:i|we)\s+said|"
+    r"like\s+before|as\s+before|"
     r"what\s+about\s+(?:the\s+)?(?:other|first|second|third|last)|"
     r"(?:option\s*)?[abc123]|"
     r"the\s+(?:first|second|third|last|other)(?:\s+one)?|"
@@ -52,6 +54,13 @@ SHORT_REPLY_RE = re.compile(
 # "which one?" / "either" when options were just offered
 WHICH_RE = re.compile(
     r"^\s*(which\s*(?:one|option|choice)?|either|both|neither)\s*[!.?]*\s*$",
+    re.IGNORECASE,
+)
+
+# "same as before" / "as I said" — resume prior plan without restarting
+SAME_AS_BEFORE_RE = re.compile(
+    r"^\s*(same\s+as\s+(?:before|last\s+time|earlier)|as\s+(?:i|we)\s+said|"
+    r"like\s+before|as\s+before)\s*[!.?]*\s*$",
     re.IGNORECASE,
 )
 # Slang / non-answers that must NEVER be treated as definition requests.
@@ -255,6 +264,15 @@ def resolve_followup(
             "'either'/'both', or clarify once if they said 'neither'. Stay on the same thread."
         )
         return text, "dialog", "which"
+
+    if SAME_AS_BEFORE_RE.match(c) and turns:
+        prior = last_asst or last_user
+        text = (
+            f'The user said "{c.strip()}" — continue with the same plan/approach as before.\n'
+            + (f'Prior context:\n"""{prior[:900]}"""\n' if prior else "")
+            + "Do not restart from zero. Resume the previous plan and take the next concrete step."
+        )
+        return text, "dialog", "same_as_before"
 
     if OPTION_PICK_RE.match(c) and turns:
         prior = last_asst or last_user

@@ -1094,6 +1094,19 @@ class CodeAgent:
                         )
                         yield {"event": "agent_note", "data": {
                             "text": "JSONDecodeError — fix JSON input"}}
+                    if re.search(r"PermissionError|IsADirectoryError|NotADirectoryError", err_full) and not m_miss:
+                        et = re.search(
+                            r"(PermissionError|IsADirectoryError|NotADirectoryError)(:\s*[^\n]+)?",
+                            err_full,
+                        )
+                        label = et.group(0)[:120] if et else "path error"
+                        self._format_nudge = (
+                            f"\n\nPATH ERROR: {label}\n"
+                            "Use a file path (not a directory), write the file first, and stay "
+                            "inside the sandbox cwd. Then RUN again."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": f"path error — {label[:80]}"}}
                     if re.search(r"IndexError|KeyError|TypeError|ValueError", err_full) and not m_miss and not m_syn and not m_attr:
                         et = re.search(r"(IndexError|KeyError|TypeError|ValueError)(:\s*[^\n]+)?", err_full)
                         label = et.group(0)[:120] if et else "runtime error"
@@ -1118,6 +1131,17 @@ class CodeAgent:
                 else:
                     fail_repeats = 0
                     fail_sig = None
+                    # Exit 0 but empty stdout when the task wants printed results
+                    if ok and not (r.get("stdout") or "").strip():
+                        expect = _expected_outputs(task)
+                        if expect or re.search(r"\bprint\b", task or "", re.I):
+                            self._format_nudge = (
+                                "\n\nEXIT 0 BUT EMPTY STDOUT. The program must PRINT results "
+                                "(use print(...)). Rewrite so it prints, then RUN again."
+                            )
+                            yield {"event": "agent_note", "data": {
+                                "text": "empty stdout — add print() before DONE"}}
+                            ok = False  # keep looping; do not auto-DONE
                     # Competitive bar: after a green run, prefer a real test oracle
                     # (pytest/unittest) when test files exist; else py_compile on
                     # multi-file / test-oriented tasks so we never DONE on garbage.

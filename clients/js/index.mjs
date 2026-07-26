@@ -247,6 +247,16 @@ export function friendly(ev) {
     const ok = data && data.ok;
     return (ok ? "Verified visual build" : "Visual build finished") + (sha ? ` · receipt ${sha}…` : "");
   }
+  if (event === "learned") {
+    const n = Array.isArray(data && data.items) ? data.items.length : (data && data.text ? 1 : 0);
+    return n ? `Remembered ${n} fact${n === 1 ? "" : "s"} for later` : "Saved something to memory";
+  }
+  if (event === "continuity_tick") {
+    const facts = (data && data.facts) || [];
+    if (data && data.model_used) return "Local continuity tick refined thread memory";
+    if (facts.length) return `Promoted ${facts.length} continuity fact${facts.length === 1 ? "" : "s"}`;
+    return data && data.promoted ? "Updated continuity memory" : null;
+  }
   if (event === "run_done") {
     const base = data.ended_by && ENDED[data.ended_by] ? `Done — ${ENDED[data.ended_by]}.` : "Done.";
     if (Array.isArray(data.provenance) && data.provenance.length) {

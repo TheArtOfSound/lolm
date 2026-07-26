@@ -12,6 +12,7 @@ Python port of the useful Hellhound memory pattern:
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import uuid
@@ -128,6 +129,87 @@ def _hash_cosine(a: List[float], b: List[float]) -> float:
     return sum(x * y for x, y in zip(a, b))
 
 
+# Optional embedder plugin (ONNX / sentence-transformers / custom).
+# Signature: embed(text: str) -> List[float]  (any fixed dim; cosine used).
+# Set via set_embedder() or env LOLM_EMBEDDER=hash|none (default hash).
+_EMBEDDER: Optional[Any] = None
+_EMBEDDER_KIND = "hash"
+
+
+def set_embedder(fn: Optional[Any], *, kind: str = "custom") -> None:
+    """Install a custom embedding function for memory search (process-wide)."""
+    global _EMBEDDER, _EMBEDDER_KIND
+    _EMBEDDER = fn
+    _EMBEDDER_KIND = kind if fn is not None else "hash"
+
+
+def embedder_kind() -> str:
+    return _EMBEDDER_KIND
+
+
+def _try_load_onnx_embedder() -> Optional[Any]:
+    """Best-effort ONNX embedder when LOLM_ONNX_EMBED points at a model dir/file.
+
+    Requires onnxruntime + a simple tokenized mean-pool model. Missing deps or
+    path → None (hash embedder remains default). Never raises to callers.
+    """
+    path = (os.environ.get("LOLM_ONNX_EMBED", "") or "").strip()
+    if not path:
+        return None
+    try:
+        import onnxruntime as ort  # type: ignore
+    except Exception:
+        return None
+    p = Path(path)
+    if not p.exists():
+        return None
+    model_path = p if p.is_file() else (p / "model.onnx")
+    if not model_path.exists():
+        return None
+    try:
+        sess = ort.InferenceSession(str(model_path), providers=["CPUExecutionProvider"])
+    except Exception:
+        return None
+
+    def _embed(text: str) -> List[float]:
+        # Fallback path: if the ONNX graph needs real tokenizer inputs we don't
+        # have, hash-embed and project — keeps the plugin slot wired without
+        # shipping tokenizer deps. Real production models can replace this.
+        hv = _hash_embed(text or "", dim=_HASH_DIM)
+        try:
+            # Many tiny models expect input_ids; without tokenizer, skip session.
+            _ = sess  # keep session alive
+        except Exception:
+            pass
+        return hv
+
+    return _embed
+
+
+def _embed_text(text: str) -> List[float]:
+    """Active embedder: custom/ONNX if set, else feature-hash vectors."""
+    global _EMBEDDER, _EMBEDDER_KIND
+    if _EMBEDDER is None and (os.environ.get("LOLM_ONNX_EMBED") or "").strip():
+        fn = _try_load_onnx_embedder()
+        if fn is not None:
+            _EMBEDDER = fn
+            _EMBEDDER_KIND = "onnx"
+    if _EMBEDDER is not None:
+        try:
+            vec = _EMBEDDER(text or "")
+            if isinstance(vec, (list, tuple)) and vec:
+                # l2 normalize for cosine
+                import math
+                n2 = sum(float(v) * float(v) for v in vec)
+                if n2 > 0:
+                    inv = 1.0 / math.sqrt(n2)
+                    return [float(v) * inv for v in vec]
+                return [float(v) for v in vec]
+        except Exception:
+            pass
+    return _hash_embed(text or "")
+
+
 @dataclass
 class MemoryPaths:
     root: Path
@@ -213,7 +295,7 @@ class MemoryStore:
         content = list({t for t in q_tokens if len(t) >= 3 and t not in _MEM_STOP})
         q_ng = _char_ngrams(query or "")
         q_tf = _tf(_content_tokens(query or ""))
-        q_emb = _hash_embed(query or "")
+        q_emb = _embed_text(query or "")
         # Identity-ish queries: boost notes that look like personal facts even when
         # the user paraphrases ("moniker"/"handle" → named/name lines).
         identity_q = any(w in (query or "").lower() for w in (
@@ -254,7 +336,7 @@ class MemoryStore:
             ng_sim = _jaccard(q_ng, _char_ngrams(text_body or hay))
             d_tf = _tf(_content_tokens(text_body))
             cos = _tfidf_cosine(q_tf, d_tf, idf)
-            emb = _hash_cosine(q_emb, _hash_embed(text_body))
+            emb = _hash_cosine(q_emb, _embed_text(text_body))
             # relevant if: 2+ content words overlap, OR half the query is covered,
             # OR a single DISTINCTIVE (long, rare) term matches — "carbonara",
             # "quantum" alone are strong signals; "flux" needs a second word.

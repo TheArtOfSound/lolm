@@ -50,6 +50,8 @@ const ok = (name) => { passed++; console.log("  ✓", name); };
   assert.match(friendly({ event: "action", data: { kind: "verify", verdict: "revise" } }), /caught an issue/);
   assert.match(friendly({ event: "proof", data: { verdict: "nfet_control_visible" } }), /acted on its own uncertainty/);
   assert.equal(friendly({ event: "token", data: { token: "x" } }), null);
+  assert.match(friendly({ event: "learned", data: { items: [{ text: "a" }] } }), /Remembered/);
+  assert.match(friendly({ event: "continuity_tick", data: { model_used: true, facts: ["x"] } }), /continuity/i);
   ok("friendly() narration");
 }
 
