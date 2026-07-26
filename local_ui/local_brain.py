@@ -36,6 +36,41 @@ def sovereign() -> bool:
     return os.environ.get("LOLM_SOVEREIGN", "").strip() in ("1", "true", "yes", "on")
 
 
+def auto_wire_evolved_local() -> Optional[str]:
+    """If the evolved OpenAI shim is up on :11435 and the owner hasn't configured
+    a local brain, point LOLM at it so learned weights actually answer.
+
+    Returns the URL wired, or None.
+    """
+    if os.environ.get("LOLM_LOCAL_MODEL", "").strip():
+        return None  # explicit config wins
+    candidates = [
+        os.environ.get("LOLM_EVOLVED_URL", "").strip(),
+        "http://127.0.0.1:11435",
+        "http://localhost:11435",
+    ]
+    for url in candidates:
+        if not url:
+            continue
+        try:
+            probe = url.rstrip("/") + "/v1/models"
+            with urllib.request.urlopen(urllib.request.Request(probe), timeout=1.5) as r:
+                if r.status != 200:
+                    continue
+            os.environ.setdefault("LOLM_LOCAL_URL", url.rstrip("/"))
+            os.environ.setdefault("LOLM_LOCAL_API", "openai")
+            os.environ.setdefault("LOLM_LOCAL_MODEL", "lolm-evolved")
+            return url.rstrip("/")
+        except Exception:
+            continue
+    return None
+
+
+# Probe once at import so local operator machines with serve_evolved running
+# immediately get a real on-device brain without manual env.
+_EVOLVED_WIRED = auto_wire_evolved_local()
+
+
 def _messages(req: Any) -> List[Dict[str, str]]:
     system, turns = _split_messages(req.messages)
     msgs: List[Dict[str, str]] = []
@@ -184,34 +219,103 @@ class LocalServerReasonerLoop:
 
 
 class BestBrain:
-    """Brain selector: prefer the LOCAL sovereign model; fall back to the cloud brain
-    only when local is unavailable AND sovereign mode is off. This is what makes
-    'runs entirely on your machine' the default whenever a local model is up, while
-    still working out-of-the-box on the shared demo box (cloud) for now."""
+    """Brain selector with resilient fallback.
+
+    Preference:
+      - LOLM_PREFER_LOCAL=1 or evolved :11435 → local first
+      - else cloud first for quality on the public box, local as safety net
+      - sovereign → local only
+
+    If the preferred brain errors BEFORE any token, the other is tried.
+    """
 
     def __init__(self, local: LocalServerReasonerLoop, cloud: Any):
         self.local = local
         self.cloud = cloud
 
+    def _prefer_local(self) -> bool:
+        pin = os.environ.get("LOLM_PREFER_LOCAL", "").strip().lower()
+        if pin in ("1", "true", "yes", "on"):
+            return True
+        if pin in ("0", "false", "no", "off"):
+            return False
+        # evolved serve on 11435 is the learned on-device brain — prefer it
+        url = (self.local.url or "").lower()
+        return "11435" in url or "lolm-evolved" in (self.local.model or "").lower()
+
     def active(self) -> str:
-        if self.local.available():
+        if sovereign():
+            return "local" if self.local.available() else "none"
+        loc, clo = self.local.available(), (
+            self.cloud is not None and self.cloud.available())
+        if self._prefer_local() and loc:
             return "local"
-        if not sovereign() and self.cloud is not None and self.cloud.available():
+        if clo:
             return "cloud"
+        if loc:
+            return "local"
         return "none"
 
     def available(self) -> bool:
         return self.active() != "none"
 
+    def _order(self) -> List[tuple]:
+        order: List[tuple] = []
+        if sovereign():
+            if self.local.available():
+                order.append(("local", self.local))
+            return order
+        loc = self.local.available()
+        clo = self.cloud is not None and self.cloud.available()
+        if self._prefer_local() and loc:
+            order.append(("local", self.local))
+            if clo:
+                order.append(("cloud", self.cloud))
+        else:
+            if clo:
+                order.append(("cloud", self.cloud))
+            if loc:
+                order.append(("local", self.local))
+        return order
+
     def __call__(self, req: Any) -> Iterator[Dict[str, Any]]:
-        choice = self.active()
-        if choice == "local":
-            yield from self.local(req)
+        order = self._order()
+        if not order:
+            yield {"event": "error", "data": {"error": (
+                "no brain available: sovereign mode is on but no local model is running "
+                "(start serve_evolved on :11435 or `ollama run …`)" if sovereign()
+                else "no brain available (configure a local model or the cloud reasoner)")}}
             return
-        if choice == "cloud":
-            yield from self.cloud(req)
-            return
+        last_err = None
+        for idx, (name, brain) in enumerate(order):
+            emitted = False
+            try:
+                for ev in brain(req):
+                    if not emitted and ev.get("event") == "error":
+                        last_err = (ev.get("data") or {}).get("error", f"{name} failed")
+                        raise RuntimeError(last_err)
+                    if ev.get("event") in ("token", "done"):
+                        emitted = True
+                    if idx > 0 and ev.get("event") == "start":
+                        # annotate fallback so receipts stay honest
+                        data = dict(ev.get("data") or {})
+                        data["brain_fallback"] = name
+                        yield {"event": "start", "data": data}
+                        continue
+                    yield ev
+                return
+            except Exception as exc:
+                last_err = str(exc)
+                if emitted:
+                    raise
+                # try next brain
+                yield {"event": "phase", "data": {
+                    "phase": "brain_fallback",
+                    "from": name,
+                    "note": f"{name} failed before tokens — trying next brain",
+                    "error": last_err[:200],
+                }}
+                continue
         yield {"event": "error", "data": {"error": (
-            "no brain available: sovereign mode is on but no local model is running "
-            "(start one, e.g. `ollama run llama3.3:70b`)" if sovereign()
-            else "no brain available (configure a local model or the cloud reasoner)")}}
+            f"all brains failed; last error: {last_err}" if last_err
+            else "no brain available")}}

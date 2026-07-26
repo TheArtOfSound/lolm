@@ -20,3 +20,8 @@
 4. Between-turn operator ticks on local operator mode
 5. Visual builder: always verify + auto-retry on blank canvas
 6. Persist conversation summaries into identity.md for long-term continuity
+
+## 2026-07-26 5m loop
+- 5-minute continuous improvement schedule (until user says stop)
+- Auto-wire evolved local brain on :11435 (lolm-evolved)
+- BestBrain resilient fallback (cloud fail → local before tokens)
