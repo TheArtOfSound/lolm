@@ -59,8 +59,10 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
-    max_new_tokens: int = 96
-    temperature: float = 0.8
+    # 96 tokens was a demo-era default that truncated every real answer into
+    # gibberish. Chat needs room; coding/research paths raise further.
+    max_new_tokens: int = 768
+    temperature: float = 0.7
     top_p: float = 0.95
     use_graft: bool = True
     ablation_mode: str = "full"

@@ -164,11 +164,16 @@ def register_workspace_routes(app: Any, store: WorkspaceStore, chat_fn=None) -> 
             if m:
                 saved.append(m)
             # route to the weight-training queue → the model bakes it in on its next cycle.
-            # ONLY in sovereign/local mode: never train the shared public model on one
-            # visitor's facts (privacy + junk). On the box this is a no-op; on your machine
-            # it closes the loop conversation → memory → weights.
+            # Public shared box: only sovereign. Local operator machine: always queue so
+            # conversation → memory → knowledge daemon → weights actually compounds.
+            import os
             from local_ui.local_brain import sovereign
-            if q and target and len(q) < 200 and sovereign():
+            learn_local = (
+                sovereign()
+                or os.environ.get("LOLM_OPERATOR_LOCAL", "").strip().lower() in ("1", "true", "yes", "on")
+                or os.environ.get("LOLM_LEARN_ALWAYS", "").strip().lower() in ("1", "true", "yes", "on")
+            )
+            if q and target and len(q) < 200 and learn_local:
                 try:
                     KNOWLEDGE_QUEUE.parent.mkdir(parents=True, exist_ok=True)
                     with KNOWLEDGE_QUEUE.open("a") as fh:

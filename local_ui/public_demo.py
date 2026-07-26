@@ -378,8 +378,16 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
         grounding, n_src, links = "", 0, []
         user_src = getattr(req, "sources", None)
         # Don't web-ground when the user pasted their OWN notes — that's strict BYO
-        # mode (answer only from their material). Otherwise: always search the web.
-        if web_sources_fn is not None and not user_src:
+        # mode (answer only from their material). Also skip web for short dialog
+        # follow-ups ("idk", "yes", "that") and social greetings — always-search
+        # was the main reason short replies turned into dictionary nonsense.
+        skip_web = False
+        try:
+            from local_ui.conversation import should_skip_web_search
+            skip_web = should_skip_web_search(req.command, getattr(req, "history", None))
+        except Exception:
+            skip_web = False
+        if web_sources_fn is not None and not user_src and not skip_web:
             try:
                 grounding, n_src, links = web_sources_fn(req.command)
             except Exception:

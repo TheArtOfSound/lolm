@@ -87,7 +87,7 @@ from local_ui.sandbox import Sandbox, _HAS_BWRAP
 
 class CodeTask(BaseModel):
     task: str
-    max_steps: int = 8
+    max_steps: int = 14
 
 
 class VisualTask(BaseModel):
@@ -255,7 +255,7 @@ def register_code_routes(app: Any, root: str,
             return JSONResponse({"error": "empty task"}, status_code=400)
 
         sb = Sandbox(root)
-        agent = CodeAgent(sb, chat_fn, max_steps=min(max(req.max_steps, 1), 10), isolated=True)
+        agent = CodeAgent(sb, chat_fn, max_steps=min(max(req.max_steps, 1), 16), isolated=True)
 
         def gen():
             try:

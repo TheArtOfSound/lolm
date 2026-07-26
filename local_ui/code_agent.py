@@ -115,7 +115,7 @@ def _parse_turn(text: str) -> Optional[Dict[str, Any]]:
 
 class CodeAgent:
     def __init__(self, sandbox: Any, chat_fn: Callable[[List[Dict[str, str]]], str],
-                 max_steps: int = 8, run_timeout: int = 15,
+                 max_steps: int = 14, run_timeout: int = 20,
                  isolated: Optional[bool] = True):
         self.sb = sandbox
         self.chat = chat_fn
@@ -123,19 +123,22 @@ class CodeAgent:
         self.run_timeout = run_timeout
         self.isolated = isolated
         self.actions: List[Dict[str, Any]] = []
+        self._format_nudge = ""
 
     def _context(self) -> str:
         if not self.actions:
-            return "\n\n(Nothing run yet. Write the complete program and run it.)"
+            base = ("\n\n(Nothing run yet. Write the complete program and run it.\n"
+                    "Reply EXACTLY:\nFILE: main.py\n```\n<code>\n```\nRUN: python3 main.py)")
+            return base + (self._format_nudge or "")
         lines = ["\n\nSO FAR:"]
-        for a in self.actions[-5:]:
+        for a in self.actions[-6:]:
             if a["kind"] == "write_file":
                 lines.append(f"- wrote {a['path']} ({a.get('bytes', 0)} bytes)")
             else:
                 r = a["result"]
                 out = ((r.get("stdout") or "") + (r.get("stderr") or "")).strip()
                 tag = "BLOCKED" if r.get("blocked") else f"exit {r.get('exit_code')}"
-                lines.append(f"- ran `{a['command']}` → {tag}\n  OUTPUT: {out[:700] or '(empty)'}")
+                lines.append(f"- ran `{a['command']}` → {tag}\n  OUTPUT: {out[:900] or '(empty)'}")
         last = self.actions[-1]
         if last["kind"] == "run" and not last["result"].get("blocked") \
                 and last["result"].get("exit_code") == 0:
@@ -147,8 +150,22 @@ class CodeAgent:
                              "program so it actually runs the logic and PRINTS results, with "
                              "a RUN line. Do NOT say DONE.")
         else:
-            lines.append("\nSend the next FILE + RUN (fix the program if the last run failed).")
+            lines.append("\nSend the next FILE + RUN (fix the program if the last run failed). "
+                         "Do not invent success — use the real OUTPUT above.")
+        if self._format_nudge:
+            lines.append(self._format_nudge)
         return "\n".join(lines)
+
+    def _auto_run_cmd(self, path: str) -> str:
+        """Guess a run command when the model forgot RUN:."""
+        p = (path or "main.py").lower()
+        if p.endswith(".py"):
+            return f"python3 {path}"
+        if p.endswith(".js"):
+            return f"node {path}"
+        if p.endswith(".sh"):
+            return f"bash {path}"
+        return f"python3 {path}"
 
     def run(self, task: str) -> Iterator[Dict[str, Any]]:
         yield {"event": "code_start", "data": {"task": task, "sandbox": self.sb.id}}
@@ -157,6 +174,7 @@ class CodeAgent:
         nudges = 0
         fail_sig = None
         fail_repeats = 0
+        parse_fails = 0
         for step in range(self.max_steps):
             msgs = [{"role": "system", "content": SYSTEM},
                     {"role": "user", "content": f"TASK: {task}{self._context()}"}]
@@ -169,20 +187,36 @@ class CodeAgent:
                 return
             turn = _parse_turn(raw)
             if turn is None:
+                parse_fails += 1
+                self._format_nudge = (
+                    "\n\nFORMAT ERROR: Your last reply was not parseable. Reply with ONLY:\n"
+                    "FILE: main.py\n```\n# full program\n```\nRUN: python3 main.py\n"
+                    "No prose outside that format."
+                )
                 yield {"event": "agent_note", "data": {"step": step,
-                       "text": "could not parse the model's reply into a FILE/RUN action",
+                       "text": "could not parse reply — re-prompting with format fix",
                        "raw": (raw or "")[:300]}}
-                break
+                if parse_fails >= 3:
+                    yield {"event": "code_done", "data": {
+                        "summary": "Model kept ignoring FILE/RUN format after 3 tries.",
+                        "budget_hit": True, "steps": step, "ran": ran_any,
+                        "produced_output": produced_output}}
+                    return
+                continue
+            parse_fails = 0
+            self._format_nudge = ""
 
             # pure DONE → finish (gated on a real, output-producing run)
             if turn["done"] and not turn["file"] and not turn["run"]:
                 if not ran_any and nudges < 2:
                     nudges += 1
+                    self._format_nudge = "\n\nYou must FILE + RUN before DONE."
                     yield {"event": "agent_note", "data": {"step": step,
                            "text": "tried to finish without running the code — making it run first"}}
                     continue
                 if ran_any and not produced_output and nudges < 3:
                     nudges += 1
+                    self._format_nudge = "\n\nLast run printed nothing. Fix the program so it PRINTS."
                     yield {"event": "agent_note", "data": {"step": step,
                            "text": "tried to finish but nothing was printed — making it produce output"}}
                     continue
@@ -191,8 +225,10 @@ class CodeAgent:
                 return
 
             did = False
+            written_path = None
             if turn["file"] and turn["file"][1] is not None:
                 path, content = turn["file"]
+                written_path = path
                 try:
                     fc = self.sb.write_file(path, content, reason="")
                     self.actions.append({"kind": "write_file", "path": path, "bytes": len(content)})
@@ -201,8 +237,13 @@ class CodeAgent:
                     did = True
                 except Exception as exc:
                     yield {"event": "agent_note", "data": {"text": f"write failed: {exc}"[:160]}}
-            if turn["run"]:
-                cmd = turn["run"]
+            # If model wrote a file but forgot RUN, auto-run once.
+            cmd = turn["run"]
+            if not cmd and written_path and did:
+                cmd = self._auto_run_cmd(written_path)
+                yield {"event": "agent_note", "data": {
+                    "text": f"no RUN line — auto-running `{cmd}`"}}
+            if cmd:
                 yield {"event": "command_started", "data": {"command": cmd}}
                 r = self.sb.run(cmd, timeout=self.run_timeout, isolated=self.isolated)
                 ran_any = True
@@ -237,6 +278,9 @@ class CodeAgent:
             if not did:
                 yield {"event": "agent_note", "data": {"step": step,
                        "text": "no FILE or RUN in the reply", "raw": (raw or "")[:200]}}
+                self._format_nudge = (
+                    "\n\nYou must include FILE: + fenced code + RUN: on every turn until DONE."
+                )
         yield {"event": "code_done", "data": {"summary": "reached the step budget",
                "budget_hit": True, "steps": self.max_steps, "ran": ran_any,
                "produced_output": produced_output}}

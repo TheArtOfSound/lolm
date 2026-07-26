@@ -45,35 +45,22 @@ from lolm.nfet_policy import (
 )
 
 
-GREETING_RE = re.compile(
-    r"^(hi+|hello+|hey+|yo|sup|howdy|hiya|good\s+(morning|afternoon|evening|day)|"
-    r"what'?s\s+up|how\s+are\s+you|how'?s\s+it\s+going|thanks?|thank\s+you|ok(ay)?|cool|nice)"
-    r"\b[\s!,.?😀-🙏]*$",
-    re.IGNORECASE,
+# Conversation intelligence (short replies, multi-turn, web gating) lives in
+# local_ui.conversation — re-exported here so existing imports keep working.
+from local_ui.conversation import (  # noqa: E402
+    DIALOG_SYSTEM,
+    GREETING_RE,
+    build_chat_messages,
+    classify_command as _classify_command,
+    is_short_reply,
+    resolve_followup,
+    should_skip_web_search,
 )
 
 
-def classify_command(command: str) -> str:
-    """Cheap command profile: social | question | task.
-
-    Social commands (greetings, thanks, one-word pleasantries) answer directly
-    without the full retrieve/verify machinery — running a three-segment
-    evidence loop on "Hello" is how agents end up lecturing people about
-    their own architecture.
-    """
-    # Question marks across scripts: ASCII, fullwidth CJK, Spanish, Arabic, Greek, Armenian.
-    QMARKS = "?？¿؟;՞"
-    c = command.strip()
-    if GREETING_RE.match(c):
-        return "social"
-    words = c.split()
-    if len(words) <= 4 and not any(ch in c for ch in QMARKS) and len(c) < 30:
-        lowered = c.lower()
-        if any(w in lowered for w in ("hi", "hello", "hey", "thanks", "thank", "bye", "goodbye", "morning", "evening")):
-            return "social"
-    if c.endswith(tuple(QMARKS)) and len(words) <= 16:
-        return "question"
-    return "task"
+def classify_command(command: str, history: Optional[List[Dict[str, Any]]] = None) -> str:
+    """social | dialog | question | task — history-aware."""
+    return _classify_command(command, history)
 
 
 def merge_segment(draft: str, new_text: str) -> tuple:
@@ -710,12 +697,38 @@ DRAFT:
             # of cleanly refusing. Answer purely from COMMAND + SOURCES.
             user = (f"COMMAND:\n{command}\n\n"
                     + self._evidence_block('SOURCES', evidence))
-        elif profile == "social":
-            system = (
-                "You are a friendly assistant. Reply to the COMMAND naturally in one "
-                "or two short sentences. No sections, no meta commentary."
+        elif profile in ("social", "dialog"):
+            # Continuous chat path: real multi-turn messages, not a cold COMMAND blob.
+            system = DIALOG_SYSTEM
+            if profile == "social":
+                system = (
+                    "You are LOLM, a friendly capable assistant. Reply naturally in one "
+                    "or two short sentences. No sections, no meta commentary, no architecture lecture."
+                )
+            mem = getattr(req, "user_memory", None)
+            if mem:
+                mem_lines = "\n".join("- " + str(x).strip() for x in mem if str(x).strip())[:1200]
+                if mem_lines:
+                    system = (system + "\n\nWHAT YOU REMEMBER ABOUT THIS USER:\n" + mem_lines)
+            hist = getattr(req, "history", None) or []
+            # Prefer structured multi-turn for frontier models that speak ChatMessage lists.
+            chat_msgs = build_chat_messages(system, hist, command, max_turns=12)
+            ChatMessage = self.deps.ChatMessage
+            msg_objs = [ChatMessage(role=m["role"], content=m["content"]) for m in chat_msgs]
+            result = yield from self._collect_stream(
+                msg_objs, req, tokens=req.final_tokens, channel="final", telemeter=False,
             )
-            user = f"COMMAND:\n{command}"
+            cleaned = strip_scaffold_echo(_CONTROL_ARTIFACT_RE.sub("", result.text)).strip()
+            if cleaned != result.text:
+                result.text = cleaned
+                result.raw["response"] = cleaned
+            if int(result.raw.get("tokens") or 0) >= req.final_tokens:
+                trimmed = self._trim_to_sentence(result.text)
+                if trimmed and trimmed != result.text:
+                    result.text = trimmed
+                    result.raw["response"] = trimmed
+                    result.raw["truncation_trimmed"] = True
+            return result
         else:
             # When the COMMAND itself demands an exact format (sections, counts,
             # "no intro"), the user's contract outranks our house style — the
@@ -967,8 +980,8 @@ WORKING DRAFT:
             proof          the proof receipt
             run_done       the full result payload (same shape run() returns)
         """
-        command = req.command.strip()
-        if not command:
+        raw_command = req.command.strip()
+        if not raw_command:
             yield {"event": "error", "data": {"error": "empty command"}}
             return
 
@@ -996,6 +1009,15 @@ WORKING DRAFT:
             if turns:
                 hist = "\n".join(f"{t['role']}: {t['content'][:600]}" for t in turns[-10:])
                 self._convo_context = hist
+                if not hist_turns:
+                    hist_turns = turns
+
+        # Resolve short / anaphoric follow-ups ("idk", "yes", "that") against history
+        # so the model never treats slang as a dictionary lookup.
+        command, profile, follow_tag = resolve_followup(raw_command, hist_turns)
+        # Keep original short text as the user-visible command on receipts when we
+        # expanded it for the model.
+        display_command = raw_command if follow_tag else command
 
         # Snapshot-lock the run-start memory stats (trust fix #1): the receipt must
         # report the stats AS OF run start, labelled "shared demo memory", so it can
@@ -1004,21 +1026,32 @@ WORKING DRAFT:
         if brain is not None and brain.available():
             try:
                 from lolm.control.memory_snapshot import snapshot_stats
-                self._brain_snapshot = snapshot_stats(brain.stats() or {}, scope="shared_demo",
-                                                      raw_stats_url="/api/demo/brain/stats")
+                self._brain_snapshot = snapshot_stats(
+                    brain.stats() or {}, scope="shared_demo",
+                    raw_stats_url="/api/demo/brain/stats",
+                )
             except Exception:
                 self._brain_snapshot = {"verdict": "no_snapshot"}
 
         started = time.time()
         head_trained = bool(self.deps.head_trained_fn())
         policy = NFETControlPolicy(self.policy_config)
-        memory_hits = self._initial_memory(command, scope=getattr(req, "session_id", None))
+        # Retrieve memory against the raw user text AND resolved form.
+        memory_hits = self._initial_memory(raw_command, scope=getattr(req, "session_id", None))
+        if command != raw_command:
+            extra = self._initial_memory(command, scope=getattr(req, "session_id", None))
+            seen = {h.get("id") or h.get("text") for h in memory_hits}
+            for h in extra:
+                key = h.get("id") or h.get("text")
+                if key not in seen:
+                    memory_hits.append(h)
+                    seen.add(key)
         evidence: List[Dict[str, Any]] = []
         # BYO-sources grounding: chunk the user's material into cited passages so
         # the drafter, the finalizer, and the citation report all ground in it.
         grounded = bool((getattr(req, "sources", None) or "").strip())
         web_grounded = bool(getattr(req, "web_grounded", False)) and grounded
-        if grounded:
+        if grounded and profile not in ("social", "dialog"):
             evidence.extend(self._chunk_sources(req.sources))
         counters = RunCounters()
         timeline: List[Dict[str, Any]] = []
@@ -1026,23 +1059,28 @@ WORKING DRAFT:
         draft = ""
         ended_by = "segment_budget"
 
-        profile = classify_command(command)
-        # Direct questions rarely need a long draft; tasks get the full budget.
-        effective_segments = (min(req.max_segments, 2) if profile == "question"
-                              else req.max_segments)
+        # Direct questions rarely need a long draft; dialog/social skip drafting.
+        if profile in ("social", "dialog"):
+            effective_segments = 0
+        elif profile == "question":
+            effective_segments = min(req.max_segments, 2)
+        else:
+            effective_segments = req.max_segments
         yield {"event": "run_start", "data": {
-            "command": command, "reasoner": req.reasoner, "head_trained": head_trained,
+            "command": display_command, "reasoner": req.reasoner, "head_trained": head_trained,
             "memory_hits": len(memory_hits), "max_segments": effective_segments,
             "segment_tokens": req.segment_tokens, "profile": profile,
+            "followup": follow_tag,
         }}
 
-        if profile == "social":
-            # Greetings and small talk answer directly — running the full
-            # evidence loop on "Hello" is how agents end up lecturing people
-            # about their own architecture.
+        if profile in ("social", "dialog"):
+            # Continuous conversation — one-shot finalize with multi-turn messages.
+            # Never run multi-segment retrieve theater on "idk" / "yes" / "hi".
             decision = ControlDecision(
                 CONTROL_FINALIZE, "finalize", "profile",
-                "conversational command — answering directly", {}, step=0,
+                f"{profile} turn — answering in conversation mode"
+                + (f" ({follow_tag})" if follow_tag else ""),
+                {}, step=0,
             )
             entry = {"segment": 0, "decision": decision.to_dict(),
                      "segment_tokens": 0, "telemetry_frames": 0,
@@ -1050,7 +1088,7 @@ WORKING DRAFT:
             timeline.append(entry)
             yield {"event": "decision", "data": entry}
             yield {"event": "action", "data": {"segment": 0, **entry["action"]}}
-            ended_by = "social_direct"
+            ended_by = f"{profile}_direct"
             segments_iter = []
         else:
             segments_iter = range(effective_segments)
