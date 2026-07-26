@@ -77,3 +77,18 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 2. Between-turn operator ticks on local operator mode
 3. Visual builder: force verify path even when playwright missing reports clearer
 4. Surface code-agent receipt trail more prominently in workspace UI
+
+## 2026-07-26 loop — code receipts + expected-output gate + static visual lint
+### Agentic coding (win #1)
+- Every code run ends with a sealed **`code_receipt`** (trail, sha, green/fail runs, verifies)
+- DONE blocked when task named concrete outputs (e.g. print 42) that never appear in stdout
+### Receipts (win #4)
+- Workspace receipt pane shows code action trail + receipt sha (reason to switch vs black box)
+### Visual builder
+- When Playwright missing: **static HTML lint** rejects blank canvases so auto-retry still fires
+- Clear reasons in verdict (`static lint: …`) — never silent ship of dead UI
+### Next queue
+1. Real embedding index for memory
+2. Between-turn operator ticks on local operator mode
+3. Persist code_receipts.jsonl ledger server-side
+4. npm client: surface code_receipt event type

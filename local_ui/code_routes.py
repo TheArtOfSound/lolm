@@ -25,12 +25,68 @@ from typing import Any, Callable, Dict, List, Optional
 _VERIFY_SCRIPT = str(Path(__file__).resolve().parent.parent / "scripts" / "visual_verify.py")
 
 
+def _static_html_lint(html: str) -> Dict[str, Any]:
+    """Heuristic verify when Chromium/Playwright is unavailable.
+
+    Never claims ``working=True`` (only a real browser can). When the HTML looks
+    like a blank canvas / dead loop, returns ``working=False`` so the build loop
+    still retries instead of shipping dead UI. Clear reasons surface in the
+    receipt so users know what was checked.
+    """
+    h = html or ""
+    low = h.lower()
+    reasons: List[str] = []
+    has_canvas = "<canvas" in low
+    has_script = "<script" in low
+    has_raf = any(x in low for x in (
+        "requestanimationframe", "setinterval(", "settimeout(",
+    ))
+    has_keys = any(x in low for x in (
+        "keydown", "keyup", "pointerdown", "touchstart", "mousedown",
+    ))
+    draw_hints = any(x in low for x in (
+        "fillrect", "strokerect", "beginpath", "fillstyle", "strokestyle",
+        "getimagedata", "drawimage", "filltext", "arc(", "lineto",
+    ))
+    if len(h.strip()) < 80:
+        reasons.append("static lint: HTML too short to be a real app")
+    if has_canvas and not draw_hints:
+        reasons.append("static lint: canvas present but no draw calls (likely blank)")
+    if has_canvas and not has_raf:
+        reasons.append("static lint: no animation/timer loop detected")
+    if has_canvas and not has_keys and "game" in low:
+        reasons.append("static lint: game-like canvas without input handlers")
+    if not has_script and has_canvas:
+        reasons.append("static lint: canvas without any <script>")
+    # working=False forces rebuild; working=None means "unknown — ship best effort"
+    if reasons:
+        return {
+            "working": False, "renders": bool(has_canvas and draw_hints),
+            "animates": has_raf, "responds": has_keys, "console_errors": [],
+            "reasons": reasons, "static_lint": True, "unavailable": True,
+            "note": "browser verifier unavailable — static lint rejected this build",
+        }
+    ok_structure = (has_canvas and draw_hints and has_raf) or (has_script and len(h) > 400)
+    return {
+        "working": None,
+        "renders": bool(has_canvas and draw_hints) if has_canvas else ("<body" in low),
+        "animates": has_raf,
+        "responds": has_keys,
+        "console_errors": [],
+        "reasons": (["static lint: structure looks ok (browser verify unavailable)"]
+                    if ok_structure else
+                    ["static lint: browser verifier unavailable — could not confirm interactivity"]),
+        "static_lint": True,
+        "unavailable": True,
+        "note": "shipped without Chromium confirm — install Playwright for hard verify",
+    }
+
+
 def _verify_html(html: str, wait_ms: int = 1400, timeout: int = 55) -> Dict[str, Any]:
-    """Run the HTML in a real browser. Returns the verdict, or {"working": None}
-    when the verifier itself can't run (no Playwright) so the caller degrades
-    gracefully (ship the candidate) instead of blocking the build."""
+    """Run the HTML in a real browser. When Playwright is missing, fall back to
+    static lint so blank canvases still trigger auto-retry (never silent ship)."""
     if not os.path.exists(_VERIFY_SCRIPT):
-        return {"working": None, "reasons": [], "unavailable": True}
+        return _static_html_lint(html)
     path = None
     try:
         with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False, encoding="utf-8") as f:
@@ -39,16 +95,29 @@ def _verify_html(html: str, wait_ms: int = 1400, timeout: int = 55) -> Dict[str,
         r = subprocess.run([sys.executable, _VERIFY_SCRIPT, path, "--wait", str(wait_ms)],
                            capture_output=True, text=True, timeout=timeout)
         line = (r.stdout or "").strip().splitlines()[-1] if (r.stdout or "").strip() else ""
-        return json.loads(line) if line else {"working": None, "reasons": [], "unavailable": True}
-    except Exception:
-        return {"working": None, "reasons": [], "unavailable": True}
+        if not line:
+            lint = _static_html_lint(html)
+            lint["reasons"] = (lint.get("reasons") or []) + [
+                "browser verifier returned no verdict — used static lint"]
+            return lint
+        verdict = json.loads(line)
+        # If browser says blank/broken, keep that; if unavailable-shaped, merge lint.
+        if verdict.get("working") is None and verdict.get("unavailable"):
+            lint = _static_html_lint(html)
+            if lint.get("working") is False:
+                return lint
+        return verdict
+    except Exception as exc:
+        lint = _static_html_lint(html)
+        lint["reasons"] = (lint.get("reasons") or []) + [
+            f"browser verifier error: {str(exc)[:120]}"]
+        return lint
     finally:
         if path:
             try:
                 os.unlink(path)
             except Exception:
                 pass
-
 
 def _verdict_score(v: Dict[str, Any]) -> int:
     """Rank candidates so we keep the best when none is fully working."""

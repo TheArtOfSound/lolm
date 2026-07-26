@@ -107,3 +107,25 @@ def test_edit_tool_surgical_fix(tmp_path):
     assert "print(3)" in sb.read_file("z.py")
     assert any(e["event"] == "command_finished" and e["data"].get("exit_code") == 0
                for e in events)
+
+
+def test_code_receipt_emitted_and_blocks_wrong_output(tmp_path):
+    sb = Sandbox(tmp_path)
+    # model prints 0 but task asked for 42 — DONE must be blocked once, then fix
+    seq = iter([
+        '{"action":"write_and_run","path":"h.py","content":"print(0)\\n","command":"python3 h.py"}',
+        '{"action":"finish","summary":"done wrong"}',
+        '{"action":"write_and_run","path":"h.py","content":"print(42)\\n","command":"python3 h.py"}',
+        '{"action":"finish","summary":"prints 42"}',
+    ])
+    events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run(
+        "make h.py print 42 and run it"))
+    kinds = [e["event"] for e in events]
+    assert "code_receipt" in kinds
+    receipt = [e["data"] for e in events if e["event"] == "code_receipt"][-1]
+    assert receipt.get("receipt_sha")
+    assert receipt.get("ok") is True
+    assert "42" in (receipt.get("last_stdout_tail") or "")
+    # blocked the premature DONE
+    notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
+    assert "missing expected" in notes or "OUTPUT MISMATCH" in notes or "blocked DONE" in notes

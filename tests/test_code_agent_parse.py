@@ -1,5 +1,6 @@
 from local_ui.code_agent import (
     _parse_turn, _wants_tests, _pick_verify_command, _is_test_path,
+    _expected_outputs,
 )
 
 def test_multi_file():
@@ -89,3 +90,8 @@ RUN: python3 main.py
     assert t["edits"][0][0] == "main.py"
     assert t["edits"][0][2] == "print(1)"
     assert t["run"].startswith("python3")
+
+
+def test_expected_outputs_from_task():
+    assert "42" in _expected_outputs("make hello.py print 42 and run it")
+    assert "hello" in _expected_outputs('print the string "hello"')

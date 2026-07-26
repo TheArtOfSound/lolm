@@ -32,10 +32,30 @@ def test_verdict_score_prefers_more_working():
 
 
 def test_verify_html_degrades_gracefully_without_playwright(monkeypatch):
-    # if the verifier subprocess can't run, we get working:None (ship, don't block)
+    # no verifier script → static lint; empty HTML is rejected so the loop retries
     monkeypatch.setattr(cr.os.path, "exists", lambda p: False)
     v = cr._verify_html("<html></html>")
-    assert v["working"] is None
+    assert v.get("static_lint") is True
+    assert v["working"] is False
+    assert v.get("unavailable") is True
+
+
+def test_static_lint_rejects_blank_canvas():
+    blank = "<!DOCTYPE html><html><body><canvas id=c></canvas><script>const c=document.getElementById('c');</script></body></html>"
+    v = cr._static_html_lint(blank)
+    assert v["working"] is False
+    assert any("blank" in r.lower() or "draw" in r.lower() for r in v["reasons"])
+
+
+def test_static_lint_allows_structured_game_as_unknown():
+    good = """<!DOCTYPE html><html><body><canvas id=c></canvas><script>
+    const c=document.getElementById('c'),x=c.getContext('2d');
+    function loop(){ x.fillStyle='#0f0'; x.fillRect(0,0,10,10); requestAnimationFrame(loop);} 
+    window.addEventListener('keydown',e=>{}); loop();
+    </script></body></html>"""
+    v = cr._static_html_lint(good)
+    assert v["working"] is None   # cannot claim working without browser
+    assert v.get("animates") is True
 
 
 def test_build_loop_retries_until_a_real_browser_confirms_it_works(monkeypatch):

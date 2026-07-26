@@ -825,7 +825,7 @@ async function runCodeLoop(task, c){
   try{ openDock('work'); document.querySelector('#btabs .tab[data-bpane=terminal]').click(); }catch(e){}
   $('bpane-terminal').innerHTML='<div id="termOut"></div>';
   const term = h => { const o=$('termOut'); if(o){ o.innerHTML+=h; o.scrollTop=o.scrollHeight; } };
-  const rec = {model:'Llama 70B (agentic)', mode:'code', verdict:'', files:[], runs:0, ok:false, lastOut:'', controls:{}, sources:[], memories:[]};
+  const rec = {model:'Llama 70B (agentic)', mode:'code', verdict:'', files:[], runs:0, ok:false, lastOut:'', controls:{}, sources:[], memories:[], code_receipt:null, receipt_sha:''};
   try{
     const hist=(c.messages||[]).filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.content})).slice(-8);
     const resp = await fetch('/api/demo/code/run',{method:'POST',headers:authHeaders(),body:JSON.stringify({task, history:hist, max_steps:18})});
@@ -838,11 +838,12 @@ async function runCodeLoop(task, c){
           if(!name) continue;
           if(name==='code_start') step('▸ sandbox <code>'+esc(data.sandbox||'')+'</code> ready');
           else if(name==='code_thinking') step('<span class="pulse">🤔 thinking… step '+((data.step|0)+1)+'/'+(data.of||'')+'</span>','codethink');
-          else if(name==='file_changed'){ rec.files.push(data.path); step('✏️ wrote <b>'+esc(data.path)+'</b> · '+data.bytes+'b'); term('<div style="color:#64748b"># wrote '+esc(data.path)+'</div>'); if(data.diff){ $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">'+esc(data.path)+'</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(data.diff)+'</pre>'; } }
-          else if(name==='command_started'){ step('▶ <b>run</b> <code>'+esc(data.command)+'</code>'); term('<div style="color:#3fd6a0">$ '+esc(data.command)+'</div>'); }
-          else if(name==='command_finished'){ rec.runs++; const out=((data.stdout||'')+(data.stderr||'')).trim(); const code=data.blocked?'blocked':data.exit_code; const col=code===0?'#3fd6a0':(code==='blocked'?'#fbbf24':'#ff6b81'); if(out) term('<pre style="margin:2px 0;white-space:pre-wrap;color:#cbd5e1">'+esc(out.slice(0,4000))+'</pre>'); term('<div style="color:'+col+';font-size:10px">exit '+code+'</div>'); step('  ↳ exit '+code); if(data.exit_code===0){ rec.ok=true; rec.lastOut=data.stdout||''; } }
+          else if(name==='file_changed'){ rec.files.push(data.path); step((data.edit?'✏️ edited ':'✏️ wrote ')+'<b>'+esc(data.path)+'</b>'+(data.bytes!=null?(' · '+data.bytes+'b'):'')); term('<div style="color:#64748b"># '+(data.edit?'edited':'wrote')+' '+esc(data.path)+'</div>'); if(data.diff){ $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">'+esc(data.path)+'</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(data.diff)+'</pre>'; } }
+          else if(name==='command_started'){ step('▶ <b>'+(data.verify?'verify':'run')+'</b> <code>'+esc(data.command)+'</code>'); term('<div style="color:#3fd6a0">$ '+esc(data.command)+'</div>'); }
+          else if(name==='command_finished'){ rec.runs++; const out=((data.stdout||'')+(data.stderr||'')).trim(); const code=data.blocked?'blocked':data.exit_code; const col=code===0?'#3fd6a0':(code==='blocked'?'#fbbf24':'#ff6b81'); if(out) term('<pre style="margin:2px 0;white-space:pre-wrap;color:#cbd5e1">'+esc(out.slice(0,4000))+'</pre>'); term('<div style="color:'+col+';font-size:10px">exit '+code+(data.verify?' · verify':'')+'</div>'); step('  ↳ exit '+code+(data.verify?' · verify':'')); if(data.exit_code===0 && !data.verify){ rec.ok=true; rec.lastOut=data.stdout||''; } }
           else if(name==='agent_note') step('• '+esc(data.text||''));
-          else if(name==='code_done'){ const t=document.getElementById('codethink'); if(t)t.remove(); rec.verdict=data.budget_hit?'budget_hit':(data.ran?'ran':'no_run'); step('✅ <b>done</b>'+(data.summary?' — '+esc(data.summary):'')); }
+          else if(name==='code_done'){ const t=document.getElementById('codethink'); if(t)t.remove(); rec.verdict=data.verdict||(data.budget_hit?'budget_hit':(data.ran?'ran':'no_run')); rec.receipt_sha=data.receipt_sha||''; if(data.ok!=null) rec.ok=!!data.ok; if(data.files&&data.files.length) rec.files=data.files; step((data.ok?'✅':'⚠')+' <b>done</b>'+(data.summary?' — '+esc(data.summary):'')+(data.receipt_sha?(' · sha '+esc(data.receipt_sha.slice(0,12))):'')); }
+          else if(name==='code_receipt'){ rec.code_receipt=data; rec.verdict=data.verdict||rec.verdict; rec.receipt_sha=data.receipt_sha||rec.receipt_sha; rec.ok=!!data.ok; if(data.files) rec.files=data.files; if(data.last_stdout_tail) rec.lastOut=data.last_stdout_tail; step('🧾 <b>receipt</b> '+esc(data.verdict||'')+' · '+(data.trail?data.trail.length:0)+' steps · sha '+esc((data.receipt_sha||'').slice(0,12))); try{openDock('inspect'); document.querySelector('#dtabs .tab[data-pane=receipt], #tabs .tab[data-pane=receipt]')?.click();}catch(_){}}
           else if(name==='error') step('⚠ '+esc(data.error||''));
         }
       }
@@ -852,7 +853,7 @@ async function runCodeLoop(task, c){
   let html='';
   if(rec.files.length) html += '<div>Wrote <b>'+rec.files.map(esc).join(', ')+'</b> and ran it'+(rec.runs>1?(' · '+rec.runs+' runs'):'')+'.</div>';
   if(rec.lastOut) html += '<div style="margin-top:6px">Output:</div><pre style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;white-space:pre-wrap;font-size:12px;overflow:auto">'+esc(rec.lastOut.trim())+'</pre>';
-  html += '<div style="margin-top:6px;color:'+(rec.ok?'var(--good)':'var(--warn)')+';font-size:12px">'+(rec.ok?'✅ Ran successfully in a network-isolated sandbox.':'⚠ Did not reach a clean run.')+'</div>';
+  html += '<div style="margin-top:6px;color:'+(rec.ok?'var(--good)':'var(--warn)')+';font-size:12px">'+(rec.ok?'✅ Ran successfully in a network-isolated sandbox.':'⚠ Did not reach a clean run.')+(rec.receipt_sha?(' <span style="font-family:var(--mono);font-size:10px;opacity:.75">receipt '+esc(rec.receipt_sha.slice(0,12))+'…</span>'):'')+'</div>';
   bub.innerHTML = html || 'No actions taken.';
   renderInspectors({receipt:rec, sources:[], memories:[]});
   await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:(rec.files.join(', ')+' → '+(rec.ok?'ok':'incomplete')+(rec.lastOut?('\n'+rec.lastOut.trim()):'')),model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
@@ -986,14 +987,35 @@ let lastRec = null;
 function renderInspectors(meta){
   const rec = meta.receipt||{}; lastRec = rec;
   // Receipt
-  const vColor = /block|fail|red/i.test(rec.verdict)?'red':(/ready|confident|shipped|done|complete/i.test(rec.verdict)?'green':'gray');
+  const vColor = /block|fail|red|stuck|incomplete|missing/i.test(rec.verdict)?'red':(/ready|confident|shipped|done|complete|ran|verified/i.test(rec.verdict)?'green':'gray');
   const sealed = rec.qev_seal_id;
+  const codeTrail = rec.code_receipt || rec.trail || null;
+  const isCode = rec.mode==='code' || rec.kind==='code_agent' || !!rec.code_receipt;
+  let codeBlock = '';
+  if(isCode || codeTrail){
+    const cr = rec.code_receipt || rec;
+    const trail = (cr.trail||[]).slice(-12);
+    const trailHtml = trail.length ? trail.map(t=>{
+      const op=esc(t.op||'?');
+      if(t.op==='write'||t.op==='edit'||t.op==='read') return `<div class="src">${op} <b>${esc(t.path||'')}</b>${t.bytes!=null?(' · '+t.bytes+'b'):''}${t.ok===false?' · failed':''}</div>`;
+      if(t.op==='run'||t.op==='verify') return `<div class="src">${op} <code>${esc((t.command||'').slice(0,80))}</code> → exit ${esc(String(t.exit))}</div>`;
+      return `<div class="src">${op}</div>`;
+    }).join('') : '<div class="notconn">No trail steps yet.</div>';
+    codeBlock =
+      `<div class="kv"><span class="k">code ok</span><span class="v">${cr.ok?'✅ yes':'⚠ no'}</span></div>`+
+      `<div class="kv"><span class="k">files</span><span class="v">${esc((cr.files||rec.files||[]).join(', ')||'—')}</span></div>`+
+      `<div class="kv"><span class="k">runs</span><span class="v">green ${cr.green_runs??'—'} · failed ${cr.failed_runs??'—'} · verifies ${cr.verifies??'—'}</span></div>`+
+      `<div class="kv"><span class="k">expected out</span><span class="v">${cr.expected_ok===false?('missing '+esc((cr.missing_expected||[]).join(', '))):(cr.expected&&cr.expected.length?esc(cr.expected.join(', ')):'—')}</span></div>`+
+      `<div class="kv"><span class="k">receipt sha</span><span class="v" style="font-family:var(--mono);font-size:10px">${esc(cr.receipt_sha||rec.receipt_sha||'—')}</span></div>`+
+      `<div style="margin-top:8px;font-size:11px;color:var(--dim);font-family:var(--mono)">action trail</div>${trailHtml}`;
+  }
   $('pane-receipt').innerHTML =
     `<div class="kv"><span class="k">model</span><span class="v">${esc(rec.model||'—')}</span></div>`+
-    `<div class="kv"><span class="k">mode</span><span class="v">${esc(rec.mode||'—')}</span></div>`+
+    `<div class="kv"><span class="k">mode</span><span class="v">${esc(rec.mode||rec.kind||'—')}</span></div>`+
     `<div class="kv"><span class="k">controls</span><span class="v">${esc(Object.entries(rec.control_counts||rec.controls||{}).map(([k,v])=>k+'×'+v).join(' · ')||'—')}</span></div>`+
     `<div class="kv"><span class="k">ended by</span><span class="v">${esc(rec.ended_by||'—')}</span></div>`+
     `<div class="kv"><span class="k">verdict</span><span class="v"><span class="badge ${vColor}">${esc(rec.verdict||'—')}</span></span></div>`+
+    codeBlock+
     `<div class="kv"><span class="k">QEV seal</span><span class="v">${sealed?`<span class="badge green">sealed</span> <span style="font-family:var(--mono);font-size:9px">${esc(sealed.slice(0,18))}…</span>`:'<span class="badge gray">not sealed</span>'}</span></div>`+
     `<div style="margin-top:10px;display:flex;gap:6px"><button class="seal-btn" id="sealBtn">⊕ Seal (QEV)</button><button class="seal-btn" id="verifyBtn" style="display:${sealed?'inline-block':'none'}">Verify seal</button></div>`+
     `<div id="sealResult" style="margin-top:8px"></div>`+

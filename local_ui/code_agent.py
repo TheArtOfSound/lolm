@@ -11,10 +11,11 @@ recorded — the model only proposes; the loop is the sole thing that touches th
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import time
 from typing import Any, Callable, Dict, Iterator, List, Optional
-
 SYSTEM = (
     "You are LOLM Code — an agentic coding system competing with Claude Code and Codex.\n"
     "Win by: (1) correct code that RUNS, (2) fixing real failures from REAL stdout/stderr, "
@@ -341,6 +342,48 @@ def _pick_verify_command(files_written: List[str], task: str) -> Optional[str]:
     return None
 
 
+def _expected_outputs(task: str) -> List[str]:
+    """Pull concrete expected outputs from the task text (print 42, "hello", …).
+
+    Used to block DONE when the last green run never actually printed what the
+    user asked for — a common Claude/Codex fail mode we refuse to ship.
+    """
+    t = task or ""
+    out: List[str] = []
+    for m in re.finditer(
+        r"""(?:print(?:s)?|output|return|show|equals?|should\s+be|must\s+(?:print|output|return))\s+"""
+        r"""(?:the\s+)?(?:number\s+|string\s+|result\s+)?["']([^"']{1,60})["']""",
+        t, re.I,
+    ):
+        out.append(m.group(1))
+    for m in re.finditer(
+        r"""(?:print(?:s)?|output|return|show|equals?|should\s+be)\s+"""
+        r"""(?:the\s+)?(?:number\s+)?(\d{1,12})\b""",
+        t, re.I,
+    ):
+        out.append(m.group(1))
+    # bare "print 42" / "print hello world" without quotes
+    for m in re.finditer(r"\bprint\s+(\d{1,12})\b", t, re.I):
+        out.append(m.group(1))
+    # de-dupe preserve order
+    seen = set()
+    uniq: List[str] = []
+    for x in out:
+        if x not in seen:
+            seen.add(x)
+            uniq.append(x)
+    return uniq[:6]
+
+
+def _last_stdout(actions: List[Dict[str, Any]]) -> str:
+    for a in reversed(actions or []):
+        if a.get("kind") == "run":
+            r = a.get("result") or {}
+            if r.get("exit_code") == 0 and not r.get("blocked"):
+                return (r.get("stdout") or "")
+    return ""
+
+
 class CodeAgent:
     def __init__(self, sandbox: Any, chat_fn: Callable[[List[Dict[str, str]]], str],
                  max_steps: int = 18, run_timeout: int = 25,
@@ -407,6 +450,107 @@ class CodeAgent:
             return f"bash {path}"
         return f"python3 {path}"
 
+    def build_receipt(self, task: str, *, summary: str = "", ran: bool = False,
+                      produced_output: bool = False, steps: int = 0,
+                      stuck: bool = False, budget_hit: bool = False,
+                      error: str = "") -> Dict[str, Any]:
+        """Auditable trail of the coding loop — the switch reason vs black-box agents."""
+        trail: List[Dict[str, Any]] = []
+        green_runs = 0
+        failed_runs = 0
+        verifies = 0
+        for a in self.actions:
+            kind = a.get("kind")
+            if kind == "write_file":
+                trail.append({"op": "write", "path": a.get("path"), "bytes": a.get("bytes")})
+            elif kind == "edit_file":
+                trail.append({"op": "edit", "path": a.get("path"), "ok": a.get("ok"),
+                              "note": a.get("note")})
+            elif kind == "read_file":
+                trail.append({"op": "read", "path": a.get("path"), "bytes": a.get("bytes")})
+            elif kind == "list_files":
+                trail.append({"op": "list", "n": len(a.get("files") or [])})
+            elif kind == "run":
+                r = a.get("result") or {}
+                ok = r.get("exit_code") == 0 and not r.get("blocked")
+                if ok:
+                    green_runs += 1
+                else:
+                    failed_runs += 1
+                is_v = bool(a.get("verify")) or "py_compile" in (a.get("command") or "") \
+                    or "pytest" in (a.get("command") or "") or "unittest" in (a.get("command") or "")
+                if is_v:
+                    verifies += 1
+                trail.append({
+                    "op": "verify" if is_v else "run",
+                    "command": (a.get("command") or "")[:160],
+                    "exit": r.get("exit_code"),
+                    "blocked": bool(r.get("blocked")),
+                    "stdout_tail": ((r.get("stdout") or "")[-240:]),
+                    "stderr_tail": ((r.get("stderr") or "")[-240:]),
+                })
+        last_out = _last_stdout(self.actions)
+        expected = _expected_outputs(task)
+        expected_ok = True
+        missing: List[str] = []
+        if expected and last_out is not None:
+            low = last_out
+            for e in expected:
+                if e not in low:
+                    expected_ok = False
+                    missing.append(e)
+        core = {
+            "kind": "code_agent",
+            "task": (task or "")[:400],
+            "summary": (summary or "")[:300],
+            "ts": int(time.time()),
+            "steps": steps,
+            "ran": bool(ran),
+            "produced_output": bool(produced_output),
+            "stuck": bool(stuck),
+            "budget_hit": bool(budget_hit),
+            "error": (error or "")[:200],
+            "files": list(self._files_written),
+            "green_runs": green_runs,
+            "failed_runs": failed_runs,
+            "verifies": verifies,
+            "expected": expected,
+            "expected_ok": expected_ok,
+            "missing_expected": missing,
+            "last_stdout_tail": last_out[-300:] if last_out else "",
+            "trail": trail[-24:],
+            "ok": bool(ran and produced_output and green_runs > 0 and expected_ok and not stuck),
+        }
+        blob = json.dumps(core, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        core["receipt_sha"] = hashlib.sha256(blob.encode("utf-8")).hexdigest()[:24]
+        core["verdict"] = (
+            "shipped" if core["ok"] else
+            ("stuck" if stuck else
+             ("budget_hit" if budget_hit else
+              ("missing_output" if not expected_ok else
+               ("ran" if ran else "incomplete"))))
+        )
+        return core
+
+    def _finish(self, task: str, **kw: Any) -> Iterator[Dict[str, Any]]:
+        """Emit code_done + sealed code_receipt (always pair them)."""
+        receipt = self.build_receipt(task, **kw)
+        data = {
+            "summary": kw.get("summary", ""),
+            "steps": kw.get("steps", 0),
+            "ran": kw.get("ran", False),
+            "produced_output": kw.get("produced_output", False),
+            "stuck": kw.get("stuck", False),
+            "budget_hit": kw.get("budget_hit", False),
+            "receipt_sha": receipt.get("receipt_sha"),
+            "verdict": receipt.get("verdict"),
+            "ok": receipt.get("ok"),
+            "files": receipt.get("files"),
+            "expected_ok": receipt.get("expected_ok"),
+        }
+        yield {"event": "code_done", "data": data}
+        yield {"event": "code_receipt", "data": receipt}
+
     def run(self, task: str) -> Iterator[Dict[str, Any]]:
         yield {"event": "code_start", "data": {"task": task, "sandbox": self.sb.id}}
         ran_any = False
@@ -424,6 +568,9 @@ class CodeAgent:
                 raw = self.chat(msgs)
             except Exception as exc:
                 yield {"event": "error", "data": {"error": f"model failed: {exc}"[:200]}}
+                yield from self._finish(task, summary=f"model failed: {exc}"[:120],
+                                        ran=ran_any, produced_output=produced_output,
+                                        steps=step, error=str(exc)[:200])
                 return
             turn = _parse_turn(raw)
             if turn is None:
@@ -437,10 +584,11 @@ class CodeAgent:
                        "text": "could not parse reply — re-prompting with format fix",
                        "raw": (raw or "")[:300]}}
                 if parse_fails >= 3:
-                    yield {"event": "code_done", "data": {
-                        "summary": "Model kept ignoring FILE/RUN format after 3 tries.",
-                        "budget_hit": True, "steps": step, "ran": ran_any,
-                        "produced_output": produced_output}}
+                    yield from self._finish(
+                        task,
+                        summary="Model kept ignoring FILE/RUN format after 3 tries.",
+                        budget_hit=True, steps=step, ran=ran_any,
+                        produced_output=produced_output)
                     return
                 continue
             parse_fails = 0
@@ -466,6 +614,21 @@ class CodeAgent:
                     yield {"event": "agent_note", "data": {"step": step,
                            "text": "tried to finish but nothing was printed — making it produce output"}}
                     continue
+                # Gate DONE when task named concrete outputs that never appeared.
+                expect = _expected_outputs(task)
+                last_out = _last_stdout(self.actions)
+                missing = [e for e in expect if e not in last_out]
+                if missing and nudges < 5:
+                    nudges += 1
+                    miss = ", ".join(repr(m) for m in missing[:4])
+                    self._format_nudge = (
+                        f"\n\nOUTPUT MISMATCH. Task expected {miss} in stdout but last green "
+                        f"run printed:\n{(last_out or '(empty)')[:400]}\n"
+                        "Fix the program so it prints the expected values, then RUN again."
+                    )
+                    yield {"event": "agent_note", "data": {
+                        "text": f"blocked DONE — missing expected output: {miss}"}}
+                    continue
                 # Gate DONE on test oracle when test files exist (Claude/Codex parity).
                 vcmd = _pick_verify_command(self._files_written, task)
                 if vcmd and any(_is_test_path(p) for p in self._files_written) and nudges < 4:
@@ -474,7 +637,8 @@ class CodeAgent:
                         "text": f"pre-DONE verify: `{note}`"}}
                     yield {"event": "command_started", "data": {"command": vcmd}}
                     vr = self.sb.run(vcmd, timeout=self.run_timeout, isolated=self.isolated)
-                    self.actions.append({"kind": "run", "command": vcmd, "result": vr})
+                    self.actions.append({"kind": "run", "command": vcmd, "result": vr,
+                                         "verify": True})
                     yield {"event": "command_finished", "data": {
                         "command": vcmd, "exit_code": vr.get("exit_code"),
                         "stdout": vr.get("stdout", ""), "stderr": vr.get("stderr", ""),
@@ -489,8 +653,9 @@ class CodeAgent:
                         yield {"event": "agent_note", "data": {
                             "text": "blocked DONE — tests still failing"}}
                         continue
-                yield {"event": "code_done", "data": {"summary": turn["done"], "steps": step,
-                       "ran": ran_any, "produced_output": produced_output}}
+                yield from self._finish(
+                    task, summary=turn["done"], steps=step,
+                    ran=ran_any, produced_output=produced_output)
                 return
 
             did = False
@@ -613,13 +778,14 @@ class CodeAgent:
                     fail_repeats = fail_repeats + 1 if sig == fail_sig else 0
                     fail_sig = sig
                     if fail_repeats >= 2:
-                        yield {"event": "code_done", "data": {
-                            "summary": ("Couldn't get a clean run in the sandbox — the same error "
-                                        "kept recurring. This task likely needs the network, a GUI, "
-                                        "a server, or live input, which the isolated sandbox doesn't "
-                                        "have. The code is written above."),
-                            "ran": ran_any, "produced_output": produced_output, "stuck": True,
-                            "steps": step}}
+                        yield from self._finish(
+                            task,
+                            summary=("Couldn't get a clean run in the sandbox — the same error "
+                                     "kept recurring. This task likely needs the network, a GUI, "
+                                     "a server, or live input, which the isolated sandbox doesn't "
+                                     "have. The code is written above."),
+                            ran=ran_any, produced_output=produced_output, stuck=True,
+                            steps=step)
                         return
                 else:
                     fail_repeats = 0
@@ -646,7 +812,8 @@ class CodeAgent:
                                 yield {"event": "command_started", "data": {"command": vcmd}}
                                 vr = self.sb.run(vcmd, timeout=self.run_timeout,
                                                  isolated=self.isolated)
-                                self.actions.append({"kind": "run", "command": vcmd, "result": vr})
+                                self.actions.append({"kind": "run", "command": vcmd,
+                                                     "result": vr, "verify": True})
                                 yield {"event": "command_finished", "data": {
                                     "command": vcmd, "exit_code": vr.get("exit_code"),
                                     "stdout": vr.get("stdout", ""), "stderr": vr.get("stderr", ""),
@@ -665,6 +832,6 @@ class CodeAgent:
                 self._format_nudge = (
                     "\n\nYou must include FILE: + fenced code + RUN: on every turn until DONE."
                 )
-        yield {"event": "code_done", "data": {"summary": "reached the step budget",
-               "budget_hit": True, "steps": self.max_steps, "ran": ran_any,
-               "produced_output": produced_output}}
+        yield from self._finish(
+            task, summary="reached the step budget", budget_hit=True,
+            steps=self.max_steps, ran=ran_any, produced_output=produced_output)
