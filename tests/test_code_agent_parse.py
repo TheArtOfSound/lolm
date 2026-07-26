@@ -46,3 +46,46 @@ def test_pick_verify_py_compile_for_multi_file():
 
 def test_pick_verify_skips_trivial_single_file():
     assert _pick_verify_command(["main.py"], "print hello") is None
+
+
+def test_json_write_and_run_single():
+    t = _parse_turn('{"action":"write_and_run","path":"x.py","content":"print(1)\\n","command":"python3 x.py"}')
+    assert t is not None
+    assert t["files"][0][0] == "x.py"
+    assert t["run"] == "python3 x.py"
+
+
+def test_json_multi_actions():
+    text = '''{"actions":[
+      {"action":"write_file","path":"a.py","content":"print(2)\\n"},
+      {"action":"run","command":"python3 a.py"}
+    ]}'''
+    t = _parse_turn(text)
+    assert t is not None
+    assert len(t["files"]) == 1 and t["files"][0][0] == "a.py"
+    assert t["run"] == "python3 a.py"
+
+
+def test_json_read_and_edit():
+    t = _parse_turn('{"action":"read_file","path":"main.py"}')
+    assert t and t["reads"] == ["main.py"]
+    t2 = _parse_turn('{"action":"edit_file","path":"main.py","old":"foo","new":"bar"}')
+    assert t2 and t2["edits"][0] == ("main.py", "foo", "bar")
+
+
+def test_text_read_and_edit_blocks():
+    text = '''READ: main.py
+EDIT: main.py
+<<<
+prnt(1)
+===
+print(1)
+>>>
+RUN: python3 main.py
+'''
+    t = _parse_turn(text)
+    assert t is not None
+    assert "main.py" in t["reads"]
+    assert t["edits"][0][0] == "main.py"
+    assert t["edits"][0][2] == "print(1)"
+    assert t["run"].startswith("python3")

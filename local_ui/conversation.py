@@ -38,7 +38,10 @@ SHORT_REPLY_RE = re.compile(
     r"do\s*it|go\s*ahead|please|sounds?\s*good|lgtm|ship\s*it|"
     r"same|again|retry|try\s*again|"
     r"wait|hold\s*on|hmm+|huh|what\?|"
-    r"tell\s*me\s*more|explain|simpler|eli5"
+    r"tell\s*me\s*more|explain|simpler|eli5|"
+    r"(?:option\s*)?[abc123]|"
+    r"the\s+(?:first|second|third|last)(?:\s+one)?|"
+    r"(?:first|second|third|last)(?:\s+one)?"
     r")[\s!.?]*$",
     re.IGNORECASE,
 )
@@ -60,6 +63,16 @@ AFFIRM_RE = re.compile(
 NEGATE_RE = re.compile(
     r"^\s*(no|nope|nah|not\s*really|never|negative|don'?t|"
     r"stop|cancel|never\s*mind|nvm)\s*[!.?]*\s*$",
+    re.IGNORECASE,
+)
+
+# User picks a lettered/numbered option the assistant offered (A/B/C, 1/2/3, first…).
+OPTION_PICK_RE = re.compile(
+    r"^\s*(?:"
+    r"(?:option\s*)?([abc123])|"
+    r"the\s+(first|second|third|last|1st|2nd|3rd)\s*(?:one|option|choice)?|"
+    r"(first|second|third|last)\s*(?:one|option|choice)?"
+    r")\s*[!.?]*\s*$",
     re.IGNORECASE,
 )
 
@@ -208,6 +221,18 @@ def resolve_followup(
         )
         return text, "dialog", "negate"
 
+    if OPTION_PICK_RE.match(c) and turns:
+        prior = last_asst or last_user
+        pick = c.strip()
+        text = (
+            f'The user selected option "{pick}" from your previous choices.\n'
+            + (f'Your previous message (with the options) was:\n"""{prior[:900]}"""\n' if prior else "")
+            + "Map their pick onto the matching option (A/B/C, 1/2/3, first/second/third/last). "
+            "Proceed with THAT choice only — do not re-list all options unless clarification is needed. "
+            "Do not restart the conversation."
+        )
+        return text, "dialog", "option_pick"
+
     if profile == "dialog" or (is_short_reply(c) and turns):
         prior = last_asst or last_user
         text = (
@@ -219,7 +244,6 @@ def resolve_followup(
         return text, "dialog", "followup"
 
     return c, profile, None
-
 
 def build_chat_messages(
     system: str,

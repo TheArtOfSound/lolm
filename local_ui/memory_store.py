@@ -29,6 +29,23 @@ _MEM_STOP = frozenset((
     "per each any all some what how why when where does whats").split())
 
 
+def _char_ngrams(text: str, n: int = 3) -> set:
+    """Character n-grams — cheap soft embedding without model weights."""
+    s = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if len(s) < n:
+        return {s} if s else set()
+    return {s[i:i + n] for i in range(len(s) - n + 1)}
+
+
+def _jaccard(a: set, b: set) -> float:
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    if not inter:
+        return 0.0
+    return inter / len(a | b)
+
+
 @dataclass
 class MemoryPaths:
     root: Path
@@ -102,15 +119,24 @@ class MemoryStore:
 
     def search_notes(self, query: str, limit: int = 12, min_importance: int = 0,
                      tag: Optional[str] = None, scope: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Relevance-scored retrieval. The old version AND-matched EVERY query token,
-        so a note only surfaced when the prompt repeated its exact words — accrued
-        knowledge almost never reached an answer. Now we score by how many CONTENT
-        words overlap (weighted by coverage, importance, recency) and return the most
-        relevant, so a RELATED question still finds what was learned. Requires a
-        genuine overlap (>=2 content words, or full coverage of a short query) so it
-        stays relevant, not a firehose."""
+        """Relevance-scored retrieval. Token overlap + char-trigram soft match.
+
+        The old version AND-matched EVERY query token, so a note only surfaced when
+        the prompt repeated its exact words. We score content-word overlap (coverage,
+        importance, recency) and add a lightweight char-trigram Jaccard score as a
+        zero-dependency stand-in for embedding similarity — so paraphrases like
+        "what's my moniker" still reach "User is named Bryan". Requires genuine
+        signal (token overlap OR strong n-gram similarity) so it stays relevant.
+        """
         q_tokens = [t for t in re.split(r"\W+", (query or "").lower()) if t]
         content = list({t for t in q_tokens if len(t) >= 3 and t not in _MEM_STOP})
+        q_ng = _char_ngrams(query or "")
+        # Identity-ish queries: boost notes that look like personal facts even when
+        # the user paraphrases ("moniker"/"handle" → named/name lines).
+        identity_q = any(w in (query or "").lower() for w in (
+            "my name", "who am i", "moniker", "handle", "call me", "i am", "i'm",
+            "prefer", "preference", "timezone", "remember",
+        ))
         rows = [r for r in self._read_jsonl(self.paths.notes)
                 if int(r.get("importance", 0)) >= min_importance
                 and (not tag or r.get("tag") == tag)
@@ -118,30 +144,44 @@ class MemoryStore:
                 # another visitor's session-scoped facts are invisible. Unscoped
                 # search (scope=None) keeps legacy behaviour (everything visible).
                 and (scope is None or r.get("scope", "global") in ("global", scope))]
-        if not content:                               # no usable query → most recent
+        if not content and not q_ng:                  # no usable query → most recent
             return rows[-limit:]
         n = max(len(rows), 1)
         scored: List[Any] = []
         for idx, row in enumerate(rows):
             hay = json.dumps(row, ensure_ascii=False).lower()
-            overlap = sum(1 for t in content if t in hay)
-            if not overlap:
-                continue
-            coverage = overlap / len(content)
+            text_body = str(row.get("text") or row.get("note") or row.get("content") or "")
+            overlap = sum(1 for t in content if t in hay) if content else 0
+            # prefix stems (4+ chars) catch light paraphrases without embeddings
+            stems = [t[:4] for t in content if len(t) >= 4]
+            stem_hits = sum(1 for s in stems if s and s in hay)
+            coverage = (overlap / len(content)) if content else 0.0
+            ng_sim = _jaccard(q_ng, _char_ngrams(text_body or hay))
             # relevant if: 2+ content words overlap, OR half the query is covered,
             # OR a single DISTINCTIVE (long, rare) term matches — "carbonara",
             # "quantum" alone are strong signals; "flux" needs a second word.
             # Also: short follow-up queries (1 content token, 4+ chars) may match
             # a single clear term so "my name?" still finds "User is named Bryan".
-            distinctive = any(len(t) >= 7 and t in hay for t in content)
-            short_ok = len(content) == 1 and len(content[0]) >= 4 and content[0] in hay
-            if overlap < 2 and coverage < 0.5 and not distinctive and not short_ok:
+            # Soft path: char-trigram Jaccard acts like a zero-dep mini-embedding.
+            distinctive = any(len(t) >= 7 and t in hay for t in content) if content else False
+            short_ok = bool(content) and len(content) == 1 and len(content[0]) >= 4 and content[0] in hay
+            soft_ok = ng_sim >= 0.14 and len(text_body) >= 12
+            personal = identity_q and any(
+                k in hay for k in ("named", "name is", "prefer", "user is", "call me", "timezone")
+            )
+            if (content and overlap < 2 and coverage < 0.5 and not distinctive
+                    and not short_ok and not soft_ok and not personal and stem_hits < 2):
+                continue
+            if not content and not soft_ok and not personal:
                 continue
             score = (overlap + 1.5 * coverage
+                     + 0.35 * stem_hits
+                     + 2.4 * ng_sim                     # soft embedding-like signal
                      + 0.3 * int(row.get("importance", 3))
-                     + 0.2 * (idx / n)                # gentle recency nudge
+                     + 0.2 * (idx / n)                  # gentle recency nudge
                      + (0.6 if (scope and row.get("scope") == scope) else 0)  # my own context first
-                     + (0.4 if short_ok else 0))
+                     + (0.4 if short_ok else 0)
+                     + (0.8 if personal else 0))
             scored.append((score, row))
         scored.sort(key=lambda s: s[0], reverse=True)
         return [row for _, row in scored[:limit]]

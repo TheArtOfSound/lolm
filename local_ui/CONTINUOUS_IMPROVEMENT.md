@@ -60,3 +60,20 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 2. Between-turn operator ticks on local operator mode
 3. Visual builder: always verify + auto-retry on blank canvas
 4. JSON tool schema for code agent (strict actions)
+
+## 2026-07-26 loop — JSON tools + soft memory + option continuity
+### Agentic coding (win #1)
+- Code agent accepts **JSON tool schema**: write/run/read/edit/list/finish + multi-`actions[]`
+- Text **READ:** / **EDIT:** blocks for surgical fixes without full rewrites
+- Edit applies unique old→new replace; auto-RUN after write/edit still on
+### Continuity (win #2)
+- Option picks (`A`/`B`/`the second one`) resolve against last assistant choices
+- Memory retrieval: char-trigram soft match + identity paraphrases (mini-embedding, no deps)
+### Speed / findability
+- try.html **live starter chips** (receipt / why switch / memory) fire real agent turns
+- why-switch: agentic row upgraded to multi-file + JSON tools + test oracle
+### Next queue
+1. Real embedding index for memory (optional ONNX/local)
+2. Between-turn operator ticks on local operator mode
+3. Visual builder: force verify path even when playwright missing reports clearer
+4. Surface code-agent receipt trail more prominently in workspace UI

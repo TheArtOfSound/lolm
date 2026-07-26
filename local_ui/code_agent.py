@@ -27,16 +27,29 @@ SYSTEM = (
     "- NO interactive input() — use fixed sample values.\n"
     "- Must RUN AND EXIT in ~20s (no servers, no infinite loops).\n"
     "If the task needs network/GUI/server, ship a self-contained simulation that PRINTS results.\n\n"
-    "Each turn reply in EXACTLY this format (you may emit MULTIPLE FILE blocks, then one RUN):\n"
+    "Prefer the FILE/RUN text format (most reliable). You may also use JSON tools.\n\n"
+    "Text format (you may emit MULTIPLE FILE blocks, then one RUN):\n"
     "FILE: <path>\n"
     "```\n"
     "<complete file contents>\n"
     "```\n"
-    "FILE: <optional second path>\n"
-    "```\n"
-    "<contents>\n"
-    "```\n"
-    "RUN: <command>\n\n"
+    "RUN: <command>\n"
+    "READ: <path>          # optional — inspect a file before editing\n"
+    "EDIT: <path>          # optional surgical fix (old → new)\n"
+    "<<<\n"
+    "<exact old text>\n"
+    "===\n"
+    "<replacement>\n"
+    ">>>\n\n"
+    "JSON tool schema (single or multi-step in one turn):\n"
+    '{"action":"write_file","path":"main.py","content":"..."}  or\n'
+    '{"action":"run","command":"python3 main.py"}  or\n'
+    '{"action":"read_file","path":"main.py"}  or\n'
+    '{"action":"edit_file","path":"main.py","old":"...","new":"..."}  or\n'
+    '{"action":"list_files"}  or\n'
+    '{"action":"finish","summary":"..."}  or multi:\n'
+    '{"actions":[{"action":"write_file",...},{"action":"run",...}]}\n'
+    "Also accepted: write_and_run with path+content+command in one object.\n\n"
     "When the run fully satisfies the TASK (and any tests you added), reply ONLY:\n"
     "DONE: <one-line summary>\n\n"
     "Quality bar:\n"
@@ -50,6 +63,12 @@ _FENCE = re.compile(r"```[a-zA-Z0-9_+\-]*\n(.*?)```", re.S)
 _FILE = re.compile(r"FILE\s*:\s*([\w./\-]{1,80})", re.IGNORECASE)
 _RUN = re.compile(r"RUN\s*:\s*(.+)", re.IGNORECASE)
 _DONE = re.compile(r"DONE\s*:\s*(.+)", re.IGNORECASE)
+_READ = re.compile(r"READ\s*:\s*([\w./\-]{1,80})", re.IGNORECASE)
+_LIST = re.compile(r"LIST\s*:\s*(files)?\s*$", re.IGNORECASE | re.M)
+_EDIT_BLOCK = re.compile(
+    r"EDIT\s*:\s*([\w./\-]{1,80})\s*\n<<<\n(.*?)\n===\n(.*?)\n>>>",
+    re.S | re.IGNORECASE,
+)
 _FILE_BLOCK = re.compile(
     r"FILE\s*:\s*([\w./\-]{1,80})\s*\n```[a-zA-Z0-9_+\-]*\n(.*?)```",
     re.S | re.IGNORECASE,
@@ -57,54 +76,196 @@ _FILE_BLOCK = re.compile(
 _LANG_EXT = {"python": "py", "py": "py", "python3": "py", "javascript": "js", "js": "js",
              "node": "js", "bash": "sh", "sh": "sh", "shell": "sh", "go": "go"}
 
+# Canonical empty turn shape
+_EMPTY_TURN = {
+    "files": [], "file": None, "run": None, "done": None,
+    "reads": [], "edits": [], "list": False,
+}
+
+
+def _json_blobs(text: str) -> List[Any]:
+    """Extract top-level JSON objects/arrays from model text (best-effort)."""
+    if not text:
+        return []
+    out: List[Any] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        if text[i] not in "{[":
+            i += 1
+            continue
+        stack: List[str] = []
+        in_str = False
+        esc = False
+        start = i
+        j = i
+        while j < n:
+            ch = text[j]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                j += 1
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch in "{[":
+                stack.append(ch)
+            elif ch in "}]":
+                if not stack:
+                    break
+                open_ch = stack.pop()
+                if (open_ch, ch) not in (("{", "}"), ("[", "]")):
+                    break
+                if not stack:
+                    chunk = text[start:j + 1]
+                    try:
+                        out.append(json.loads(chunk))
+                    except json.JSONDecodeError:
+                        pass
+                    i = j + 1
+                    break
+            j += 1
+        else:
+            break
+        if j >= n and stack:
+            break
+        if i == start:
+            i += 1
+    return out
+
 
 def _extract_json(text: str) -> Optional[Dict[str, Any]]:
     """Pull a JSON action object out of a reply (legacy/strict format)."""
-    if not text:
+    for obj in _json_blobs(text):
+        if isinstance(obj, dict) and (obj.get("action") or obj.get("actions")):
+            return obj
+    return None
+
+
+def _norm_action(a: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Normalize one JSON tool call into internal turn fields."""
+    if not isinstance(a, dict):
         return None
-    start = text.find("{")
-    while start != -1:
-        depth = 0
-        for i in range(start, len(text)):
-            if text[i] == "{":
-                depth += 1
-            elif text[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    try:
-                        obj = json.loads(text[start:i + 1])
-                        if isinstance(obj, dict) and obj.get("action"):
-                            return obj
-                    except json.JSONDecodeError:
-                        break
-        start = text.find("{", start + 1)
+    act = str(a.get("action") or a.get("tool") or "").strip().lower()
+    if not act and a.get("path") and ("content" in a or "old" in a):
+        act = "edit_file" if a.get("old") is not None else "write_file"
+    if act in ("write_file", "write", "create_file", "create"):
+        pair = (a.get("path") or "main.py", a.get("content") or a.get("code") or "")
+        return {"files": [pair], "run": a.get("command") or a.get("run")}
+    if act in ("write_and_run", "write_run"):
+        pair = (a.get("path") or "main.py", a.get("content") or a.get("code") or "")
+        cmd = a.get("command") or a.get("run") or f"python3 {pair[0]}"
+        return {"files": [pair], "run": cmd}
+    if act in ("run", "shell", "bash", "exec"):
+        return {"run": a.get("command") or a.get("cmd") or a.get("shell")}
+    if act in ("finish", "done", "complete"):
+        return {"done": a.get("summary") or a.get("message") or "done"}
+    if act in ("read_file", "read", "cat", "open"):
+        p = a.get("path") or a.get("file")
+        return {"reads": [p]} if p else None
+    if act in ("edit_file", "edit", "str_replace", "search_replace", "patch"):
+        p = a.get("path") or a.get("file")
+        old = a.get("old") if "old" in a else a.get("find") or a.get("search")
+        new = a.get("new") if "new" in a else a.get("replace") or a.get("replacement")
+        if p is not None and old is not None and new is not None:
+            return {"edits": [(p, str(old), str(new))]}
+        return None
+    if act in ("list_files", "list", "ls"):
+        return {"list": True}
+    return None
+
+
+def _merge_turn_bits(*bits: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    t = dict(_EMPTY_TURN)
+    t["files"] = []
+    t["reads"] = []
+    t["edits"] = []
+    for b in bits:
+        if not b:
+            continue
+        for f in b.get("files") or []:
+            t["files"].append(f)
+        for r in b.get("reads") or []:
+            if r and r not in t["reads"]:
+                t["reads"].append(r)
+        for e in b.get("edits") or []:
+            t["edits"].append(e)
+        if b.get("run"):
+            t["run"] = b["run"]
+        if b.get("done"):
+            t["done"] = b["done"]
+        if b.get("list"):
+            t["list"] = True
+    t["file"] = t["files"][0] if t["files"] else None
+    return t
+
+
+def _parse_json_tools(text: str) -> Optional[Dict[str, Any]]:
+    """Parse single/multi JSON tool calls into a unified turn."""
+    blobs = _json_blobs(text)
+    if not blobs:
+        return None
+    bits: List[Dict[str, Any]] = []
+    for obj in blobs:
+        if isinstance(obj, list):
+            for item in obj:
+                n = _norm_action(item) if isinstance(item, dict) else None
+                if n:
+                    bits.append(n)
+            continue
+        if not isinstance(obj, dict):
+            continue
+        if isinstance(obj.get("actions"), list):
+            for item in obj["actions"]:
+                n = _norm_action(item) if isinstance(item, dict) else None
+                if n:
+                    bits.append(n)
+            continue
+        n = _norm_action(obj)
+        if n:
+            bits.append(n)
+    if not bits:
+        return None
+    t = _merge_turn_bits(*bits)
+    if t["files"] or t["run"] or t["done"] or t["reads"] or t["edits"] or t["list"]:
+        return t
     return None
 
 
 def _parse_turn(text: str) -> Optional[Dict[str, Any]]:
-    """Unified parser → files list + run + done.
+    """Unified parser → files list + run + done + reads/edits.
 
-    Returns:
-      {"files": [(path, content), ...], "file": first|None, "run": cmd|None, "done": str|None}
-    Multi-FILE turns are first-class (Claude Code / Codex parity for multi-file edits).
+    Returns dict with keys:
+      files, file, run, done, reads, edits, list
+    Multi-FILE turns and multi-action JSON are first-class (Claude/Codex parity).
     """
     if not text or not text.strip():
         return None
-    # legacy JSON action
-    a = _extract_json(text)
-    if a:
-        act = a.get("action")
-        if act == "write_file":
-            pair = (a.get("path", "main.py"), a.get("content", ""))
-            return {"files": [pair], "file": pair, "run": None, "done": None}
-        if act == "run":
-            return {"files": [], "file": None, "run": a.get("command"), "done": None}
-        if act == "finish":
-            return {"files": [], "file": None, "run": None, "done": a.get("summary", "done")}
+    # JSON tools first (single action, actions[], write_and_run, …)
+    jt = _parse_json_tools(text)
+    if jt and (jt.get("files") or jt.get("run") or jt.get("done")
+               or jt.get("reads") or jt.get("edits") or jt.get("list")):
+        # Allow hybrid: JSON write + textual RUN/DONE leftovers
+        if not jt.get("run"):
+            runm = _RUN.search(text)
+            if runm:
+                jt["run"] = runm.group(1).strip().strip("`").strip()
+        if not jt.get("done"):
+            dm = _DONE.search(text)
+            if dm and not jt.get("files") and not jt.get("run"):
+                jt["done"] = dm.group(1).strip()
+        return jt
 
     files = [(m.group(1), m.group(2)) for m in _FILE_BLOCK.finditer(text)]
     runm = _RUN.search(text)
     cmd = runm.group(1).strip().strip("`").strip() if runm else None
+    reads = [m.group(1) for m in _READ.finditer(text)]
+    edits = [(m.group(1), m.group(2), m.group(3)) for m in _EDIT_BLOCK.finditer(text)]
+    wants_list = bool(_LIST.search(text)) or bool(re.search(r"^\s*LIST\s*$", text, re.I | re.M))
 
     if not files:
         fence = _FENCE.search(text)
@@ -120,13 +281,19 @@ def _parse_turn(text: str) -> Optional[Dict[str, Any]]:
             if content is not None:
                 files = [(name, content)]
 
-    if files or cmd is not None:
+    if files or cmd is not None or reads or edits or wants_list:
         first = files[0] if files else None
-        return {"files": files, "file": first, "run": cmd, "done": None}
+        return {
+            "files": files, "file": first, "run": cmd, "done": None,
+            "reads": reads, "edits": edits, "list": wants_list,
+        }
 
     dm = _DONE.search(text)
     if dm:
-        return {"files": [], "file": None, "run": None, "done": dm.group(1).strip()}
+        return {
+            "files": [], "file": None, "run": None, "done": dm.group(1).strip(),
+            "reads": [], "edits": [], "list": False,
+        }
     return None
 
 
@@ -193,24 +360,35 @@ class CodeAgent:
                     "Reply EXACTLY:\nFILE: main.py\n```\n<code>\n```\nRUN: python3 main.py)")
             return base + (self._format_nudge or "")
         lines = ["\n\nSO FAR:"]
-        for a in self.actions[-6:]:
-            if a["kind"] == "write_file":
+        for a in self.actions[-8:]:
+            kind = a.get("kind")
+            if kind == "write_file":
                 lines.append(f"- wrote {a['path']} ({a.get('bytes', 0)} bytes)")
+            elif kind == "read_file":
+                body = (a.get("content") or "")[:700]
+                lines.append(f"- read {a['path']} ({a.get('bytes', 0)} bytes)\n  CONTENT:\n{body}")
+            elif kind == "edit_file":
+                lines.append(f"- edited {a['path']} (ok={a.get('ok')}, {a.get('note', '')})")
+            elif kind == "list_files":
+                lines.append(f"- listed files: {', '.join(a.get('files') or []) or '(empty)'}")
             else:
-                r = a["result"]
+                r = a.get("result") or {}
                 out = ((r.get("stdout") or "") + (r.get("stderr") or "")).strip()
                 tag = "BLOCKED" if r.get("blocked") else f"exit {r.get('exit_code')}"
-                lines.append(f"- ran `{a['command']}` → {tag}\n  OUTPUT: {out[:900] or '(empty)'}")
+                lines.append(f"- ran `{a.get('command')}` → {tag}\n  OUTPUT: {out[:900] or '(empty)'}")
         last = self.actions[-1]
-        if last["kind"] == "run" and not last["result"].get("blocked") \
-                and last["result"].get("exit_code") == 0:
-            if (last["result"].get("stdout") or "").strip():
+        if last.get("kind") == "run" and not (last.get("result") or {}).get("blocked") \
+                and (last.get("result") or {}).get("exit_code") == 0:
+            if ((last.get("result") or {}).get("stdout") or "").strip():
                 lines.append("\nThe last run printed the output above. If it satisfies the "
                              "TASK, reply `DONE: ...`. Otherwise send a corrected FILE + RUN.")
             else:
                 lines.append("\nThe last run exited 0 but printed NOTHING. Rewrite the FULL "
                              "program so it actually runs the logic and PRINTS results, with "
                              "a RUN line. Do NOT say DONE.")
+        elif last.get("kind") in ("read_file", "list_files", "edit_file"):
+            lines.append("\nYou inspected/edited files. Next: FILE + RUN (or DONE only if a "
+                         "prior green run already satisfied the TASK).")
         else:
             lines.append("\nSend the next FILE + RUN (fix the program if the last run failed). "
                          "Do not invent success — use the real OUTPUT above.")
@@ -269,7 +447,13 @@ class CodeAgent:
             self._format_nudge = ""
 
             # pure DONE → finish (gated on a real, output-producing run)
-            if turn["done"] and not turn["file"] and not turn["run"]:
+            pure_done = (
+                turn.get("done")
+                and not turn.get("file") and not turn.get("run")
+                and not turn.get("files") and not turn.get("reads")
+                and not turn.get("edits") and not turn.get("list")
+            )
+            if pure_done:
                 if not ran_any and nudges < 2:
                     nudges += 1
                     self._format_nudge = "\n\nYou must FILE + RUN before DONE."
@@ -311,6 +495,80 @@ class CodeAgent:
 
             did = False
             written_path = None
+
+            # LIST / READ / EDIT first (inspect before mutate) — Claude/Codex style.
+            if turn.get("list"):
+                try:
+                    files_here = self.sb.list_files()
+                except Exception as exc:
+                    files_here = []
+                    yield {"event": "agent_note", "data": {"text": f"list failed: {exc}"[:160]}}
+                self.actions.append({"kind": "list_files", "files": files_here[:80]})
+                yield {"event": "agent_note", "data": {
+                    "text": "files: " + (", ".join(files_here[:40]) or "(empty)")}}
+                did = True
+
+            for path in turn.get("reads") or []:
+                try:
+                    content = self.sb.read_file(path)
+                    self.actions.append({
+                        "kind": "read_file", "path": path,
+                        "bytes": len(content or ""), "content": content or "",
+                    })
+                    yield {"event": "agent_note", "data": {
+                        "text": f"read {path} ({len(content or '')} bytes)",
+                        "path": path, "preview": (content or "")[:400]}}
+                    did = True
+                except Exception as exc:
+                    self.actions.append({
+                        "kind": "read_file", "path": path, "bytes": 0,
+                        "content": f"(read failed: {exc})",
+                    })
+                    yield {"event": "agent_note", "data": {"text": f"read {path} failed: {exc}"[:160]}}
+                    did = True
+
+            for path, old, new in turn.get("edits") or []:
+                try:
+                    cur = self.sb.read_file(path)
+                except Exception as exc:
+                    self.actions.append({"kind": "edit_file", "path": path, "ok": False,
+                                         "note": f"read failed: {exc}"})
+                    yield {"event": "agent_note", "data": {
+                        "text": f"edit {path} failed — cannot read: {exc}"[:160]}}
+                    did = True
+                    continue
+                if old not in cur:
+                    self.actions.append({"kind": "edit_file", "path": path, "ok": False,
+                                         "note": "old text not found"})
+                    yield {"event": "agent_note", "data": {
+                        "text": f"edit {path} — old text not found (read file first)"}}
+                    did = True
+                    continue
+                if cur.count(old) > 1:
+                    self.actions.append({"kind": "edit_file", "path": path, "ok": False,
+                                         "note": "old text not unique"})
+                    yield {"event": "agent_note", "data": {
+                        "text": f"edit {path} — old text matches {cur.count(old)} times; make it unique"}}
+                    did = True
+                    continue
+                updated = cur.replace(old, new, 1)
+                try:
+                    fc = self.sb.write_file(path, updated, reason="edit")
+                    self.actions.append({"kind": "edit_file", "path": path, "ok": True,
+                                         "note": f"{len(old)}→{len(new)} chars"})
+                    if path not in self._files_written:
+                        self._files_written.append(path)
+                    written_path = path
+                    yield {"event": "file_changed", "data": {"path": path,
+                           "diff": (fc.get("diff") or "")[:2500], "bytes": len(updated),
+                           "edit": True}}
+                    did = True
+                except Exception as exc:
+                    self.actions.append({"kind": "edit_file", "path": path, "ok": False,
+                                         "note": str(exc)[:120]})
+                    yield {"event": "agent_note", "data": {"text": f"edit write failed: {exc}"[:160]}}
+                    did = True
+
             file_list = turn.get("files") or (
                 [turn["file"]] if turn.get("file") and turn["file"][1] is not None else []
             )
@@ -328,9 +586,9 @@ class CodeAgent:
                     did = True
                 except Exception as exc:
                     yield {"event": "agent_note", "data": {"text": f"write failed: {exc}"[:160]}}
-            # If model wrote a file but forgot RUN, auto-run once.
-            cmd = turn["run"]
-            if not cmd and written_path and did:
+            # If model wrote/edited a file but forgot RUN, auto-run once.
+            cmd = turn.get("run")
+            if not cmd and written_path and did and (file_list or turn.get("edits")):
                 cmd = self._auto_run_cmd(written_path)
                 yield {"event": "agent_note", "data": {
                     "text": f"no RUN line — auto-running `{cmd}`"}}

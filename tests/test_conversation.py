@@ -34,3 +34,20 @@ def test_multiturn_messages():
     msgs = build_chat_messages("sys", HIST, "idk")
     assert msgs[0]["role"] == "system"
     assert msgs[-1]["role"] == "user"
+
+
+def test_option_pick_a_b_c():
+    hist = [
+        {"role": "user", "content": "What should we build?"},
+        {"role": "assistant", "content": "Pick one: A) chat fix  B) coding loop  C) pricing"},
+    ]
+    cmd, prof, tag = resolve_followup("B", hist)
+    assert prof == "dialog" and tag == "option_pick"
+    assert "option" in cmd.lower() and "B" in cmd
+    cmd2, _, tag2 = resolve_followup("the second one", hist)
+    assert tag2 == "option_pick"
+    assert "second" in cmd2.lower()
+
+def test_short_option_is_short_reply():
+    assert is_short_reply("A")
+    assert is_short_reply("the first one")

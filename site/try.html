@@ -177,6 +177,11 @@
   <summary>📄 Ground it in your own text <span>— paste notes, a doc, an email thread (optional)</span></summary>
   <textarea id="sources" placeholder="Paste your notes, a contract, docs, an email thread… LOLM answers ONLY from this, cites the exact passage it used, and tells you plainly when the answer isn't in here — instead of making one up."></textarea>
 </details>
+<div class="live-starters" id="liveStarters" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:10px 0 4px">
+  <button type="button" class="live-chip" data-live="Explain what a receipt is in LOLM in one short paragraph." style="border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 12px;font-size:12.5px;cursor:pointer;color:var(--text)">What is a receipt?</button>
+  <button type="button" class="live-chip" data-live="In one short answer: why would someone switch from Claude Code to LOLM?" style="border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 12px;font-size:12.5px;cursor:pointer;color:var(--text)">Why switch?</button>
+  <button type="button" class="live-chip" data-live="Remember my name is Alex for this chat. Suggest one next thing to try on LOLM." style="border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 12px;font-size:12.5px;cursor:pointer;color:var(--text)">Memory demo</button>
+</div>
 <div class="ask">
   <input id="q" placeholder="…or ask your own question, run live">
   <button id="go" disabled>Ask</button>
@@ -761,6 +766,17 @@
 
   // Resilience: register the service worker so the page + every replay work
   // with zero network, and an offline indicator in the nav.
+  
+  // Live starter chips — one tap runs a real agent turn (speed-to-value).
+  document.querySelectorAll('.live-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const qEl = $('q'); const goEl = $('go');
+      if (!qEl || !goEl || goEl.disabled) return;
+      qEl.value = btn.getAttribute('data-live') || '';
+      goEl.click();
+    });
+  });
+
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }

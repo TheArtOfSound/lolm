@@ -78,3 +78,32 @@ def test_loop_stops_on_unparseable(tmp_path):
     agent = CodeAgent(sb, lambda m: "I will now write the code...", isolated=None)
     kinds = [e["event"] for e in agent.run("x")]
     assert "agent_note" in kinds
+
+
+def test_json_multi_action_write_and_run(tmp_path):
+    sb = Sandbox(tmp_path)
+    seq = iter([
+        '{"actions":[{"action":"write_file","path":"m.py","content":"print(7*6)\\n"},'
+        '{"action":"run","command":"python3 m.py"}]}',
+        '{"action":"finish","summary":"42"}',
+    ])
+    events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("print 42"))
+    kinds = [e["event"] for e in events]
+    assert "file_changed" in kinds and "command_finished" in kinds and "code_done" in kinds
+    cf = [e for e in events if e["event"] == "command_finished"][0]
+    assert cf["data"]["exit_code"] == 0 and "42" in cf["data"]["stdout"]
+
+
+def test_edit_tool_surgical_fix(tmp_path):
+    sb = Sandbox(tmp_path)
+    sb.write_file("z.py", "prnt(3)\n")
+    seq = iter([
+        '{"action":"edit_file","path":"z.py","old":"prnt(3)","new":"print(3)"}',
+        # auto-run may fire after edit; if not, explicit run
+        '{"action":"run","command":"python3 z.py"}',
+        '{"action":"finish","summary":"fixed"}',
+    ])
+    events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("fix print"))
+    assert "print(3)" in sb.read_file("z.py")
+    assert any(e["event"] == "command_finished" and e["data"].get("exit_code") == 0
+               for e in events)
