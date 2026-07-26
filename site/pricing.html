@@ -69,9 +69,13 @@
     Cheaper than big assistants. Cancel anytime. Card handled by Stripe — LOLM never sees it.
   </p>
   <div id="msg" class="msg"></div>
+  <div id="usageLive" class="path" style="margin-bottom:18px;display:none">
+    <h3 style="margin:0 0 4px">Your plan today</h3>
+    <p id="usageLiveText" style="margin:0"></p>
+  </div>
 
   <div class="grid" id="tiers">
-    <div class="card">
+    <div class="card" id="card-free">
       <h2>Free</h2>
       <div class="price">$0 <span>/ month</span></div>
       <ul>
@@ -82,7 +86,7 @@
       </ul>
       <a class="btn btn-ghost" href="/">Start free →</a>
     </div>
-    <div class="card featured">
+    <div class="card featured" id="card-plus">
       <h2>Plus</h2>
       <div class="price">$7.99 <span>/ month</span></div>
       <ul>
@@ -91,9 +95,9 @@
         <li>Everyday coding + research</li>
         <li>Same privacy model as free</li>
       </ul>
-      <button class="btn btn-primary" onclick="buy('plus')">Upgrade to Plus →</button>
+      <button class="btn btn-primary" id="btn-plus" onclick="buy('plus')">Upgrade to Plus →</button>
     </div>
-    <div class="card">
+    <div class="card" id="card-pro">
       <h2>Pro</h2>
       <div class="price">$19.99 <span>/ month</span></div>
       <ul>
@@ -102,7 +106,7 @@
         <li>Heavy use + priority ensemble builds</li>
         <li>Still under a typical $20 AI plan</li>
       </ul>
-      <button class="btn btn-secondary" onclick="buy('pro')">Upgrade to Pro →</button>
+      <button class="btn btn-secondary" id="btn-pro" onclick="buy('pro')">Upgrade to Pro →</button>
     </div>
   </div>
 
@@ -137,34 +141,89 @@
   </p>
 </div>
 <script>
+function authHeaders(){
+  const h={'Content-Type':'application/json'};
+  const a=localStorage.getItem('lolm_admin'); if(a) h['X-LOLM-Admin']=a;
+  const l=localStorage.getItem('lolm_license'); if(l) h['X-LOLM-License']=l;
+  return h;
+}
 async function buy(tier){
   const msg = document.getElementById('msg');
   msg.style.display='block'; msg.className='msg'; msg.textContent='Opening secure Stripe checkout…';
   try{
     const r = await fetch('/api/demo/billing/checkout', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers:authHeaders(),
       body: JSON.stringify({tier})
     });
     const j = await r.json();
     if(j.url){ location.href = j.url; return; }
-    msg.className='msg err'; msg.textContent = j.error || 'Checkout unavailable on this instance.';
+    msg.className='msg err';
+    msg.textContent = j.error || 'Checkout unavailable — self-host is unlimited, or Stripe is not configured on this box.';
   }catch(e){
     msg.className='msg err'; msg.textContent = 'Checkout failed: '+e.message;
   }
 }
+async function loadUsage(){
+  const box=document.getElementById('usageLive');
+  const text=document.getElementById('usageLiveText');
+  if(!box||!text) return;
+  try{
+    const j=await (await fetch('/api/demo/billing/usage',{headers:authHeaders()})).json();
+    box.style.display='block';
+    if(j.admin || j.unlimited){
+      text.innerHTML = j.admin
+        ? 'Owner mode · unlimited runs. <a href="/">Open workspace →</a>'
+        : 'Local/sovereign install · unlimited. <a href="/">Open workspace →</a>';
+      return;
+    }
+    const runs=j.runs||{}, vis=j.visual||{};
+    const rem=runs.remaining, lim=runs.limit, used=runs.used||0;
+    const vrem=vis.remaining, vlim=vis.limit;
+    let line = '<b>'+(j.label||j.tier||'Free')+'</b>';
+    if(rem!=null && lim!=null) line += ' · <b>'+rem+'</b>/'+lim+' runs left today ('+used+' used)';
+    if(vrem!=null && vlim!=null) line += ' · '+vrem+'/'+vlim+' builds left';
+    if(j.tier==='free'){
+      line += ' · <a href="#card-plus">Upgrade to Plus for 300/day</a>';
+      if(rem!=null && rem<=3){
+        const msg=document.getElementById('msg');
+        msg.style.display='block'; msg.className='msg';
+        msg.textContent = rem===0
+          ? 'Daily free runs used up — Plus ($7.99) unlocks 300 more today.'
+          : 'Only '+rem+' free run'+(rem===1?'':'s')+' left today — upgrade anytime.';
+      }
+    } else {
+      line += ' · <a href="/">Open workspace →</a>';
+      const btn=document.getElementById(j.tier==='pro'?'btn-pro':'btn-plus');
+      if(btn){ btn.textContent='Current plan ✓'; btn.disabled=true; btn.style.opacity='0.7'; }
+    }
+    text.innerHTML = line;
+  }catch(_){ /* silent — page still works offline for static pricing */ }
+}
 // claim license if returned from Stripe
 (async function(){
-  const sid = new URLSearchParams(location.search).get('sub_session');
-  if(!sid) return;
-  try{
-    const r = await (await fetch('/api/demo/billing/claim?session_id='+encodeURIComponent(sid))).json();
-    if(r.license){
-      localStorage.setItem('lolm_license', r.license);
-      const msg=document.getElementById('msg');
-      msg.style.display='block'; msg.className='msg';
-      msg.textContent='✓ Welcome to LOLM '+(r.label||r.tier)+' — open the workspace to use higher limits.';
-    }
-  }catch(_){}
+  const params = new URLSearchParams(location.search);
+  const msg=document.getElementById('msg');
+  if(params.get('cancelled')==='1'){
+    msg.style.display='block'; msg.className='msg err';
+    msg.textContent='Checkout cancelled — free tier still works. No charge.';
+    history.replaceState(null,'',location.pathname);
+  }
+  const sid = params.get('sub_session');
+  if(sid){
+    try{
+      const r = await (await fetch('/api/demo/billing/claim?session_id='+encodeURIComponent(sid))).json();
+      if(r.license){
+        localStorage.setItem('lolm_license', r.license);
+        msg.style.display='block'; msg.className='msg';
+        msg.innerHTML='✓ Welcome to LOLM <b>'+(r.label||r.tier)+'</b> — <a href="/">open the workspace</a> to use higher limits.';
+      } else if(r.error){
+        msg.style.display='block'; msg.className='msg err';
+        msg.textContent = r.error;
+      }
+    }catch(_){}
+    history.replaceState(null,'',location.pathname);
+  }
+  loadUsage();
 })();
 </script>
 </body>

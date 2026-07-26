@@ -163,8 +163,44 @@ class MemoryStore:
             existing += "\n"
         self.paths.identity.write_text(existing + bullet + "\n", encoding="utf-8")
 
-    def add_summary(self, summary: str, span: str = "session") -> None:
-        self._append_line(self.paths.summaries, {"ts": time.time(), "span": span, "summary": summary})
+    def add_summary(self, summary: str, span: str = "session",
+                    *, promote: bool = False) -> None:
+        text = (summary or "").strip()
+        if not text:
+            return
+        self._append_line(self.paths.summaries, {
+            "ts": time.time(), "span": span, "summary": text, "promoted": bool(promote),
+        })
+        if promote:
+            self.promote_summary_to_identity(text)
+
+    def promote_summary_to_identity(self, summary: str) -> bool:
+        """Lift durable user facts from a rolling summary into identity.md.
+
+        Long-thread continuity: summaries alone age out of context windows;
+        identity is always retrieved on identity-relevant turns. Only promote
+        lines that look like durable personal/project facts — not every chitchat.
+        """
+        s = (summary or "").strip()
+        if not s:
+            return False
+        # "user text → answer" rolling form from nfet_agent
+        user_part = s.split(" → ", 1)[0].strip() if " → " in s else s
+        low = user_part.lower()
+        durable = (
+            "remember", "my name", "i prefer", "i am ", "i'm ", "im ",
+            "call me", "my timezone", "i work", "i live", "my project",
+            "we use", "our stack", "don't ", "do not ", "always ", "never ",
+        )
+        if not any(m in low for m in durable):
+            return False
+        # Keep identity compact and non-duplicative
+        line = re.sub(r"\s+", " ", user_part)[:160]
+        if len(line) < 8:
+            return False
+        before = self.read_identity()
+        self.append_identity_line(f"from chat: {line}")
+        return self.read_identity() != before
 
     def recent_summaries(self, limit: int = 5) -> List[Dict[str, Any]]:
         return self._read_jsonl(self.paths.summaries)[-limit:]

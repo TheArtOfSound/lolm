@@ -623,12 +623,28 @@ class _CheckoutBody(_BM):
 
 @app.get("/api/demo/billing/config")
 def billing_config(request: Request):
+    """Public billing snapshot + live remaining budget (does not consume a unit)."""
     lic = usage_limits.read_license(request.headers.get("x-lolm-license", ""))
+    status = usage_limits.usage_status(request)
     return {"enabled": bool(os.environ.get("STRIPE_SECRET_KEY", "").strip())
                        and usage_limits.enforced(),
             "tiers": usage_limits.public_tiers(),
-            "your_tier": (lic or {}).get("tier", "free"),
-            "admin": usage_limits.is_admin(request.headers.get("x-lolm-admin", ""))}
+            "your_tier": status.get("tier") or (lic or {}).get("tier", "free"),
+            "label": status.get("label"),
+            "admin": bool(status.get("admin")),
+            "unlimited": bool(status.get("unlimited")),
+            "usage": {
+                "runs": status.get("runs"),
+                "visual": status.get("visual"),
+            },
+            "upgrade_hint": bool(status.get("upgrade_hint")),
+            "enforced": bool(status.get("enforced"))}
+
+
+@app.get("/api/demo/billing/usage")
+def billing_usage(request: Request):
+    """Lightweight remaining-quota peek for chips / pricing UX. Safe to poll."""
+    return usage_limits.usage_status(request)
 
 
 @app.post("/api/demo/billing/checkout")

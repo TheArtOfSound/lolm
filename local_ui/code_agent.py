@@ -137,6 +137,43 @@ def _wants_tests(task: str) -> bool:
     ))
 
 
+def _is_test_path(path: str) -> bool:
+    p = (path or "").replace("\\", "/").lower()
+    name = p.rsplit("/", 1)[-1]
+    return (
+        name.startswith("test_")
+        or name.endswith("_test.py")
+        or "/tests/" in f"/{p}/"
+        or p.startswith("tests/")
+    )
+
+
+def _pick_verify_command(files_written: List[str], task: str) -> Optional[str]:
+    """Choose a post-green-run oracle. Prefer real tests over py_compile.
+
+    Competitive bar vs Claude Code / Codex: if the agent wrote test files, run
+    them (unittest discovery — always in stdlib; pytest when present). Otherwise
+    for test-oriented or multi-file Python work, at least py_compile so we never
+    DONE on syntax-broken trees.
+    """
+    py = [p for p in (files_written or []) if (p or "").endswith(".py")]
+    if not py:
+        return None
+    tests = [p for p in py if _is_test_path(p)]
+    if tests:
+        # unittest discover is stdlib; try pytest first when installed in the jail.
+        # Single shell line so sandbox.run stays one command.
+        return (
+            "python3 -c \"import importlib.util as u,sys; sys.exit(0 if u.find_spec('pytest') else 1)\" "
+            "&& python3 -m pytest -q --tb=line "
+            + " ".join(tests)
+            + " || python3 -m unittest discover -s . -p 'test*.py' -q"
+        )
+    if _wants_tests(task) or len(py) >= 2:
+        return "python3 -m py_compile " + " ".join(py)
+    return None
+
+
 class CodeAgent:
     def __init__(self, sandbox: Any, chat_fn: Callable[[List[Dict[str, str]]], str],
                  max_steps: int = 18, run_timeout: int = 25,
@@ -245,6 +282,29 @@ class CodeAgent:
                     yield {"event": "agent_note", "data": {"step": step,
                            "text": "tried to finish but nothing was printed — making it produce output"}}
                     continue
+                # Gate DONE on test oracle when test files exist (Claude/Codex parity).
+                vcmd = _pick_verify_command(self._files_written, task)
+                if vcmd and any(_is_test_path(p) for p in self._files_written) and nudges < 4:
+                    note = vcmd if len(vcmd) <= 140 else vcmd[:137] + "…"
+                    yield {"event": "agent_note", "data": {
+                        "text": f"pre-DONE verify: `{note}`"}}
+                    yield {"event": "command_started", "data": {"command": vcmd}}
+                    vr = self.sb.run(vcmd, timeout=self.run_timeout, isolated=self.isolated)
+                    self.actions.append({"kind": "run", "command": vcmd, "result": vr})
+                    yield {"event": "command_finished", "data": {
+                        "command": vcmd, "exit_code": vr.get("exit_code"),
+                        "stdout": vr.get("stdout", ""), "stderr": vr.get("stderr", ""),
+                        "blocked": vr.get("blocked", False), "isolated": True,
+                        "verify": True}}
+                    if vr.get("exit_code") != 0 or vr.get("blocked"):
+                        nudges += 1
+                        self._format_nudge = (
+                            "\n\nTESTS FAILED before DONE. Fix the failing tests, FILE + RUN again. "
+                            "Do not say DONE until tests pass."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": "blocked DONE — tests still failing"}}
+                        continue
                 yield {"event": "code_done", "data": {"summary": turn["done"], "steps": step,
                        "ran": ran_any, "produced_output": produced_output}}
                 return
@@ -306,33 +366,41 @@ class CodeAgent:
                 else:
                     fail_repeats = 0
                     fail_sig = None
-                    # Competitive bar: after a green run on non-trivial tasks, run a
-                    # second verification command when the user asked for tests, or a
-                    # cheap syntax check so we don't DONE on silent garbage.
-                    if ok and produced_output and _wants_tests(task):
-                        vcmd = None
-                        if any(p.endswith(".py") for p in self._files_written):
-                            vcmd = "python3 -m py_compile " + " ".join(
-                                p for p in self._files_written if p.endswith(".py")
-                            )
+                    # Competitive bar: after a green run, prefer a real test oracle
+                    # (pytest/unittest) when test files exist; else py_compile on
+                    # multi-file / test-oriented tasks so we never DONE on garbage.
+                    if ok and produced_output:
+                        vcmd = _pick_verify_command(self._files_written, task)
                         if vcmd:
-                            yield {"event": "agent_note", "data": {
-                                "text": f"verify: `{vcmd}`"}}
-                            yield {"event": "command_started", "data": {"command": vcmd}}
-                            vr = self.sb.run(vcmd, timeout=self.run_timeout, isolated=self.isolated)
-                            self.actions.append({"kind": "run", "command": vcmd, "result": vr})
-                            yield {"event": "command_finished", "data": {
-                                "command": vcmd, "exit_code": vr.get("exit_code"),
-                                "stdout": vr.get("stdout", ""), "stderr": vr.get("stderr", ""),
-                                "blocked": vr.get("blocked", False), "isolated": True,
-                                "verify": True}}
-                            if vr.get("exit_code") != 0 or vr.get("blocked"):
-                                ok = False
-                                produced_output = True  # keep working
-                                self._format_nudge = (
-                                    "\n\nVERIFY FAILED. Fix syntax/tests, then RUN again. "
-                                    "Do not say DONE."
-                                )
+                            # Avoid re-running the exact same verify after every green
+                            # run in a flail loop — only once per unique command set.
+                            last_v = next(
+                                (a for a in reversed(self.actions)
+                                 if a.get("kind") == "run" and a.get("command") == vcmd),
+                                None,
+                            )
+                            if last_v and last_v.get("result", {}).get("exit_code") == 0:
+                                pass  # already verified cleanly
+                            else:
+                                note = vcmd if len(vcmd) < 140 else vcmd[:137] + "…"
+                                yield {"event": "agent_note", "data": {
+                                    "text": f"verify: `{note}`"}}
+                                yield {"event": "command_started", "data": {"command": vcmd}}
+                                vr = self.sb.run(vcmd, timeout=self.run_timeout,
+                                                 isolated=self.isolated)
+                                self.actions.append({"kind": "run", "command": vcmd, "result": vr})
+                                yield {"event": "command_finished", "data": {
+                                    "command": vcmd, "exit_code": vr.get("exit_code"),
+                                    "stdout": vr.get("stdout", ""), "stderr": vr.get("stderr", ""),
+                                    "blocked": vr.get("blocked", False), "isolated": True,
+                                    "verify": True}}
+                                if vr.get("exit_code") != 0 or vr.get("blocked"):
+                                    ok = False
+                                    produced_output = True  # keep working
+                                    self._format_nudge = (
+                                        "\n\nVERIFY FAILED. Fix syntax/tests, then RUN again. "
+                                        "Do not say DONE."
+                                    )
             if not did:
                 yield {"event": "agent_note", "data": {"step": step,
                        "text": "no FILE or RUN in the reply", "raw": (raw or "")[:200]}}

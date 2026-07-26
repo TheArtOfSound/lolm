@@ -1398,12 +1398,18 @@ WORKING DRAFT:
             if cap:
                 yield {"event": "learned", "data": cap}
             # Rolling conversation summary — long-thread continuity without embeddings.
+            # When we also captured a durable fact this turn, promote it into identity.md
+            # so later chats (not just this session's summary window) still resolve "yes/that".
             if profile in ("dialog", "question", "task") and answer_text and len(raw_command) > 2:
                 try:
                     mem = getattr(self.deps, "memory", None)
                     if mem is not None and hasattr(mem, "add_summary"):
                         snippet = (raw_command[:120] + " → " + answer_text.strip().replace("\n", " ")[:180])
-                        mem.add_summary(snippet, span=getattr(req, "session_id", None) or "session")
+                        mem.add_summary(
+                            snippet,
+                            span=getattr(req, "session_id", None) or "session",
+                            promote=bool(cap),
+                        )
                 except Exception:
                     pass
         except Exception:

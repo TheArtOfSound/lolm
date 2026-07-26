@@ -790,7 +790,7 @@ async function send(){
     const user_memory = (state.memories||[]).map(m=>m.text);   // cross-session facts about you
     const resp = await fetch('/api/demo/run/stream', {method:'POST', headers:authHeaders(), body: JSON.stringify({command, history, user_memory, session_id: c.id})});
     if(!resp.ok){
-      if(resp.status===402){ const err=await resp.json().catch(()=>({})); bub.textContent=err.error||'daily limit reached'; showUpgrade(bub, err); }
+      if(resp.status===402){ const err=await resp.json().catch(()=>({})); bub.textContent=err.error||'daily limit reached'; showUpgrade(bub, err); try{refreshUsageChip();}catch(_){ } }
       else bub.textContent = 'run refused: '+resp.status;
     }
     else {
@@ -807,6 +807,7 @@ async function send(){
   rec.verdict = rec.verdict || 'completed';
   renderInspectors({receipt:rec, sources:rec.sources, memories:rec.memories});
   softUpgradeHint(ansEl);
+  try{ refreshUsageChip(); }catch(_){}
   await api('/conversations/'+c.id+'/messages', {method:'POST', body: JSON.stringify({
     role:'assistant', content: (rec.answer||bub.textContent), model_used: rec.model, verdict: rec.verdict,
     meta:{receipt:rec, sources:rec.sources, memories:rec.memories}})});
@@ -1327,62 +1328,44 @@ function toggleSide(){
 function authHeaders(){ const h={'Content-Type':'application/json'}; const a=localStorage.getItem('lolm_admin'); if(a) h['X-LOLM-Admin']=a; const l=localStorage.getItem('lolm_license'); if(l) h['X-LOLM-License']=l; return h; }
 function updateShield(){ const s=document.getElementById('shield'); if(!s) return; const on=!!localStorage.getItem('lolm_admin'); s.style.opacity=on?'0.9':'0.25'; s.style.filter=on?'drop-shadow(0 0 4px #16a34a)':'none'; s.title=on?'owner mode: unlimited (click to lock)':'owner unlock'; }
 async function shieldUnlock(){
-  if(localStorage.getItem('lolm_admin')){ if(confirm('Leave owner mode?')){ localStorage.removeItem('lolm_admin'); updateShield();
-
-function shareLolm(e){ if(e) e.preventDefault();
-  const url='https://lolm.imagineqira.com/?ref=share';
-  const text='LOLM — a persistent AI agent with receipts. Free to try: '+url;
-  if(navigator.share){ navigator.share({title:'LOLM', text:text, url:url}).catch(()=>{}); }
-  else if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>alert('Invite link copied:\\n'+url)); }
-  else prompt('Copy this invite link:', url);
-}
-async function refreshUsageChip(){
-  const el=document.getElementById('usageChip'); if(!el) return;
-  try{
-    const r=await fetch('/api/demo/billing/config',{headers:authHeaders()});
-    const j=await r.json();
-    // show tiers always; if license present, show paid badge
-    const lic=localStorage.getItem('lolm_license');
-    if(lic){ el.style.display='block'; el.innerHTML='✓ Paid plan active · <a href="/pricing.html">manage</a>'; return; }
-    el.style.display='block';
-    el.innerHTML='Free tier · 10 runs/day · <a href="/pricing.html" style="color:var(--accent);font-weight:650">Upgrade</a>';
-  }catch(_){ }
-}
-const _pl=document.getElementById('pricingLink');
-const _sl=document.getElementById('shareLink');
-if(_sl) _sl.onclick=shareLolm;
-refreshUsageChip();
- } return; }
+  if(localStorage.getItem('lolm_admin')){ if(confirm('Leave owner mode?')){ localStorage.removeItem('lolm_admin'); updateShield(); refreshUsageChip(); } return; }
   const pw=prompt('Owner password:'); if(!pw) return;
   try{ const r=await (await fetch('/api/demo/admin/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})})).json();
-    if(r.admin){ localStorage.setItem('lolm_admin', r.admin); updateShield();
-
+    if(r.admin){ localStorage.setItem('lolm_admin', r.admin); updateShield(); refreshUsageChip();
+      alert('Owner mode: unlimited usage + key writes enabled on this browser for '+(r.days||30)+' days.'); }
+    else alert('Nope.');
+  }catch(e){ alert('unlock failed: '+e.message); }
+}
 function shareLolm(e){ if(e) e.preventDefault();
   const url='https://lolm.imagineqira.com/?ref=share';
   const text='LOLM — a persistent AI agent with receipts. Free to try: '+url;
   if(navigator.share){ navigator.share({title:'LOLM', text:text, url:url}).catch(()=>{}); }
-  else if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>alert('Invite link copied:\\n'+url)); }
+  else if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>alert('Invite link copied:\n'+url)); }
   else prompt('Copy this invite link:', url);
 }
 async function refreshUsageChip(){
   const el=document.getElementById('usageChip'); if(!el) return;
   try{
-    const r=await fetch('/api/demo/billing/config',{headers:authHeaders()});
-    const j=await r.json();
-    // show tiers always; if license present, show paid badge
-    const lic=localStorage.getItem('lolm_license');
-    if(lic){ el.style.display='block'; el.innerHTML='✓ Paid plan active · <a href="/pricing.html">manage</a>'; return; }
+    const j=await (await fetch('/api/demo/billing/usage',{headers:authHeaders()})).json();
     el.style.display='block';
-    el.innerHTML='Free tier · 10 runs/day · <a href="/pricing.html" style="color:var(--accent);font-weight:650">Upgrade</a>';
+    if(j.admin || j.unlimited){
+      el.innerHTML=j.admin?'✓ Owner · unlimited':'Unlimited (local)';
+      return;
+    }
+    const runs=j.runs||{};
+    const rem=runs.remaining!=null?runs.remaining:(runs.limit!=null?Math.max(0,runs.limit-(runs.used||0)):null);
+    const lim=runs.limit;
+    const label=esc(j.label||j.tier||'Free');
+    let line=label;
+    if(rem!=null && lim!=null) line+=' · <b>'+rem+'</b>/'+lim+' runs left today';
+    else if(lim!=null) line+=' · '+lim+' runs/day';
+    if(j.tier==='free' || j.upgrade_hint){
+      line+=' · <a href="/pricing.html" style="color:var(--accent);font-weight:650">Upgrade</a>';
+    } else {
+      line+=' · <a href="/pricing.html">manage</a>';
+    }
+    el.innerHTML=line;
   }catch(_){ }
-}
-const _pl=document.getElementById('pricingLink');
-const _sl=document.getElementById('shareLink');
-if(_sl) _sl.onclick=shareLolm;
-refreshUsageChip();
- alert('Owner mode: unlimited usage + key writes enabled on this browser for '+(r.days||30)+' days.'); }
-    else alert('Nope.');
-  }catch(e){ alert('unlock failed: '+e.message); }
 }
 function softUpgradeHint(el){
   if(localStorage.getItem('lolm_license')||localStorage.getItem('lolm_admin')) return;
@@ -1413,32 +1396,11 @@ async function startCheckout(tier){
 // returning from Stripe: claim the subscription → store the signed license
 (async function(){ const sid=new URLSearchParams(location.search).get('sub_session'); if(!sid) return;
   try{ const r=await (await fetch('/api/demo/billing/claim?session_id='+encodeURIComponent(sid))).json();
-    if(r.license){ localStorage.setItem('lolm_license', r.license);
+    if(r.license){ localStorage.setItem('lolm_license', r.license); refreshUsageChip();
       const t=document.createElement('div'); t.textContent='✓ Welcome to LOLM '+(r.label||r.tier)+' — your limits are upgraded.'; t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:10px 18px;border-radius:10px;font-weight:600;z-index:9999'; document.body.appendChild(t); setTimeout(()=>t.remove(),6000); }
     history.replaceState(null,'',location.pathname);
   }catch(_){}})();
 updateShield();
-
-function shareLolm(e){ if(e) e.preventDefault();
-  const url='https://lolm.imagineqira.com/?ref=share';
-  const text='LOLM — a persistent AI agent with receipts. Free to try: '+url;
-  if(navigator.share){ navigator.share({title:'LOLM', text:text, url:url}).catch(()=>{}); }
-  else if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>alert('Invite link copied:\\n'+url)); }
-  else prompt('Copy this invite link:', url);
-}
-async function refreshUsageChip(){
-  const el=document.getElementById('usageChip'); if(!el) return;
-  try{
-    const r=await fetch('/api/demo/billing/config',{headers:authHeaders()});
-    const j=await r.json();
-    // show tiers always; if license present, show paid badge
-    const lic=localStorage.getItem('lolm_license');
-    if(lic){ el.style.display='block'; el.innerHTML='✓ Paid plan active · <a href="/pricing.html">manage</a>'; return; }
-    el.style.display='block';
-    el.innerHTML='Free tier · 10 runs/day · <a href="/pricing.html" style="color:var(--accent);font-weight:650">Upgrade</a>';
-  }catch(_){ }
-}
-const _pl=document.getElementById('pricingLink');
 const _sl=document.getElementById('shareLink');
 if(_sl) _sl.onclick=shareLolm;
 refreshUsageChip();

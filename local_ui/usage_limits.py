@@ -155,35 +155,96 @@ def _used(identity: str, kind: str) -> int:
         return 0
 
 
+def _identity_and_tier(request: Any) -> Dict[str, Any]:
+    """Resolve who is calling and which tier they are on — no counters touched.
+
+    Returns keys: tier, identity, admin, unlimited (bool). unlimited covers
+    local installs, loopback, and the owner shield.
+    """
+    if not enforced():
+        return {"tier": "unlimited", "identity": "local", "admin": False, "unlimited": True}
+    headers = getattr(request, "headers", {}) or {}
+    client = getattr(request, "client", None)
+    # the machine itself (no proxy header + loopback client) is never limited:
+    # the box's own eval scripts and a local Mac app must keep working
+    if not headers.get("x-forwarded-for") and getattr(client, "host", "") in ("127.0.0.1", "::1"):
+        return {"tier": "unlimited", "identity": "loopback", "admin": False, "unlimited": True}
+    if is_admin(headers.get("x-lolm-admin", "")):
+        return {"tier": "admin", "identity": "admin", "admin": True, "unlimited": True}
+    lic = read_license(headers.get("x-lolm-license", ""))
+    tier = lic["tier"] if lic else "free"
+    identity = f"sub:{lic['sub_id']}" if lic else f"ip:{_client_ip(request)}"
+    return {"tier": tier, "identity": identity, "admin": False, "unlimited": False,
+            "sub_id": (lic or {}).get("sub_id")}
+
+
+def _limit_for(tier: str, kind: str) -> int:
+    limit_key = "visual_per_day" if kind == "visual" else "runs_per_day"
+    return int(os.environ.get(f"LOLM_{tier.upper()}_{limit_key.upper()}",
+                              TIERS[tier][limit_key]))
+
+
+def usage_status(request: Any) -> Dict[str, Any]:
+    """Peek remaining daily budget WITHOUT consuming a unit.
+
+    Used by the workspace chip, pricing page, and any client that needs to
+    show "X runs left today" before the next gated call. Safe to poll.
+    """
+    who = _identity_and_tier(request)
+    if who["unlimited"]:
+        return {
+            "enforced": enforced(),
+            "tier": who["tier"],
+            "label": "Admin" if who["admin"] else "Unlimited",
+            "admin": who["admin"],
+            "unlimited": True,
+            "runs": {"used": 0, "limit": None, "remaining": None},
+            "visual": {"used": 0, "limit": None, "remaining": None},
+            "upgrade_hint": False,
+            "tiers": public_tiers(),
+        }
+    tier = who["tier"]
+    identity = who["identity"]
+    runs_used = _used(identity, "runs")
+    visual_used = _used(identity, "visual")
+    runs_limit = _limit_for(tier, "runs")
+    visual_limit = _limit_for(tier, "visual")
+    runs_rem = max(0, runs_limit - runs_used)
+    visual_rem = max(0, visual_limit - visual_used)
+    return {
+        "enforced": True,
+        "tier": tier,
+        "label": TIERS[tier]["label"],
+        "admin": False,
+        "unlimited": False,
+        "runs": {"used": runs_used, "limit": runs_limit, "remaining": runs_rem},
+        "visual": {"used": visual_used, "limit": visual_limit, "remaining": visual_rem},
+        # nudge free users when they've burned most of the day budget
+        "upgrade_hint": tier == "free" and (runs_rem <= 3 or visual_rem <= 1),
+        "tiers": public_tiers(),
+    }
+
+
 def check_request(request: Any, kind: str = "runs") -> Dict[str, Any]:
     """The gate. kind: 'runs' (chat/agent turns) or 'visual' (builds).
     Returns {allowed, tier, used, limit, admin} — and COUNTS the use when allowed.
     Never limits when enforcement is off (local installs) or for the admin."""
-    if not enforced():
-        return {"allowed": True, "tier": "unlimited", "admin": False}
-    headers = getattr(request, "headers", {}) or {}
-    # the machine itself (no proxy header + loopback client) is never limited:
-    # the box's own eval scripts and a local Mac app must keep working
-    client = getattr(request, "client", None)
-    if not headers.get("x-forwarded-for") and getattr(client, "host", "") in ("127.0.0.1", "::1"):
-        return {"allowed": True, "tier": "unlimited", "admin": False}
-    if is_admin(headers.get("x-lolm-admin", "")):
-        return {"allowed": True, "tier": "admin", "admin": True}
-    lic = read_license(headers.get("x-lolm-license", ""))
-    tier = lic["tier"] if lic else "free"
-    identity = f"sub:{lic['sub_id']}" if lic else f"ip:{_client_ip(request)}"
-    limit_key = "visual_per_day" if kind == "visual" else "runs_per_day"
-    limit = int(os.environ.get(f"LOLM_{tier.upper()}_{limit_key.upper()}",
-                               TIERS[tier][limit_key]))
+    who = _identity_and_tier(request)
+    if who["unlimited"]:
+        return {"allowed": True, "tier": who["tier"], "admin": who["admin"]}
+    tier = who["tier"]
+    identity = who["identity"]
+    limit = _limit_for(tier, kind)
     used = _used(identity, kind)
     if used >= limit:
         return {"allowed": False, "tier": tier, "used": used, "limit": limit,
-                "admin": False,
+                "remaining": 0, "admin": False,
                 "error": (f"daily {kind} limit reached ({limit}/{TIERS[tier]['label']}). "
                           "Upgrade for more — cheaper than any big assistant."),
                 "tiers": public_tiers()}
-    _bump(identity, kind)
-    return {"allowed": True, "tier": tier, "used": used + 1, "limit": limit, "admin": False}
+    new_used = _bump(identity, kind)
+    return {"allowed": True, "tier": tier, "used": new_used, "limit": limit,
+            "remaining": max(0, limit - new_used), "admin": False}
 
 
 def _client_ip(request: Any) -> str:
@@ -220,8 +281,9 @@ def create_subscription_checkout(tier: str, base_url: str) -> Dict[str, Any]:
     base = base_url.rstrip("/")
     data = {
         "mode": "subscription",
-        "success_url": f"{base}/?sub_session={{CHECKOUT_SESSION_ID}}",
-        "cancel_url": f"{base}/",
+        # Land on pricing so the claim banner + "open workspace" CTA are obvious.
+        "success_url": f"{base}/pricing.html?sub_session={{CHECKOUT_SESSION_ID}}",
+        "cancel_url": f"{base}/pricing.html?cancelled=1",
         "line_items[0][quantity]": "1",
         "line_items[0][price_data][currency]": "usd",
         "line_items[0][price_data][unit_amount]": str(int(round(t["usd"] * 100))),

@@ -88,6 +88,32 @@ def test_visual_budget_is_separate(monkeypatch):
     assert ul.check_request(r, "visual")["allowed"]     # separate counter
 
 
+def test_usage_status_peeks_without_consuming(monkeypatch):
+    """Workspace chip / pricing poll must not burn the daily budget."""
+    monkeypatch.setenv("LOLM_ADMIN_PASS_SHA256", PW_HASH)
+    monkeypatch.setenv("LOLM_FREE_RUNS_PER_DAY", "3")
+    r = _req(fwd="10.0.0.5")
+    s0 = ul.usage_status(r)
+    assert s0["tier"] == "free"
+    assert s0["runs"]["used"] == 0 and s0["runs"]["remaining"] == 3
+    assert s0["unlimited"] is False
+    # three peeks leave the counter untouched
+    for _ in range(3):
+        s = ul.usage_status(r)
+        assert s["runs"]["used"] == 0 and s["runs"]["remaining"] == 3
+    # real gated calls still count
+    assert ul.check_request(r)["allowed"]
+    s1 = ul.usage_status(r)
+    assert s1["runs"]["used"] == 1 and s1["runs"]["remaining"] == 2
+    assert s1["upgrade_hint"] is True   # free + remaining <= 3
+
+
+def test_usage_status_unlimited_when_not_enforced():
+    s = ul.usage_status(_req(fwd="1.2.3.4"))
+    assert s["unlimited"] is True
+    assert s["runs"]["remaining"] is None
+
+
 # ── subscriber licenses ──────────────────────────────────────────────────────
 
 def test_license_round_trip_and_higher_limits(monkeypatch):
@@ -123,6 +149,8 @@ def test_checkout_builds_a_monthly_subscription(monkeypatch):
     assert seen["data"]["mode"] == "subscription"
     assert seen["data"]["line_items[0][price_data][recurring][interval]"] == "month"
     assert seen["data"]["line_items[0][price_data][unit_amount]"] == "799"
+    assert "pricing.html?sub_session=" in seen["data"]["success_url"]
+    assert "pricing.html?cancelled=1" in seen["data"]["cancel_url"]
     assert seen["auth"] == ("sk_test_x", "")
 
 
