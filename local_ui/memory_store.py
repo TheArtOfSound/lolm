@@ -131,13 +131,17 @@ class MemoryStore:
             # relevant if: 2+ content words overlap, OR half the query is covered,
             # OR a single DISTINCTIVE (long, rare) term matches — "carbonara",
             # "quantum" alone are strong signals; "flux" needs a second word.
+            # Also: short follow-up queries (1 content token, 4+ chars) may match
+            # a single clear term so "my name?" still finds "User is named Bryan".
             distinctive = any(len(t) >= 7 and t in hay for t in content)
-            if overlap < 2 and coverage < 0.5 and not distinctive:
+            short_ok = len(content) == 1 and len(content[0]) >= 4 and content[0] in hay
+            if overlap < 2 and coverage < 0.5 and not distinctive and not short_ok:
                 continue
             score = (overlap + 1.5 * coverage
                      + 0.3 * int(row.get("importance", 3))
                      + 0.2 * (idx / n)                # gentle recency nudge
-                     + (0.6 if (scope and row.get("scope") == scope) else 0))  # my own context first
+                     + (0.6 if (scope and row.get("scope") == scope) else 0)  # my own context first
+                     + (0.4 if short_ok else 0))
             scored.append((score, row))
         scored.sort(key=lambda s: s[0], reverse=True)
         return [row for _, row in scored[:limit]]
