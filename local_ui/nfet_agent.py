@@ -1397,6 +1397,15 @@ WORKING DRAFT:
             )
             if cap:
                 yield {"event": "learned", "data": cap}
+            # Rolling conversation summary — long-thread continuity without embeddings.
+            if profile in ("dialog", "question", "task") and answer_text and len(raw_command) > 2:
+                try:
+                    mem = getattr(self.deps, "memory", None)
+                    if mem is not None and hasattr(mem, "add_summary"):
+                        snippet = (raw_command[:120] + " → " + answer_text.strip().replace("\n", " ")[:180])
+                        mem.add_summary(snippet, span=getattr(req, "session_id", None) or "session")
+                except Exception:
+                    pass
         except Exception:
             pass
 
