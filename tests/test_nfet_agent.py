@@ -96,7 +96,8 @@ class FakeLoop:
                            "temperature": req.temperature, "use_graft": req.use_graft})
         if "normal local chatbot" in system:
             yield from self._plain(self.base_text)
-        elif "friendly assistant" in system:
+        elif "friendly" in system and "assistant" in system:
+            # Social path: "friendly capable assistant" (and older "friendly assistant")
             yield from self._plain("Hi there! How can I help today?")
         elif "verifier" in system:
             yield from self._plain(self.verify_text)
@@ -426,7 +427,7 @@ def test_social_command_answers_directly(tmp_path):
     # no drafting-engine call ever happened
     assert not any("drafting engine" in c["system"] for c in loop.calls)
     # the finalizer used the friendly style, not the sectioned task style
-    social_calls = [c for c in loop.calls if "friendly assistant" in c["system"]]
+    social_calls = [c for c in loop.calls if "friendly" in c["system"] and "assistant" in c["system"]]
     assert social_calls and "Hello" in social_calls[0]["user"]
     assert out["result"]["response"].startswith("Hi there")
     assert out["proof"]["verdict"] == "social_direct_reply"

@@ -157,9 +157,9 @@ GEN = _ClaudeFirst(CLAUDE, BestBrain(LOCAL, CLOUD))
 def _resolve_reasoner() -> str:
     """Best brain available RIGHT NOW for the chat path ('auto' resolution).
     reasoner!='local' routes to GEN — the full _ClaudeFirst→BestBrain(LOCAL,
-    CLOUD) chain (paid Claude > your local model > worker gateway > your direct
-    provider keys). 'local' means the tiny in-process demo model — the last
-    resort only, never the silent default it used to be."""
+    CLOUD) chain (paid Claude > worker/direct cloud > explicit local OR
+    auto-discovered evolved :11435). 'local' means the tiny in-process demo
+    model — the last resort only, never the silent default it used to be."""
     if GEN._claude_on():
         return "claude"
     if LOCAL.available() or CLOUD.available():

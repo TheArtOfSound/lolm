@@ -173,9 +173,13 @@ def test_workers_ai_ctor_override_beats_env(monkeypatch):
 
 
 def test_local_brain_hot_applies_and_reprobes(monkeypatch):
-    from local_ui.local_brain import LocalServerReasonerLoop
+    from local_ui import local_brain as lb
     monkeypatch.delenv("LOLM_LOCAL_MODEL", raising=False)
-    loop = LocalServerReasonerLoop(state_fn=lambda: None)
+    monkeypatch.delenv("LOLM_LOCAL_URL", raising=False)
+    monkeypatch.delenv("LOLM_LOCAL_API", raising=False)
+    # Isolate from a live evolved serve on the developer machine.
+    monkeypatch.setattr(lb, "probe_evolved", lambda *a, **k: False)
+    loop = lb.LocalServerReasonerLoop(state_fn=lambda: None)
     assert loop.configured() is False
     monkeypatch.setenv("LOLM_LOCAL_MODEL", "qwen2.5:3b")
     assert loop.configured() is True                         # env applied live
@@ -185,6 +189,95 @@ def test_local_brain_hot_applies_and_reprobes(monkeypatch):
     # available() sees cfg != cached cfg → resets _healthy before using it
     monkeypatch.setenv("LOLM_LOCAL_URL", "http://127.0.0.1:9")   # unreachable
     assert loop.available() is False
+
+
+def test_evolved_auto_discovers_when_local_env_unset(monkeypatch):
+    """No LOLM_LOCAL_* → pick lolm-evolved on :11435 when the probe is live."""
+    from local_ui import local_brain as lb
+    for k in ("LOLM_LOCAL_MODEL", "LOLM_LOCAL_URL", "LOLM_LOCAL_API", "LOLM_EVOLVED_URL"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr(lb, "probe_evolved", lambda *a, **k: True)
+    loop = lb.LocalServerReasonerLoop(state_fn=lambda: None)
+    assert loop.configured() is True
+    assert loop.source() == "evolved_auto"
+    assert loop.model == "lolm-evolved"
+    assert loop.api == "openai"
+    assert "11435" in loop.url
+    assert loop.available() is True
+
+
+def test_explicit_local_env_beats_evolved_auto(monkeypatch):
+    from local_ui import local_brain as lb
+    monkeypatch.setenv("LOLM_LOCAL_MODEL", "qwen2.5:7b")
+    monkeypatch.setenv("LOLM_LOCAL_URL", "http://127.0.0.1:11434")
+    monkeypatch.delenv("LOLM_LOCAL_API", raising=False)
+    monkeypatch.setattr(lb, "probe_evolved", lambda *a, **k: True)
+    loop = lb.LocalServerReasonerLoop(state_fn=lambda: None)
+    assert loop.source() == "env"
+    assert loop.model == "qwen2.5:7b"
+    assert loop.api == "ollama"
+
+
+def test_bestbrain_uses_evolved_as_rescue_after_cloud(monkeypatch):
+    """Auto-evolved must NOT demote Workers/direct — cloud first, evolved rescue."""
+    from local_ui.local_brain import BestBrain
+
+    class _Local:
+        def available(self): return True
+        def source(self): return "evolved_auto"
+        def __call__(self, req):
+            yield {"event": "token", "data": {"token": "evolved "}}
+            yield {"event": "done", "data": {"response": "evolved ok"}}
+
+    class _Cloud:
+        def __init__(self, fail=False):
+            self.fail, self.calls = fail, 0
+        def available(self): return True
+        def __call__(self, req):
+            self.calls += 1
+            if self.fail:
+                yield {"event": "error", "data": {"error": "workers 429"}}
+                return
+            yield {"event": "token", "data": {"token": "cloud "}}
+            yield {"event": "done", "data": {"response": "cloud ok"}}
+
+    monkeypatch.delenv("LOLM_BRAIN", raising=False)
+    monkeypatch.delenv("LOLM_SOVEREIGN", raising=False)
+
+    cloud_ok = _Cloud(fail=False)
+    bb = BestBrain(_Local(), cloud_ok)
+    assert bb.active() == "cloud"
+    events = list(bb({}))
+    assert any(e["event"] == "done" and "cloud" in e["data"].get("response", "") for e in events)
+
+    cloud_bad = _Cloud(fail=True)
+    bb2 = BestBrain(_Local(), cloud_bad)
+    events2 = list(bb2({}))
+    kinds = [e["event"] for e in events2]
+    assert "phase" in kinds
+    assert any(e.get("data", {}).get("phase") == "brain_fallback" for e in events2)
+    assert any(e["event"] == "done" and "evolved" in e["data"].get("response", "") for e in events2)
+
+
+def test_bestbrain_explicit_local_still_leads(monkeypatch):
+    from local_ui.local_brain import BestBrain
+
+    class _Local:
+        def available(self): return True
+        def source(self): return "env"
+        def __call__(self, req):
+            yield {"event": "done", "data": {"response": "local ok"}}
+
+    class _Cloud:
+        def available(self): return True
+        def __call__(self, req):
+            yield {"event": "done", "data": {"response": "cloud ok"}}
+
+    monkeypatch.delenv("LOLM_BRAIN", raising=False)
+    monkeypatch.delenv("LOLM_SOVEREIGN", raising=False)
+    bb = BestBrain(_Local(), _Cloud())
+    assert bb.active() == "local"
+    assert list(bb({}))[0]["data"]["response"] == "local ok"
 
 
 def test_resolver_prefers_claude_then_cascade(spd_mod, monkeypatch):

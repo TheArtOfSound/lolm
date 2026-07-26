@@ -9,6 +9,7 @@
 - Coding agent: 14 steps, format re-prompt, auto-RUN
 - Memory short-token retrieval
 - Capture learning from raw user text
+- Evolved local :11435 auto-discover + rescue after Claude/Workers fail mid-dialog
 
 ## Deploy
   DEPLOY_SSH_HOST=autohustle-aws bash deploy/deploy_box.sh
@@ -16,19 +17,6 @@
 ## Next queue (do not wait for user)
 1. Embedding-backed memory retrieval
 2. Code agent: JSON tool schema + pytest oracle
-3. Prefer evolved local serve (11435) when Claude/Workers fail mid-dialog
-4. Between-turn operator ticks on local operator mode
-5. Visual builder: always verify + auto-retry on blank canvas
-6. Persist conversation summaries into identity.md for long-term continuity
-
-## 2026-07-26 5m loop
-- 5-minute continuous improvement schedule (until user says stop)
-- Auto-wire evolved local brain on :11435 (lolm-evolved)
-- BestBrain resilient fallback (cloud fail → local before tokens)
-
-## Monetization + discovery (live)
-- /pricing.html Free / Plus $7.99 / Pro $19.99 + Stripe checkout
-- /llms.txt for AI crawlers
-- sitemap + robots refreshed
-- Workspace: Pricing + Share + free-tier chip + soft upgrade hint
-- try.html next-steps footer
+3. Between-turn operator ticks on local operator mode
+4. Visual builder: always verify + auto-retry on blank canvas
+5. Persist conversation summaries into identity.md for long-term continuity
