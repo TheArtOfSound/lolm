@@ -893,7 +893,10 @@ WORKING DRAFT:
         mem = getattr(self.deps, "memory", None)
         cmd = (command or "").strip()
         ans = (answer_text or "").strip()
-        if mem is None or profile == "social" or len(cmd) < 12:
+        # social stays silent; dialog still captures "remember …" and short facts
+        if mem is None or profile == "social":
+            return None
+        if len(cmd) < 8 and not _TEACH_MARKER_RE.search(cmd):
             return None
         sess = scope or "anon"
 
@@ -1386,8 +1389,12 @@ WORKING DRAFT:
         # injection above make what's captured actually pay off on later questions).
         try:
             _math_ok = bool(vres.get("checks")) and not vres.get("failed")
-            cap = self._capture_learning(command, answer_text, profile, _math_ok,
-                                         scope=getattr(req, "session_id", None))
+            # Capture from the user's raw text (not the expanded dialog prompt)
+            # so "remember my name is Bryan" and short facts still land in memory.
+            cap = self._capture_learning(
+                raw_command, answer_text, profile, _math_ok,
+                scope=getattr(req, "session_id", None),
+            )
             if cap:
                 yield {"event": "learned", "data": cap}
         except Exception:
