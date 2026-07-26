@@ -826,7 +826,8 @@ async function runCodeLoop(task, c){
   const term = h => { const o=$('termOut'); if(o){ o.innerHTML+=h; o.scrollTop=o.scrollHeight; } };
   const rec = {model:'Llama 70B (agentic)', mode:'code', verdict:'', files:[], runs:0, ok:false, lastOut:'', controls:{}, sources:[], memories:[]};
   try{
-    const resp = await fetch('/api/demo/code/run',{method:'POST',headers:authHeaders(),body:JSON.stringify({task})});
+    const hist=(c.messages||[]).filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.content})).slice(-8);
+    const resp = await fetch('/api/demo/code/run',{method:'POST',headers:authHeaders(),body:JSON.stringify({task, history:hist, max_steps:18})});
     if(!resp.ok){ const e=await resp.json().catch(()=>({})); step('⚠ '+esc(e.error||('HTTP '+resp.status))); bub.textContent='Code execution refused: '+(e.error||resp.status); }
     else{
       const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';

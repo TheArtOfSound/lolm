@@ -87,7 +87,9 @@ from local_ui.sandbox import Sandbox, _HAS_BWRAP
 
 class CodeTask(BaseModel):
     task: str
-    max_steps: int = 14
+    max_steps: int = 18
+    # Optional prior chat turns so coding continues the conversation (switch-from-Claude UX)
+    history: Optional[List[Dict[str, str]]] = None
 
 
 class VisualTask(BaseModel):
@@ -255,10 +257,46 @@ def register_code_routes(app: Any, root: str,
             return JSONResponse({"error": "empty task"}, status_code=400)
 
         sb = Sandbox(root)
-        agent = CodeAgent(sb, chat_fn, max_steps=min(max(req.max_steps, 1), 16), isolated=True)
+        # Wrap chat_fn to inject conversation history for multi-turn coding sessions
+        hist = getattr(req, "history", None) or []
+        hist_lines = []
+        if isinstance(hist, list):
+            for t in hist[-8:]:
+                if not isinstance(t, dict):
+                    continue
+                role = "user" if t.get("role") == "user" else "assistant"
+                content = str(t.get("content") or "").strip()
+                if content:
+                    hist_lines.append(f"{role}: {content[:500]}")
+        base_chat = chat_fn
+
+        def _chat_with_history(msgs: List[Dict[str, str]]) -> str:
+            out: List[Dict[str, str]] = []
+            for x in msgs:
+                content = str(x.get("content") or "")
+                if (
+                    hist_lines
+                    and x.get("role") == "user"
+                    and content.startswith("TASK:")
+                    and "CONVERSATION SO FAR" not in content
+                ):
+                    content = (
+                        "CONVERSATION SO FAR (coding session):\n"
+                        + "\n".join(hist_lines)
+                        + "\n\n"
+                        + content
+                    )
+                out.append({"role": x.get("role", "user"), "content": content})
+            try:
+                return base_chat(out, max_new_tokens=2400)  # type: ignore[call-arg]
+            except TypeError:
+                return base_chat(out)
+
+        agent = CodeAgent(sb, _chat_with_history, max_steps=min(max(req.max_steps, 1), 22), isolated=True)
 
         def gen():
             try:
+                yield _sse("agent_note", {"text": "LOLM Code — multi-file agentic loop (run → fix → verify)"})
                 for ev in agent.run(task):
                     yield _sse(ev["event"], ev["data"])
             except Exception as exc:

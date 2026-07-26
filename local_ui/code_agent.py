@@ -16,37 +16,44 @@ import re
 from typing import Any, Callable, Dict, Iterator, List, Optional
 
 SYSTEM = (
-    "You are a precise coding agent in a SANDBOXED Linux box. python3 and node are "
-    "available. Solve the TASK by writing a COMPLETE, RUNNABLE program that performs the "
-    "task AND prints its results.\n\n"
-    "ENVIRONMENT LIMITS — code that violates these WILL FAIL, so design around them:\n"
-    "- NO network (requests/urllib/fetch/scraping/APIs all fail — never use them).\n"
-    "- NO pip/npm install — standard library only.\n"
-    "- NO GUI/display (no pygame/tkinter/turtle/matplotlib windows).\n"
-    "- NO interactive input — input()/readline BLOCKS FOREVER. Use fixed sample values.\n"
-    "- The program must RUN AND EXIT in ~15s: no servers, no infinite loops, no waiting.\n"
-    "If the task as literally asked needs the network, a GUI, a server, or live typing, "
-    "write a SELF-CONTAINED version that demonstrates the core logic with sample/hard-coded "
-    "data and PRINTS the result (e.g. simulate a few game turns and print each board; parse "
-    "a hard-coded HTML string instead of fetching a URL; drive a calculator with example "
-    "inputs). Print one line noting what you substituted.\n\n"
-    "Reply in EXACTLY this format each turn (nothing else):\n"
-    "FILE: <filename>\n"
+    "You are LOLM Code — an agentic coding system competing with Claude Code and Codex.\n"
+    "Win by: (1) correct code that RUNS, (2) fixing real failures from REAL stdout/stderr, "
+    "(3) multi-file projects when needed, (4) never claiming success without a green run.\n\n"
+    "Sandbox: python3 + node + coreutils. Isolated Linux jail.\n"
+    "HARD LIMITS (violations always fail):\n"
+    "- NO network (no requests/urllib/fetch/APIs).\n"
+    "- NO pip/npm install — stdlib only.\n"
+    "- NO GUI (no pygame/tkinter/matplotlib windows).\n"
+    "- NO interactive input() — use fixed sample values.\n"
+    "- Must RUN AND EXIT in ~20s (no servers, no infinite loops).\n"
+    "If the task needs network/GUI/server, ship a self-contained simulation that PRINTS results.\n\n"
+    "Each turn reply in EXACTLY this format (you may emit MULTIPLE FILE blocks, then one RUN):\n"
+    "FILE: <path>\n"
     "```\n"
-    "<the complete file contents>\n"
+    "<complete file contents>\n"
     "```\n"
-    "RUN: <command to run it>\n\n"
-    "When the run output correctly satisfies the TASK, reply with exactly one line:\n"
+    "FILE: <optional second path>\n"
+    "```\n"
+    "<contents>\n"
+    "```\n"
+    "RUN: <command>\n\n"
+    "When the run fully satisfies the TASK (and any tests you added), reply ONLY:\n"
     "DONE: <one-line summary>\n\n"
-    "Rules: the FILE must be the WHOLE program and must PRINT results. After each run you "
-    "see the REAL output; if it failed, FIX THE ROOT CAUSE (don't repeat the same code). "
-    "Never say DONE until you have SEEN a successful run with the expected output."
+    "Quality bar:\n"
+    "- Prefer small pure functions + a main that prints clear results.\n"
+    "- For non-trivial logic, add asserts or a tiny self-check in the same file and RUN it.\n"
+    "- On failure: read the error, fix ROOT CAUSE, do not rewrite the same broken code.\n"
+    "- Never DONE until you have SEEN exit 0 with meaningful printed output."
 )
 
 _FENCE = re.compile(r"```[a-zA-Z0-9_+\-]*\n(.*?)```", re.S)
 _FILE = re.compile(r"FILE\s*:\s*([\w./\-]{1,80})", re.IGNORECASE)
 _RUN = re.compile(r"RUN\s*:\s*(.+)", re.IGNORECASE)
 _DONE = re.compile(r"DONE\s*:\s*(.+)", re.IGNORECASE)
+_FILE_BLOCK = re.compile(
+    r"FILE\s*:\s*([\w./\-]{1,80})\s*\n```[a-zA-Z0-9_+\-]*\n(.*?)```",
+    re.S | re.IGNORECASE,
+)
 _LANG_EXT = {"python": "py", "py": "py", "python3": "py", "javascript": "js", "js": "js",
              "node": "js", "bash": "sh", "sh": "sh", "shell": "sh", "go": "go"}
 
@@ -75,9 +82,12 @@ def _extract_json(text: str) -> Optional[Dict[str, Any]]:
 
 
 def _parse_turn(text: str) -> Optional[Dict[str, Any]]:
-    """Unified parser → {"file": (name, content)|None, "run": cmd|None, "done": str|None}.
-    Accepts the natural FILE/```/RUN/DONE format AND the legacy JSON action format. A turn
-    that writes/runs is executed; a pure DONE finishes."""
+    """Unified parser → files list + run + done.
+
+    Returns:
+      {"files": [(path, content), ...], "file": first|None, "run": cmd|None, "done": str|None}
+    Multi-FILE turns are first-class (Claude Code / Codex parity for multi-file edits).
+    """
     if not text or not text.strip():
         return None
     # legacy JSON action
@@ -85,37 +95,51 @@ def _parse_turn(text: str) -> Optional[Dict[str, Any]]:
     if a:
         act = a.get("action")
         if act == "write_file":
-            return {"file": (a.get("path", "main.py"), a.get("content", "")), "run": None, "done": None}
+            pair = (a.get("path", "main.py"), a.get("content", ""))
+            return {"files": [pair], "file": pair, "run": None, "done": None}
         if act == "run":
-            return {"file": None, "run": a.get("command"), "done": None}
+            return {"files": [], "file": None, "run": a.get("command"), "done": None}
         if act == "finish":
-            return {"file": None, "run": None, "done": a.get("summary", "done")}
+            return {"files": [], "file": None, "run": None, "done": a.get("summary", "done")}
 
-    fence = _FENCE.search(text)
+    files = [(m.group(1), m.group(2)) for m in _FILE_BLOCK.finditer(text)]
     runm = _RUN.search(text)
-    content = fence.group(1) if fence else None
     cmd = runm.group(1).strip().strip("`").strip() if runm else None
 
-    if content is not None or cmd is not None:
-        name = None
-        fm = _FILE.search(text)
-        if fm:
-            name = fm.group(1)
-        if not name and content is not None:
-            lang = re.search(r"```([a-zA-Z0-9_+\-]+)", text)
-            name = "main." + _LANG_EXT.get((lang.group(1).lower() if lang else ""), "py")
-        return {"file": (name, content) if content is not None else None,
-                "run": cmd, "done": None}
+    if not files:
+        fence = _FENCE.search(text)
+        content = fence.group(1) if fence else None
+        if content is not None or cmd is not None:
+            name = None
+            fm = _FILE.search(text)
+            if fm:
+                name = fm.group(1)
+            if not name and content is not None:
+                lang = re.search(r"```([a-zA-Z0-9_+\-]+)", text)
+                name = "main." + _LANG_EXT.get((lang.group(1).lower() if lang else ""), "py")
+            if content is not None:
+                files = [(name, content)]
+
+    if files or cmd is not None:
+        first = files[0] if files else None
+        return {"files": files, "file": first, "run": cmd, "done": None}
 
     dm = _DONE.search(text)
     if dm:
-        return {"file": None, "run": None, "done": dm.group(1).strip()}
+        return {"files": [], "file": None, "run": None, "done": dm.group(1).strip()}
     return None
+
+
+def _wants_tests(task: str) -> bool:
+    t = (task or "").lower()
+    return any(k in t for k in (
+        "test", "unittest", "pytest", "assert", "tdd", "spec", "verify",
+    ))
 
 
 class CodeAgent:
     def __init__(self, sandbox: Any, chat_fn: Callable[[List[Dict[str, str]]], str],
-                 max_steps: int = 14, run_timeout: int = 20,
+                 max_steps: int = 18, run_timeout: int = 25,
                  isolated: Optional[bool] = True):
         self.sb = sandbox
         self.chat = chat_fn
@@ -124,6 +148,7 @@ class CodeAgent:
         self.isolated = isolated
         self.actions: List[Dict[str, Any]] = []
         self._format_nudge = ""
+        self._files_written: List[str] = []
 
     def _context(self) -> str:
         if not self.actions:
@@ -226,12 +251,18 @@ class CodeAgent:
 
             did = False
             written_path = None
-            if turn["file"] and turn["file"][1] is not None:
-                path, content = turn["file"]
+            file_list = turn.get("files") or (
+                [turn["file"]] if turn.get("file") and turn["file"][1] is not None else []
+            )
+            for path, content in file_list:
+                if content is None:
+                    continue
                 written_path = path
                 try:
                     fc = self.sb.write_file(path, content, reason="")
                     self.actions.append({"kind": "write_file", "path": path, "bytes": len(content)})
+                    if path not in self._files_written:
+                        self._files_written.append(path)
                     yield {"event": "file_changed", "data": {"path": path,
                            "diff": (fc.get("diff") or "")[:2500], "bytes": len(content)}}
                     did = True
@@ -275,6 +306,33 @@ class CodeAgent:
                 else:
                     fail_repeats = 0
                     fail_sig = None
+                    # Competitive bar: after a green run on non-trivial tasks, run a
+                    # second verification command when the user asked for tests, or a
+                    # cheap syntax check so we don't DONE on silent garbage.
+                    if ok and produced_output and _wants_tests(task):
+                        vcmd = None
+                        if any(p.endswith(".py") for p in self._files_written):
+                            vcmd = "python3 -m py_compile " + " ".join(
+                                p for p in self._files_written if p.endswith(".py")
+                            )
+                        if vcmd:
+                            yield {"event": "agent_note", "data": {
+                                "text": f"verify: `{vcmd}`"}}
+                            yield {"event": "command_started", "data": {"command": vcmd}}
+                            vr = self.sb.run(vcmd, timeout=self.run_timeout, isolated=self.isolated)
+                            self.actions.append({"kind": "run", "command": vcmd, "result": vr})
+                            yield {"event": "command_finished", "data": {
+                                "command": vcmd, "exit_code": vr.get("exit_code"),
+                                "stdout": vr.get("stdout", ""), "stderr": vr.get("stderr", ""),
+                                "blocked": vr.get("blocked", False), "isolated": True,
+                                "verify": True}}
+                            if vr.get("exit_code") != 0 or vr.get("blocked"):
+                                ok = False
+                                produced_output = True  # keep working
+                                self._format_nudge = (
+                                    "\n\nVERIFY FAILED. Fix syntax/tests, then RUN again. "
+                                    "Do not say DONE."
+                                )
             if not did:
                 yield {"event": "agent_note", "data": {"step": step,
                        "text": "no FILE or RUN in the reply", "raw": (raw or "")[:200]}}
