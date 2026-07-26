@@ -173,3 +173,12 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 - "do that" / "go for it" / "once more" treated as affirm
 ### Findability (win #6)
 - try.html nav: why switch, receipts, pricing, workspace
+
+## 2026-07-26 loop — runtime error coaches + option reject + npm ledger docs
+### Agentic coding (win #1)
+- FileNotFound / ZeroDivision / Index|Key|Type|ValueError auto-coaches
+### Continuity (win #2)
+- "not A" / "the other one" option reject/pick paths
+### Findability (win #6)
+- npm README: listCodeReceipts + receipts.html; package 0.2.3
+- why-switch + pricing link live receipts ledger

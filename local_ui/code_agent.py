@@ -1006,6 +1006,37 @@ class CodeAgent:
                         )
                         yield {"event": "agent_note", "data": {
                             "text": "timeout/kill — rewrite to exit quickly"}}
+                    m_fnf = re.search(
+                        r"FileNotFoundError:.*No such file or directory: ['\"]([^'\"]+)['\"]",
+                        err_full,
+                    ) or re.search(
+                        r"can't open file ['\"]([^'\"]+)['\"]",
+                        err_full,
+                    )
+                    if m_fnf and not m_miss:
+                        missing = m_fnf.group(1).rsplit("/", 1)[-1]
+                        self._format_nudge = (
+                            f"\n\nFILE NOT FOUND: `{missing}`. Write FILE: {missing} "
+                            "(or fix the RUN path), then RUN again."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": f"missing file `{missing}` — write it before RUN"}}
+                    if re.search(r"ZeroDivisionError", err_full) and not m_miss:
+                        self._format_nudge = (
+                            "\n\nZeroDivisionError: guard the divisor (or fix the math), "
+                            "then RUN again. Do not claim DONE."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": "ZeroDivisionError — guard divisors"}}
+                    if re.search(r"IndexError|KeyError|TypeError|ValueError", err_full) and not m_miss and not m_syn:
+                        et = re.search(r"(IndexError|KeyError|TypeError|ValueError)(:\s*[^\n]+)?", err_full)
+                        label = et.group(0)[:120] if et else "runtime error"
+                        self._format_nudge = (
+                            f"\n\nRUNTIME ERROR: {label}\n"
+                            "Fix the root cause in the FILE (bounds, keys, types), then RUN again."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": f"runtime error — {label[:80]}"}}
                     fail_repeats = fail_repeats + 1 if sig == fail_sig else 0
                     fail_sig = sig
                     if fail_repeats >= 2:

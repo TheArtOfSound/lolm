@@ -40,12 +40,12 @@ SHORT_REPLY_RE = re.compile(
     r"wait|hold\s*on|hmm+|huh|what\?|"
     r"tell\s*me\s*more|explain|simpler|eli5|"
     r"(?:option\s*)?[abc123]|"
-    r"the\s+(?:first|second|third|last)(?:\s+one)?|"
-    r"(?:first|second|third|last)(?:\s+one)?"
+    r"the\s+(?:first|second|third|last|other)(?:\s+one)?|"
+    r"(?:first|second|third|last|other)(?:\s+one)?|"
+    r"not\s+(?:option\s*)?(?:[abc123]|the\s+)?(?:first|second|third|last|other|[abc123])(?:\s+one)?"
     r")[\s!.?]*$",
     re.IGNORECASE,
 )
-
 # Slang / non-answers that must NEVER be treated as definition requests.
 UNKNOWN_RE = re.compile(
     r"^\s*(i\s*don'?t\s*know|idk|i\s*dunno|dunno|no\s*idea|not\s*sure|n/?a|"
@@ -70,9 +70,16 @@ NEGATE_RE = re.compile(
 OPTION_PICK_RE = re.compile(
     r"^\s*(?:"
     r"(?:option\s*)?([abc123])|"
-    r"the\s+(first|second|third|last|1st|2nd|3rd)\s*(?:one|option|choice)?|"
-    r"(first|second|third|last)\s*(?:one|option|choice)?"
+    r"the\s+(first|second|third|last|other|1st|2nd|3rd)\s*(?:one|option|choice)?|"
+    r"(first|second|third|last|other)\s*(?:one|option|choice)?"
     r")\s*[!.?]*\s*$",
+    re.IGNORECASE,
+)
+
+# "not A" / "not the first" — decline one option and take the alternative.
+OPTION_REJECT_RE = re.compile(
+    r"^\s*not\s+(?:option\s*)?([abc123]|the\s+)?(first|second|third|last|other|[abc123])"
+    r"(?:\s+one)?\s*[!.?]*\s*$",
     re.IGNORECASE,
 )
 
@@ -221,13 +228,23 @@ def resolve_followup(
         )
         return text, "dialog", "negate"
 
+    if OPTION_REJECT_RE.match(c) and turns:
+        prior = last_asst or last_user
+        text = (
+            f'The user rejected a choice with "{c.strip()}".\n'
+            + (f'Your previous message (with the options) was:\n"""{prior[:900]}"""\n' if prior else "")
+            + "Do NOT take the rejected option. Pick the best remaining alternative "
+            "(or ask once between the remaining ones). Continue the same thread."
+        )
+        return text, "dialog", "option_reject"
+
     if OPTION_PICK_RE.match(c) and turns:
         prior = last_asst or last_user
         pick = c.strip()
         text = (
             f'The user selected option "{pick}" from your previous choices.\n'
             + (f'Your previous message (with the options) was:\n"""{prior[:900]}"""\n' if prior else "")
-            + "Map their pick onto the matching option (A/B/C, 1/2/3, first/second/third/last). "
+            + "Map their pick onto the matching option (A/B/C, 1/2/3, first/second/third/last/other). "
             "Proceed with THAT choice only — do not re-list all options unless clarification is needed. "
             "Do not restart the conversation."
         )

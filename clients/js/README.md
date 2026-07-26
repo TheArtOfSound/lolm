@@ -134,3 +134,13 @@ with nothing worth saying. Build a chat-style UI in a dozen lines.
 
 MIT (this client). The LOLM model and workspace are licensed separately under
 the LOLM Community License — see [lolm.imagineqira.com](https://lolm.imagineqira.com).
+
+## Code receipts ledger
+
+```js
+import { listCodeReceipts } from "lolm-nfet-client";
+const { receipts, stats } = await listCodeReceipts({ limit: 20 });
+```
+
+Live UI: https://lolm.imagineqira.com/receipts.html
+
