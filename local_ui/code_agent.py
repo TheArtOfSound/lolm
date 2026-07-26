@@ -57,10 +57,8 @@ SYSTEM = (
     "- Prefer small pure functions + a main that prints clear results.\n"
     "- For non-trivial logic, add asserts or a tiny self-check in the same file and RUN it.\n"
     "- On failure: read the error, fix ROOT CAUSE, do not rewrite the same broken code.\n"
-    "- Never DONE until you have SEEN exit 0 with meaningful printed output.
-"
-    "- The harness may auto-finish when expected output or tests already pass.
-"
+    "- Never DONE until you have SEEN exit 0 with meaningful printed output.\n"
+    "- The harness may auto-finish when expected output or tests already pass."
 )
 
 _FENCE = re.compile(r"```[a-zA-Z0-9_+\-]*\n(.*?)```", re.S)
