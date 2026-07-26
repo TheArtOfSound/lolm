@@ -196,3 +196,35 @@ def test_code_receipt_emitted_and_blocks_wrong_output(tmp_path):
     # blocked the premature DONE
     notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
     assert "missing expected" in notes or "OUTPUT MISMATCH" in notes or "blocked DONE" in notes
+
+
+def test_third_party_import_coaches_stdlib_rewrite(tmp_path):
+    """No pip in jail — coach stdlib rewrite instead of fake FILE: requests.py."""
+    sb = Sandbox(tmp_path)
+    seq = iter([
+        '{"action":"write_and_run","path":"f.py","content":"import requests\\nprint(1)\\n",'
+        '"command":"python3 f.py"}',
+        '{"action":"write_and_run","path":"f.py","content":"print(1)\\n","command":"python3 f.py"}',
+        '{"action":"finish","summary":"stdlib"}',
+    ])
+    events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("print 1 without network"))
+    notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
+    assert "stdlib" in notes.lower() or "no pip" in notes.lower() or "requests" in notes
+    # must not invent a sibling requests.py coach as the primary path
+    assert "need FILE: requests.py" not in notes
+    assert any(e["event"] == "code_receipt" for e in events)
+
+
+def test_attributeerror_coaches_fix(tmp_path):
+    sb = Sandbox(tmp_path)
+    seq = iter([
+        '{"action":"write_and_run","path":"a.py",'
+        '"content":"x=1\\nprint(x.append(2))\\n","command":"python3 a.py"}',
+        '{"action":"write_and_run","path":"a.py","content":"x=[1]\\nx.append(2)\\nprint(x)\\n",'
+        '"command":"python3 a.py"}',
+        '{"action":"finish","summary":"fixed"}',
+    ])
+    events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("append and print"))
+    notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
+    assert "AttributeError" in notes
+    assert any(e["event"] == "code_receipt" for e in events)

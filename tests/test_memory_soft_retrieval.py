@@ -1,4 +1,6 @@
-from local_ui.memory_store import MemoryStore, _tfidf_cosine, _tf, _content_tokens
+from local_ui.memory_store import (
+    MemoryStore, _tfidf_cosine, _tf, _content_tokens, _hash_embed, _hash_cosine,
+)
 
 
 def test_soft_retrieval_finds_paraphrased_personal_fact(tmp_path):
@@ -19,3 +21,11 @@ def test_tfidf_ranks_related_notes_above_noise(tmp_path):
     # cosine self-similarity sanity
     toks = _content_tokens("carbonara recipe eggs")
     assert _tfidf_cosine(_tf(toks), _tf(toks), {t: 1.0 for t in toks}) > 0.99
+
+
+def test_hash_embed_self_similarity_and_paraphrase():
+    a = _hash_embed("User prefers dark mode UI theme")
+    b = _hash_embed("User prefers dark mode UI theme")
+    c = _hash_embed("totally unrelated quantum flux nonsense")
+    assert _hash_cosine(a, b) > 0.99
+    assert _hash_cosine(a, _hash_embed("prefers a dark mode theme")) > _hash_cosine(a, c)

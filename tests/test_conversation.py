@@ -65,3 +65,13 @@ def test_option_reject_not_a():
     cmd, prof, tag = resolve_followup("not A", hist)
     assert tag == "option_reject"
     assert "rejected" in cmd.lower() or "NOT" in cmd
+
+
+def test_which_one_continuity():
+    hist = [
+        {"role": "user", "content": "A or B?"},
+        {"role": "assistant", "content": "A) memory  B) coding"},
+    ]
+    cmd, prof, tag = resolve_followup("which one?", hist)
+    assert prof == "dialog" and tag == "which"
+    assert "option" in cmd.lower() or "Recommend" in cmd

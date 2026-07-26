@@ -1,25 +1,170 @@
 # Copyright (c) 2026 Qira LLC. All rights reserved.
-"""Between-turn continuity maintenance — no model call, pure memory hygiene.
+"""Between-turn continuity maintenance.
 
 After each chat turn we:
   1. Ensure the last exchange is in rolling summaries
   2. Promote durable user lines into identity when capture signals fire
   3. Return a compact "continuity pack" the next turn can inject
+  4. Optionally run a *model-backed* micro-tick (local-only) to extract
+     durable facts / open loops when a generate callback is provided
 
-This is the cheap half of "operator ticks between prompts" — always safe on
-the public box, zero latency, no tokens burned.
+The default path is pure memory hygiene — always safe on the public box,
+zero latency, no tokens burned. Model ticks are opt-in via `generate`.
 """
 
 from __future__ import annotations
 
+import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 _DURABLE = re.compile(
     r"\b(remember|my name|i prefer|i am |i'm |call me|my timezone|i work|i live|"
     r"my project|we use|our stack|don't |do not |always |never )\b",
     re.I,
 )
+
+# Heuristic fact lines the model-free path can still promote.
+_FACT_LINE = re.compile(
+    r"(?im)^\s*(?:[-*]\s*)?(?:user\s+)?(?:name|prefers?|timezone|project|stack|works?|"
+    r"lives?|always|never|don't|do not)[^\n]{4,120}$"
+)
+_NAME_INLINE = re.compile(
+    r"\b(?:my name is|i am|i'm|call me|i am called)\s+([A-Z][a-zA-Z\-']{1,40})\b",
+    re.I,
+)
+_PREFER_INLINE = re.compile(
+    r"\b(?:i prefer|prefer(?:ence)?s?)\s+([^\n.!?]{3,80})",
+    re.I,
+)
+
+
+def _heuristic_facts(user_text: str, assistant_text: str = "") -> List[str]:
+    """Extract durable facts without a model call."""
+    facts: List[str] = []
+    u = (user_text or "").strip()
+    if not u:
+        return facts
+    m = _NAME_INLINE.search(u)
+    if m:
+        facts.append(f"name is {m.group(1)}")
+    m = _PREFER_INLINE.search(u)
+    if m:
+        facts.append(f"prefers {m.group(1).strip()}")
+    if _DURABLE.search(u) and len(u) <= 160:
+        # keep short durable statements as-is
+        clean = re.sub(r"\s+", " ", u)
+        if clean.lower() not in {f.lower() for f in facts}:
+            facts.append(clean[:160])
+    # model sometimes restates facts; harvest short assistant identity lines
+    for line in (assistant_text or "").splitlines():
+        if _FACT_LINE.match(line.strip()):
+            facts.append(line.strip().lstrip("-* ").strip()[:120])
+    # de-dupe
+    seen = set()
+    out: List[str] = []
+    for f in facts:
+        k = f.lower()
+        if k not in seen and len(f) >= 6:
+            seen.add(k)
+            out.append(f)
+    return out[:4]
+
+
+def _apply_facts(memory: Any, facts: List[str]) -> int:
+    n = 0
+    if memory is None or not facts:
+        return 0
+    for f in facts:
+        try:
+            if hasattr(memory, "append_identity_line"):
+                before = memory.read_identity() if hasattr(memory, "read_identity") else ""
+                memory.append_identity_line(f"from chat: {f}")
+                after = memory.read_identity() if hasattr(memory, "read_identity") else before
+                if after != before:
+                    n += 1
+            if hasattr(memory, "append_note"):
+                memory.append_note(f, tag="fact", importance=5)
+        except Exception:
+            pass
+    return n
+
+
+def model_backed_tick(
+    memory: Any,
+    *,
+    user_text: str,
+    assistant_text: str,
+    session_id: str = "",
+    generate: Optional[Callable[[str], str]] = None,
+) -> Dict[str, Any]:
+    """Optional local-only micro-tick: extract durable facts + open loop.
+
+    `generate` should be a cheap local completion (e.g. evolved :11435). When
+    absent or disabled, falls back to heuristic fact extraction only.
+    Returns {facts, open_loop, model_used, promoted}.
+    """
+    out: Dict[str, Any] = {
+        "facts": [], "open_loop": "", "model_used": False, "promoted": 0,
+    }
+    u = (user_text or "").strip()
+    a = (assistant_text or "").strip()
+    if not u and not a:
+        return out
+
+    facts = _heuristic_facts(u, a)
+    open_loop = ""
+    used_model = False
+
+    # Env gate: only burn tokens when explicitly enabled (local operator boxes).
+    allow = os.environ.get("LOLM_MODEL_TICK", "").strip() in ("1", "true", "yes", "on")
+    if generate is not None and allow and (u or a):
+        prompt = (
+            "Extract continuity from this chat turn. Reply with EXACTLY two lines:\n"
+            "FACTS: <comma-separated durable user facts, or none>\n"
+            "OPEN: <one open question or next action, or none>\n\n"
+            f"USER: {u[:400]}\nASSISTANT: {a[:500]}\n"
+        )
+        try:
+            raw = (generate(prompt) or "").strip()
+            used_model = True
+            for line in raw.splitlines():
+                low = line.strip()
+                if low.upper().startswith("FACTS:"):
+                    body = low.split(":", 1)[1].strip()
+                    if body and body.lower() not in ("none", "n/a", "-"):
+                        for part in re.split(r"[,;]|\s+\|\s+", body):
+                            p = part.strip(" -")
+                            if 6 <= len(p) <= 120:
+                                facts.append(p)
+                elif low.upper().startswith("OPEN:"):
+                    body = low.split(":", 1)[1].strip()
+                    if body and body.lower() not in ("none", "n/a", "-"):
+                        open_loop = body[:200]
+        except Exception:
+            used_model = False
+
+    # de-dupe facts
+    seen = set()
+    uniq: List[str] = []
+    for f in facts:
+        k = f.lower()
+        if k not in seen:
+            seen.add(k)
+            uniq.append(f)
+    facts = uniq[:5]
+    promoted = _apply_facts(memory, facts)
+    if open_loop and memory is not None:
+        try:
+            if hasattr(memory, "add_summary"):
+                memory.add_summary(f"open: {open_loop}", span=session_id or "session")
+        except Exception:
+            pass
+    out["facts"] = facts
+    out["open_loop"] = open_loop
+    out["model_used"] = used_model
+    out["promoted"] = promoted
+    return out
 
 
 def between_turn(
@@ -29,9 +174,12 @@ def between_turn(
     assistant_text: str = "",
     session_id: str = "",
     promote: bool = False,
+    generate: Optional[Callable[[str], str]] = None,
 ) -> Dict[str, Any]:
-    """Run after a finished turn. Returns {summarized, promoted, continuity}."""
-    out: Dict[str, Any] = {"summarized": False, "promoted": False, "continuity": ""}
+    """Run after a finished turn. Returns {summarized, promoted, continuity, tick}."""
+    out: Dict[str, Any] = {
+        "summarized": False, "promoted": False, "continuity": "", "tick": {},
+    }
     if memory is None:
         return out
     u = (user_text or "").strip()
@@ -52,6 +200,20 @@ def between_turn(
                 out["promoted"] = do_promote
         except Exception:
             pass
+        # Model-backed or heuristic micro-tick (facts + open loop)
+        try:
+            tick = model_backed_tick(
+                memory,
+                user_text=u,
+                assistant_text=a,
+                session_id=span,
+                generate=generate,
+            )
+            out["tick"] = tick
+            if tick.get("promoted"):
+                out["promoted"] = True
+        except Exception:
+            out["tick"] = {}
     # Pack recent summaries + identity tail for the next request (read path always)
     bits: List[str] = []
     try:

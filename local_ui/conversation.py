@@ -39,11 +39,19 @@ SHORT_REPLY_RE = re.compile(
     r"same|again|retry|try\s*again|do\s*that(\s*again)?|once\s*more|another(\s*one)?|"
     r"wait|hold\s*on|hmm+|huh|what\?|"
     r"tell\s*me\s*more|explain|simpler|eli5|"
+    r"which\s*(?:one|option|choice)?|either|both|neither|"
+    r"what\s+about\s+(?:the\s+)?(?:other|first|second|third|last)|"
     r"(?:option\s*)?[abc123]|"
     r"the\s+(?:first|second|third|last|other)(?:\s+one)?|"
     r"(?:first|second|third|last|other)(?:\s+one)?|"
     r"not\s+(?:option\s*)?(?:[abc123]|the\s+)?(?:first|second|third|last|other|[abc123])(?:\s+one)?"
     r")[\s!.?]*$",
+    re.IGNORECASE,
+)
+
+# "which one?" / "either" when options were just offered
+WHICH_RE = re.compile(
+    r"^\s*(which\s*(?:one|option|choice)?|either|both|neither)\s*[!.?]*\s*$",
     re.IGNORECASE,
 )
 # Slang / non-answers that must NEVER be treated as definition requests.
@@ -237,6 +245,16 @@ def resolve_followup(
             "(or ask once between the remaining ones). Continue the same thread."
         )
         return text, "dialog", "option_reject"
+
+    if WHICH_RE.match(c) and turns:
+        prior = last_asst or last_user
+        text = (
+            f'The user asked "{c.strip()}" — they want help choosing among your options.\n'
+            + (f'Your previous message (with the options) was:\n"""{prior[:900]}"""\n' if prior else "")
+            + "Recommend ONE best option with a one-line reason, then proceed if they said "
+            "'either'/'both', or clarify once if they said 'neither'. Stay on the same thread."
+        )
+        return text, "dialog", "which"
 
     if OPTION_PICK_RE.match(c) and turns:
         prior = last_asst or last_user

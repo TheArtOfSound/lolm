@@ -78,6 +78,19 @@ _FILE_BLOCK = re.compile(
 _LANG_EXT = {"python": "py", "py": "py", "python3": "py", "javascript": "js", "js": "js",
              "node": "js", "bash": "sh", "sh": "sh", "shell": "sh", "go": "go"}
 
+# Third-party packages the sandbox cannot install — coach stdlib rewrites instead of
+# inventing a fake sibling module (Claude Code users install; we simulate).
+_THIRD_PARTY_MODS = frozenset({
+    "requests", "urllib3", "httpx", "aiohttp", "numpy", "np", "pandas", "pd",
+    "scipy", "sklearn", "torch", "tensorflow", "tf", "keras", "flask", "django",
+    "fastapi", "bs4", "beautifulsoup4", "lxml", "PIL", "pillow", "cv2", "opencv",
+    "matplotlib", "seaborn", "plotly", "openai", "anthropic", "tiktoken",
+    "langchain", "transformers", "datasets", "huggingface_hub", "boto3", "botocore",
+    "redis", "sqlalchemy", "psycopg2", "pymongo", "selenium", "playwright",
+    "pytest", "hypothesis", "pydantic", "yaml", "toml", "dotenv", "rich", "typer",
+    "click", "tqdm", "joblib", "numba", "sympy", "networkx", "scrapy",
+})
+
 # Canonical empty turn shape
 _EMPTY_TURN = {
     "files": [], "file": None, "run": None, "done": None,
@@ -950,9 +963,22 @@ class CodeAgent:
                         r"ImportError:\s*cannot import name ['\"]([^'\"]+)['\"]",
                         err_full,
                     )
+                    third_party_miss = False
                     if m_miss:
                         mod = m_miss.group(1).split(".")[0]
-                        if mod and mod.isidentifier() and f"{mod}.py" not in self._files_written:
+                        # Third-party / non-stdlib: do NOT invent FILE: requests.py —
+                        # rewrite with stdlib (sandbox has no pip/network).
+                        if mod and (mod in _THIRD_PARTY_MODS or mod.lower() in _THIRD_PARTY_MODS):
+                            third_party_miss = True
+                            self._format_nudge = (
+                                f"\n\nTHIRD-PARTY IMPORT BLOCKED: `{mod}` is not available "
+                                "(no pip/network in the jail). Rewrite using Python stdlib only "
+                                "(urllib, json, http.server, csv, re, pathlib, …). "
+                                "Remove the import, then RUN again. Do not claim DONE yet."
+                            )
+                            yield {"event": "agent_note", "data": {
+                                "text": f"no pip — rewrite without `{mod}` (stdlib only)"}}
+                        elif mod and mod.isidentifier() and f"{mod}.py" not in self._files_written:
                             self._format_nudge = (
                                 f"\n\nIMPORT ERROR: missing module `{mod}`. "
                                 f"Write FILE: {mod}.py with the needed code, update imports if "
@@ -1028,7 +1054,47 @@ class CodeAgent:
                         )
                         yield {"event": "agent_note", "data": {
                             "text": "ZeroDivisionError — guard divisors"}}
-                    if re.search(r"IndexError|KeyError|TypeError|ValueError", err_full) and not m_miss and not m_syn:
+                    # AttributeError / UnboundLocalError — common model flail modes
+                    m_attr = re.search(
+                        r"AttributeError:\s*'([^']+)' object has no attribute '([^']+)'",
+                        err_full,
+                    ) or re.search(
+                        r"AttributeError:\s*module '([^']+)' has no attribute '([^']+)'",
+                        err_full,
+                    ) or re.search(r"AttributeError:\s*(.+)", err_full)
+                    if m_attr and not m_miss and not m_syn and not third_party_miss:
+                        detail = (m_attr.group(0) if m_attr.lastindex is None
+                                  else m_attr.group(0))[:140]
+                        self._format_nudge = (
+                            f"\n\nAttributeError: {detail}\n"
+                            "Fix the object/API (typo, wrong type, missing method), "
+                            "then RUN again. Prefer EDIT over full rewrite."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": f"AttributeError — {detail[:80]}"}}
+                    if re.search(r"UnboundLocalError", err_full) and not m_miss:
+                        self._format_nudge = (
+                            "\n\nUnboundLocalError: a name is assigned later in the function "
+                            "but read earlier. Initialize it before use (or use a different name), "
+                            "then RUN again."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": "UnboundLocalError — init before use"}}
+                    if re.search(r"RecursionError", err_full) and not m_miss:
+                        self._format_nudge = (
+                            "\n\nRecursionError: infinite or too-deep recursion. Add a base case "
+                            "(or rewrite iteratively), then RUN again."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": "RecursionError — add base case / iterate"}}
+                    if re.search(r"JSONDecodeError|json\.decoder", err_full) and not m_miss:
+                        self._format_nudge = (
+                            "\n\nJSONDecodeError: invalid JSON input. Validate/fix the string "
+                            "(or use a fixed sample), catch errors, then RUN again."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": "JSONDecodeError — fix JSON input"}}
+                    if re.search(r"IndexError|KeyError|TypeError|ValueError", err_full) and not m_miss and not m_syn and not m_attr:
                         et = re.search(r"(IndexError|KeyError|TypeError|ValueError)(:\s*[^\n]+)?", err_full)
                         label = et.group(0)[:120] if et else "runtime error"
                         self._format_nudge = (

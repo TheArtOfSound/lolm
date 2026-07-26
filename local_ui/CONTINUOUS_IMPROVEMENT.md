@@ -183,6 +183,22 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 - npm README: listCodeReceipts + receipts.html; package 0.2.3
 - why-switch + pricing link live receipts ledger
 
+## 2026-07-26 loop — stdlib import coach + hash embeddings + model ticks
+### Agentic coding (win #1)
+- **Third-party import coach**: ModuleNotFound for requests/numpy/… → rewrite with stdlib (no fake FILE: requests.py)
+- AttributeError / UnboundLocalError / RecursionError / JSONDecodeError auto-coaches
+### Continuity / memory (win #2)
+- Memory: **feature-hashing dense embeddings** (128-d, zero deps) + TF-IDF + n-grams
+- Heuristic fact extract + optional **model-backed tick** (`LOLM_MODEL_TICK=1` + generate)
+- "which one?" / either / both / neither dialog continuity
+### Findability (win #6)
+- try.html live chip: code self-fix; why-switch memory row names hash embeddings
+### Next queue
+1. Wire local generate into model_backed_tick on operator boxes
+2. ONNX embedder plugin slot when weights present
+3. npm publish 0.2.3+
+4. Real non-demo ledger traffic samples
+
 ## Train/improve loop (serious)
 - scripts/train_improve_loop.py: HF ingest → queue mint → gated LoRA → promote → restart serve
 - Fixed corrupt live adapter (was destroying generation; quarantined)

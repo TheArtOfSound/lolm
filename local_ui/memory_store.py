@@ -88,6 +88,46 @@ def _tfidf_cosine(q_tf: Dict[str, float], d_tf: Dict[str, float],
     return dot / ((qn ** 0.5) * (dn ** 0.5))
 
 
+# Feature-hashing dense embedding (no ONNX/numpy). Acts as a real fixed-dim
+# vector index so paraphrases rank when token overlap is weak.
+_HASH_DIM = 128
+
+
+def _hash_embed(text: str, dim: int = _HASH_DIM) -> List[float]:
+    """Bag-of-ngrams hashed into a unit vector (feature hashing trick)."""
+    import hashlib
+    import math
+    s = re.sub(r"\s+", " ", (text or "").lower()).strip()
+    if not s:
+        return [0.0] * dim
+    vec = [0.0] * dim
+    # word unigrams + bigrams + char trigrams for soft paraphrase
+    toks = [t for t in re.split(r"\W+", s) if t and len(t) >= 2]
+    feats = list(toks)
+    for i in range(len(toks) - 1):
+        feats.append(toks[i] + "_" + toks[i + 1])
+    if len(s) >= 3:
+        for i in range(min(len(s) - 2, 80)):
+            feats.append("#" + s[i:i + 3])
+    for f in feats:
+        h = hashlib.blake2b(f.encode("utf-8"), digest_size=8).digest()
+        idx = int.from_bytes(h[:4], "little") % dim
+        sign = 1.0 if (h[4] & 1) == 0 else -1.0
+        vec[idx] += sign
+    # l2 normalize
+    n2 = sum(v * v for v in vec)
+    if n2 <= 0:
+        return vec
+    inv = 1.0 / math.sqrt(n2)
+    return [v * inv for v in vec]
+
+
+def _hash_cosine(a: List[float], b: List[float]) -> float:
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    return sum(x * y for x, y in zip(a, b))
+
+
 @dataclass
 class MemoryPaths:
     root: Path
@@ -161,16 +201,19 @@ class MemoryStore:
 
     def search_notes(self, query: str, limit: int = 12, min_importance: int = 0,
                      tag: Optional[str] = None, scope: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Relevance-scored retrieval: token overlap + TF-IDF cosine + char n-grams.
+        """Relevance-scored retrieval: tokens + TF-IDF + hash embeddings + n-grams.
 
-        Acts as a zero-dependency embedding substitute: sparse TF-IDF over the
-        note corpus (smoothed IDF) so paraphrases rank above exact-word-only
-        noise, plus char-trigram soft match for identity-style queries.
+        Zero-dependency stack that still behaves like an embedding index:
+          - sparse TF-IDF cosine (exact term signal)
+          - fixed-dim feature-hashing vectors (paraphrase / soft match)
+          - char-trigram Jaccard for identity-style queries
+        Optional ONNX/local embedders can plug in later via the same score slot.
         """
         q_tokens = [t for t in re.split(r"\W+", (query or "").lower()) if t]
         content = list({t for t in q_tokens if len(t) >= 3 and t not in _MEM_STOP})
         q_ng = _char_ngrams(query or "")
         q_tf = _tf(_content_tokens(query or ""))
+        q_emb = _hash_embed(query or "")
         # Identity-ish queries: boost notes that look like personal facts even when
         # the user paraphrases ("moniker"/"handle" → named/name lines).
         identity_q = any(w in (query or "").lower() for w in (
@@ -211,15 +254,16 @@ class MemoryStore:
             ng_sim = _jaccard(q_ng, _char_ngrams(text_body or hay))
             d_tf = _tf(_content_tokens(text_body))
             cos = _tfidf_cosine(q_tf, d_tf, idf)
+            emb = _hash_cosine(q_emb, _hash_embed(text_body))
             # relevant if: 2+ content words overlap, OR half the query is covered,
             # OR a single DISTINCTIVE (long, rare) term matches — "carbonara",
             # "quantum" alone are strong signals; "flux" needs a second word.
             # Also: short follow-up queries (1 content token, 4+ chars) may match
             # a single clear term so "my name?" still finds "User is named Bryan".
-            # Soft path: char-trigram / TF-IDF act like a zero-dep mini-embedding.
+            # Soft path: hash-embedding / char-trigram / TF-IDF.
             distinctive = any(len(t) >= 7 and t in hay for t in content) if content else False
             short_ok = bool(content) and len(content) == 1 and len(content[0]) >= 4 and content[0] in hay
-            soft_ok = (ng_sim >= 0.14 or cos >= 0.12) and len(text_body) >= 12
+            soft_ok = (ng_sim >= 0.14 or cos >= 0.12 or emb >= 0.22) and len(text_body) >= 12
             personal = identity_q and any(
                 k in hay for k in ("named", "name is", "prefer", "user is", "call me", "timezone")
             )
@@ -231,7 +275,8 @@ class MemoryStore:
             score = (overlap + 1.5 * coverage
                      + 0.35 * stem_hits
                      + 2.4 * ng_sim                     # soft n-gram signal
-                     + 3.0 * cos                        # TF-IDF cosine "embedding"
+                     + 3.0 * cos                        # TF-IDF cosine
+                     + 3.5 * emb                        # dense hash embedding
                      + 0.3 * int(row.get("importance", 3))
                      + 0.2 * (idx / n)                  # gentle recency nudge
                      + (0.6 if (scope and row.get("scope") == scope) else 0)  # my own context first
