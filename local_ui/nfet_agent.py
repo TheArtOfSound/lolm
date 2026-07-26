@@ -398,9 +398,24 @@ class NFETAgent:
         lecture about the workspace). They are included only when the command
         actually references the agent/workspace. Notes are keyword-gated by
         the memory search already.
+
+        Continuity: recent rolling summaries + identity tail always surface for
+        short / anaphoric follow-ups so "yes/that/idk" keep thread context.
         """
         memory = self.deps.memory
         hits: List[Dict[str, Any]] = []
+        cmd = (command or "").strip()
+        short = len(cmd.split()) <= 8 or len(cmd) < 48
+        # Greetings stay light (no identity dump). Dialog follow-ups (idk/yes/that)
+        # and self-referent questions pull identity + rolling summaries.
+        try:
+            from local_ui.conversation import classify_command
+            profile_hint = classify_command(cmd)
+        except Exception:
+            profile_hint = "task"
+        want_thread = self._wants_identity(command) or (
+            short and profile_hint == "dialog"
+        )
         if self._wants_identity(command):
             identity = memory.read_identity().strip()
             if identity:
@@ -408,6 +423,19 @@ class NFETAgent:
             goals = [g for g in memory.get_goals() if g.get("status", "active") == "active"]
             for goal in sorted(goals, key=lambda g: int(g.get("priority", 3)), reverse=True)[:6]:
                 hits.append({"kind": "goal", "text": goal.get("title", ""), "meta": {"why": goal.get("why", "")}})
+        elif want_thread:
+            identity = memory.read_identity().strip()
+            if identity:
+                hits.append({"kind": "identity", "text": identity[-1200:], "meta": {}})
+        # Rolling summaries = between-turn continuity pack without embeddings
+        try:
+            if hasattr(memory, "recent_summaries") and want_thread:
+                for row in reversed(memory.recent_summaries(4) or []):
+                    s = str(row.get("summary") or "").strip()
+                    if s:
+                        hits.append({"kind": "summary", "text": s[:400], "meta": {"span": row.get("span")}})
+        except Exception:
+            pass
         for note in memory.search_notes(command, limit=8, scope=scope):
             hits.append({"kind": "memory", "text": note.get("text", ""), "meta": {"tag": note.get("tag")}})
         return [h for h in hits if h.get("text")][:12]
@@ -805,6 +833,20 @@ WORKING DRAFT:
                           "name, respect stated preferences) but do not recite it unprompted.")
                 user = ("WHAT YOU REMEMBER ABOUT THIS USER (persistent, across "
                         f"conversations):\n{mem_lines}\n\n" + user)
+        # Between-turn continuity pack (identity + recent summaries) from prior tick
+        cont = getattr(req, "_continuity_pack", None) or ""
+        if not cont:
+            try:
+                from local_ui.continuity_tick import between_turn
+                pack = between_turn(self.deps.memory, user_text="", assistant_text="",
+                                    session_id=getattr(req, "session_id", None) or "session")
+                cont = pack.get("continuity") or ""
+            except Exception:
+                cont = ""
+        if cont:
+            system = (system + " CONTINUITY below is durable thread context from earlier turns "
+                      "in this workspace; resolve pronouns and short replies against it.")
+            user = f"CONTINUITY (prior thread + identity):\n{cont[:1400]}\n\n" + user
         result = yield from self._collect_stream(
             [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
             req, tokens=req.final_tokens, channel="final", telemeter=False,

@@ -359,6 +359,11 @@ def register_code_routes(app: Any, root: str,
     def code_receipts_tail(limit: int = 20, kind: str = ""):
         """Public audit window: recent sealed code/visual receipts (hash-chained)."""
         lim = max(1, min(int(limit or 20), 50))
+        # Empty-ledger UX: seed labeled demos so /receipts.html shows the format.
+        try:
+            code_receipt_ledger.ensure_demo_seed()
+        except Exception:
+            pass
         rows = code_receipt_ledger.tail(max(lim, 50))
         want = (kind or "").strip().lower()
         # Strip bulky stdout tails for the list view; full sha remains.
@@ -387,6 +392,7 @@ def register_code_routes(app: Any, root: str,
                 "html_sha": r.get("html_sha"),
                 "ts": r.get("ledger_ts") or r.get("ts"),
                 "source": r.get("source"),
+                "demo": bool(r.get("demo")),
             })
         slim = slim[-lim:]
         return {"receipts": slim, "stats": code_receipt_ledger.stats()}

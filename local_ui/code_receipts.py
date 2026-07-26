@@ -116,3 +116,52 @@ def stats() -> Dict[str, Any]:
         "fail": len(rows) - ok_n,
         "last_sha": (rows[-1].get("ledger_sha") if rows else None),
     }
+
+
+def ensure_demo_seed() -> bool:
+    """If the ledger is empty, seal two labeled demo receipts so the public
+    audit page is never a blank wall. Marked ``demo: true`` — not real user runs.
+    Returns True if seeds were written.
+    """
+    if tail(1):
+        return False
+    samples = [
+        {
+            "kind": "code_agent",
+            "task": "[demo] make hello.py print 42 and run it",
+            "summary": "demo seed — print 42",
+            "verdict": "shipped",
+            "ok": True,
+            "files": ["hello.py"],
+            "green_runs": 1,
+            "failed_runs": 0,
+            "verifies": 0,
+            "expected": ["42"],
+            "expected_ok": True,
+            "trail": [
+                {"op": "write", "path": "hello.py", "bytes": 12},
+                {"op": "run", "command": "python3 hello.py", "exit": 0},
+            ],
+            "receipt_sha": "demo_code_seed_0001",
+            "demo": True,
+        },
+        {
+            "kind": "visual_build",
+            "task": "[demo] tiny animated canvas pulse",
+            "verdict": "verified",
+            "ok": True,
+            "attempts": 1,
+            "mode": "single",
+            "bytes": 1200,
+            "working": True,
+            "renders": True,
+            "animates": True,
+            "responds": False,
+            "html_sha": "demo_visual_seed_html",
+            "receipt_sha": "demo_visual_seed_0001",
+            "demo": True,
+        },
+    ]
+    for s in samples:
+        append(s, source="demo_seed")
+    return True

@@ -153,7 +153,7 @@ function renderList(){
     const files = (r.files||[]).slice(0,6).join(', ');
     return `<article class="row ${ok?'ok':'fail'}">
       <div class="top">
-        <span class="kind">${esc(kind)} · ${esc(ago(r.ts))}</span>
+        <span class="kind">${esc(kind)}${r.demo?' · demo':''} · ${esc(ago(r.ts))}</span>
         <span class="verdict ${vClass}">${esc(r.verdict|| (ok?'ok':'…'))}</span>
       </div>
       <div class="task">${esc(r.task||'(no task text)')}</div>

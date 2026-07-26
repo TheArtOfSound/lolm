@@ -36,23 +36,23 @@ def between_turn(
         return out
     u = (user_text or "").strip()
     a = (assistant_text or "").strip()
-    if not u and not a:
-        return out
     span = session_id or "session"
-    snippet = ""
-    if u and a:
-        snippet = (u[:120] + " → " + a.replace("\n", " ")[:180])
-    elif u:
-        snippet = u[:200]
-    try:
-        if snippet and hasattr(memory, "add_summary"):
-            do_promote = bool(promote) or bool(_DURABLE.search(u))
-            memory.add_summary(snippet, span=span, promote=do_promote)
-            out["summarized"] = True
-            out["promoted"] = do_promote
-    except Exception:
-        pass
-    # Pack recent summaries + identity tail for the next request
+    # Optional write path: only when we have a new exchange
+    if u or a:
+        snippet = ""
+        if u and a:
+            snippet = (u[:120] + " → " + a.replace("\n", " ")[:180])
+        elif u:
+            snippet = u[:200]
+        try:
+            if snippet and hasattr(memory, "add_summary"):
+                do_promote = bool(promote) or bool(_DURABLE.search(u))
+                memory.add_summary(snippet, span=span, promote=do_promote)
+                out["summarized"] = True
+                out["promoted"] = do_promote
+        except Exception:
+            pass
+    # Pack recent summaries + identity tail for the next request (read path always)
     bits: List[str] = []
     try:
         if hasattr(memory, "read_identity"):

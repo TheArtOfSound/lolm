@@ -16,3 +16,12 @@ def test_between_turn_summarizes_and_promotes(tmp_path):
     assert "Casey" in mem.read_identity() or mem.recent_summaries(1)
     pack = out["continuity"]
     assert pack  # identity and/or recent thread
+
+
+def test_between_turn_read_pack_without_new_exchange(tmp_path):
+    mem = MemoryStore(tmp_path)
+    mem.append_identity_line("from chat: remember my name is Casey")
+    mem.add_summary("hi → hello", span="s1")
+    out = between_turn(mem, user_text="", assistant_text="", session_id="s1")
+    assert out["summarized"] is False
+    assert "Casey" in out["continuity"] or "RECENT" in out["continuity"] or "IDENTITY" in out["continuity"]

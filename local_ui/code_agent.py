@@ -890,6 +890,17 @@ class CodeAgent:
                         )
                         yield {"event": "agent_note", "data": {
                             "text": f"NameError — `{missing_name}` not defined"}}
+                    m_assert = re.search(r"AssertionError(?::\s*(.+))?", err_full)
+                    if m_assert and not m_miss and not m_syn and not m_name:
+                        detail = (m_assert.group(1) or "").strip()[:160]
+                        self._format_nudge = (
+                            "\n\nASSERT FAILED"
+                            + (f": {detail}" if detail else ".")
+                            + " Fix the logic (or the assert) so the check passes, then RUN again. "
+                            "Do not say DONE until asserts are green."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": "AssertionError — fix logic/tests before DONE"}}
                     fail_repeats = fail_repeats + 1 if sig == fail_sig else 0
                     fail_sig = sig
                     if fail_repeats >= 2:

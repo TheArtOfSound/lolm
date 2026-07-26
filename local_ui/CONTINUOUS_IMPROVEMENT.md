@@ -137,3 +137,19 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 2. Model-backed between-turn ticks (local)
 3. npm publish
 4. Seed demo receipts on deploy for empty-ledger UX (optional)
+
+## 2026-07-26 loop — continuity in memory path + demo receipt seeds
+### Continuity (win #2)
+- Short **dialog** follow-ups pull identity + rolling summaries into memory_hits
+- Finalizer injects CONTINUITY pack (identity/thread) every turn
+- continuity_tick can **read pack without writing** (between-turn hygiene)
+### Receipts / findability (wins #4 #6)
+- Empty ledger auto-seeds **labeled demo** receipts so /receipts.html shows format
+- Workspace nav: Why switch + Receipts
+### Agentic coding (win #1)
+- AssertionError auto-coach before DONE
+### Next queue
+1. ONNX embeddings optional
+2. Model-backed local ticks
+3. npm publish
+4. Real live code run to fill non-demo ledger
