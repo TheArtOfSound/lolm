@@ -1,6 +1,6 @@
 from local_ui.code_agent import (
     _parse_turn, _wants_tests, _pick_verify_command, _is_test_path,
-    _expected_outputs, _local_modules_needed,
+    _expected_outputs, _local_modules_needed, _task_oracle_satisfied,
 )
 
 def test_multi_file():
@@ -103,3 +103,14 @@ def test_local_modules_needed_flags_missing_sibling():
     assert "helper.py" in miss
     files2 = {"main.py": "import helper\n", "helper.py": "x=1\n"}
     assert _local_modules_needed(files2) == []
+
+
+def test_task_oracle_satisfied_on_expected_stdout():
+    actions = [{"kind": "run", "command": "python3 h.py",
+                "result": {"exit_code": 0, "stdout": "42\n", "blocked": False}}]
+    s = _task_oracle_satisfied("print 42", actions, ["h.py"])
+    assert s and "42" in s
+    assert _task_oracle_satisfied("print 42", [
+        {"kind": "run", "command": "python3 h.py",
+         "result": {"exit_code": 0, "stdout": "0\n", "blocked": False}}
+    ], ["h.py"]) is None

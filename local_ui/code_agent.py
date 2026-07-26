@@ -57,7 +57,10 @@ SYSTEM = (
     "- Prefer small pure functions + a main that prints clear results.\n"
     "- For non-trivial logic, add asserts or a tiny self-check in the same file and RUN it.\n"
     "- On failure: read the error, fix ROOT CAUSE, do not rewrite the same broken code.\n"
-    "- Never DONE until you have SEEN exit 0 with meaningful printed output."
+    "- Never DONE until you have SEEN exit 0 with meaningful printed output.
+"
+    "- The harness may auto-finish when expected output or tests already pass.
+"
 )
 
 _FENCE = re.compile(r"```[a-zA-Z0-9_+\-]*\n(.*?)```", re.S)
@@ -379,9 +382,54 @@ def _last_stdout(actions: List[Dict[str, Any]]) -> str:
     for a in reversed(actions or []):
         if a.get("kind") == "run":
             r = a.get("result") or {}
+            # skip verify-only commands when looking for task output
+            cmd = (a.get("command") or "")
+            if a.get("verify") or "py_compile" in cmd or "pytest" in cmd or "unittest" in cmd:
+                continue
             if r.get("exit_code") == 0 and not r.get("blocked"):
                 return (r.get("stdout") or "")
     return ""
+
+
+def _task_oracle_satisfied(task: str, actions: List[Dict[str, Any]],
+                           files_written: List[str]) -> Optional[str]:
+    """Return a DONE summary if objective oracles say the task is complete.
+
+    Speed + reliability: when expected stdout appears (or tests go green), finish
+    without waiting for the model to say DONE — Claude/Codex users expect the
+    loop to stop when the check passes.
+    """
+    last_out = _last_stdout(actions)
+    expect = _expected_outputs(task)
+    if expect:
+        if last_out and all(e in last_out for e in expect):
+            return f"auto-verified: printed {', '.join(expect)}"
+        return None
+    # Test files present → require a green verify command
+    if any(_is_test_path(p) for p in (files_written or [])):
+        for a in reversed(actions or []):
+            if a.get("kind") != "run":
+                continue
+            cmd = a.get("command") or ""
+            if "pytest" in cmd or "unittest" in cmd:
+                r = a.get("result") or {}
+                if r.get("exit_code") == 0 and not r.get("blocked"):
+                    return "auto-verified: tests passed"
+                return None
+        return None
+    # Simple print-style tasks with a clean non-empty run and no open failures
+    tlow = (task or "").lower()
+    if any(k in tlow for k in ("print", "hello", "fib", "prime", "factorial", "fizz")):
+        if last_out and last_out.strip():
+            # only auto-stop if the last non-verify run is green
+            for a in reversed(actions or []):
+                if a.get("kind") != "run" or a.get("verify"):
+                    continue
+                r = a.get("result") or {}
+                if r.get("exit_code") == 0 and not r.get("blocked"):
+                    return "auto-verified: clean run with output"
+                break
+    return None
 
 
 _STDLIB_MODS = frozenset("""
@@ -952,6 +1000,18 @@ class CodeAgent:
                                         "\n\nVERIFY FAILED. Fix syntax/tests, then RUN again. "
                                         "Do not say DONE."
                                     )
+                        # Auto-DONE when oracles are green — speed-to-value without
+                        # burning another model turn waiting for "DONE:".
+                        if ok:
+                            auto = _task_oracle_satisfied(
+                                task, self.actions, self._files_written)
+                            if auto:
+                                yield {"event": "agent_note", "data": {
+                                    "text": f"oracle green — finishing ({auto})"}}
+                                yield from self._finish(
+                                    task, summary=auto, steps=step,
+                                    ran=ran_any, produced_output=produced_output)
+                                return
             if not did:
                 yield {"event": "agent_note", "data": {"step": step,
                        "text": "no FILE or RUN in the reply", "raw": (raw or "")[:200]}}

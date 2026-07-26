@@ -94,6 +94,26 @@ def test_json_multi_action_write_and_run(tmp_path):
     assert cf["data"]["exit_code"] == 0 and "42" in cf["data"]["stdout"]
 
 
+def test_auto_done_when_expected_output_prints(tmp_path):
+    """Oracle green → finish without waiting for model DONE (speed-to-value)."""
+    sb = Sandbox(tmp_path)
+    calls = {"n": 0}
+
+    def chat(msgs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return '{"action":"write_and_run","path":"h.py","content":"print(42)\\n","command":"python3 h.py"}'
+        raise AssertionError("model should not be called again after auto-DONE")
+
+    events = list(CodeAgent(sb, chat, isolated=None).run("make h.py print 42 and run it"))
+    assert any(e["event"] == "code_done" for e in events)
+    notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
+    assert "oracle green" in notes or "auto-verified" in notes
+    receipt = [e["data"] for e in events if e["event"] == "code_receipt"][-1]
+    assert receipt.get("ok") is True
+    assert calls["n"] == 1
+
+
 def test_edit_tool_surgical_fix(tmp_path):
     sb = Sandbox(tmp_path)
     sb.write_file("z.py", "prnt(3)\n")

@@ -153,3 +153,13 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 2. Model-backed local ticks
 3. npm publish
 4. Real live code run to fill non-demo ledger
+
+## 2026-07-26 loop — auto-DONE oracle + speed starters
+### Agentic coding + speed (wins #1 #3)
+- **Auto-DONE** when expected stdout or tests are green (no extra model turn)
+- Workspace empty-state starters emphasize coding, memory, why-switch, receipts links
+### Next queue
+1. ONNX embeddings optional
+2. Model-backed local ticks
+3. npm publish
+4. Capture real non-demo ledger runs from public traffic
