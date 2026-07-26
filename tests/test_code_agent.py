@@ -109,6 +109,19 @@ def test_edit_tool_surgical_fix(tmp_path):
                for e in events)
 
 
+def test_syntaxerror_coaches_surgical_fix(tmp_path):
+    sb = Sandbox(tmp_path)
+    seq = iter([
+        '{"action":"write_and_run","path":"buggy.py","content":"def f(\\n  return 1\\n","command":"python3 buggy.py"}',
+        '{"action":"write_and_run","path":"buggy.py","content":"def f():\\n  return 1\\nprint(f())\\n","command":"python3 buggy.py"}',
+        '{"action":"finish","summary":"fixed syntax"}',
+    ])
+    events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("fix syntax and print 1"))
+    notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
+    assert "SyntaxError" in notes or "surgical fix" in notes or "line" in notes
+    assert any(e["event"] == "code_receipt" and e["data"].get("ok") for e in events)
+
+
 def test_modulenotfound_coaches_missing_file(tmp_path):
     sb = Sandbox(tmp_path)
     seq = iter([

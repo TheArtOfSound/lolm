@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOLM Receipts — live audit trail for agentic code &amp; visual builds</title>
+<meta name="description" content="Hash-chained public ledger of LOLM code runs and visual builds. See verdicts, files, verifies, and receipt SHAs — the auditability reason to switch from Claude Code or Codex.">
+<meta property="og:title" content="LOLM Receipts — auditable agent runs">
+<meta property="og:description" content="Live sealed receipts for coding and visual builds. Not a black box.">
+<meta property="og:url" content="https://lolm.imagineqira.com/receipts.html">
+<meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://lolm.imagineqira.com/receipts.html">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#0a0c10">
+<style>
+  :root{--bg:#fff;--ink:#0a0c10;--muted:#525c69;--line:#e6e8ec;--soft:#f6f7f9;--accent:#f43f5e;--good:#0f9d6b;--warn:#b8730a;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+  a{color:var(--ink)}
+  .wrap{max-width:920px;margin:0 auto;padding:28px 18px 64px}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px}
+  .brand{font-weight:700;letter-spacing:-.02em;text-decoration:none}
+  nav a{margin-left:14px;font-size:14px;color:var(--muted);text-decoration:none}
+  nav a:hover{color:var(--ink)}
+  h1{font-size:clamp(26px,4vw,36px);letter-spacing:-.03em;margin:0 0 8px}
+  .sub{color:var(--muted);font-size:15px;max-width:42em;margin-bottom:18px}
+  .stats{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 20px}
+  .pill{border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:6px 12px;font-size:12.5px;color:var(--muted)}
+  .pill b{color:var(--ink)}
+  .pill.ok b{color:var(--good)}
+  .pill.fail b{color:var(--accent)}
+  .row{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:0 0 10px;background:var(--soft)}
+  .row.ok{border-color:rgba(15,157,107,.35)}
+  .row.fail{border-color:rgba(244,63,94,.25)}
+  .top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline}
+  .kind{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .verdict{font-size:13px;font-weight:650}
+  .verdict.good{color:var(--good)}
+  .verdict.bad{color:var(--accent)}
+  .verdict.mid{color:var(--warn)}
+  .task{margin:6px 0 8px;font-size:14.5px}
+  .meta{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all}
+  .meta span{margin-right:12px}
+  .empty{border:1px dashed var(--line);border-radius:14px;padding:28px 18px;text-align:center;color:var(--muted);background:#fafbfc}
+  .empty b{color:var(--ink)}
+  .btns{margin-top:14px}
+  a.btn{display:inline-block;margin:6px 8px 0 0;padding:11px 14px;border-radius:10px;background:var(--accent);color:#fff;text-decoration:none;font-weight:650;font-size:14px}
+  a.ghost{background:var(--ink)}
+  a.outline{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .note{margin-top:28px;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+  .err{color:var(--accent);font-size:13px;margin:8px 0}
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+  .filters button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--muted)}
+  .filters button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="/">LOLM · Qira</a>
+    <nav>
+      <a href="/try.html">Try free</a>
+      <a href="/why-switch.html">Why switch</a>
+      <a href="/pricing.html">Pricing</a>
+      <a href="/">Workspace</a>
+    </nav>
+  </header>
+
+  <h1>Live receipts. Not vibes.</h1>
+  <p class="sub">
+    Every public agentic code run and visual build can seal a <b>hash-chained receipt</b>
+    (task, verdict, files, verifies, SHA). This page reads the live ledger —
+    the auditability reason people switch from black-box coding agents.
+  </p>
+
+  <div class="stats" id="stats">
+    <div class="pill">loading ledger…</div>
+  </div>
+  <div class="filters" id="filters">
+    <button type="button" class="on" data-f="all">All</button>
+    <button type="button" data-f="code">Code</button>
+    <button type="button" data-f="visual">Visual</button>
+    <button type="button" data-f="ok">OK only</button>
+  </div>
+  <div id="err" class="err" style="display:none"></div>
+  <div id="list"></div>
+
+  <div class="btns">
+    <a class="btn" href="/">Run code in workspace →</a>
+    <a class="btn ghost" href="/try.html">Try free (no account)</a>
+    <a class="btn outline" href="/why-switch.html">Why switch</a>
+    <a class="btn outline" href="/api/demo/code/receipts">JSON API</a>
+  </div>
+
+  <p class="note">
+    Ledger is append-only and public on this shared box. SHAs chain
+    (<code>prev_ledger_sha</code> → <code>ledger_sha</code>). Local/sovereign installs
+    keep their own ledger. Qira LLC · Patent pending.
+  </p>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+let ALL = [];
+let FILTER = 'all';
+
+function esc(s){
+  return String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function ago(ts){
+  if(!ts) return '';
+  const s = Math.max(0, Math.floor(Date.now()/1000 - Number(ts)));
+  if(s < 60) return s+'s ago';
+  if(s < 3600) return Math.floor(s/60)+'m ago';
+  if(s < 86400) return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
+function kindOf(r){
+  const k = (r.kind || r.source || '').toLowerCase();
+  if(k.includes('visual')) return 'visual';
+  return 'code';
+}
+function renderStats(st){
+  const el = $('stats');
+  if(!st){ el.innerHTML = '<div class="pill">ledger offline</div>'; return; }
+  el.innerHTML =
+    `<div class="pill">recent <b>${st.recent??0}</b></div>`+
+    `<div class="pill ok">ok <b>${st.ok??0}</b></div>`+
+    `<div class="pill fail">fail <b>${st.fail??0}</b></div>`+
+    (st.last_sha ? `<div class="pill">head <b style="font-family:ui-monospace,monospace">${esc(String(st.last_sha).slice(0,12))}…</b></div>` : '');
+}
+function renderList(){
+  const box = $('list');
+  let rows = ALL.slice().reverse(); // newest first
+  if(FILTER==='code') rows = rows.filter(r => kindOf(r)==='code');
+  if(FILTER==='visual') rows = rows.filter(r => kindOf(r)==='visual');
+  if(FILTER==='ok') rows = rows.filter(r => r.ok);
+  if(!rows.length){
+    box.innerHTML = `<div class="empty">
+      <b>No sealed runs in this window yet.</b><br>
+      Run a coding task or visual build in the workspace — the receipt appears here with a SHA you can verify.
+      <div class="btns"><a class="btn" href="/">Open workspace →</a>
+      <a class="btn outline" href="/try.html">Try free</a></div>
+    </div>`;
+    return;
+  }
+  box.innerHTML = rows.map(r => {
+    const ok = !!r.ok;
+    const v = (r.verdict||'').toLowerCase();
+    const vClass = ok || v==='shipped'||v==='verified' ? 'good' : (v==='stuck'||v==='failed'||v==='incomplete' ? 'bad' : 'mid');
+    const kind = kindOf(r);
+    const files = (r.files||[]).slice(0,6).join(', ');
+    return `<article class="row ${ok?'ok':'fail'}">
+      <div class="top">
+        <span class="kind">${esc(kind)} · ${esc(ago(r.ts))}</span>
+        <span class="verdict ${vClass}">${esc(r.verdict|| (ok?'ok':'…'))}</span>
+      </div>
+      <div class="task">${esc(r.task||'(no task text)')}</div>
+      <div class="meta">
+        <span>sha ${esc((r.receipt_sha||r.ledger_sha||'').slice(0,16))}…</span>
+        ${r.files&&r.files.length?`<span>files ${esc(files)}</span>`:''}
+        ${r.green_runs!=null?`<span>green ${esc(r.green_runs)} · fail ${esc(r.failed_runs??0)} · verify ${esc(r.verifies??0)}</span>`:''}
+        ${r.attempts!=null?`<span>attempts ${esc(r.attempts)}</span>`:''}
+      </div>
+    </article>`;
+  }).join('');
+}
+document.querySelectorAll('#filters button').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('#filters button').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    FILTER = btn.dataset.f;
+    renderList();
+  };
+});
+(async function load(){
+  try{
+    const j = await (await fetch('/api/demo/code/receipts?limit=40')).json();
+    ALL = j.receipts || [];
+    renderStats(j.stats);
+    renderList();
+  }catch(e){
+    $('err').style.display='block';
+    $('err').textContent = 'Could not load ledger: '+e.message;
+    $('stats').innerHTML = '<div class="pill">offline</div>';
+    renderList();
+  }
+})();
+</script>
+</body>
+</html>

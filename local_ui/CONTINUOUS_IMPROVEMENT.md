@@ -124,3 +124,16 @@ Be a better default daily agent than Claude Code / Codex for people willing to s
 2. Model-backed between-turn operator ticks (local-only)
 3. npm publish 0.2.2
 4. Public mini /receipts.html audit page
+
+## 2026-07-26 loop — public receipts page + syntax auto-coach
+### Receipts / findability (wins #4 #6)
+- **`/receipts.html`** live audit UI over `/api/demo/code/receipts` (filter code/visual/ok)
+- Sitemap + llms.txt + why-switch + pricing nav link the ledger
+- API slim rows include `kind`, `attempts`, `html_sha`
+### Agentic coding (win #1)
+- SyntaxError / IndentationError / NameError auto-coach surgical EDIT/FILE fix
+### Next queue
+1. Optional ONNX embeddings
+2. Model-backed between-turn ticks (local)
+3. npm publish
+4. Seed demo receipts on deploy for empty-ledger UX (optional)

@@ -863,6 +863,33 @@ class CodeAgent:
                             )
                             yield {"event": "agent_note", "data": {
                                 "text": f"import failed — need FILE: {mod}.py"}}
+                    # SyntaxError / IndentationError / NameError → surgical fix coach
+                    m_syn = re.search(
+                        r'File "([^"]+)", line (\d+)[^\n]*\n(?:[^\n]*\n){0,2}\s*(SyntaxError|IndentationError):\s*(.+)',
+                        err_full,
+                    )
+                    m_name = re.search(
+                        r"NameError:\s*name ['\"]([^'\"]+)['\"] is not defined",
+                        err_full,
+                    )
+                    if m_syn and not m_miss:
+                        fpath, line_no, etype, emsg = m_syn.group(1), m_syn.group(2), m_syn.group(3), m_syn.group(4).strip()
+                        base = fpath.rsplit("/", 1)[-1]
+                        self._format_nudge = (
+                            f"\n\n{etype} in `{base}` line {line_no}: {emsg[:160]}\n"
+                            f"Use EDIT: {base} (or rewrite FILE: {base}) to fix ONLY that issue, "
+                            "then RUN again. Do not start over unless necessary."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": f"{etype} line {line_no} in {base} — surgical fix"}}
+                    elif m_name and not m_miss:
+                        missing_name = m_name.group(1)
+                        self._format_nudge = (
+                            f"\n\nNameError: `{missing_name}` is not defined. "
+                            "Define it (or fix the typo) in the relevant FILE, then RUN again."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": f"NameError — `{missing_name}` not defined"}}
                     fail_repeats = fail_repeats + 1 if sig == fail_sig else 0
                     fail_sig = sig
                     if fail_repeats >= 2:

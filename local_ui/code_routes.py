@@ -356,17 +356,26 @@ def register_code_routes(app: Any, root: str,
                 "receipts": code_receipt_ledger.stats()}
 
     @app.get("/api/demo/code/receipts")
-    def code_receipts_tail(limit: int = 20):
-        """Public audit window: recent sealed code receipts (hash-chained)."""
+    def code_receipts_tail(limit: int = 20, kind: str = ""):
+        """Public audit window: recent sealed code/visual receipts (hash-chained)."""
         lim = max(1, min(int(limit or 20), 50))
-        rows = code_receipt_ledger.tail(lim)
+        rows = code_receipt_ledger.tail(max(lim, 50))
+        want = (kind or "").strip().lower()
         # Strip bulky stdout tails for the list view; full sha remains.
         slim = []
         for r in rows:
+            rkind = (r.get("kind") or (
+                "visual_build" if "visual" in str(r.get("source") or "") else "code_agent"
+            ))
+            if want in ("code", "code_agent") and "visual" in str(rkind):
+                continue
+            if want in ("visual", "visual_build") and "visual" not in str(rkind):
+                continue
             slim.append({
                 "ledger_sha": r.get("ledger_sha"),
                 "prev_ledger_sha": r.get("prev_ledger_sha"),
                 "receipt_sha": r.get("receipt_sha"),
+                "kind": rkind,
                 "task": (r.get("task") or "")[:160],
                 "verdict": r.get("verdict"),
                 "ok": r.get("ok"),
@@ -374,9 +383,12 @@ def register_code_routes(app: Any, root: str,
                 "green_runs": r.get("green_runs"),
                 "failed_runs": r.get("failed_runs"),
                 "verifies": r.get("verifies"),
+                "attempts": r.get("attempts"),
+                "html_sha": r.get("html_sha"),
                 "ts": r.get("ledger_ts") or r.get("ts"),
                 "source": r.get("source"),
             })
+        slim = slim[-lim:]
         return {"receipts": slim, "stats": code_receipt_ledger.stats()}
 
     @app.post("/api/demo/code/run")

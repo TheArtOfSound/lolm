@@ -6,6 +6,7 @@
 - Workspace: https://lolm.imagineqira.com/
 - Free try (no account): https://lolm.imagineqira.com/try.html
 - Why switch from Claude Code / Codex: https://lolm.imagineqira.com/why-switch.html
+- Live receipts ledger: https://lolm.imagineqira.com/receipts.html
 - Pricing: https://lolm.imagineqira.com/pricing.html
 - Science / architecture: https://lolm.imagineqira.com/about.html
 - Live research: https://lolm.imagineqira.com/research.html
