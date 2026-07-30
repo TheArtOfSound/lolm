@@ -109,8 +109,42 @@ def make_chat_fn(model: str = "") -> Any:
     return chat
 
 
+def make_gen_many_fn() -> Any:
+    """Multi-model generation through the same worker gateway the origin box uses.
+
+    Mirrors workers_ai_reasoner.generate_many: /generate_many next to the configured
+    /ai/generate endpoint, returning the candidate list the agent scores.
+    """
+    url = os.environ.get("WORKERS_AI_URL", "")
+    secret = os.environ.get("WORKERS_AI_SECRET", "")
+    if not (url and secret):
+        return None
+    many_url = url.rsplit("/", 1)[0] + "/generate_many"
+
+    def gen_many(messages: List[Dict[str, str]], models: List[str],
+                 max_tokens: int = 3600) -> List[Dict[str, Any]]:
+        payload = {"messages": [{"role": m.get("role", "user"),
+                                 "content": str(m.get("content") or "")}
+                                for m in messages],
+                   "max_tokens": min(max(int(max_tokens), 96), 8192),
+                   "models": list(models)[:4]}
+        req = urllib.request.Request(
+            many_url, data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {secret}",
+                     "User-Agent": "lolm-nfet-origin/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=160) as r:
+                return (json.loads(r.read()) or {}).get("candidates", [])
+        except Exception:
+            return []
+
+    return gen_many
+
+
 def run_one(task: Dict[str, Any], chat_fn: Any, root: Path, *,
-            max_steps: int, run_timeout: int, trial: int) -> Dict[str, Any]:
+            max_steps: int, run_timeout: int, trial: int,
+            gen_many_fn: Any = None) -> Dict[str, Any]:
     t0 = time.time()
     rec: Dict[str, Any] = {"id": task["id"], "tier": task.get("tier", "impl"),
                            "trial": trial, "passed": False, "steps": 0,
@@ -124,8 +158,13 @@ def run_one(task: Dict[str, Any], chat_fn: Any, root: Path, *,
             sb.write_file(path, content, reason="bench seed")
         seeded = sorted((task.get("seed") or {}).keys())
 
-        agent = CodeAgent(sb, chat_fn, max_steps=max_steps,
-                          run_timeout=run_timeout, isolated=True)
+        # gen_many_fn only exists on the post-fix agent; passing it to the pristine
+        # baseline agent would TypeError, and the A/B has to run the SAME runner
+        # against both to be a fair comparison.
+        kw = {"max_steps": max_steps, "run_timeout": run_timeout, "isolated": True}
+        if gen_many_fn is not None:
+            kw["gen_many_fn"] = gen_many_fn
+        agent = CodeAgent(sb, chat_fn, **kw)
         for ev in agent.run(task["task"]):
             name, data = ev.get("event"), (ev.get("data") or {})
             if name == "code_thinking":
@@ -177,6 +216,9 @@ def main() -> int:
     ap.add_argument("--max-steps", type=int, default=22)
     ap.add_argument("--run-timeout", type=int, default=25)
     ap.add_argument("--model", default="")
+    ap.add_argument("--ensemble", action="store_true",
+                    help="race several brains on the opening turn and keep "
+                         "whichever candidate actually runs")
     ap.add_argument("--out", default=str(ROOT / "bench" / "results"))
     args = ap.parse_args()
 
@@ -190,6 +232,9 @@ def main() -> int:
         raise SystemExit(f"no tasks matched {args.tasks!r}")
 
     chat_fn = make_chat_fn(args.model)
+    gen_many_fn = make_gen_many_fn() if args.ensemble else None
+    if args.ensemble and gen_many_fn is None:
+        raise SystemExit('--ensemble needs WORKERS_AI_URL/SECRET')
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     sbx_root = ROOT / "runs" / "bench_sandboxes"
@@ -197,7 +242,8 @@ def main() -> int:
 
     jobs = [(t, i) for i in range(args.repeat) for t in picked]
     print(f"[bench] label={args.label} tasks={len(picked)} repeat={args.repeat} "
-          f"jobs={len(jobs)} workers={args.workers} max_steps={args.max_steps}",
+          f"jobs={len(jobs)} workers={args.workers} max_steps={args.max_steps} "
+          f"ensemble={bool(gen_many_fn)}",
           flush=True)
 
     started = time.time()
@@ -205,7 +251,8 @@ def main() -> int:
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futs = {pool.submit(run_one, t, chat_fn, sbx_root,
                             max_steps=args.max_steps, run_timeout=args.run_timeout,
-                            trial=i): (t["id"], i) for t, i in jobs}
+                            trial=i, gen_many_fn=gen_many_fn): (t["id"], i)
+                for t, i in jobs}
         for fut in as_completed(futs):
             tid, trial = futs[fut]
             try:
@@ -248,6 +295,7 @@ def main() -> int:
         "median_wall_s": round(statistics.median(walls), 1) if walls else 0.0,
         "total_wall_s": total_wall,
         "max_steps": args.max_steps,
+        "ensemble": bool(gen_many_fn),
         "by_tier": {},
         "by_task": {tid: {"pass": sum(1 for x in rs if x.get("passed")), "of": len(rs)}
                     for tid, rs in sorted(by_task.items())},
