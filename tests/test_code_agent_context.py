@@ -308,3 +308,53 @@ def test_done_blocked_while_the_tree_does_not_compile(tmp_path):
     assert any("does not compile" in n for n in notes), notes
     rec = [e["data"] for e in events if e["event"] == "code_receipt"][-1]
     assert rec["syntax_ok"] is True, "it should have been driven to a compiling tree"
+
+
+# ── best-of-N on the opening turn ────────────────────────────────────────────
+
+def test_ensemble_keeps_the_candidate_that_actually_runs(tmp_path):
+    # Scored by what happens when the code RUNS, not by how the text reads: the
+    # broken candidate compiles-fails, the wrong-path one misses the contract.
+    sb = Sandbox(tmp_path)
+    cands = [
+        {"model": "broken", "text": "FILE: solution.py\n```\ndef f(:\n```\nRUN: python3 solution.py"},
+        {"model": "wrongpath", "text": "FILE: other.py\n```\ndef go():\n    return 1\nprint(go())\n```\nRUN: python3 other.py"},
+        {"model": "good", "text": "FILE: solution.py\n```\ndef go():\n    return 7\nprint(go())\n```\nRUN: python3 solution.py"},
+    ]
+    agent = CodeAgent(sb, lambda m: "DONE: fallback", isolated=None,
+                      gen_many_fn=lambda msgs, models: cands)
+    events = list(agent.run("Create solution.py defining go()"))
+    notes = [e["data"] for e in events if e["event"] == "agent_note"
+             and "raced" in (e["data"].get("text") or "")]
+    assert notes, "expected an ensemble note"
+    scores = {c["model"]: c["score"] for c in notes[0]["candidates"]}
+    assert scores["good"] > scores["broken"], scores
+    assert scores["good"] > scores["wrongpath"], scores
+    assert scores["broken"] == 0.0, "code that does not compile scores zero"
+    assert "def go" in sb.read_file("solution.py")
+
+
+def test_ensemble_failure_falls_back_to_the_single_model(tmp_path):
+    sb = Sandbox(tmp_path)
+    def boom(msgs, models):
+        raise RuntimeError("gateway down")
+    seq = iter([
+        "FILE: solution.py\n```\ndef go():\n    return 1\nprint(go())\n```\nRUN: python3 solution.py",
+        "DONE: ok",
+    ])
+    agent = CodeAgent(sb, lambda m: next(seq), isolated=None, gen_many_fn=boom)
+    events = list(agent.run("Create solution.py defining go()"))
+    assert any(e["event"] == "code_done" for e in events), "must not die with the gateway"
+    assert "def go" in sb.read_file("solution.py")
+
+
+def test_ensemble_only_runs_on_the_first_turn(tmp_path):
+    sb = Sandbox(tmp_path)
+    calls = {"n": 0}
+    def many(msgs, models):
+        calls["n"] += 1
+        return [{"model": "m", "text": "FILE: solution.py\n```\nprint(1)\n```\nRUN: python3 solution.py"}]
+    seq = iter(["DONE: done"] * 6)
+    agent = CodeAgent(sb, lambda m: next(seq), isolated=None, gen_many_fn=many)
+    list(agent.run("Create solution.py"))
+    assert calls["n"] == 1, f"ensemble should fire once, fired {calls['n']}x"

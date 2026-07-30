@@ -474,8 +474,13 @@ def register_code_routes(app: Any, root: str,
             and "game" not in tlow and "server" not in tlow
         )
         step_cap = 10 if simple else 22
+        # gen_many_fn lets the agent race several brains on the OPENING turn and keep
+        # whichever candidate actually runs — the same ensemble the visual builder uses,
+        # already wired into this module. None on hosts without the gateway, in which
+        # case the agent silently uses the single-model path.
         agent = CodeAgent(sb, _chat_with_history,
-                          max_steps=min(max(req.max_steps, 1), step_cap), isolated=True)
+                          max_steps=min(max(req.max_steps, 1), step_cap), isolated=True,
+                          gen_many_fn=gen_many_fn)
 
         def gen():
             try:

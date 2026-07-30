@@ -16,6 +16,15 @@ import json
 import re
 import time
 from typing import Any, Callable, Dict, Iterator, List, Optional
+
+from local_ui.sandbox import Sandbox
+
+# Brains raced on the opening turn, matching the set the visual builder already uses.
+ENSEMBLE_MODELS = [
+    "zai-glm-4.7",
+    "openai/gpt-oss-120b",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+]
 SYSTEM = (
     "You are LOLM Code — an agentic coding system competing with Claude Code and Codex.\n"
     "Win by: (1) correct code that RUNS, (2) fixing real failures from REAL stdout/stderr, "
@@ -606,7 +615,9 @@ def _local_modules_needed(file_contents: Dict[str, str]) -> List[str]:
 class CodeAgent:
     def __init__(self, sandbox: Any, chat_fn: Callable[[List[Dict[str, str]]], str],
                  max_steps: int = 18, run_timeout: int = 25,
-                 isolated: Optional[bool] = True):
+                 isolated: Optional[bool] = True,
+                 gen_many_fn: Optional[Callable[..., List[Dict[str, Any]]]] = None,
+                 ensemble_models: Optional[List[str]] = None):
         self.sb = sandbox
         self.chat = chat_fn
         self.max_steps = max_steps
@@ -615,6 +626,100 @@ class CodeAgent:
         self.actions: List[Dict[str, Any]] = []
         self._format_nudge = ""
         self._files_written: List[str] = []
+        # Best-of-N on the FIRST turn only. The opening implementation decides most
+        # runs — later turns are repairs against a real error, where a second opinion
+        # adds little. Bounding it to step 0 keeps the extra cost to one multi-model
+        # call per run instead of one per step. Same shape the visual builder already
+        # uses (race brains, verify each, keep what actually works), but with a
+        # stronger oracle: each candidate is RUN in a throwaway sandbox.
+        self.gen_many = gen_many_fn
+        self.ensemble_models = list(ensemble_models or ENSEMBLE_MODELS)
+
+    def _score_candidate(self, raw: str, task: str) -> Dict[str, Any]:
+        """Run one candidate opening turn in a scratch sandbox and score it.
+
+        Higher is better. Scores what actually happened, not how the text reads:
+        does it compile, does it run clean, does it define the names the task asked
+        for, does it print what the task said it would.
+        """
+        res = {"score": -1.0, "why": "unparseable", "raw": raw}
+        turn = _parse_turn(raw or "")
+        if not turn:
+            return res
+        files = turn.get("files") or (
+            [turn["file"]] if turn.get("file") and turn["file"][1] is not None else [])
+        files = [(p, c) for p, c in files if c is not None]
+        if not files:
+            res["why"] = "no files"
+            return res
+        scratch = None
+        try:
+            scratch = Sandbox(self.sb.root)
+            for path, content in files:
+                scratch.write_file(path, content, reason="candidate")
+            score, why = 0.0, []
+            py = [p for p, _ in files if p.endswith(".py")]
+            if py:
+                cr = scratch.run("python3 -m py_compile " + " ".join(py),
+                                 timeout=min(12, self.run_timeout), isolated=self.isolated)
+                if cr.get("exit_code") == 0 and not cr.get("blocked"):
+                    score += 2.0; why.append("compiles")
+                else:
+                    res.update(score=0.0, why="does not compile")
+                    return res
+            # Required paths and names — the contract, checked before anything else.
+            have = set(scratch.list_files(limit=200))
+            missing_files = [t for t in _task_target_files(task) if t not in have]
+            if missing_files:
+                why.append("wrong path")
+            else:
+                score += 2.0; why.append("paths ok")
+            cmd = turn.get("run") or (self._auto_run_cmd(files[0][0]) if files else "")
+            out = ""
+            if cmd:
+                rr = scratch.run(cmd, timeout=self.run_timeout, isolated=self.isolated)
+                if rr.get("exit_code") == 0 and not rr.get("blocked"):
+                    score += 3.0; why.append("runs green")
+                    out = (rr.get("stdout") or "")
+                    if out.strip():
+                        score += 1.0; why.append("prints")
+                else:
+                    why.append("run failed")
+            want = _task_required_symbols(task)
+            py_targets = [t for t in _task_target_files(task) if t.endswith(".py")]
+            if want and py_targets and not missing_files:
+                mod = re.sub(r"\.py$", "", py_targets[0]).replace("/", ".")
+                probe = ("python3 -c \"import importlib;"
+                         f"m=importlib.import_module('{mod}');"
+                         f"print('S:'+','.join([n for n in {want!r} if not hasattr(m,n)]))\"")
+                sr = scratch.run(probe, timeout=min(12, self.run_timeout),
+                                 isolated=self.isolated)
+                miss = ""
+                for line in reversed((sr.get("stdout") or "").splitlines()):
+                    if line.startswith("S:"):
+                        miss = line[2:]
+                        break
+                if sr.get("exit_code") == 0 and not miss:
+                    score += 2.0; why.append("names ok")
+                else:
+                    why.append("missing names")
+            expect = _expected_outputs(task)
+            if expect:
+                if all(e in out for e in expect):
+                    score += 1.0; why.append("expected output")
+                else:
+                    why.append("output mismatch")
+            res.update(score=score, why=", ".join(why))
+            return res
+        except Exception as exc:
+            res.update(score=-1.0, why=f"scoring failed: {exc}"[:120])
+            return res
+        finally:
+            if scratch is not None:
+                try:
+                    scratch.destroy()
+                except Exception:
+                    pass
 
     # Total chars of file content rendered per turn. The gateway caps OUTPUT tokens but
     # never the prompt, so this is the only guard against pushing SYSTEM out of the
@@ -957,14 +1062,45 @@ class CodeAgent:
                     {"role": "user", "content": f"TASK: {task}{self._context(task)}"}]
             yield {"event": "code_thinking", "data": {"step": step, "of": self.max_steps,
                    "ran": ran_any}}
-            try:
-                raw = self.chat(msgs)
-            except Exception as exc:
-                yield {"event": "error", "data": {"error": f"model failed: {exc}"[:200]}}
-                yield from self._finish(task, summary=f"model failed: {exc}"[:120],
-                                        ran=ran_any, produced_output=produced_output,
-                                        steps=step, error=str(exc)[:200])
-                return
+            raw = None
+            # Best-of-N on the opening turn: race several brains, RUN each candidate in
+            # a throwaway sandbox, and keep the one that actually works. Falls through
+            # to the single-model path on any failure, so the loop never depends on it.
+            if step == 0 and self.gen_many is not None:
+                try:
+                    cands = self.gen_many(msgs, self.ensemble_models) or []
+                except Exception:
+                    cands = []
+                scored = []
+                for cnd in cands:
+                    text = (cnd or {}).get("text") or ""
+                    if not text.strip():
+                        continue
+                    s = self._score_candidate(text, task)
+                    s["model"] = (cnd or {}).get("model")
+                    scored.append(s)
+                if scored:
+                    scored.sort(key=lambda x: x["score"], reverse=True)
+                    best = scored[0]
+                    yield {"event": "agent_note", "data": {
+                        "step": step,
+                        "text": "raced %d brains on the opening turn — kept %s (%s)" % (
+                            len(scored), best.get("model") or "candidate", best["why"]),
+                        "candidates": [
+                            {"model": c.get("model"), "score": c["score"], "why": c["why"]}
+                            for c in scored],
+                    }}
+                    if best["score"] > 0:
+                        raw = best["raw"]
+            if raw is None:
+                try:
+                    raw = self.chat(msgs)
+                except Exception as exc:
+                    yield {"event": "error", "data": {"error": f"model failed: {exc}"[:200]}}
+                    yield from self._finish(task, summary=f"model failed: {exc}"[:120],
+                                            ran=ran_any, produced_output=produced_output,
+                                            steps=step, error=str(exc)[:200])
+                    return
             turn = _parse_turn(raw)
             if turn is None:
                 parse_fails += 1

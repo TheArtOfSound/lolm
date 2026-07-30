@@ -1,0 +1,1389 @@
+{
+  "summary": {
+    "label": "AB-ensemble",
+    "model": "default",
+    "jobs": 60,
+    "passed": 46,
+    "pass_rate": 0.767,
+    "overclaim_rate": 0.1,
+    "median_wall_s": 24.8,
+    "total_wall_s": 1013.1,
+    "max_steps": 22,
+    "ensemble": true,
+    "by_tier": {
+      "fix": {
+        "pass": 17,
+        "of": 20,
+        "rate": 0.85
+      },
+      "impl": {
+        "pass": 29,
+        "of": 40,
+        "rate": 0.725
+      }
+    },
+    "by_task": {
+      "expr_eval": {
+        "pass": 3,
+        "of": 5
+      },
+      "fix_csv_parser": {
+        "pass": 4,
+        "of": 5
+      },
+      "fix_multifile_stats": {
+        "pass": 4,
+        "of": 5
+      },
+      "fix_pagination": {
+        "pass": 5,
+        "of": 5
+      },
+      "fix_state_machine": {
+        "pass": 4,
+        "of": 5
+      },
+      "interval_merge": {
+        "pass": 4,
+        "of": 5
+      },
+      "iso_duration": {
+        "pass": 1,
+        "of": 5
+      },
+      "jsonpath": {
+        "pass": 3,
+        "of": 5
+      },
+      "lru": {
+        "pass": 5,
+        "of": 5
+      },
+      "roman": {
+        "pass": 5,
+        "of": 5
+      },
+      "semver": {
+        "pass": 5,
+        "of": 5
+      },
+      "wrap": {
+        "pass": 3,
+        "of": 5
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "lru",
+      "tier": "impl",
+      "trial": 0,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 3.9,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "interval_merge",
+      "tier": "impl",
+      "trial": 0,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 4.0,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "iso_duration",
+      "tier": "impl",
+      "trial": 0,
+      "passed": false,
+      "steps": 1,
+      "wall_s": 6.8,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 20, in <module>\n    bad(s)\n    ~~~^^^\n  File \"/work/_lolm_hidden_check.py\", line 10, in bad\n    raise AssertionError(f\"{s!r} should have raised ValueError\")\nAssertionError: 'P' should have raised ValueError",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "roman",
+      "tier": "impl",
+      "trial": 0,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 11.2,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "semver",
+      "tier": "impl",
+      "trial": 0,
+      "passed": true,
+      "steps": 5,
+      "wall_s": 44.2,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 4,
+      "runs": 9,
+      "green_runs": 8,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_pagination",
+      "tier": "fix",
+      "trial": 0,
+      "passed": true,
+      "steps": 6,
+      "wall_s": 42.6,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "paginate.py",
+        "test_paginate.py"
+      ],
+      "writes": 6,
+      "runs": 12,
+      "green_runs": 12,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_state_machine",
+      "tier": "fix",
+      "trial": 0,
+      "passed": true,
+      "steps": 1,
+      "wall_s": 2.7,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "orders.py",
+        "test_orders.py"
+      ],
+      "writes": 4,
+      "runs": 6,
+      "green_runs": 6,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "jsonpath",
+      "tier": "impl",
+      "trial": 0,
+      "passed": false,
+      "steps": 3,
+      "wall_s": 112.6,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 3,
+      "runs": 6,
+      "green_runs": 3,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 4, in <module>\n    assert S.get(d, 'a.b') == 7\n           ^^^^^^^^^^^^^^^^^^^^\nAssertionError",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "iso_duration",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "steps": 1,
+      "wall_s": 5.7,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 18, in <module>\n    assert abs(S.parse_duration('PT0S')) < 1e-9\n               ~~~~~~~~~~~~~~~~^^^^^^^^\n  File \"/work/solution.py\", line 94, in parse_duration\n    raise ValueError(f\"Invalid ISO\u20118601 duration (no components): {s!r}\")\nValueError: Invalid ISO\u20118601 duration (no components): 'PT0S'",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "roman",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 7.7,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "interval_merge",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 3.8,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_multifile_stats",
+      "tier": "fix",
+      "trial": 0,
+      "passed": true,
+      "steps": 9,
+      "wall_s": 90.5,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "report.py",
+        "stats.py"
+      ],
+      "writes": 19,
+      "runs": 26,
+      "green_runs": 25,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "expr_eval",
+      "tier": "impl",
+      "trial": 0,
+      "passed": false,
+      "steps": 8,
+      "wall_s": 133.0,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 8,
+      "runs": 16,
+      "green_runs": 11,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 14, in <module>\n    assert abs(S.evaluate('-(3+2)') + 5) < 1e-9\n               ~~~~~~~~~~^^^^^^^^^^\n  File \"/work/solution.py\", line 85, in evaluate\n    raise ValueError(\"Malformed input\")\nValueError: Malformed input",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "expr_eval",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 3.9,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "semver",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 7.3,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "wrap",
+      "tier": "impl",
+      "trial": 0,
+      "passed": true,
+      "steps": 16,
+      "wall_s": 139.0,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 15,
+      "runs": 30,
+      "green_runs": 26,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "wrap",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "steps": 2,
+      "wall_s": 5.2,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 14, in <module>\n    assert '' in para, para\n           ^^^^^^^^^^\nAssertionError: ['one two', 'three four']",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "lru",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "steps": 4,
+      "wall_s": 32.1,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 4,
+      "runs": 7,
+      "green_runs": 3,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_state_machine",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "steps": 1,
+      "wall_s": 3.8,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "demo.py",
+        "orders.py",
+        "test_orders.py"
+      ],
+      "writes": 5,
+      "runs": 7,
+      "green_runs": 7,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "jsonpath",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "steps": 3,
+      "wall_s": 33.2,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 3,
+      "runs": 6,
+      "green_runs": 3,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 2, in <module>\n    import solution as S\n  File \"/work/solution.py\", line 65, in <module>\n    print(get(obj, 'a.b'))  # Should print: value\n          ~~~^^^^^^^^^^^^\n  File \"/work/solution.py\", line 46, in get\n    raise ValueError(f\"Malformed path: {path}\")\nValueError: Malformed path: a.b",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "fix_pagination",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "steps": 4,
+      "wall_s": 35.6,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "paginate.py",
+        "test_paginate.py"
+      ],
+      "writes": 4,
+      "runs": 9,
+      "green_runs": 7,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "roman",
+      "tier": "impl",
+      "trial": 2,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 5.4,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_multifile_stats",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "steps": 14,
+      "wall_s": 117.8,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "main.py",
+        "report.py",
+        "stats.py"
+      ],
+      "writes": 18,
+      "runs": 32,
+      "green_runs": 25,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "lru",
+      "tier": "impl",
+      "trial": 2,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 6.5,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "semver",
+      "tier": "impl",
+      "trial": 2,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 6.1,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "iso_duration",
+      "tier": "impl",
+      "trial": 2,
+      "passed": false,
+      "steps": 2,
+      "wall_s": 145.6,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 2,
+      "runs": 5,
+      "green_runs": 5,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 20, in <module>\n    bad(s)\n    ~~~^^^\n  File \"/work/_lolm_hidden_check.py\", line 10, in bad\n    raise AssertionError(f\"{s!r} should have raised ValueError\")\nAssertionError: 'P' should have raised ValueError\n273906.0\n0.5\n31536000\n-300\n3600\nInvalid duration string\n0\nInvalid duration string\nInvalid duration string",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "interval_merge",
+      "tier": "impl",
+      "trial": 2,
+      "passed": true,
+      "steps": 4,
+      "wall_s": 145.9,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 3,
+      "runs": 5,
+      "green_runs": 4,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "wrap",
+      "tier": "impl",
+      "trial": 2,
+      "passed": false,
+      "steps": 2,
+      "wall_s": 8.4,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 4, in <module>\n    assert 'textwrap' not in src, 'must not use textwrap'\n           ^^^^^^^^^^^^^^^^^^^^^\nAssertionError: must not use textwrap",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "jsonpath",
+      "tier": "impl",
+      "trial": 2,
+      "passed": true,
+      "steps": 4,
+      "wall_s": 46.3,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 3,
+      "runs": 6,
+      "green_runs": 6,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_pagination",
+      "tier": "fix",
+      "trial": 2,
+      "passed": true,
+      "steps": 5,
+      "wall_s": 28.1,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "paginate.py",
+        "test_paginate.py"
+      ],
+      "writes": 9,
+      "runs": 14,
+      "green_runs": 13,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_state_machine",
+      "tier": "fix",
+      "trial": 2,
+      "passed": true,
+      "steps": 5,
+      "wall_s": 43.7,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "orders.py"
+      ],
+      "writes": 5,
+      "runs": 10,
+      "green_runs": 8,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_csv_parser",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "steps": 22,
+      "wall_s": 272.5,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "csvlite.py",
+        "main.py"
+      ],
+      "writes": 23,
+      "runs": 46,
+      "green_runs": 46,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": true,
+      "seed_deleted": []
+    },
+    {
+      "id": "iso_duration",
+      "tier": "impl",
+      "trial": 3,
+      "passed": true,
+      "steps": 1,
+      "wall_s": 6.4,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "roman",
+      "tier": "impl",
+      "trial": 3,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 8.4,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "interval_merge",
+      "tier": "impl",
+      "trial": 3,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 3.6,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "lru",
+      "tier": "impl",
+      "trial": 3,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 4.1,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_csv_parser",
+      "tier": "fix",
+      "trial": 2,
+      "passed": true,
+      "steps": 8,
+      "wall_s": 56.7,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "csvlite.py",
+        "main.py"
+      ],
+      "writes": 7,
+      "runs": 14,
+      "green_runs": 13,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "expr_eval",
+      "tier": "impl",
+      "trial": 3,
+      "passed": true,
+      "steps": 3,
+      "wall_s": 29.8,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 2,
+      "runs": 4,
+      "green_runs": 4,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "semver",
+      "tier": "impl",
+      "trial": 3,
+      "passed": true,
+      "steps": 3,
+      "wall_s": 38.6,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 2,
+      "runs": 4,
+      "green_runs": 4,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "wrap",
+      "tier": "impl",
+      "trial": 3,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 3.7,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "jsonpath",
+      "tier": "impl",
+      "trial": 3,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 10.7,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_pagination",
+      "tier": "fix",
+      "trial": 3,
+      "passed": true,
+      "steps": 3,
+      "wall_s": 21.4,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "paginate.py"
+      ],
+      "writes": 7,
+      "runs": 11,
+      "green_runs": 9,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_multifile_stats",
+      "tier": "fix",
+      "trial": 3,
+      "passed": true,
+      "steps": 4,
+      "wall_s": 28.9,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "report.py",
+        "stats.py",
+        "test_stats.py"
+      ],
+      "writes": 3,
+      "runs": 8,
+      "green_runs": 4,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_state_machine",
+      "tier": "fix",
+      "trial": 3,
+      "passed": false,
+      "steps": 4,
+      "wall_s": 28.8,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "main.py",
+        "orders.py"
+      ],
+      "writes": 2,
+      "runs": 5,
+      "green_runs": 1,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 4, in <module>\n    assert o.state == 'new' and o.history() == ['new'], o.history()\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: []",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "fix_multifile_stats",
+      "tier": "fix",
+      "trial": 2,
+      "passed": false,
+      "steps": 9,
+      "wall_s": 221.4,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "main.py",
+        "report.py",
+        "stats.py",
+        "test_stats.py"
+      ],
+      "writes": 14,
+      "runs": 23,
+      "green_runs": 16,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 15, in <module>\n    assert St.percentile(xs, 150) == 100, 'p must clamp at 100'\n           ~~~~~~~~~~~~~^^^^^^^^^\n  File \"/work/stats.py\", line 19, in percentile\n    raise ValueError(\"percentile() p must be between 0 and 100\")\nValueError: percentile() p must be between 0 and 100",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "iso_duration",
+      "tier": "impl",
+      "trial": 4,
+      "passed": false,
+      "steps": 2,
+      "wall_s": 35.1,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 2,
+      "runs": 5,
+      "green_runs": 4,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 20, in <module>\n    bad(s)\n    ~~~^^^\n  File \"/work/_lolm_hidden_check.py\", line 10, in bad\n    raise AssertionError(f\"{s!r} should have raised ValueError\")\nAssertionError: 'P' should have raised ValueError\n273906.0\n0.5\n31536000\n-300\n3600\nInvalid duration string\n0\nInvalid duration string\nInvalid duration string",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "roman",
+      "tier": "impl",
+      "trial": 4,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 7.6,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "lru",
+      "tier": "impl",
+      "trial": 4,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 6.5,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "semver",
+      "tier": "impl",
+      "trial": 4,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 8.0,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "expr_eval",
+      "tier": "impl",
+      "trial": 4,
+      "passed": false,
+      "steps": 3,
+      "wall_s": 35.2,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 2,
+      "runs": 5,
+      "green_runs": 2,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 2, in <module>\n    import solution as S, pathlib\n  File \"/work/solution.py\", line 143, in <module>\n    print(evaluate(\"1 / (2 - 2)\"))  # Expected output: ZeroDivisionError\n          ~~~~~~~~^^^^^^^^^^^^^^^\n  File \"/work/solution.py\", line 39, in evaluate\n    result = evaluate_postfix(postfix)\n  File \"/work/solution.py\", line 122, in evaluate_postfix\n    raise ZeroDivisionError(\"Division by zero\")\nZeroDivisionError: Division by zero\n7.0\n9.0",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "jsonpath",
+      "tier": "impl",
+      "trial": 4,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 8.4,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "wrap",
+      "tier": "impl",
+      "trial": 4,
+      "passed": true,
+      "steps": 2,
+      "wall_s": 4.9,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "solution.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "interval_merge",
+      "tier": "impl",
+      "trial": 4,
+      "passed": false,
+      "steps": 7,
+      "wall_s": 71.4,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 5,
+      "runs": 10,
+      "green_runs": 5,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 2, in <module>\n    import solution as S\n  File \"/work/solution.py\", line 104\n    RUN: python3 solution.py\n                 ^^^^^^^^\nSyntaxError: invalid syntax",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "fix_pagination",
+      "tier": "fix",
+      "trial": 4,
+      "passed": true,
+      "steps": 3,
+      "wall_s": 13.6,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "paginate.py"
+      ],
+      "writes": 4,
+      "runs": 5,
+      "green_runs": 4,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_multifile_stats",
+      "tier": "fix",
+      "trial": 4,
+      "passed": true,
+      "steps": 3,
+      "wall_s": 17.8,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "report.py",
+        "stats.py"
+      ],
+      "writes": 4,
+      "runs": 7,
+      "green_runs": 7,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_state_machine",
+      "tier": "fix",
+      "trial": 4,
+      "passed": true,
+      "steps": 4,
+      "wall_s": 37.2,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "orders.py",
+        "test_orders.py"
+      ],
+      "writes": 6,
+      "runs": 12,
+      "green_runs": 11,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "expr_eval",
+      "tier": "impl",
+      "trial": 2,
+      "passed": true,
+      "steps": 16,
+      "wall_s": 449.9,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 15,
+      "runs": 24,
+      "green_runs": 14,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_csv_parser",
+      "tier": "fix",
+      "trial": 3,
+      "passed": false,
+      "steps": 12,
+      "wall_s": 322.5,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "csvlite.py",
+        "main.py"
+      ],
+      "writes": 9,
+      "runs": 15,
+      "green_runs": 4,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 2, in <module>\n    import csvlite as C, pathlib\n  File \"/work/csvlite.py\", line 93\n    RUN: python3 csvlite.py\n                 ^^^^^^^\nSyntaxError: invalid syntax",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "fix_csv_parser",
+      "tier": "fix",
+      "trial": 0,
+      "passed": true,
+      "steps": 22,
+      "wall_s": 865.1,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "csvlite.py",
+        "main.py"
+      ],
+      "writes": 28,
+      "runs": 50,
+      "green_runs": 45,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": true,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_csv_parser",
+      "tier": "fix",
+      "trial": 4,
+      "passed": true,
+      "steps": 22,
+      "wall_s": 331.7,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "csvlite.py"
+      ],
+      "writes": 18,
+      "runs": 39,
+      "green_runs": 38,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": true,
+      "seed_deleted": []
+    }
+  ]
+}
