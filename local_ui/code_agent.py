@@ -35,8 +35,9 @@ SYSTEM = (
     "<complete file contents>\n"
     "```\n"
     "RUN: <command>\n"
-    "READ: <path>          # optional — inspect a file before editing\n"
-    "EDIT: <path>          # optional surgical fix (old → new)\n"
+    "READ: <path>          # re-read a file (its content also appears in CURRENT WORKSPACE)\n"
+    "EDIT: <path>          # surgical fix — old text must match the file BYTE-FOR-BYTE,\n"
+    "                      # including indentation. Copy it out of CURRENT WORKSPACE.\n"
     "<<<\n"
     "<exact old text>\n"
     "===\n"
@@ -54,8 +55,21 @@ SYSTEM = (
     "When the run fully satisfies the TASK (and any tests you added), reply ONLY:\n"
     "DONE: <one-line summary>\n\n"
     "Quality bar:\n"
+    "- HONOR THE REQUESTED SHAPE. If the TASK names files, function signatures, or a "
+    "module layout, produce EXACTLY those, at exactly those paths. Never collapse a "
+    "requested layout into main.py. Callers import these names — a correct program at "
+    "the wrong path is a FAILURE.\n"
+    "- BUILD ONLY WHAT THE TASK ASKS. Do not invent extra requirements, extra cases, or "
+    "extra assertions the TASK never stated, then fail your own invention. When the TASK "
+    "gives examples, those are the contract.\n"
+    "- When a CURRENT WORKSPACE block is present it is the real on-disk content. Prefer "
+    "EDIT with old-text copied verbatim from it; full FILE rewrite only for a new file "
+    "or a deliberate restructure.\n"
     "- Prefer small pure functions + a main that prints clear results.\n"
-    "- For non-trivial logic, add asserts or a tiny self-check in the same file and RUN it.\n"
+    "- For non-trivial logic, add a self-check and RUN it. If the TASK asks for tests, "
+    "write test_<name>.py using unittest.TestCase subclasses with self.assertEqual / "
+    "self.assertRaises — that shape runs under BOTH pytest and `python3 -m unittest`, "
+    "so it works whether or not pytest is in the jail.\n"
     "- On failure: read the error, fix ROOT CAUSE, do not rewrite the same broken code.\n"
     "- Never DONE until you have SEEN exit 0 with meaningful printed output.\n"
     "- The harness may auto-finish when expected output or tests already pass."
@@ -90,6 +104,11 @@ _THIRD_PARTY_MODS = frozenset({
     "pytest", "hypothesis", "pydantic", "yaml", "toml", "dotenv", "rich", "typer",
     "click", "tqdm", "joblib", "numba", "sympy", "networkx", "scrapy",
 })
+
+# Test frameworks are absent from the jail like any other third-party package, but they
+# need their OWN coach: the generic "rewrite with stdlib only" message reads as license
+# to delete the tests, which is the opposite of what a test-shaped task wants.
+_TEST_FRAMEWORK_MODS = frozenset({"pytest", "hypothesis", "nose", "nose2"})
 
 # Canonical empty turn shape
 _EMPTY_TURN = {
@@ -312,11 +331,36 @@ def _parse_turn(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+_FILENAME_IN_TASK = re.compile(
+    r"\b([A-Za-z_][\w\-]{0,40}\.(?:py|js|mjs|ts|json|txt|md|html|css|sh))\b")
+
+
+def _task_target_files(task: str) -> List[str]:
+    """Paths the TASK explicitly names, in order of first mention.
+
+    The first-turn scaffold used to hard-code ``FILE: main.py``, which out-shouted
+    any path the task actually asked for — a task saying "create solution.py"
+    reliably produced main.py, so anything that imported the requested module failed
+    outright no matter how good the code was.
+    """
+    out: List[str] = []
+    for m in _FILENAME_IN_TASK.finditer(task or ""):
+        p = m.group(1)
+        if p not in out:
+            out.append(p)
+    return out
+
+
 def _wants_tests(task: str) -> bool:
     t = (task or "").lower()
     return any(k in t for k in (
         "test", "unittest", "pytest", "assert", "tdd", "spec", "verify",
     ))
+
+
+def _is_test_command(cmd: str) -> bool:
+    c = (cmd or "").lower()
+    return "unittest" in c or "pytest" in c
 
 
 def _is_test_path(path: str) -> bool:
@@ -343,13 +387,19 @@ def _pick_verify_command(files_written: List[str], task: str) -> Optional[str]:
         return None
     tests = [p for p in py if _is_test_path(p)]
     if tests:
-        # unittest discover is stdlib; try pytest first when installed in the jail.
-        # Single shell line so sandbox.run stays one command.
+        # unittest is stdlib; try pytest first when it happens to be in the jail.
+        # Single shell line so sandbox.run stays one command. The fallback names the
+        # test MODULES explicitly rather than using `discover -p 'test*.py'`: discovery
+        # silently collects nothing for an accepted layout like foo_test.py and then
+        # exits 5 (NO TESTS RAN), so the verify could never go green and the loop
+        # could never converge no matter how correct the code was.
+        mods = [re.sub(r"\.py$", "", t).replace("/", ".") for t in tests]
         return (
             "python3 -c \"import importlib.util as u,sys; sys.exit(0 if u.find_spec('pytest') else 1)\" "
             "&& python3 -m pytest -q --tb=line "
             + " ".join(tests)
-            + " || python3 -m unittest discover -s . -p 'test*.py' -q"
+            + " || python3 -m unittest -q "
+            + " ".join(mods)
         )
     if _wants_tests(task) or len(py) >= 2:
         return "python3 -m py_compile " + " ".join(py)
@@ -504,25 +554,121 @@ class CodeAgent:
         self._format_nudge = ""
         self._files_written: List[str] = []
 
+    # Total chars of file content rendered per turn. The gateway caps OUTPUT tokens but
+    # never the prompt, so this is the only guard against pushing SYSTEM out of the
+    # context window — which would break FILE/RUN parsing and trip the 3-strike bailout.
+    _WS_BUDGET = 7000
+    _SKIP_EXT = (".pyc", ".pyo", ".so", ".png", ".jpg", ".jpeg", ".gif", ".zip",
+                 ".pdf", ".ico", ".woff", ".woff2", ".ttf")
+
+    def _workspace_block(self) -> str:
+        """The exact on-disk content of the files in play.
+
+        Without this the model saw only ``- wrote solution.py (2524 bytes)`` and had to
+        reconstruct the file from memory every single turn, so a blind full rewrite was
+        the only rational move — and each rewrite could silently clobber the parts that
+        already worked. Raw bytes, deliberately NO line numbers: EDIT matches by exact
+        substring, so a gutter number copied into the old text guarantees a miss.
+        """
+        try:
+            names = [f for f in self.sb.list_files(limit=60)
+                     if "__pycache__" not in f and not f.endswith(self._SKIP_EXT)]
+        except Exception:
+            return ""
+        if not names:
+            return ""
+        # Most-recently-touched first — that is the file actually being iterated on.
+        order = [p for p in reversed(self._files_written) if p in names]
+        order += [p for p in names if p not in order]
+        budget = self._WS_BUDGET
+        blocks: List[str] = []
+        for path in order:
+            if budget <= 200:
+                break
+            try:
+                body = self.sb.read_file(path)
+            except Exception:
+                continue
+            if len(body) > budget:
+                keep = max(budget - 120, 200)
+                head, tail = body[: keep // 2], body[-(keep - keep // 2):]
+                body = (head + f"\n\n... [{len(body) - keep} chars omitted — do NOT EDIT "
+                        f"against this elided region; rewrite the whole FILE instead] ...\n\n"
+                        + tail)
+            budget -= len(body)
+            blocks.append(f"--- {path} ({len(body)} bytes) ---\n{body}")
+        if not blocks:
+            return ""
+        return ("\n\nCURRENT WORKSPACE — the real content on disk right now. Copy EDIT "
+                "old-text verbatim out of this:\n" + "\n".join(blocks))
+
+    def _missing_targets(self, task: str) -> List[str]:
+        """Paths the TASK named that are not actually on disk.
+
+        The scaffold now asks for the right filename, but a 70B model still drifts to
+        a name of its own choosing. Since the caller will import exactly what the task
+        specified, a missing target is a hard failure — so the loop verifies it rather
+        than trusting the model to have complied.
+        """
+        targets = _task_target_files(task)
+        if not targets:
+            return []
+        try:
+            have = set(self.sb.list_files(limit=200))
+        except Exception:
+            return []
+        return [t for t in targets if t not in have]
+
+    def _recent_actions(self, keep: int = 12) -> List[Dict[str, Any]]:
+        """Recent actions with GREEN verify runs collapsed out.
+
+        One write+run step appends up to four rows (write, py_compile verify, run, test
+        verify), so a flat [-8:] window held barely two turns of history. A py_compile
+        that exited 0 carries no information — but a FAILING verify is the single most
+        informative row there is, so only the green ones are dropped.
+        """
+        useful = [a for a in self.actions
+                  if not (a.get("verify") and (a.get("result") or {}).get("exit_code") == 0)]
+        return useful[-keep:]
+
     def _context(self, task: str = "") -> str:
+        ws = self._workspace_block()
         if not self.actions:
-            base = ("\n\n(Nothing run yet. Write the complete program and run it.\n"
-                    "Reply EXACTLY:\nFILE: main.py\n```\n<code>\n```\nRUN: python3 main.py)")
+            if ws:
+                # Files already exist (a fix / refactor task). Telling the model
+                # "nothing run yet, write the complete program" here made it clobber
+                # the very code it was asked to repair.
+                base = ("\n\n(These files ALREADY EXIST — the CURRENT WORKSPACE block below "
+                        "is their exact content. Change only what the TASK requires, with "
+                        "EDIT blocks where you can, keeping every existing module, class, "
+                        "and function name. Then RUN to check your work.)")
+            else:
+                targets = _task_target_files(task)
+                primary = targets[0] if targets else "main.py"
+                extra = ""
+                if len(targets) > 1:
+                    extra = ("\nThe TASK names several files — create EVERY one, at exactly "
+                             "these paths: " + ", ".join(targets) + ".")
+                base = (f"\n\n(Nothing run yet. Write the code and run it.{extra}\n"
+                        f"Reply EXACTLY:\nFILE: {primary}\n```\n<code>\n```\n"
+                        f"RUN: {self._auto_run_cmd(primary)})")
             # Speed-to-value: surface concrete expected stdout on the first turn
             # so the model aims correctly without burning a mismatch cycle.
             expect = _expected_outputs(task or "")
             if expect:
                 base += ("\n\nEXPECTED STDOUT (must appear after RUN):\n- "
                          + "\n- ".join(repr(e) for e in expect[:4]))
-            return base + (self._format_nudge or "")
+            return base + ws + (self._format_nudge or "")
         lines = ["\n\nSO FAR:"]
-        for a in self.actions[-8:]:
+        for a in self._recent_actions():
             kind = a.get("kind")
             if kind == "write_file":
                 lines.append(f"- wrote {a['path']} ({a.get('bytes', 0)} bytes)")
             elif kind == "read_file":
-                body = (a.get("content") or "")[:700]
-                lines.append(f"- read {a['path']} ({a.get('bytes', 0)} bytes)\n  CONTENT:\n{body}")
+                # Content lives in CURRENT WORKSPACE (always fresh); echoing the
+                # snapshot here would duplicate it and go stale after the next write.
+                lines.append(f"- read {a['path']} ({a.get('bytes', 0)} bytes) — "
+                             f"its current content is in CURRENT WORKSPACE below")
             elif kind == "edit_file":
                 lines.append(f"- edited {a['path']} (ok={a.get('ok')}, {a.get('note', '')})")
             elif kind == "list_files":
@@ -539,18 +685,19 @@ class CodeAgent:
                 lines.append("\nThe last run printed the output above. If it satisfies the "
                              "TASK, reply `DONE: ...`. Otherwise send a corrected FILE + RUN.")
             else:
-                lines.append("\nThe last run exited 0 but printed NOTHING. Rewrite the FULL "
-                             "program so it actually runs the logic and PRINTS results, with "
-                             "a RUN line. Do NOT say DONE.")
+                lines.append("\nThe last run exited 0 but printed NOTHING. Add a "
+                             "`if __name__ == \"__main__\":` block that exercises the code "
+                             "and PRINTS results — keep the required functions and paths "
+                             "exactly as they are. Then RUN. Do NOT say DONE.")
         elif last.get("kind") in ("read_file", "list_files", "edit_file"):
-            lines.append("\nYou inspected/edited files. Next: FILE + RUN (or DONE only if a "
-                         "prior green run already satisfied the TASK).")
+            lines.append("\nYou inspected/edited files. Next: EDIT or FILE, then RUN (or DONE "
+                         "only if a prior green run already satisfied the TASK).")
         else:
-            lines.append("\nSend the next FILE + RUN (fix the program if the last run failed). "
-                         "Do not invent success — use the real OUTPUT above.")
+            lines.append("\nSend the next EDIT or FILE + RUN (fix the program if the last run "
+                         "failed). Do not invent success — use the real OUTPUT above.")
         if self._format_nudge:
             lines.append(self._format_nudge)
-        return "\n".join(lines)
+        return "\n".join(lines) + ws
 
     def _auto_run_cmd(self, path: str) -> str:
         """Guess a run command when the model forgot RUN:."""
@@ -566,7 +713,8 @@ class CodeAgent:
     def build_receipt(self, task: str, *, summary: str = "", ran: bool = False,
                       produced_output: bool = False, steps: int = 0,
                       stuck: bool = False, budget_hit: bool = False,
-                      error: str = "") -> Dict[str, Any]:
+                      error: str = "",
+                      syntax: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Auditable trail of the coding loop — the switch reason vs black-box agents."""
         trail: List[Dict[str, Any]] = []
         green_runs = 0
@@ -632,22 +780,63 @@ class CodeAgent:
             "missing_expected": missing,
             "last_stdout_tail": last_out[-300:] if last_out else "",
             "trail": trail[-24:],
-            "ok": bool(ran and produced_output and green_runs > 0 and expected_ok and not stuck),
+            # Part of the hashed core, not bolted on afterwards — the seal has to
+            # cover the syntax verdict or it proves nothing about the delivered code.
+            "syntax_ok": bool(syntax.get("ok", True)) if syntax else True,
+            "syntax_error": (syntax or {}).get("error", "")[:400],
+            "syntax_checked": list((syntax or {}).get("checked", [])),
+            "ok": bool(ran and produced_output and green_runs > 0 and expected_ok
+                       and not stuck and (syntax.get("ok", True) if syntax else True)),
         }
         blob = json.dumps(core, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
         core["receipt_sha"] = hashlib.sha256(blob.encode("utf-8")).hexdigest()[:24]
         core["verdict"] = (
             "shipped" if core["ok"] else
-            ("stuck" if stuck else
-             ("budget_hit" if budget_hit else
-              ("missing_output" if not expected_ok else
-               ("ran" if ran else "incomplete"))))
+            ("broken" if not core["syntax_ok"] else
+             ("stuck" if stuck else
+              ("budget_hit" if budget_hit else
+               ("missing_output" if not expected_ok else
+                ("ran" if ran else "incomplete")))))
         )
         return core
 
+    def _final_compile_check(self) -> Dict[str, Any]:
+        """Does the delivered Python actually parse?
+
+        Runs at the moment of finishing, over the real files on disk. The write-time
+        preflight can be left behind: when the step budget runs out mid-repair, the
+        loop used to hand back a tree with a SyntaxError in it and still report DONE.
+        A receipt that says "shipped" over code that cannot even be imported is the
+        one failure this product cannot afford.
+        """
+        py = [p for p in self._files_written if (p or "").endswith(".py")]
+        if not py:
+            return {"checked": [], "ok": True, "error": ""}
+        try:
+            r = self.sb.run("python3 -m py_compile " + " ".join(py),
+                            timeout=min(15, max(self.run_timeout, 5)),
+                            isolated=self.isolated)
+        except Exception as exc:
+            return {"checked": py, "ok": True, "error": f"(check skipped: {exc})"[:160]}
+        ok = r.get("exit_code") == 0 and not r.get("blocked")
+        err = ((r.get("stderr") or "") + (r.get("stdout") or "")).strip()
+        return {"checked": py, "ok": bool(ok), "error": "" if ok else err[-400:]}
+
     def _finish(self, task: str, **kw: Any) -> Iterator[Dict[str, Any]]:
         """Emit code_done + sealed code_receipt (always pair them)."""
-        receipt = self.build_receipt(task, **kw)
+        syntax = self._final_compile_check()
+        if not syntax["ok"]:
+            # Never let a green earlier run launder a broken final tree.
+            kw["produced_output"] = False
+            kw["summary"] = (
+                "INCOMPLETE — the delivered code does not compile: "
+                + syntax["error"].splitlines()[-1][:160]
+                if syntax["error"] else "INCOMPLETE — the delivered code does not compile"
+            )
+            yield {"event": "agent_note", "data": {
+                "text": "final check: delivered code does NOT compile — reporting it as "
+                        "incomplete rather than shipped"}}
+        receipt = self.build_receipt(task, syntax=syntax, **kw)
         data = {
             "summary": kw.get("summary", ""),
             "steps": kw.get("steps", 0),
@@ -688,9 +877,12 @@ class CodeAgent:
             turn = _parse_turn(raw)
             if turn is None:
                 parse_fails += 1
+                _tf = _task_target_files(task)
+                _pf = _tf[0] if _tf else "main.py"
                 self._format_nudge = (
                     "\n\nFORMAT ERROR: Your last reply was not parseable. Reply with ONLY:\n"
-                    "FILE: main.py\n```\n# full program\n```\nRUN: python3 main.py\n"
+                    f"FILE: {_pf}\n```\n# full file contents\n```\n"
+                    f"RUN: {self._auto_run_cmd(_pf)}\n"
                     "No prose outside that format."
                 )
                 yield {"event": "agent_note", "data": {"step": step,
@@ -720,6 +912,24 @@ class CodeAgent:
                     self._format_nudge = "\n\nYou must FILE + RUN before DONE."
                     yield {"event": "agent_note", "data": {"step": step,
                            "text": "tried to finish without running the code — making it run first"}}
+                    continue
+                # A path the TASK named is part of the contract, not a suggestion:
+                # whoever asked will import exactly that module. Correct code at the
+                # wrong path is a total failure, and it used to sail through as DONE.
+                missing_files = self._missing_targets(task)
+                if missing_files and nudges < 4:
+                    nudges += 1
+                    want = ", ".join(missing_files)
+                    self._format_nudge = (
+                        f"\n\nWRONG PATH: the TASK requires {want}, which does not exist "
+                        f"in the workspace. Whatever you wrote is at the wrong path, so it "
+                        f"cannot be imported. Re-emit the SAME code as `FILE: "
+                        f"{missing_files[0]}` (keep the required function and class names "
+                        f"exactly as the TASK states), then RUN. Do NOT say DONE yet."
+                    )
+                    yield {"event": "agent_note", "data": {"step": step,
+                           "text": f"required file missing: {want} — redirecting to the "
+                                   f"requested path"}}
                     continue
                 if ran_any and not produced_output and nudges < 3:
                     nudges += 1
@@ -836,15 +1046,25 @@ class CodeAgent:
                     did = True
                     continue
                 if old not in cur:
-                    self.actions.append({"kind": "edit_file", "path": path, "ok": False,
-                                         "note": "old text not found"})
+                    # Nothing changed. Steer at the workspace block instead of leaving a
+                    # content-free "not found" — that was a dead end whose only escape
+                    # was a blind full rewrite.
+                    self.actions.append({
+                        "kind": "edit_file", "path": path, "ok": False,
+                        "note": "old text did NOT match byte-for-byte, so NOTHING changed. "
+                                "Do not guess it again — copy the old text verbatim out of "
+                                f"the CURRENT WORKSPACE block for {path} (watch indentation), "
+                                "or send a full FILE rewrite."})
                     yield {"event": "agent_note", "data": {
-                        "text": f"edit {path} — old text not found (read file first)"}}
+                        "text": f"edit {path} — old text not found; showing exact file content"}}
                     did = True
                     continue
                 if cur.count(old) > 1:
-                    self.actions.append({"kind": "edit_file", "path": path, "ok": False,
-                                         "note": "old text not unique"})
+                    self.actions.append({
+                        "kind": "edit_file", "path": path, "ok": False,
+                        "note": f"old text matches {cur.count(old)} places — nothing changed. "
+                                "Extend it with surrounding lines from CURRENT WORKSPACE "
+                                "until it is unique."})
                     yield {"event": "agent_note", "data": {
                         "text": f"edit {path} — old text matches {cur.count(old)} times; make it unique"}}
                     did = True
@@ -905,7 +1125,9 @@ class CodeAgent:
                             err = ((vr.get("stderr") or "") + (vr.get("stdout") or "")).strip()
                             self._format_nudge = (
                                 f"\n\nSYNTAX ERROR in `{path}` (py_compile failed).\n"
-                                f"{err[:500]}\nFix with EDIT or full FILE rewrite, then RUN."
+                                f"{err[:500]}\nFix it with an EDIT block (copy the old text "
+                                f"verbatim from CURRENT WORKSPACE); use a full FILE rewrite "
+                                f"only if the file needs restructuring. Then RUN."
                             )
                             yield {"event": "agent_note", "data": {
                                 "text": f"py_compile failed for {path} — fix before RUN"}}
@@ -963,6 +1185,14 @@ class CodeAgent:
                 ok = r.get("exit_code") == 0 and not r.get("blocked")
                 if ok and (r.get("stdout") or "").strip():
                     produced_output = True
+                elif ok and _is_test_command(cmd) and (r.get("stderr") or "").strip():
+                    # A green unittest/pytest run reports "Ran N tests / OK" on STDERR
+                    # with STDOUT empty. Without this, a genuinely passing suite reads as
+                    # "printed nothing": DONE stays blocked, the verify oracle (gated on
+                    # produced_output) never fires, and the receipt marks a correct run
+                    # incomplete. Scoped to test runners so the anti-vacuous-success
+                    # guard still holds for ordinary programs.
+                    produced_output = True
                 self.actions.append({"kind": "run", "command": cmd, "result": r})
                 yield {"event": "command_finished", "data": {
                     "command": cmd, "exit_code": r.get("exit_code"),
@@ -989,7 +1219,23 @@ class CodeAgent:
                         mod = m_miss.group(1).split(".")[0]
                         # Third-party / non-stdlib: do NOT invent FILE: requests.py —
                         # rewrite with stdlib (sandbox has no pip/network).
-                        if mod and (mod in _THIRD_PARTY_MODS or mod.lower() in _THIRD_PARTY_MODS):
+                        if mod and mod.lower() in _TEST_FRAMEWORK_MODS:
+                            # Must be tested BEFORE the third-party branch: that one
+                            # coaches "rewrite with stdlib only", which a model reads as
+                            # permission to DELETE the test file it was asked for. Keep
+                            # the tests, change only their dialect.
+                            third_party_miss = True
+                            self._format_nudge = (
+                                f"\n\n`{mod}` is not installed in the jail. KEEP the test "
+                                "file — convert it to stdlib unittest: subclass "
+                                "unittest.TestCase and use self.assertEqual / "
+                                "self.assertRaises instead of bare asserts, and drop the "
+                                f"`import {mod}` line. That shape also runs under pytest. "
+                                "Do NOT delete or weaken any test. Then RUN again."
+                            )
+                            yield {"event": "agent_note", "data": {
+                                "text": f"no {mod} in the jail — converting tests to unittest"}}
+                        elif mod and (mod in _THIRD_PARTY_MODS or mod.lower() in _THIRD_PARTY_MODS):
                             third_party_miss = True
                             self._format_nudge = (
                                 f"\n\nTHIRD-PARTY IMPORT BLOCKED: `{mod}` is not available "
@@ -1215,7 +1461,10 @@ class CodeAgent:
                                     )
                         # Auto-DONE when oracles are green — speed-to-value without
                         # burning another model turn waiting for "DONE:".
-                        if ok:
+                        # A green oracle on the wrong filename is still a failure, so the
+                        # required-path check gates the auto-finish too — otherwise this
+                        # path just routes around it.
+                        if ok and not self._missing_targets(task):
                             auto = _task_oracle_satisfied(
                                 task, self.actions, self._files_written)
                             if auto:

@@ -1,0 +1,593 @@
+/* Copyright (c) 2026 Qira LLC. All rights reserved.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * LOLM Design System
+ *
+ * One stylesheet reskins the whole product. Both surfaces already drive their
+ * colour off custom properties — the workspace on --ink/--panel/--panel2, the
+ * landing page on --text/--panel-2/--bg2 — so this file redefines BOTH token
+ * vocabularies and every hardcoded colour that would otherwise punch a white
+ * hole through a dark surface.
+ *
+ * Load it AFTER each page's inline <style>. Equal specificity, later origin —
+ * these rules win without a single !important outside the theme guards.
+ *
+ * Dark is the default, the way the agentic tools this borrows from behave. A
+ * light theme ships too, and it is a real design rather than an afterthought:
+ * warmer paper, deeper contrast, the same accent geometry.
+ *
+ * What stays LOLM and is not up for negotiation:
+ *   · the rose → indigo axis (#f43f5e → #6366f1) as the one signature gradient
+ *   · monospace as the voice of measurement — telemetry, receipts, state
+ *   · the five control states as a first-class, colour-coded visual system
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── 1. tokens ─────────────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: dark;
+
+  /* brand axis — identical in both themes so the signature never drifts */
+  --lolm-rose: #f43f5e;
+  --lolm-indigo: #6366f1;
+  --lolm-grad: linear-gradient(135deg, var(--lolm-rose) 0%, #a855f7 52%, var(--lolm-indigo) 100%);
+  --lolm-grad-soft: linear-gradient(135deg, rgba(244,63,94,.16), rgba(99,102,241,.16));
+
+  /* surfaces — a cool near-black, layered rather than flat */
+  --bg: #07080b;
+  --bg2: #0b0d12;
+  --panel: #0d1015;
+  --panel2: #14181f;
+  --panel-2: #14181f;              /* landing-page spelling */
+  --surface-raised: #171b23;
+  --surface-sunken: #050608;
+
+  /* ink */
+  --ink: #e9edf4;
+  --text: #ccd4e0;                 /* landing-page body */
+  --t-hi: #f3f6fa;                 /* landing-page headline */
+  --dim: #9aa5b5;
+  --faint: #6b7686;
+
+  /* lines — two weights, both hairline */
+  --line: #1c212b;
+  --line-2: #2a313e;
+  --line-strong: #2a313e;
+
+  /* accents, lifted for legibility on dark */
+  --accent: #ff5273;
+  --accent2: #7f88f8;
+  --accent-2: #7f88f8;
+  --good: #2ed9a3;
+  --green: #2ed9a3;
+  --warn: #f5b23d;
+  --amber: #f5b23d;
+  --blue: #5b9cff;
+  --pink: #ff4d8d;
+  --purple: #a855f7;
+
+  /* the five control states — LOLM's own semantic scale */
+  --state-steady: #2ed9a3;
+  --state-unsure: #f5b23d;
+  --state-wobble: #a855f7;
+  --state-stuck: #ff5273;
+  --state-confident: #5b9cff;
+
+  /* type */
+  --sans: "Inter var", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* depth. On dark, light does the lifting, not shadow. */
+  --ring: 0 0 0 1px rgba(255,255,255,.055) inset;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.45);
+  --shadow-md: 0 8px 24px -8px rgba(0,0,0,.65);
+  --shadow-lg: 0 24px 64px -16px rgba(0,0,0,.72);
+  --glow-accent: 0 0 0 3px rgba(127,136,248,.22);
+
+  --r-sm: 7px;
+  --r: 11px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+
+  --ease: cubic-bezier(.2,.7,.2,1);
+  --fast: 140ms var(--ease);
+  --med: 220ms var(--ease);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #fcfcfd;
+    --bg2: #f6f7f9;
+    --panel: #ffffff;
+    --panel2: #f1f3f7;
+    --panel-2: #f1f3f7;
+    --surface-raised: #ffffff;
+    --surface-sunken: #eef1f5;
+    --ink: #0a0c10;
+    --text: #2a323c;
+    --t-hi: #05070a;
+    --dim: #4e5866;
+    --faint: #8b95a4;
+    --line: #e5e8ee;
+    --line-2: #ccd2dc;
+    --line-strong: #ccd2dc;
+    --accent: #f43f5e;
+    --accent2: #5457ee;
+    --accent-2: #5457ee;
+    --good: #0f9d6b;
+    --green: #0f9d6b;
+    --warn: #b45309;
+    --amber: #b8730a;
+    --blue: #2563eb;
+    --purple: #7c3aed;
+    --state-steady: #0f9d6b;
+    --state-unsure: #b8730a;
+    --state-wobble: #7c3aed;
+    --state-stuck: #e11d48;
+    --state-confident: #2563eb;
+    --ring: 0 0 0 1px rgba(9,12,20,.04) inset;
+    --shadow-sm: 0 1px 2px rgba(9,12,20,.06);
+    --shadow-md: 0 8px 24px -10px rgba(9,12,20,.14);
+    --shadow-lg: 0 24px 64px -20px rgba(9,12,20,.18);
+    --glow-accent: 0 0 0 3px rgba(84,87,238,.16);
+  }
+}
+
+/* explicit toggle wins over the OS in both directions */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #fcfcfd; --bg2: #f6f7f9; --panel: #ffffff; --panel2: #f1f3f7;
+  --panel-2: #f1f3f7; --surface-raised: #ffffff; --surface-sunken: #eef1f5;
+  --ink: #0a0c10; --text: #2a323c; --t-hi: #05070a; --dim: #4e5866; --faint: #8b95a4;
+  --line: #e5e8ee; --line-2: #ccd2dc; --line-strong: #ccd2dc;
+  --accent: #f43f5e; --accent2: #5457ee; --accent-2: #5457ee;
+  --good: #0f9d6b; --green: #0f9d6b; --warn: #b45309; --amber: #b8730a;
+  --blue: #2563eb; --purple: #7c3aed;
+  --state-steady: #0f9d6b; --state-unsure: #b8730a; --state-wobble: #7c3aed;
+  --state-stuck: #e11d48; --state-confident: #2563eb;
+  --ring: 0 0 0 1px rgba(9,12,20,.04) inset;
+  --shadow-md: 0 8px 24px -10px rgba(9,12,20,.14);
+  --glow-accent: 0 0 0 3px rgba(84,87,238,.16);
+}
+
+/* ── 2. foundation ─────────────────────────────────────────────────────────── */
+
+/* The page background lives on <html> so body::before can sit BEHIND the content
+   at z-index:-1. A fixed overlay at z-index:0 would paint above every
+   non-positioned element on the page — the ambient wash would become a curtain. */
+html {
+  background: var(--bg);
+}
+html, body {
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+}
+body {
+  background: transparent;
+  position: relative;
+  isolation: isolate;
+}
+
+/* An ambient wash so a full-bleed dark page reads as lit rather than switched
+   off. Fixed, behind content, and non-interactive. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(80ch 60ch at 12% -12%, rgba(244,63,94,.055), transparent 62%),
+    radial-gradient(80ch 60ch at 92% 4%, rgba(99,102,241,.06), transparent 60%);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) body::before { opacity: .55; }
+}
+
+::selection { background: rgba(127,136,248,.28); color: var(--t-hi); }
+
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent2);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* Thin, themed scrollbars — the default light chrome scrollbar on a near-black
+   panel is the single loudest tell that a dark theme was bolted on. */
+* { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background-clip: content-box; background-color: var(--faint); }
+
+h1, h2, h3, h4 { letter-spacing: -.022em; }
+h1 { font-weight: 680; }
+
+/* ── 3. typographic signature ──────────────────────────────────────────────── */
+
+/* The wordmark: LO in rose, LM in indigo. Existing markup is `LO<span>LM</span>`
+   or a .wordmark element, so support both without touching the HTML. */
+.brand, .wordmark, .logo {
+  letter-spacing: -.01em;
+}
+.wordmark em, .wordmark i, .brand .lm, .logo span {
+  font-style: normal;
+  background: var(--lolm-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Mono is how this product speaks about measurement. Give it real spacing. */
+[class*="mono"], .kv, .pill, .badge, .sec-label, .meta, code, pre {
+  font-variant-ligatures: none;
+  letter-spacing: .012em;
+}
+.sec-label { text-transform: uppercase; letter-spacing: .1em; font-size: 10px; }
+
+/* ── 4. surfaces ───────────────────────────────────────────────────────────── */
+
+.side, .right, .dock {
+  background: var(--panel);
+  border-color: var(--line);
+  box-shadow: var(--ring);
+}
+.conv-head, .tabs, .brand {
+  background: color-mix(in srgb, var(--panel) 82%, var(--bg));
+  border-color: var(--line);
+  backdrop-filter: saturate(140%) blur(8px);
+}
+
+/* Every hardcoded #fff that would otherwise burn a hole in a dark panel. */
+.conv.active, .tabs, .starters button, .mode, .crow, .menu-btn, .sideopener,
+.card, .panel, .box {
+  background: var(--surface-raised);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.conv.active { border-color: var(--line-2); box-shadow: var(--ring); }
+.conv { transition: background var(--fast), border-color var(--fast); }
+.conv:hover { background: var(--panel2); }
+
+/* INVERTED CONTROLS. Several pages do `background:var(--ink); color:#fff` — a
+   solid near-black button, correct in light mode. When --ink inverts to near-white
+   the fill goes pale and the white label vanishes into it (measured 1.06:1 on the
+   pricing page's "Upgrade to Pro"). Any control filled with --ink must take its
+   label from --bg so it stays legible in BOTH themes. */
+.btn, .btn-secondary, a.ghost, .mode.on, .filters button.on {
+  color: var(--bg);
+}
+.btn, .btn-secondary, a.ghost, .filters button.on {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+/* …except the ones the design system deliberately owns: the gradient primary and
+   the tinted mode chip both set their own fill and label above. */
+.btn.btn-primary, .btn-primary, .cta { color: #fff; }
+.mode.on { background: var(--lolm-grad-soft); color: var(--ink); }
+
+/* Element-level rules in the pages hardcode a white background, so a variable
+   swap alone leaves them glowing on a dark surface. These are the audited set —
+   every `background:#fff | rgba(255,…)` rule across site/*.html. */
+header {
+  background: color-mix(in srgb, var(--panel) 74%, var(--bg)) !important;
+  border-bottom: 1px solid var(--line) !important;
+  backdrop-filter: saturate(150%) blur(12px);
+}
+.seal-btn, .dock-head, .dseg.on, .dock-toggle, pre.json,
+.card.featured, .btn-ghost, a.outline, .filters button, .btn.ghost,
+.fresh-warn, .verdict.warn, .hi {
+  background: var(--surface-raised);
+  border-color: var(--line);
+  color: var(--ink);
+}
+pre.json { color: var(--dim); }
+.dseg.on { box-shadow: var(--ring), var(--shadow-sm); }
+.card.featured {
+  border-color: color-mix(in srgb, var(--accent2) 42%, transparent);
+  box-shadow: var(--ring), var(--shadow-md);
+}
+.fresh-warn, .verdict.warn {
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 34%, transparent);
+  color: var(--warn);
+}
+.hi { background: color-mix(in srgb, var(--accent2) 15%, transparent); color: var(--ink); }
+
+/* ── 5. controls ───────────────────────────────────────────────────────────── */
+
+button { transition: background var(--fast), border-color var(--fast),
+                     color var(--fast), transform var(--fast), box-shadow var(--fast); }
+button:active { transform: translateY(.5px); }
+
+/* primary — the one gradient, used sparingly */
+.newbtn, .send, .btn-primary, .cta {
+  background: var(--lolm-grad);
+  color: #fff;
+  border: 1px solid transparent;
+  box-shadow: 0 1px 0 rgba(255,255,255,.16) inset, var(--shadow-sm);
+  font-weight: 600;
+}
+.newbtn:hover, .send:hover:not(:disabled), .btn-primary:hover, .cta:hover {
+  filter: brightness(1.08) saturate(1.05);
+  box-shadow: 0 1px 0 rgba(255,255,255,.2) inset, var(--shadow-md);
+}
+/* A disabled control should read as inert, not as a broken gradient. Fading the
+   rose→indigo fill to 38% produced a muddy maroon that looked like a rendering
+   fault rather than "not yet". */
+.send:disabled, .newbtn:disabled, .btn-primary:disabled, .cta:disabled,
+button[disabled] {
+  background: var(--panel2);
+  color: var(--faint);
+  border: 1px solid var(--line);
+  box-shadow: none;
+  filter: none;
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+/* secondary — hairline ghost */
+.starters button, .mode, .modes-toggle, .btn-ghost {
+  color: var(--dim);
+  box-shadow: var(--ring);
+}
+.starters button:hover, .btn-ghost:hover {
+  color: var(--ink);
+  border-color: var(--line-2);
+  background: var(--panel2);
+}
+.mode.on {
+  background: var(--lolm-grad-soft);
+  border-color: color-mix(in srgb, var(--accent2) 46%, transparent);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* the composer — the one element that should always feel alive */
+.crow {
+  border-radius: var(--r-lg);
+  box-shadow: var(--ring), var(--shadow-md);
+  transition: border-color var(--med), box-shadow var(--med);
+}
+.crow:focus-within {
+  border-color: color-mix(in srgb, var(--accent2) 62%, transparent);
+  box-shadow: var(--ring), var(--glow-accent), var(--shadow-lg);
+}
+.crow textarea { color: var(--ink); caret-color: var(--accent); }
+.crow textarea::placeholder { color: var(--faint); }
+
+input, textarea, select, .search {
+  background: var(--surface-sunken);
+  color: var(--ink);
+  border-color: var(--line);
+  border-radius: var(--r-sm);
+}
+input::placeholder, textarea::placeholder { color: var(--faint); }
+.search:focus { border-color: var(--line-2); outline: none; box-shadow: var(--glow-accent); }
+
+/* ── 6. conversation ───────────────────────────────────────────────────────── */
+
+.msg.user .bub {
+  background: var(--lolm-grad);
+  color: #fff;
+  box-shadow: 0 1px 0 rgba(255,255,255,.14) inset, var(--shadow-sm);
+}
+.msg.assistant .bub {
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--ink);
+  box-shadow: var(--ring);
+}
+.bub.md a { color: var(--accent2); }
+.bub.md code.ic {
+  background: var(--panel2);
+  border-color: var(--line);
+  color: color-mix(in srgb, var(--accent) 70%, var(--ink));
+}
+/* Code stays on its own dark slab in BOTH themes — a code block that flips to
+   paper white loses the one affordance that says "this is machine output". */
+.bub.md pre.cb, pre.cb, pre.code, .codeblock {
+  background: #0b0e14;
+  border: 1px solid #1e2431;
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
+}
+.bub.md pre.cb code, pre.cb code { color: #cdd6e4; }
+
+/* the reasoning trace — instrument panel, not prose */
+.reason {
+  background: color-mix(in srgb, var(--panel2) 88%, var(--bg));
+  border-color: var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--ring);
+  color: var(--dim);
+}
+.reason .step b { color: var(--accent2); }
+.reason .step code { background: var(--surface-sunken); color: var(--ink); }
+
+/* ── 7. the five control states ────────────────────────────────────────────── */
+
+/* LOLM's own semantic scale. Each state gets one colour and keeps it wherever it
+   appears — trace row, chip, legend card — so the vocabulary becomes learnable. */
+.state, .move, [data-state] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--panel2);
+  color: var(--dim);
+}
+.state::before, .move::before, [data-state]::before {
+  content: "";
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent);
+}
+[data-state="steady"],   .state.steady    { color: var(--state-steady);
+  border-color: color-mix(in srgb, var(--state-steady) 40%, transparent); }
+[data-state="unsure"],   .state.unsure    { color: var(--state-unsure);
+  border-color: color-mix(in srgb, var(--state-unsure) 40%, transparent); }
+[data-state="wobble"],   .state.wobble    { color: var(--state-wobble);
+  border-color: color-mix(in srgb, var(--state-wobble) 40%, transparent); }
+[data-state="stuck"],    .state.stuck     { color: var(--state-stuck);
+  border-color: color-mix(in srgb, var(--state-stuck) 40%, transparent); }
+[data-state="confident"],.state.confident { color: var(--state-confident);
+  border-color: color-mix(in srgb, var(--state-confident) 40%, transparent); }
+
+/* ── 8. pills, badges, metadata ────────────────────────────────────────────── */
+
+.pill, .badge {
+  background: var(--panel2);
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--mono);
+}
+.badge.green { background: color-mix(in srgb, var(--good) 15%, transparent);
+  color: var(--good); border-color: color-mix(in srgb, var(--good) 35%, transparent); }
+.badge.red { background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.badge.amber { background: color-mix(in srgb, var(--warn) 15%, transparent);
+  color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.badge.gray { background: var(--panel2); color: var(--dim); }
+
+.kv .k { color: var(--faint); }
+.kv .v { color: var(--ink); }
+.memrow, .src, .memcount {
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--ink);
+  border-radius: var(--r-sm);
+}
+.nav-link { color: var(--dim); border-radius: var(--r-sm); }
+.nav-link:hover { background: var(--panel2); color: var(--ink); }
+.tab { color: var(--faint); transition: color var(--fast), border-color var(--fast); }
+.tab.on { color: var(--ink); border-bottom-color: var(--accent); }
+.conv-x:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent) !important;
+  color: var(--accent) !important;
+}
+
+/* ── 9. landing page ───────────────────────────────────────────────────────── */
+
+/* Display type does the work a hero image would. Fluid so it never wraps badly. */
+.hero h1, h1.hero, .headline {
+  font-size: clamp(2.1rem, 1rem + 4.4vw, 4.15rem);
+  line-height: 1.02;
+  letter-spacing: -.038em;
+  font-weight: 700;
+}
+.hero .sub, .subhead, .lede {
+  font-size: clamp(1rem, .95rem + .35vw, 1.2rem);
+  line-height: 1.62;
+  color: var(--dim);
+  max-width: 62ch;
+}
+
+/* Every boxed thing on the landing page reads as one family. */
+.card, .replay, .starter, .tile, .feature, .note, .callout {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--ring);
+  transition: border-color var(--med), transform var(--med), box-shadow var(--med);
+}
+.card:hover, .replay:hover, .starter:hover, .tile:hover {
+  border-color: var(--line-2);
+  transform: translateY(-1px);
+  box-shadow: var(--ring), var(--shadow-md);
+}
+.callout, .note {
+  background: var(--lolm-grad-soft);
+  border-color: color-mix(in srgb, var(--accent2) 26%, transparent);
+}
+
+hr, .rule { border: 0; border-top: 1px solid var(--line); }
+
+table { border-color: var(--line); }
+th { color: var(--faint); font-family: var(--mono); font-size: 11px;
+     text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+td, th { border-color: var(--line); }
+
+/* ── 10. the Qira ecosystem bar (nginx-injected) ───────────────────────────── */
+
+/* Injected server-side with its own inline <style>, so it needs !important to
+   join the theme instead of floating as a black slab above a light page. */
+.qira-eco {
+  background: color-mix(in srgb, var(--panel) 70%, var(--bg)) !important;
+  border-bottom: 1px solid var(--line) !important;
+  color: var(--dim) !important;
+  backdrop-filter: saturate(150%) blur(10px);
+  position: sticky !important;
+  top: 0;
+}
+.qira-eco-home { color: var(--ink) !important; }
+.qira-eco-here { color: var(--faint) !important; }
+.qira-eco-links a { color: var(--dim) !important; }
+.qira-eco-links a:hover { color: var(--ink) !important; }
+.qira-eco-all { color: var(--ink) !important; }
+
+/* ── 11. theme toggle ──────────────────────────────────────────────────────── */
+
+.lolm-theme-toggle {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 70;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--surface-raised);
+  color: var(--dim);
+  font-size: 15px;
+  line-height: 1;
+  box-shadow: var(--ring), var(--shadow-md);
+}
+.lolm-theme-toggle:hover { color: var(--ink); border-color: var(--faint); }
+
+/* On a phone every corner is already taken — the composer's send button owns
+   bottom-right, the workspace hamburger owns top-left, and the landing page's
+   sticky wordmark owns the top. Sit just above the composer on the left, where
+   the feed is empty, and stay out of the thumb zone. */
+@media (max-width: 640px) {
+  .lolm-theme-toggle {
+    right: auto;
+    left: 10px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+    width: 32px;
+    height: 32px;
+    font-size: 13px;
+    opacity: .8;
+  }
+  .lolm-theme-toggle:hover, .lolm-theme-toggle:focus-visible { opacity: 1; }
+}
+
+/* ── 12. motion, honestly ──────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  .card:hover, .replay:hover, .starter:hover, .tile:hover { transform: none; }
+}

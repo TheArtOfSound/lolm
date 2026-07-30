@@ -1,6 +1,8 @@
 # Copyright (c) 2026 Qira LLC. All rights reserved.
 """Tests for the agentic coding loop (fake model, REAL sandbox)."""
 
+import ast
+
 from local_ui.code_agent import CodeAgent, _extract_json
 from local_ui.sandbox import Sandbox
 
@@ -198,20 +200,48 @@ def test_code_receipt_emitted_and_blocks_wrong_output(tmp_path):
     assert "missing expected" in notes or "OUTPUT MISMATCH" in notes or "blocked DONE" in notes
 
 
+def _absent_third_party(sb):
+    """A blocked package that the sandbox's OWN python3 cannot import.
+
+    Hardcoding `requests` made this test environment-dependent: it is absent from a
+    bare system python3 (so the coach fired and the test passed locally) but present
+    on CI once the full deps are installed — there the import SUCCEEDED, the
+    expected-output oracle auto-finished the run, and no coach was ever emitted. The
+    suite was red on main for days over an environment difference, not a real defect.
+    Ask the interpreter that will actually run the code, rather than assuming.
+    """
+    cands = ["cv2", "scrapy", "selenium", "tensorflow", "sklearn", "requests"]
+    probe = (
+        "python3 -c \"import importlib.util as u;"
+        f"print([m for m in {cands!r} if u.find_spec(m) is None])\""
+    )
+    r = sb.run(probe, timeout=30, isolated=None)
+    try:
+        missing = ast.literal_eval((r.get("stdout") or "").strip() or "[]")
+    except (ValueError, SyntaxError):
+        missing = []
+    assert missing, (
+        "no blocked third-party package is absent from this python3 — cannot test the "
+        f"import coach (probe stdout={r.get('stdout')!r} stderr={r.get('stderr')!r})"
+    )
+    return missing[0]
+
+
 def test_third_party_import_coaches_stdlib_rewrite(tmp_path):
-    """No pip in jail — coach stdlib rewrite instead of fake FILE: requests.py."""
+    """No pip in jail — coach stdlib rewrite instead of a fake sibling module."""
     sb = Sandbox(tmp_path)
+    mod = _absent_third_party(sb)
     seq = iter([
-        '{"action":"write_and_run","path":"f.py","content":"import requests\\nprint(1)\\n",'
-        '"command":"python3 f.py"}',
+        '{"action":"write_and_run","path":"f.py","content":"import ' + mod +
+        '\\nprint(1)\\n","command":"python3 f.py"}',
         '{"action":"write_and_run","path":"f.py","content":"print(1)\\n","command":"python3 f.py"}',
         '{"action":"finish","summary":"stdlib"}',
     ])
     events = list(CodeAgent(sb, lambda m: next(seq), isolated=None).run("print 1 without network"))
     notes = " ".join(e["data"].get("text", "") for e in events if e["event"] == "agent_note")
-    assert "stdlib" in notes.lower() or "no pip" in notes.lower() or "requests" in notes
-    # must not invent a sibling requests.py coach as the primary path
-    assert "need FILE: requests.py" not in notes
+    assert "stdlib" in notes.lower() or "no pip" in notes.lower() or mod in notes, notes
+    # must not invent a sibling <mod>.py coach as the primary path
+    assert f"need FILE: {mod}.py" not in notes
     assert any(e["event"] == "code_receipt" for e in events)
 
 

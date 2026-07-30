@@ -1,0 +1,349 @@
+{
+  "summary": {
+    "label": "baseline",
+    "model": "default",
+    "jobs": 12,
+    "passed": 4,
+    "pass_rate": 0.333,
+    "overclaim_rate": 0.667,
+    "median_wall_s": 162.7,
+    "total_wall_s": 634.0,
+    "max_steps": 22,
+    "by_tier": {
+      "fix": {
+        "pass": 2,
+        "of": 4,
+        "rate": 0.5
+      },
+      "impl": {
+        "pass": 2,
+        "of": 8,
+        "rate": 0.25
+      }
+    },
+    "by_task": {
+      "expr_eval": {
+        "pass": 0,
+        "of": 1
+      },
+      "fix_csv_parser": {
+        "pass": 0,
+        "of": 1
+      },
+      "fix_multifile_stats": {
+        "pass": 1,
+        "of": 1
+      },
+      "fix_pagination": {
+        "pass": 1,
+        "of": 1
+      },
+      "fix_state_machine": {
+        "pass": 0,
+        "of": 1
+      },
+      "interval_merge": {
+        "pass": 1,
+        "of": 1
+      },
+      "iso_duration": {
+        "pass": 0,
+        "of": 1
+      },
+      "jsonpath": {
+        "pass": 0,
+        "of": 1
+      },
+      "lru": {
+        "pass": 0,
+        "of": 1
+      },
+      "roman": {
+        "pass": 0,
+        "of": 1
+      },
+      "semver": {
+        "pass": 1,
+        "of": 1
+      },
+      "wrap": {
+        "pass": 0,
+        "of": 1
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "iso_duration",
+      "tier": "impl",
+      "trial": 0,
+      "passed": false,
+      "steps": 1,
+      "wall_s": 13.9,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py"
+      ],
+      "writes": 1,
+      "runs": 2,
+      "green_runs": 2,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 2, in <module>\n    import solution as S\nModuleNotFoundError: No module named 'solution'",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "interval_merge",
+      "tier": "impl",
+      "trial": 0,
+      "passed": true,
+      "steps": 3,
+      "wall_s": 17.3,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 4,
+      "runs": 7,
+      "green_runs": 7,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "lru",
+      "tier": "impl",
+      "trial": 0,
+      "passed": false,
+      "steps": 6,
+      "wall_s": 39.5,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 9,
+      "runs": 14,
+      "green_runs": 13,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 14, in <module>\n    assert z.get('x') is None and len(z) == 0\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "roman",
+      "tier": "impl",
+      "trial": 0,
+      "passed": false,
+      "steps": 8,
+      "wall_s": 80.5,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 11,
+      "runs": 19,
+      "green_runs": 11,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 22, in <module>\n    bad(S.from_roman, v)\n    ~~~^^^^^^^^^^^^^^^^^\n  File \"/work/_lolm_hidden_check.py\", line 18, in bad\n    raise AssertionError(f\"{v!r} should raise ValueError\")\nAssertionError: 'IIII' should raise ValueError",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "expr_eval",
+      "tier": "impl",
+      "trial": 0,
+      "passed": false,
+      "steps": 8,
+      "wall_s": 116.3,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 8,
+      "runs": 16,
+      "green_runs": 9,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 7, in <module>\n    assert abs(S.evaluate('(1+2)*3') - 9) < 1e-9\n               ~~~~~~~~~~^^^^^^^^^^^\n  File \"/work/solution.py\", line 54, in evaluate\n    while operator_stack and precedence[operator_stack[-1]] >= precedence[char]:\n                             ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^\nKeyError: '('",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "fix_pagination",
+      "tier": "fix",
+      "trial": 0,
+      "passed": true,
+      "steps": 1,
+      "wall_s": 4.8,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "paginate.py"
+      ],
+      "writes": 2,
+      "runs": 4,
+      "green_runs": 4,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "jsonpath",
+      "tier": "impl",
+      "trial": 0,
+      "passed": false,
+      "steps": 7,
+      "wall_s": 209.0,
+      "agent_said_done": true,
+      "receipt_ok": false,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 7,
+      "runs": 13,
+      "green_runs": 9,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 2, in <module>\n    import solution as S\n  File \"/work/solution.py\", line 85, in <module>\n    print(get(obj, \"a..b\"))  # Malformed path: consecutive dots\n          ~~~^^^^^^^^^^^^^\n  File \"/work/solution.py\", line 26, in get\n    raise ValueError(\"Malformed path: consecutive dots\")\nValueError: Malformed path: consecutive dots\nvalue\nItem 1\n6\nItem 2\n2\n4\nNone\nNone",
+      "error": "",
+      "stuck": true,
+      "budget_hit": false,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "wrap",
+      "tier": "impl",
+      "trial": 0,
+      "passed": false,
+      "steps": 22,
+      "wall_s": 292.2,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 41,
+      "runs": 64,
+      "green_runs": 62,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 5, in <module>\n    assert S.wrap('', 10) == []\n           ^^^^^^^^^^^^^^^^^^^^\nAssertionError",
+      "error": "",
+      "stuck": false,
+      "budget_hit": true,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "semver",
+      "tier": "impl",
+      "trial": 0,
+      "passed": true,
+      "steps": 22,
+      "wall_s": 423.7,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "solution.py"
+      ],
+      "writes": 21,
+      "runs": 41,
+      "green_runs": 37,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": true,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_multifile_stats",
+      "tier": "fix",
+      "trial": 0,
+      "passed": true,
+      "steps": 10,
+      "wall_s": 329.3,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "report.py",
+        "stats.py"
+      ],
+      "writes": 20,
+      "runs": 28,
+      "green_runs": 25,
+      "hidden_stderr": "",
+      "error": "",
+      "stuck": false,
+      "budget_hit": false,
+      "seed_deleted": []
+    },
+    {
+      "id": "fix_state_machine",
+      "tier": "fix",
+      "trial": 0,
+      "passed": false,
+      "steps": 22,
+      "wall_s": 235.8,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "main.py",
+        "orders.py"
+      ],
+      "writes": 26,
+      "runs": 47,
+      "green_runs": 38,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 4, in <module>\n    assert o.state == 'new' and o.history() == ['new'], o.history()\n           ^^^^^^^\nAttributeError: 'Order' object has no attribute 'state'. Did you mean: 'states'?\n['new', 'paid', 'shipped', 'delivered']\nTrue\nIllegal transition from delivered to paid",
+      "error": "",
+      "stuck": false,
+      "budget_hit": true,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    },
+    {
+      "id": "fix_csv_parser",
+      "tier": "fix",
+      "trial": 0,
+      "passed": false,
+      "steps": 22,
+      "wall_s": 261.3,
+      "agent_said_done": true,
+      "receipt_ok": true,
+      "files": [
+        "csvlite.py",
+        "main.py"
+      ],
+      "writes": 32,
+      "runs": 50,
+      "green_runs": 37,
+      "hidden_stderr": "Traceback (most recent call last):\n  File \"/work/_lolm_hidden_check.py\", line 10, in <module>\n    assert C.parse(doubled) == [[q, 'z']], C.parse(doubled)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: [['he said \"hi\"\",z']]\n[['Name', 'Age', 'City'], ['John', '25', 'New York, NY'], ['Jane', '30', 'Los Angeles, CA']]",
+      "error": "",
+      "stuck": false,
+      "budget_hit": true,
+      "seed_deleted": [],
+      "hidden_exit": 1
+    }
+  ]
+}

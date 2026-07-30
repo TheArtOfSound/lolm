@@ -12,10 +12,14 @@
  * but their failure degrades gracefully in the page, not here.
  */
 
-const CACHE = "lolm-nfet-v3";   // bump on any shell/asset change so returning
+const CACHE = "lolm-nfet-v4";   // bump on any shell/asset change so returning
                                 // visitors get the update (activate clears old)
+                                // v4: design-system reskin (lolm-ds.css/js). A
+                                // stale v3 was still serving a pre-workspace
+                                // shell to returning visitors.
 const SHELL = [
   "/", "/index.html", "/try.html", "/og-card.png",
+  "/lolm-ds.css", "/lolm-ds.js",
   "/manifest.webmanifest", "/replays/index.json",
 ];
 
