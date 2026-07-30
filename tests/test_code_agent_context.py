@@ -365,6 +365,12 @@ def test_ensemble_only_runs_on_the_first_turn(tmp_path):
 def test_self_reported_failure_is_detected():
     from local_ui.code_agent import _output_reports_failure as f
     assert f("✓ ok\n✗ VIV should have raised ValueError\n")
+    # The exact line from the real capture that the first version of this regex
+    # missed: the phrase follows "(" rather than whitespace.
+    assert f("  VIV -> 9 (SHOULD HAVE RAISED ValueError)")
+    assert f("  LXL -> 90 (SHOULD HAVE RAISED ValueError)")
+    assert f("expected 42 but returned 7")
+    assert f("did not equal the reference")
     assert f("FAILED: 2 cases")
     assert f("AssertionError: nope")
     assert f("Traceback (most recent call last):")
@@ -373,6 +379,9 @@ def test_self_reported_failure_is_detected():
     # clean output must not trip it
     assert not f("✓ all good\nhello-world-123\n")
     assert not f("Result: 42")
+    # words that merely CONTAIN a trigger must not trip it
+    assert not f("FAILSAFE mode engaged")
+    assert not f("the expected value is 42")
     assert not f("")
 
 

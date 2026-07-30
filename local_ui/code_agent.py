@@ -426,11 +426,15 @@ def _task_required_symbols(task: str) -> List[str]:
 # see "green exit + non-empty stdout" and call that shipped, so a run whose output
 # literally read "✗ VIV should have raised ValueError" was reported as a success. The
 # agent's own words are evidence — read them.
+#
+# The leading (?:^|\s) this used to carry made it miss the very first real case it
+# was written for: the run printed "VIV -> 9 (SHOULD HAVE RAISED ValueError)", where
+# the phrase follows "(" rather than whitespace. Anchor on word boundaries instead.
 _SELF_REPORTED_FAILURE = re.compile(
-    r"(?:^|\s)(?:✗|✘|❌|FAIL(?:ED|URE)?\b|Traceback \(most recent call last\)|"
-    r"AssertionError|should have (?:raised|returned|been)|"
-    r"expected .{0,40}? but (?:got|was)|did not (?:raise|match)|"
-    r"\b\d+\s+failed\b|test[s]? failed)",
+    r"(?:[✗✘❌]|\bFAIL(?:ED|URE)?\b|Traceback \(most recent call last\)|"
+    r"\bAssertionError\b|\bshould have (?:raised|returned|been|failed)\b|"
+    r"\bexpected\b.{0,40}?\bbut (?:got|was|returned)\b|"
+    r"\bdid not (?:raise|match|equal)\b|\b\d+\s+failed\b|\btests? failed\b)",
     re.I)
 
 
