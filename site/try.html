@@ -163,6 +163,64 @@
   is "better" — it proves the controller acted on uncertainty this run, with the raw trace visible.</div>
 </div>
 
+<style>
+/* Recorded demo. Deliberately cheap: preload="none" so the homepage costs nothing
+   extra until the clip is actually scrolled to, and it only plays while on screen. */
+.demo{margin:26px 0 8px}
+.demo-label{text-align:center;font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.demo-frame{position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;
+  background:#07080b;box-shadow:0 0 0 1px rgba(255,255,255,.04) inset,0 24px 60px -24px rgba(2,6,23,.55)}
+.demo-frame video{display:block;width:100%;height:auto}
+.demo-cap{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:center;
+  margin-top:10px;font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+.demo-cap b{color:var(--dim);font-weight:600}
+.demo-replay{position:absolute;right:10px;bottom:10px;border:1px solid var(--line);
+  background:rgba(7,8,11,.72);backdrop-filter:blur(6px);color:var(--dim);border-radius:999px;
+  padding:5px 11px;font-family:var(--mono);font-size:11px;cursor:pointer}
+.demo-replay:hover{color:var(--t-hi)}
+@media (prefers-reduced-motion: reduce){ .demo-frame video{display:none} .demo-poster{display:block} }
+.demo-poster{display:none;width:100%;height:auto}
+</style>
+<div class="demo">
+  <div class="demo-label">Watch it actually work — a real run, unedited</div>
+  <div class="demo-frame">
+    <video id="demoVid" muted loop playsinline preload="none"
+           poster="/media/cli-demo.jpg" aria-label="A real LOLM coding run: it races several models, writes the file, compiles it, runs it, and prints a sealed receipt.">
+      <source src="/media/cli-demo.webm" type="video/webm">
+      <source src="/media/cli-demo.mp4" type="video/mp4">
+    </video>
+    <img class="demo-poster" src="/media/cli-demo.jpg" alt="A real LOLM coding run ending in a sealed receipt.">
+    <button class="demo-replay" id="demoReplay" type="button">↺ replay</button>
+  </div>
+  <div class="demo-cap">
+    <span><b>npx lolm-cli code</b> — captured from a real terminal, nothing re-enacted</span>
+    <span>·</span>
+    <span id="demoReceipt">every run ends in a sealed receipt</span>
+  </div>
+</div>
+<script>
+(function () {
+  var v = document.getElementById("demoVid");
+  if (!v) return;
+  var btn = document.getElementById("demoReplay");
+  var reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Only fetch + play while it is on screen; pause the moment it is not. A homepage
+  // should not stream a video to someone who never scrolled to it.
+  if (!reduced && "IntersectionObserver" in window) {
+    new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting) { v.preload = "auto"; v.play().catch(function () {}); }
+        else { v.pause(); }
+      });
+    }, { threshold: 0.35 }).observe(v);
+  }
+  btn.addEventListener("click", function () {
+    v.currentTime = 0; v.preload = "auto"; v.play().catch(function () {});
+  });
+})();
+</script>
+
 <div class="examples">
   <div class="ex-label">Tap one — instant replays of real runs</div>
   <div class="ex-grid" id="exGrid"></div>

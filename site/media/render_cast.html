@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>lolm — session replay (recording surface)</title>
+<!--
+  Recording surface for the homepage demo. Loads a cast captured by capture_cli.py
+  and replays it at the timings the run ACTUALLY had. Nothing here invents output:
+  every byte on screen came off a real `lolm` process through a pty.
+
+  Not linked from the site — record.py points a headless browser at it.
+    render_cast.html?cast=cli-session.json&speed=1
+-->
+<style>
+  :root {
+    --bg: #07080b; --card: #0d1015; --line: #1c212b; --ink: #e9edf4; --dim: #9aa5b5;
+    --rose: #ff5273; --indigo: #7f88f8; --green: #2ed9a3; --blue: #5b9cff;
+    --violet: #a855f7; --amber: #f5b23d; --faint: #6b7686;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body {
+    background: var(--bg); color: var(--ink); height: 100%;
+    font-family: var(--mono); display: grid; place-items: center;
+  }
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(70ch 50ch at 10% -10%, rgba(244,63,94,.10), transparent 60%),
+      radial-gradient(70ch 50ch at 95% 5%, rgba(99,102,241,.11), transparent 60%);
+  }
+  .frame { width: 1000px; padding: 26px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.04) inset, 0 30px 70px -20px rgba(0,0,0,.8);
+    overflow: hidden;
+  }
+  .bar {
+    display: flex; align-items: center; gap: 8px; padding: 11px 14px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(255,255,255,.03), transparent);
+  }
+  .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .bar .t {
+    margin-left: 8px; color: var(--faint); font-size: 12px; letter-spacing: .04em;
+  }
+  .bar .badge {
+    margin-left: auto; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--dim); border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px;
+  }
+  pre {
+    margin: 0; padding: 18px 20px 22px; font-size: 14.5px; line-height: 1.52;
+    white-space: pre-wrap; word-break: break-word; min-height: 430px;
+    font-variant-ligatures: none;
+  }
+  .cursor {
+    display: inline-block; width: 8px; height: 1.05em; vertical-align: -2px;
+    background: var(--rose); animation: blink 1.05s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0 } }
+  /* ANSI SGR -> classes */
+  .b { font-weight: 700 } .d { color: var(--faint) }
+  .c31 { color: var(--rose) } .c32 { color: var(--green) } .c33 { color: var(--amber) }
+  .c34 { color: var(--blue) } .c35 { color: var(--violet) } .c36 { color: #4dd4e0 }
+</style>
+
+<div class="frame">
+  <div class="card">
+    <div class="bar">
+      <span class="dot" style="background:#ff5f57"></span>
+      <span class="dot" style="background:#febc2e"></span>
+      <span class="dot" style="background:#28c840"></span>
+      <span class="t" id="title">lolm</span>
+      <span class="badge">real run · not a mockup</span>
+    </div>
+    <pre id="out"></pre>
+  </div>
+</div>
+
+<script>
+const qs = new URLSearchParams(location.search);
+const CAST = qs.get("cast") || "cli-session.json";
+const SPEED = parseFloat(qs.get("speed") || "1");
+const HOLD = parseFloat(qs.get("hold") || "2200");   // ms to linger on the receipt
+const out = document.getElementById("out");
+
+// Minimal ANSI SGR -> HTML. The CLI only emits reset/bold/dim and 31-36, so this
+// stays small and exact rather than pulling in a parser.
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+function ansify(text) {
+  let html = "", open = 0;
+  const re = /\x1b\[([0-9;]*)m/g;
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    html += esc(text.slice(last, m.index));
+    last = re.lastIndex;
+    for (const code of (m[1] || "0").split(";")) {
+      const n = parseInt(code || "0", 10);
+      if (n === 0) { html += "</span>".repeat(open); open = 0; }
+      else if (n === 1) { html += '<span class="b">'; open++; }
+      else if (n === 2) { html += '<span class="d">'; open++; }
+      else if (n >= 31 && n <= 36) { html += `<span class="c${n}">`; open++; }
+    }
+  }
+  html += esc(text.slice(last));
+  return html + "</span>".repeat(open);
+}
+
+(async function play() {
+  const cast = await (await fetch(CAST)).json();
+  document.getElementById("title").textContent =
+    "lolm " + (cast.argv || []).slice(2).join(" ").slice(0, 64);
+  let acc = "";
+  const t0 = performance.now();
+  for (const [t, chunk] of cast.chunks) {
+    const due = t0 + (t * 1000) / SPEED;
+    const wait = due - performance.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    acc += chunk;
+    out.innerHTML = ansify(acc) + '<span class="cursor"></span>';
+    out.scrollTop = out.scrollHeight;
+  }
+  out.innerHTML = ansify(acc);            // drop the cursor on the final frame
+  await new Promise((r) => setTimeout(r, HOLD));
+  document.title = "DONE";                 // recorder waits for this
+  window.__castDone = true;
+})();
+</script>

@@ -358,3 +358,51 @@ def test_ensemble_only_runs_on_the_first_turn(tmp_path):
     agent = CodeAgent(sb, lambda m: next(seq), isolated=None, gen_many_fn=many)
     list(agent.run("Create solution.py"))
     assert calls["n"] == 1, f"ensemble should fire once, fired {calls['n']}x"
+
+
+# ── the program's own output is evidence ─────────────────────────────────────
+
+def test_self_reported_failure_is_detected():
+    from local_ui.code_agent import _output_reports_failure as f
+    assert f("✓ ok\n✗ VIV should have raised ValueError\n")
+    assert f("FAILED: 2 cases")
+    assert f("AssertionError: nope")
+    assert f("Traceback (most recent call last):")
+    assert f("expected 42 but got 7")
+    assert f("3 failed")
+    # clean output must not trip it
+    assert not f("✓ all good\nhello-world-123\n")
+    assert not f("Result: 42")
+    assert not f("")
+
+
+def test_done_blocked_when_the_run_prints_its_own_failure(tmp_path):
+    # Caught on a real recording: the agent exited 0 while printing
+    # "✗ VIV should have raised ValueError" and the harness called it shipped.
+    sb = Sandbox(tmp_path)
+    bad = ("print('checks:')\n"
+           "print('\\u2717 VIV should have raised ValueError')\n")
+    good = "print('checks:')\nprint('all cases passed')\n"
+    seq = iter([
+        f"FILE: solution.py\n```\n{bad}```\nRUN: python3 solution.py",
+        "DONE: shipped it",
+        f"FILE: solution.py\n```\n{good}```\nRUN: python3 solution.py",
+        "DONE: really passing now",
+    ])
+    agent = CodeAgent(sb, lambda m: next(seq), isolated=None)
+    events = list(agent.run("Create solution.py and print the check results"))
+    notes = [e["data"].get("text", "") for e in events if e["event"] == "agent_note"]
+    assert any("own output reports a failure" in n for n in notes), notes
+    assert "all cases passed" in sb.read_file("solution.py")
+
+
+def test_clean_run_oracle_does_not_auto_finish_over_a_printed_failure():
+    from local_ui.code_agent import _task_oracle_satisfied
+    actions = [{"kind": "run", "command": "python3 solution.py",
+                "result": {"exit_code": 0, "stdout": "✗ VIV should have raised ValueError\n",
+                           "blocked": False}}]
+    assert _task_oracle_satisfied("print the roman numeral checks", actions,
+                                  ["solution.py"]) is None
+    ok = [{"kind": "run", "command": "python3 solution.py",
+           "result": {"exit_code": 0, "stdout": "hello-world-123\n", "blocked": False}}]
+    assert _task_oracle_satisfied("print the slug", ok, ["solution.py"]) is not None

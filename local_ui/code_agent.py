@@ -422,6 +422,26 @@ def _task_required_symbols(task: str) -> List[str]:
     return out[:4]
 
 
+# A program can exit 0 while PRINTING that its own checks failed. The oracle used to
+# see "green exit + non-empty stdout" and call that shipped, so a run whose output
+# literally read "✗ VIV should have raised ValueError" was reported as a success. The
+# agent's own words are evidence — read them.
+_SELF_REPORTED_FAILURE = re.compile(
+    r"(?:^|\s)(?:✗|✘|❌|FAIL(?:ED|URE)?\b|Traceback \(most recent call last\)|"
+    r"AssertionError|should have (?:raised|returned|been)|"
+    r"expected .{0,40}? but (?:got|was)|did not (?:raise|match)|"
+    r"\b\d+\s+failed\b|test[s]? failed)",
+    re.I)
+
+
+def _output_reports_failure(text: str) -> Optional[str]:
+    """The first line of stdout in which the program says its own check failed."""
+    for line in (text or "").splitlines():
+        if _SELF_REPORTED_FAILURE.search(line):
+            return line.strip()[:200]
+    return None
+
+
 def _wants_tests(task: str) -> bool:
     t = (task or "").lower()
     return any(k in t for k in (
@@ -553,6 +573,9 @@ def _task_oracle_satisfied(task: str, actions: List[Dict[str, Any]],
     tlow = (task or "").lower()
     if any(k in tlow for k in ("print", "hello", "fib", "prime", "factorial", "fizz")):
         if last_out and last_out.strip():
+            # A program can exit 0 while printing that its own checks failed.
+            if _output_reports_failure(last_out):
+                return None
             # only auto-stop if the last non-verify run is green
             for a in reversed(actions or []):
                 if a.get("kind") != "run" or a.get("verify"):
@@ -1189,6 +1212,23 @@ class CodeAgent:
                     )
                     yield {"event": "agent_note", "data": {"step": step,
                            "text": f"required name missing: {names}"}}
+                    continue
+                # The program's own words count as evidence. Exiting 0 while printing
+                # "✗ ... should have raised ValueError" is a failing run that merely
+                # declined to signal it through the exit code.
+                self_fail = _output_reports_failure(_last_stdout(self.actions))
+                if self_fail and nudges < 8:
+                    nudges += 1
+                    self._format_nudge = (
+                        f"\n\nYOUR OWN OUTPUT REPORTS A FAILURE:\n  {self_fail}\n"
+                        "The run exited 0, but it printed that a check did not pass — that "
+                        "is a failing run. Fix the code so every check it prints passes, "
+                        "then RUN again. Do NOT say DONE while your own output says a case "
+                        "failed, and do NOT delete the check to silence it."
+                    )
+                    yield {"event": "agent_note", "data": {"step": step,
+                           "text": f"blocked DONE — its own output reports a failure: "
+                                   f"{self_fail[:90]}"}}
                     continue
                 if ran_any and not produced_output and nudges < 3:
                     nudges += 1
