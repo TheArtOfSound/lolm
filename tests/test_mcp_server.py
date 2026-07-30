@@ -8,7 +8,14 @@ import pytest
 # Route workspace data into a temp dir BEFORE importing the server module.
 os.environ.setdefault("LOCAL_UI_DATA_DIR", "/tmp/lolm-mcp-test-data")
 
-from local_ui import mcp_server  # noqa: E402
+# MCP is an optional extra, and FastMCP has moved between SDK releases. A hard import
+# here raised at COLLECTION time, which aborted the entire suite with exit 2 rather
+# than failing this one module — CI was red for reasons that had nothing to do with
+# the code under test. Skip cleanly when the extra is absent or incompatible.
+mcp_server = pytest.importorskip(
+    "local_ui.mcp_server",
+    reason="MCP extra not installed (pip install -r requirements-agent.txt)",
+)
 
 
 def test_all_tools_registered():

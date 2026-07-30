@@ -1,0 +1,66 @@
+name: publish-npm-cli
+
+# Publish clients/cli (the `lolm` command) with provenance, then smoke-test the
+# published binary in a clean project. Inert until NPM_TOKEN is set.
+#
+# Separate from publish-npm-{canary,stable}.yml because those target clients/js,
+# and the CLI has its own version line and its own smoke test (it has to actually
+# run as a binary, not just import).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (blank = whatever package.json says)'
+        required: false
+      dry_run:
+        description: 'Pack and test only — do not publish'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write                # npm provenance
+
+jobs:
+  cli:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Guard — require NPM_TOKEN
+        if: ${{ !inputs.dry_run }}
+        run: '[ -n "${{ secrets.NPM_TOKEN }}" ] || { echo "NPM_TOKEN not set — refusing to publish"; exit 1; }'
+      - name: Set version
+        if: ${{ inputs.version != '' }}
+        run: npm version "${{ inputs.version }}" --no-git-tag-version
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+      - name: Test + inspect package contents
+        run: |
+          node test/run.mjs
+          npm pack --dry-run
+      - name: Publish (provenance)
+        if: ${{ !inputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+      - name: Smoke the published binary in a clean project
+        if: ${{ !inputs.dry_run }}
+        run: |
+          V="$(node -p "require('./package.json').version")"
+          cd "$RUNNER_TEMP"
+          mkdir cli-smoke && cd cli-smoke && npm init -y >/dev/null
+          # the registry needs a moment to serve a brand-new version
+          for i in 1 2 3 4 5 6; do npm install "lolm@$V" && break || sleep 10; done
+          ./node_modules/.bin/lolm --version
+          ./node_modules/.bin/lolm --help | grep -q "USAGE"
+          # a real network call against the hosted API — proves the binary works
+          ./node_modules/.bin/lolm status
+          echo "cli smoke OK"

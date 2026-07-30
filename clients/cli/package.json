@@ -1,0 +1,47 @@
+{
+  "name": "lolm",
+  "version": "0.1.0",
+  "description": "Command-line client for the LOLM agent: run a coding task in a jailed sandbox, watch the write-run-fix loop live, and get a sealed receipt for what actually happened.",
+  "type": "module",
+  "bin": {
+    "lolm": "./bin/lolm.mjs"
+  },
+  "files": [
+    "bin/lolm.mjs",
+    "lib/diff.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/run.mjs"
+  },
+  "dependencies": {
+    "lolm-nfet-client": "^0.2.4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "cli",
+    "agent",
+    "ai",
+    "llm",
+    "coding-agent",
+    "sandbox",
+    "code-execution",
+    "receipts",
+    "uncertainty",
+    "lolm"
+  ],
+  "author": "Qira LLC (Bryan Leonard & Brandyn Leonard)",
+  "license": "MIT",
+  "homepage": "https://lolm.imagineqira.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheArtOfSound/lolm.git",
+    "directory": "clients/cli"
+  },
+  "bugs": {
+    "url": "https://imagineqira.com/#contact"
+  }
+}

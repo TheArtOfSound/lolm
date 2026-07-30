@@ -37,7 +37,21 @@ from typing import Any, Dict, List, Optional
 from local_ui import byok
 byok.load_into_env()   # BYOK: panel-saved keys (ANTHROPIC etc.) reach this entrypoint too
 
-from mcp.server.fastmcp import FastMCP
+# FastMCP moved between MCP SDK releases: it lived at mcp.server.fastmcp, and newer
+# SDKs ship it as the standalone `fastmcp` package. requirements-agent.txt only floors
+# the version (mcp>=1.2.0), so CI resolved a newer SDK than the dev box and the import
+# died — which aborted collection of the WHOLE test suite, not just this module. Try
+# both locations and let the caller decide what to do when neither is present.
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError:  # pragma: no cover - depends on the installed SDK
+    try:
+        from fastmcp import FastMCP
+    except ImportError as exc:
+        raise ImportError(
+            "FastMCP not found. Install the MCP extra: "
+            "pip install -r requirements-agent.txt"
+        ) from exc
 
 from local_ui import server as workspace
 from local_ui.claude_reasoner import (
