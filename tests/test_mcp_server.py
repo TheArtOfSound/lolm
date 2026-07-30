@@ -11,11 +11,19 @@ os.environ.setdefault("LOCAL_UI_DATA_DIR", "/tmp/lolm-mcp-test-data")
 # MCP is an optional extra, and FastMCP has moved between SDK releases. A hard import
 # here raised at COLLECTION time, which aborted the entire suite with exit 2 rather
 # than failing this one module — CI was red for reasons that had nothing to do with
-# the code under test. Skip cleanly when the extra is absent or incompatible.
-mcp_server = pytest.importorskip(
-    "local_ui.mcp_server",
-    reason="MCP extra not installed (pip install -r requirements-agent.txt)",
-)
+# the code under test.
+#
+# try/except + module-level skip rather than pytest.importorskip: mcp_server raises a
+# plain ImportError describing which FastMCP locations it tried, and modern pytest
+# re-raises a non-matching ImportError out of importorskip instead of skipping (so it
+# cannot mask real import bugs). Catching it here is the version-proof form.
+try:
+    from local_ui import mcp_server  # noqa: E402
+except ImportError as exc:  # pragma: no cover - depends on the installed extras
+    pytest.skip(
+        f"MCP extra unavailable ({exc}) — pip install -r requirements-agent.txt",
+        allow_module_level=True,
+    )
 
 
 def test_all_tools_registered():
