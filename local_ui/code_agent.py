@@ -110,6 +110,12 @@ _THIRD_PARTY_MODS = frozenset({
 # to delete the tests, which is the opposite of what a test-shaped task wants.
 _TEST_FRAMEWORK_MODS = frozenset({"pytest", "hypothesis", "nose", "nose2"})
 
+# Chars of unified diff sent per file_changed event. The sandbox already retains up to
+# _OUTPUT_CAP (24k) per change, so the old 2500 threw away data it had — and clients
+# that rebuild files from the stream (`lolm-cli code --save`) could not reconstruct
+# anything past a couple of hundred lines. Matched to the sandbox's own cap.
+_DIFF_CAP = 24000
+
 # Canonical empty turn shape
 _EMPTY_TURN = {
     "files": [], "file": None, "run": None, "done": None,
@@ -349,6 +355,62 @@ def _task_target_files(task: str) -> List[str]:
         if p not in out:
             out.append(p)
     return out
+
+
+# Names the task says the code must EXPOSE. Only read after a definitional cue, so
+# ordinary prose like "it prints(x)" cannot manufacture a phantom requirement — a
+# wrongly-required symbol would block DONE forever.
+_DEFN_CUE = re.compile(
+    r"\b(?:defin(?:e|es|ing)|implement(?:s|ing)?|expos(?:e|es|ing)|"
+    r"provid(?:e|es|ing)|declar(?:e|es|ing))\b", re.I)
+# No whitespace before the paren: a real signature is `merge(intervals)`, whereas
+# prose like "[start, end] pairs (unsorted)" or "subtractive forms (IV, IX)" always
+# has a space — and those produced phantom requirements that could never be satisfied.
+_SIG = re.compile(r"\b([A-Za-z_]\w*)\(")
+_NOT_A_SYMBOL = frozenset({
+    "print", "return", "str", "int", "float", "bool", "list", "dict", "set", "tuple",
+    "len", "range", "open", "type", "abs", "min", "max", "sum", "sorted", "enumerate",
+    "zip", "map", "filter", "round", "isinstance", "getattr", "hasattr", "repr",
+    "raise", "if", "for", "while", "and", "or", "not", "in", "is", "e", "g", "eg",
+    "etc", "ValueError", "TypeError", "KeyError", "IndexError", "ZeroDivisionError",
+    "class", "def", "self", "note", "eval", "exec",
+})
+
+
+def _task_required_symbols(task: str) -> List[str]:
+    """Function/class names the TASK explicitly says to define.
+
+    A correct implementation under a different name is as useless as one at the wrong
+    path — the caller imports the name it asked for. The loop verifies this the same
+    way it verifies the filename, rather than trusting the model to have complied.
+    """
+    t = task or ""
+    out: List[str] = []
+    for cue in _DEFN_CUE.finditer(t):
+        # Read to the end of the sentence OR the next definitional cue, whichever comes
+        # first. Stopping at the next cue keeps a class's METHODS out of the list:
+        # "defining a class LRU(capacity) implementing … with get(key)" must require
+        # only LRU, since get/put are attributes of the instance, not the module.
+        seg = t[cue.end(): cue.end() + 240]
+        seg = re.split(r"(?<=[.;])\s|\n", seg, maxsplit=1)[0]
+        nxt = _DEFN_CUE.search(seg)
+        if nxt:
+            seg = seg[: nxt.start()]
+        for m in _SIG.finditer(seg):
+            name = m.group(1)
+            if name in _NOT_A_SYMBOL or not name.isidentifier():
+                continue
+            if name not in out:
+                out.append(name)
+        # Only the FIRST clause that names anything sets the contract. Later clauses
+        # describe behaviour — "a class LRU(capacity) implementing … with get(key)"
+        # must require LRU alone, since get/put live on the instance, not the module.
+        # Under-enforcing is safe (the caller's own tests still catch it); over-
+        # enforcing would demand a module-level name that can never appear and would
+        # deadlock the loop against a requirement the task never made.
+        if out:
+            break
+    return out[:4]
 
 
 def _wants_tests(task: str) -> bool:
@@ -618,6 +680,35 @@ class CodeAgent:
         except Exception:
             return []
         return [t for t in targets if t not in have]
+
+    def _missing_symbols(self, task: str) -> List[str]:
+        """Required names the produced module does not actually expose.
+
+        Imports the module inside the jail and asks it, rather than grepping the
+        source — a name defined inside a conditional or a class body still counts,
+        and a name that only appears in a comment does not.
+        """
+        want = _task_required_symbols(task)
+        py = [t for t in _task_target_files(task) if t.endswith(".py")]
+        if not want or not py:
+            return []
+        mod = re.sub(r"\.py$", "", py[0]).replace("/", ".")
+        probe = (
+            "python3 -c \"import importlib;"
+            f"m=importlib.import_module('{mod}');"
+            f"print('LOLM_MISSING:'+','.join([n for n in {want!r} if not hasattr(m,n)]))\""
+        )
+        try:
+            r = self.sb.run(probe, timeout=min(15, max(self.run_timeout, 5)),
+                            isolated=self.isolated)
+        except Exception:
+            return []
+        if r.get("exit_code") != 0 or r.get("blocked"):
+            return []      # cannot even import — the compile gate owns that failure
+        for line in reversed((r.get("stdout") or "").splitlines()):
+            if line.startswith("LOLM_MISSING:"):
+                return [x for x in line.split(":", 1)[1].split(",") if x]
+        return []
 
     def _recent_actions(self, keep: int = 12) -> List[Dict[str, Any]]:
         """Recent actions with GREEN verify runs collapsed out.
@@ -931,6 +1022,38 @@ class CodeAgent:
                            "text": f"required file missing: {want} — redirecting to the "
                                    f"requested path"}}
                     continue
+                # Broken code must not be handed back while there is still budget to
+                # repair it. The finish-time check keeps the receipt honest; this one
+                # actually gets the tree fixed.
+                if nudges < 6:
+                    syn = self._final_compile_check()
+                    if not syn["ok"]:
+                        nudges += 1
+                        self._format_nudge = (
+                            "\n\nTHE DELIVERED CODE DOES NOT COMPILE — you cannot be done.\n"
+                            f"{syn['error'][-400:]}\n"
+                            "Fix the syntax error with an EDIT block (copy the old text "
+                            "verbatim from CURRENT WORKSPACE), then RUN."
+                        )
+                        yield {"event": "agent_note", "data": {"step": step,
+                               "text": "blocked DONE — delivered code does not compile"}}
+                        continue
+                # A name the TASK said to define is part of the contract too: the caller
+                # imports that exact name, so a correct function under a different name
+                # is as useless as one at the wrong path.
+                missing_syms = self._missing_symbols(task)
+                if missing_syms and nudges < 7:
+                    nudges += 1
+                    names = ", ".join(missing_syms)
+                    self._format_nudge = (
+                        f"\n\nMISSING REQUIRED NAME: the TASK asks for {names}, which the "
+                        f"module does not define. Whatever you named it, rename or add it "
+                        f"so `{names}` is importable with the exact signature the TASK "
+                        f"states, then RUN. Do NOT say DONE yet."
+                    )
+                    yield {"event": "agent_note", "data": {"step": step,
+                           "text": f"required name missing: {names}"}}
+                    continue
                 if ran_any and not produced_output and nudges < 3:
                     nudges += 1
                     self._format_nudge = "\n\nLast run printed nothing. Fix the program so it PRINTS."
@@ -1078,7 +1201,7 @@ class CodeAgent:
                         self._files_written.append(path)
                     written_path = path
                     yield {"event": "file_changed", "data": {"path": path,
-                           "diff": (fc.get("diff") or "")[:2500], "bytes": len(updated),
+                           "diff": (fc.get("diff") or "")[:_DIFF_CAP], "bytes": len(updated),
                            "edit": True}}
                     did = True
                     if (path or "").endswith(".py"):
@@ -1104,7 +1227,7 @@ class CodeAgent:
                     if path not in self._files_written:
                         self._files_written.append(path)
                     yield {"event": "file_changed", "data": {"path": path,
-                           "diff": (fc.get("diff") or "")[:2500], "bytes": len(content)}}
+                           "diff": (fc.get("diff") or "")[:_DIFF_CAP], "bytes": len(content)}}
                     did = True
                     # Pre-flight syntax gate: catch SyntaxError before a full RUN
                     # burns a step (speed + reliability vs Claude/Codex).
@@ -1464,7 +1587,8 @@ class CodeAgent:
                         # A green oracle on the wrong filename is still a failure, so the
                         # required-path check gates the auto-finish too — otherwise this
                         # path just routes around it.
-                        if ok and not self._missing_targets(task):
+                        if (ok and not self._missing_targets(task)
+                                and not self._missing_symbols(task)):
                             auto = _task_oracle_satisfied(
                                 task, self.actions, self._files_written)
                             if auto:

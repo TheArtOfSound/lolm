@@ -17,7 +17,7 @@ jobs:
   rollback:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Guard — require deploy secrets
         run: '[ -n "${{ secrets.DEPLOY_SSH_HOST }}" ] && [ -n "${{ secrets.DEPLOY_KEY }}" ] || { echo "deploy secrets not set — refusing"; exit 1; }'
       - name: Set up SSH

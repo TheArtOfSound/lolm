@@ -248,3 +248,63 @@ def test_compiling_code_still_reports_shipped(tmp_path):
     rec = [e["data"] for e in events if e["event"] == "code_receipt"][0]
     assert rec["syntax_ok"] is True
     assert rec["ok"] is True and rec["verdict"] == "shipped", rec["verdict"]
+
+
+# ── the required NAME is a contract too ──────────────────────────────────────
+
+def test_required_symbols_reads_only_the_definitional_clause():
+    from local_ui.code_agent import _task_required_symbols as sym
+    assert sym("Create solution.py defining parse_duration(s) -> float") == ["parse_duration"]
+    assert sym("defining to_roman(n) -> str and from_roman(s) -> int") == [
+        "to_roman", "from_roman"]
+    # A class's methods live on the instance, not the module — requiring them at module
+    # level would deadlock the loop against a requirement the task never made.
+    assert sym("defining a class LRU(capacity) implementing a cache with get(key) "
+               "and put(key, value)") == ["LRU"]
+
+
+def test_prose_cannot_manufacture_a_required_symbol():
+    from local_ui.code_agent import _task_required_symbols as sym
+    # A space before the paren means prose, not a signature.
+    assert sym("defining merge(intervals) over [start, end] pairs (unsorted)") == ["merge"]
+    assert sym("defining to_roman(n) using subtractive forms (IV, IX)") == ["to_roman"]
+    assert sym("no definitional cue here foo(bar)") == []
+    assert sym("") == []
+
+
+def test_done_blocked_until_the_required_name_exists(tmp_path):
+    sb = Sandbox(tmp_path)
+    seq = iter([
+        # right file, wrong name — used to sail through as a green DONE
+        "FILE: solution.py\n```\ndef calc(s):\n    return 1.0\nprint(calc('x'))\n```\n"
+        "RUN: python3 solution.py",
+        "DONE: built the evaluator",
+        "FILE: solution.py\n```\ndef evaluate(s):\n    return 1.0\nprint(evaluate('x'))\n```\n"
+        "RUN: python3 solution.py",
+        "DONE: named correctly now",
+    ])
+    agent = CodeAgent(sb, lambda m: next(seq), isolated=None)
+    events = list(agent.run("Create solution.py defining evaluate(s) -> float"))
+    notes = [e["data"].get("text", "") for e in events if e["event"] == "agent_note"]
+    assert any("required name missing" in n for n in notes), notes
+    assert "def evaluate" in sb.read_file("solution.py")
+
+
+def test_done_blocked_while_the_tree_does_not_compile(tmp_path):
+    # The finish-time check keeps the receipt honest; this gate actually gets the code
+    # fixed while budget remains, instead of handing back a broken tree.
+    sb = Sandbox(tmp_path)
+    seq = iter([
+        "FILE: solution.py\n```\nprint('ok')\n```\nRUN: python3 solution.py",
+        "FILE: solution.py\n```\ndef broken(:\n```\nRUN: python3 solution.py",
+        "DONE: shipping it",
+        "FILE: solution.py\n```\ndef fixed():\n    return 1\nprint(fixed())\n```\n"
+        "RUN: python3 solution.py",
+        "DONE: compiles now",
+    ])
+    agent = CodeAgent(sb, lambda m: next(seq), isolated=None)
+    events = list(agent.run("Create solution.py"))
+    notes = [e["data"].get("text", "") for e in events if e["event"] == "agent_note"]
+    assert any("does not compile" in n for n in notes), notes
+    rec = [e["data"] for e in events if e["event"] == "code_receipt"][-1]
+    assert rec["syntax_ok"] is True, "it should have been driven to a compiling tree"

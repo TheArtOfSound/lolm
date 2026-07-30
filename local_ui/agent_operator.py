@@ -19,6 +19,10 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Dict, Iterator, List, Optional
 
+# Chars of unified diff per file_changed event. The sandbox keeps up to 24k,
+# so the old 2500 discarded data clients need to rebuild files from the stream.
+_DIFF_CAP = 24000
+
 
 SYSTEM = (
     "You are LOLM Operator: an autonomous agent with your own VIRTUAL COMPUTER — a "
@@ -362,7 +366,7 @@ class AgentOperator:
                     fc = self.sb.write_file(act["path"], act["content"], reason="operator")
                     yield {"event": "tool_call", "data": {"tool": "write", "path": act["path"]}}
                     yield {"event": "file_changed", "data": {"path": act["path"],
-                           "diff": (fc.get("diff") or "")[:2500],
+                           "diff": (fc.get("diff") or "")[:_DIFF_CAP],
                            "bytes": len(act["content"])}}
                     self.log.append({"kind": "write", "changed": True,
                                      "summary": f"wrote {act['path']} ({len(act['content'])} bytes)",
@@ -406,7 +410,7 @@ class AgentOperator:
                     fc = self.sb.write_file(path, content.replace(old, new, 1), reason="operator-edit")
                     yield {"event": "tool_call", "data": {"tool": "edit", "path": path}}
                     yield {"event": "file_changed", "data": {"path": path,
-                           "diff": (fc.get("diff") or "")[:2500], "edit": True}}
+                           "diff": (fc.get("diff") or "")[:_DIFF_CAP], "edit": True}}
                     self.log.append({"kind": "edit", "changed": True,
                                      "summary": f"edited {path} "
                                      f"(-{old.count(chr(10))+1}/+{new.count(chr(10))+1} lines)",
