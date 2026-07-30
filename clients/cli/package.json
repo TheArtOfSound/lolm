@@ -1,10 +1,10 @@
 {
-  "name": "lolm",
+  "name": "lolm-cli",
   "version": "0.1.0",
-  "description": "Command-line client for the LOLM agent: run a coding task in a jailed sandbox, watch the write-run-fix loop live, and get a sealed receipt for what actually happened.",
+  "description": "Command-line client for the LOLM agent (installs the `lolm` command): run a coding task in a network-isolated sandbox, watch the write-run-fix loop live, and get a sealed receipt for what actually happened.",
   "type": "module",
   "bin": {
-    "lolm": "./bin/lolm.mjs"
+    "lolm": "bin/lolm.mjs"
   },
   "files": [
     "bin/lolm.mjs",

@@ -1,11 +1,11 @@
-# lolm
+# lolm-cli
 
 Command-line client for the [LOLM agent](https://lolm.imagineqira.com). Run a coding
 task in a network-isolated sandbox, watch the real write → run → read-the-error → fix
 loop, and end with a sealed receipt of what actually happened.
 
 ```bash
-npx lolm code "write fizzbuzz to 20 in solution.py and run it" --save ./out
+npx lolm-cli code "write fizzbuzz to 20 in solution.py and run it" --save ./out
 ```
 
 ```
@@ -27,10 +27,14 @@ runs      2 green / 0 failed
 receipt   0f5e12f682d212b438a7d3ba
 ```
 
+The package is `lolm-cli`; the command it installs is `lolm`. (npm rejects the bare
+name `lolm` as too similar to existing packages.)
+
 No API key needed for the free tier. Nothing is installed globally unless you want it:
 
 ```bash
-npm install -g lolm     # or just use npx
+npm install -g lolm-cli   # installs the `lolm` command
+# or run it without installing:  npx lolm-cli <command>
 ```
 
 ## Commands
