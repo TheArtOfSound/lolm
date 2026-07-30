@@ -12,8 +12,10 @@
  * but their failure degrades gracefully in the page, not here.
  */
 
-const CACHE = "lolm-nfet-v4";   // bump on any shell/asset change so returning
+const CACHE = "lolm-nfet-v5";   // bump on any shell/asset change so returning
                                 // visitors get the update (activate clears old)
+                                // v5: homepage demo video (media/ is served
+                                // network-first and never precached).
                                 // v4: design-system reskin (lolm-ds.css/js). A
                                 // stale v3 was still serving a pre-workspace
                                 // shell to returning visitors.
@@ -59,6 +61,12 @@ self.addEventListener("fetch", (event) => {
   // failure (offline banner / replays / in-browser engine).
   if (url.pathname.startsWith("/api/")) return;
 
+  // Media: hand straight to the browser, no worker in the middle. A <video> fetches
+  // by Range, and cache.put() REJECTS a 206 Partial Content — which would fall
+  // through the catch below and answer a video request with index.html, breaking
+  // playback outright. Big clips also have no business in an offline shell.
+  if (url.pathname.startsWith("/media/") || event.request.headers.has("range")) return;
+
   const isHTML = event.request.mode === "navigate" ||
                  (event.request.headers.get("accept") || "").includes("text/html");
 
@@ -78,7 +86,10 @@ self.addEventListener("fetch", (event) => {
     // Static + replays: cache-first with background revalidate.
     const cached = await cache.match(event.request);
     const network = fetch(event.request).then((resp) => {
-      if (resp && resp.ok && url.origin === self.location.origin) cache.put(event.request, resp.clone());
+      // status must be exactly 200: resp.ok also covers 206, which cache.put rejects.
+      if (resp && resp.status === 200 && url.origin === self.location.origin) {
+        cache.put(event.request, resp.clone()).catch(() => {});
+      }
       return resp;
     }).catch(() => null);
     return cached || (await network) || cache.match("/index.html");

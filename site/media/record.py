@@ -24,7 +24,7 @@ from functools import partial
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-W, H = 1000, 620
+W, H = 1000, 720
 
 
 def free_port() -> int:
@@ -40,7 +40,7 @@ def serve(directory: Path, port: int):
     return httpd
 
 
-def record(cast: str, name: str, speed: float, out_dir: Path) -> Path:
+def record(cast: str, name: str, speed: float, out_dir: Path, height: int = H) -> Path:
     from playwright.sync_api import sync_playwright
 
     port = free_port()
@@ -51,10 +51,10 @@ def record(cast: str, name: str, speed: float, out_dir: Path) -> Path:
         with sync_playwright() as p:
             browser = p.chromium.launch(args=["--force-device-scale-factor=2"])
             ctx = browser.new_context(
-                viewport={"width": W, "height": H},
+                viewport={"width": W, "height": height},
                 device_scale_factor=2,
                 record_video_dir=str(raw_dir),
-                record_video_size={"width": W, "height": H},
+                record_video_size={"width": W, "height": height},
             )
             page = ctx.new_page()
             page.goto(f"http://127.0.0.1:{port}/render_cast.html"
@@ -97,13 +97,15 @@ def main():
     ap.add_argument("--cast", default="cli-session.json")
     ap.add_argument("--name", default="cli-demo")
     ap.add_argument("--speed", type=float, default=1.0)
+    ap.add_argument("--height", type=int, default=H,
+                    help="viewport height; the receipt must not fall below the fold")
     ap.add_argument("--out", default=str(HERE))
     a = ap.parse_args()
     if not shutil.which("ffmpeg"):
         raise SystemExit("ffmpeg not on PATH")
     out_dir = Path(a.out)
     print(f"[record] replaying {a.cast} at {a.speed}x …")
-    raw = record(a.cast, a.name, a.speed, out_dir)
+    raw = record(a.cast, a.name, a.speed, out_dir, a.height)
     print(f"[record] raw {raw.name} ({raw.stat().st_size // 1024} KB)")
     res = transcode(raw, a.name, out_dir)
     for k in ("mp4", "webm", "poster"):
