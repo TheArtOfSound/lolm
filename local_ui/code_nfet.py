@@ -281,6 +281,9 @@ def retrieve_code_memory(task: str, error: str = "", limit: int = 4) -> List[Dic
 class CodeNFET:
     """Stateful NFET controller for one coding run."""
 
+    # Default coding-head checkpoint (observable-only MLP, no backbone needed).
+    DEFAULT_HEAD = "runs/nfet_controller/code_head.pt"
+
     def __init__(
         self,
         backbone: Any = None,
@@ -288,6 +291,7 @@ class CodeNFET:
         head_trained: bool = False,
         *,
         prefer_graft: bool = True,
+        coding_head_path: Optional[str] = None,
     ):
         self.backbone = backbone
         self.graft = graft
@@ -298,6 +302,32 @@ class CodeNFET:
         self._last: Optional[CodingControl] = None
         self._verify_debt = 0   # verify decisions not yet satisfied
         self._branch_debt = 0
+        self._coding_head = None
+        self._coding_head_meta: Dict[str, Any] = {}
+        self._load_coding_head(coding_head_path)
+
+    def _load_coding_head(self, path: Optional[str]) -> None:
+        import os
+        from pathlib import Path
+        candidates = []
+        if path:
+            candidates.append(path)
+        env = os.environ.get("LOLM_CODE_NFET_HEAD", "").strip()
+        if env:
+            candidates.append(env)
+        candidates.append(self.DEFAULT_HEAD)
+        # Also try relative to repo root next to this file.
+        here = Path(__file__).resolve().parent.parent
+        candidates.append(str(here / "runs" / "nfet_controller" / "code_head.pt"))
+        try:
+            from lolm.code_nfet_train import load_coding_head
+        except Exception:
+            return
+        for c in candidates:
+            loaded = load_coding_head(Path(c))
+            if loaded is not None:
+                self._coding_head, self._coding_head_meta = loaded
+                return
 
     @property
     def available_graft(self) -> bool:
@@ -363,6 +393,38 @@ class CodeNFET:
             control_logits=control_logits,
             head_trained=self.head_trained and control_logits is not None,
         )
+
+        # Coding-trained head override (observable + sandbox features). Takes
+        # priority over the chat graft head when confident — this is the
+        # flywheel: receipts + synth train a head that knows thrash/contract.
+        head_probs = decision.head_probs
+        if self._coding_head is not None and decision.source not in ("calibrating", "cooldown"):
+            try:
+                from lolm.code_nfet_train import predict_control, _feat
+                mean_e_tmp = sum(f.logit_entropy for f in frames) / max(len(frames), 1)
+                mean_d = sum(f.hidden_drift for f in frames) / max(len(frames), 1)
+                mean_g = sum(f.gate_mean for f in frames) / max(len(frames), 1)
+                mean_r = sum(f.regime_entropy for f in frames) / max(len(frames), 1)
+                feats = _feat(
+                    mean_e_tmp, mean_d, mean_g, mean_r,
+                    thrash=thrash, green=green_runs, failed=failed_runs,
+                    contract_failed=contract_failed, exit_ok=exit_ok,
+                )
+                pred = predict_control(self._coding_head, feats, min_confidence=0.42)
+                if pred is not None:
+                    best, probs = pred
+                    decision = ControlDecision(
+                        control=best,
+                        label=CONTROL_LABELS[best],
+                        source="code_head",
+                        reason=f"coding head confident (p={probs[best]:.2f})",
+                        zscores=decision.zscores,
+                        head_probs=probs,
+                        step=decision.step,
+                    )
+                    head_probs = probs
+            except Exception:
+                pass
 
         # Coding-specific guards: never finalize a red run; never continue
         # thrashing without a branch/verify.
@@ -477,6 +539,8 @@ class CodeNFET:
             "nfet_coding": True,
             "mode": (self._last.mode if self._last else "none"),
             "graft_available": self.available_graft,
+            "code_head": bool(self._coding_head is not None),
+            "code_head_val_acc": self._coding_head_meta.get("val_acc"),
             "n_decisions": len(self.timeline),
             "counts": counts,
             "timeline": self.timeline[-24:],
