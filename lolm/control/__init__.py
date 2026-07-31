@@ -12,6 +12,10 @@ Nothing here is decorative. The controller's choice (continue / recall / retriev
 argmax of a scored, safety/budget-bounded action set over the measured signals,
 and every decision is hashed into a receipt whose prose is validated against the
 structured trace so the UI can never claim an action that did not happen.
+
+Closed-loop extensions (2026-07):
+    state_vector, action_executor, contract, trajectory — see
+    docs/NFET_IMPLEMENTATION_PLAN.md
 """
 
 from lolm.control.config import (
@@ -31,6 +35,9 @@ from lolm.control.nfet import NFETField, decide, AGENT_ACTIONS
 from lolm.control.decision_packet import DecisionPacket
 from lolm.control.receipt import ControlReceipt, build_control_receipt, receipt_hash
 from lolm.control.receipt_validator import validate_receipt_claims, FORBIDDEN_WHEN
+from lolm.control.state_vector import NfetStateVector, estimate_from_sandbox
+from lolm.control.action_executor import ActionExecutor, ExecutionResult
+from lolm.control.contract import ContractResult, check_task_contract
 
 __all__ = [
     "ControlSignals", "fused_uncertainty", "NFETField", "decide", "AGENT_ACTIONS",
@@ -39,4 +46,7 @@ __all__ = [
     "NFET_WEIGHTS", "NFET_FIELD_WEIGHTS", "NFET_THRESHOLDS", "ACTION_SCORE_WEIGHTS",
     "VERIFICATION_WEIGHTS", "RETRIEVAL_WEIGHTS", "BRANCH_WEIGHTS",
     "MEMORY_WRITE_WEIGHTS", "MEMORY_THRESHOLDS", "CONTROLLER_VERSION",
+    "NfetStateVector", "estimate_from_sandbox",
+    "ActionExecutor", "ExecutionResult",
+    "ContractResult", "check_task_contract",
 ]

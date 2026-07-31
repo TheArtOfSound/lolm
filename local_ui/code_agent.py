@@ -873,7 +873,10 @@ class CodeAgent:
         self.ensemble_models = list(ensemble_models or ENSEMBLE_MODELS)
         # NFET coding controller: measured uncertainty → verify/retrieve/branch/
         # finalize. Always on (synthetic proxies when the graft is offline).
-        if nfet is not None:
+        # Pass nfet=False to force plain (no controller) for matched baselines.
+        if nfet is False:
+            self.nfet = None
+        elif nfet is not None:
             self.nfet = nfet
         elif build_code_nfet is not None:
             try:
@@ -885,6 +888,11 @@ class CodeAgent:
         self._green_runs = 0
         self._failed_runs = 0
         self._last_contract_failed = False
+        try:
+            from lolm.control.action_executor import ActionExecutor
+            self._executor = ActionExecutor()
+        except Exception:
+            self._executor = None
 
     def _score_candidate(self, raw: str, task: str) -> Dict[str, Any]:
         """Run one candidate opening turn in a scratch sandbox and score it.
@@ -1975,6 +1983,61 @@ class CodeAgent:
                     }}
                     if nfet_ctrl.nudge:
                         self._format_nudge = (self._format_nudge or "") + nfet_ctrl.nudge
+                    # Record consumption via unified executor (side effects already
+                    # applied by force_* flags + contract path below).
+                    if self._executor is not None:
+                        try:
+                            from lolm.control.action_executor import ExecutorContext
+                            from lolm.control import trajectory as nfet_traj
+                            from lolm.control.state_vector import estimate_from_sandbox
+                            label = nfet_ctrl.decision.label
+                            # Map finalize/verify/branch/retrieve to executor.
+                            act = label if label in (
+                                "continue", "retrieve", "verify", "branch", "finalize"
+                            ) else "continue"
+                            ctx = ExecutorContext(
+                                task=task, exit_ok=bool(ok),
+                                contract_ok=not self._last_contract_failed,
+                                thrash=fail_repeats,
+                                authorize_finalize=lambda: bool(
+                                    ok and not self._last_contract_failed
+                                ),
+                            )
+                            eres = self._executor.execute(act, ctx)
+                            # Branch/verify are consumed by the agent loop itself.
+                            if act in ("branch", "verify", "retrieve") and (
+                                nfet_ctrl.force_branch or nfet_ctrl.force_verify
+                                or nfet_ctrl.force_retrieve
+                            ):
+                                eres.consumed = True
+                                eres.side_effects = list(eres.side_effects) + [
+                                    "agent_loop_will_honor"]
+                            yield {"event": "agent_note", "data": {
+                                "text": (
+                                    f"NFET executor: {eres.action} "
+                                    f"consumed={eres.consumed}"
+                                ),
+                                "execution": eres.to_dict(),
+                            }}
+                            try:
+                                sv = estimate_from_sandbox(
+                                    exit_ok=bool(ok), thrash=fail_repeats,
+                                    green_runs=self._green_runs,
+                                    failed_runs=self._failed_runs,
+                                    contract_failed=self._last_contract_failed,
+                                )
+                                nfet_traj.log_step(
+                                    state=sv.to_dict(),
+                                    action=eres.action,
+                                    consumed=eres.consumed,
+                                    cost=1.0,
+                                    outcome={"exit_ok": bool(ok)},
+                                    source="code",
+                                )
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
                     if nfet_ctrl.force_branch and self.gen_many is not None and self._repair_races < 2:
                         # Honor BRANCH immediately: fire a repair ensemble race now.
                         self._format_nudge = (self._format_nudge or "") + (
