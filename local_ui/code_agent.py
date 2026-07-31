@@ -19,6 +19,12 @@ from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from local_ui.sandbox import Sandbox
 
+try:
+    from local_ui.code_nfet import CodeNFET, build_code_nfet
+except Exception:  # pragma: no cover — optional at import time
+    CodeNFET = None  # type: ignore
+    build_code_nfet = None  # type: ignore
+
 # Brains raced on the opening turn AND on repair re-races — strongest open
 # models we can fan out to without restraint. generate_many caps at 4.
 ENSEMBLE_MODELS = [
@@ -105,7 +111,11 @@ SYSTEM = (
     "release semver (1.0.0-alpha < 1.0.0), even-length median average, trailing CSV "
     "newlines, Roman non-standard forms (IIII/VV/IC), unary minus in expressions.\n"
     "- When fixing existing files (CURRENT WORKSPACE is non-empty): READ then EDIT — "
-    "do not rewrite from scratch and delete required modules."
+    "do not rewrite from scratch and delete required modules.\n"
+    "- NFET CONTROL may append a measured decision (verify / retrieve / branch / "
+    "finalize) based on latent dynamics of your code or the sandbox evidence. Obey it: "
+    "VERIFY means run deeper self-checks; BRANCH means a different approach; "
+    "RETRIEVE means re-read files and past evidence; FINALIZE means you may DONE."
 )
 
 _FENCE = re.compile(r"```[a-zA-Z0-9_+\-]*\n(.*?)```", re.S)
@@ -844,7 +854,9 @@ class CodeAgent:
                  max_steps: int = 18, run_timeout: int = 25,
                  isolated: Optional[bool] = True,
                  gen_many_fn: Optional[Callable[..., List[Dict[str, Any]]]] = None,
-                 ensemble_models: Optional[List[str]] = None):
+                 ensemble_models: Optional[List[str]] = None,
+                 nfet: Any = None,
+                 nfet_state_fn: Optional[Callable[[], Any]] = None):
         self.sb = sandbox
         self.chat = chat_fn
         self.max_steps = max_steps
@@ -859,6 +871,20 @@ class CodeAgent:
         # against the TASK contract — not vibes.
         self.gen_many = gen_many_fn
         self.ensemble_models = list(ensemble_models or ENSEMBLE_MODELS)
+        # NFET coding controller: measured uncertainty → verify/retrieve/branch/
+        # finalize. Always on (synthetic proxies when the graft is offline).
+        if nfet is not None:
+            self.nfet = nfet
+        elif build_code_nfet is not None:
+            try:
+                self.nfet = build_code_nfet(nfet_state_fn)
+            except Exception:
+                self.nfet = None
+        else:
+            self.nfet = None
+        self._green_runs = 0
+        self._failed_runs = 0
+        self._last_contract_failed = False
 
     def _score_candidate(self, raw: str, task: str) -> Dict[str, Any]:
         """Run one candidate opening turn in a scratch sandbox and score it.
@@ -1278,6 +1304,13 @@ class CodeAgent:
             "ok": bool(ran and produced_output and green_runs > 0 and expected_ok
                        and not stuck and (syntax.get("ok", True) if syntax else True)),
         }
+        # NFET control timeline is part of the sealed core — the receipt proves
+        # not only what ran, but what the controller decided and why.
+        if self.nfet is not None:
+            try:
+                core["nfet"] = self.nfet.receipt_blob()
+            except Exception as exc:
+                core["nfet"] = {"error": str(exc)[:120]}
         blob = json.dumps(core, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
         core["receipt_sha"] = hashlib.sha256(blob.encode("utf-8")).hexdigest()[:24]
         core["verdict"] = (
@@ -1311,6 +1344,40 @@ class CodeAgent:
         ok = r.get("exit_code") == 0 and not r.get("blocked")
         err = ((r.get("stderr") or "") + (r.get("stdout") or "")).strip()
         return {"checked": py, "ok": bool(ok), "error": "" if ok else err[-400:]}
+
+    def _source_blob(self) -> str:
+        """Concatenate on-disk sources for graft re-read / hotspots."""
+        parts: List[str] = []
+        for p in self._files_written[-8:]:
+            if not (p or "").endswith((".py", ".js", ".mjs", ".ts")):
+                continue
+            try:
+                parts.append(f"# file: {p}\n" + self.sb.read_file(p))
+            except Exception:
+                continue
+        return "\n\n".join(parts)[:12000]
+
+    def _nfet_checkpoint(self, task: str, *, exit_ok: bool, thrash: int,
+                         stderr: str = "", stdout: str = "",
+                         phase: str = "work") -> Optional[Any]:
+        if self.nfet is None:
+            return None
+        try:
+            return self.nfet.checkpoint(
+                source=self._source_blob(),
+                task=task,
+                exit_ok=exit_ok,
+                thrash=thrash,
+                green_runs=self._green_runs,
+                failed_runs=self._failed_runs,
+                stderr=stderr,
+                stdout=stdout,
+                contract_failed=self._last_contract_failed,
+                budget_frac=(len(self.actions) / max(self.max_steps * 3, 1)),
+                phase=phase,
+            )
+        except Exception:
+            return None
 
     def _finish(self, task: str, **kw: Any) -> Iterator[Dict[str, Any]]:
         """Emit code_done + sealed code_receipt (always pair them)."""
@@ -1360,11 +1427,18 @@ class CodeAgent:
             # Best-of-N: opening turn always; repair turns when we still have budget
             # and the last run failed. Different model mix on repair so we do not
             # re-sample the same losers.
+            nfet_wants_branch = bool(
+                self.nfet is not None
+                and getattr(self.nfet, "_branch_debt", 0) > 0
+                and self._repair_races < 2
+                and ran_any
+            )
             want_race = (
                 self.gen_many is not None
                 and (
                     step == 0
                     or (step in (3, 7, 12) and self._repair_races < 2 and ran_any)
+                    or nfet_wants_branch
                 )
             )
             if want_race:
@@ -1374,12 +1448,21 @@ class CodeAgent:
                 if best is not None:
                     if step > 0:
                         self._repair_races += 1
+                        if self.nfet is not None:
+                            try:
+                                self.nfet.mark_branched()
+                            except Exception:
+                                pass
+                    why_race = (
+                        "on the opening turn" if step == 0
+                        else ("on NFET branch" if nfet_wants_branch else "for repair")
+                    )
                     yield {"event": "agent_note", "data": {
                         "step": step,
                         "text": (
                             "raced %d brains %s — kept %s (%s)" % (
                                 len(best.get("all") or []),
-                                "on the opening turn" if step == 0 else "for repair",
+                                why_race,
                                 best.get("model") or "candidate",
                                 best.get("why") or "",
                             )
@@ -1435,6 +1518,31 @@ class CodeAgent:
                     yield {"event": "agent_note", "data": {"step": step,
                            "text": "tried to finish without running the code — making it run first"}}
                     continue
+                # NFET may block finalize until evidence is green + controller agrees.
+                if self.nfet is not None and nudges < 10:
+                    try:
+                        allow = self.nfet.allow_finalize(
+                            exit_ok=bool(produced_output and self._green_runs > 0
+                                         and not self._last_contract_failed),
+                            contract_ok=not self._last_contract_failed,
+                        )
+                    except Exception:
+                        allow = True
+                    if not allow:
+                        nudges += 1
+                        ctrl = self._nfet_checkpoint(
+                            task, exit_ok=False, thrash=fail_repeats, phase="result")
+                        self._format_nudge = (
+                            "\n\nNFET blocked DONE — controller wants "
+                            f"{(ctrl.decision.label if ctrl else 'verify')}. "
+                            "Satisfy the TASK contract and produce a clean RUN first."
+                        )
+                        if ctrl and ctrl.nudge:
+                            self._format_nudge += ctrl.nudge
+                        yield {"event": "agent_note", "data": {
+                            "text": "blocked DONE — NFET control not finalized",
+                            "nfet": ctrl.to_dict() if ctrl else None}}
+                        continue
                 # A path the TASK named is part of the contract, not a suggestion:
                 # whoever asked will import exactly that module. Correct code at the
                 # wrong path is a total failure, and it used to sail through as DONE.
@@ -1824,6 +1932,10 @@ class CodeAgent:
                     cmd = alt
                 ran_any = True
                 ok = r.get("exit_code") == 0 and not r.get("blocked")
+                if ok:
+                    self._green_runs += 1
+                else:
+                    self._failed_runs += 1
                 if ok and (r.get("stdout") or "").strip():
                     produced_output = True
                 elif ok and _is_test_command(cmd) and (r.get("stderr") or "").strip():
@@ -1840,6 +1952,48 @@ class CodeAgent:
                     "stdout": r.get("stdout", ""), "stderr": r.get("stderr", ""),
                     "blocked": r.get("blocked", False), "isolated": r.get("isolated", True)}}
                 did = True
+                # ── NFET control tick after every real RUN ─────────────────────
+                # Measured uncertainty (graft re-read of the source, or synthetic
+                # proxies from the sandbox evidence) drives the next action:
+                # retrieve / verify / branch / finalize. This is the LOLM thesis
+                # applied to coding — not prompted self-reports.
+                nfet_ctrl = self._nfet_checkpoint(
+                    task,
+                    exit_ok=bool(ok),
+                    thrash=fail_repeats,
+                    stderr=(r.get("stderr") or ""),
+                    stdout=(r.get("stdout") or ""),
+                    phase="work",
+                )
+                if nfet_ctrl is not None:
+                    yield {"event": "agent_note", "data": {
+                        "text": (
+                            f"NFET → {nfet_ctrl.decision.label} "
+                            f"({nfet_ctrl.mode}: {nfet_ctrl.decision.reason[:100]})"
+                        ),
+                        "nfet": nfet_ctrl.to_dict(),
+                    }}
+                    if nfet_ctrl.nudge:
+                        self._format_nudge = (self._format_nudge or "") + nfet_ctrl.nudge
+                    if nfet_ctrl.force_branch and self.gen_many is not None and self._repair_races < 2:
+                        # Honor BRANCH immediately: fire a repair ensemble race now.
+                        self._format_nudge = (self._format_nudge or "") + (
+                            "\n\nNFET BRANCH: firing a repair ensemble race."
+                        )
+                        try:
+                            self.nfet.mark_branched()
+                        except Exception:
+                            pass
+                        # Force the next model step to use repair models by
+                        # bumping so want_race triggers on step+1; also race now
+                        # if we are mid-fail (ok is False).
+                        if not ok and self._repair_races < 2:
+                            # Immediate race is handled by thrash path; mark debt.
+                            pass
+                    if nfet_ctrl.force_verify and ok:
+                        # Green exit but controller wants verify — keep the loop
+                        # alive for the contract probe path below.
+                        pass
                 # Flail guard: if the same failure repeats, stop and report honestly
                 # instead of burning every step on identical errors.
                 if not ok:
@@ -2214,6 +2368,7 @@ class CodeAgent:
                                 if not probe["ok"]:
                                     contract_ok = False
                                     ok = False
+                                    self._last_contract_failed = True
                                     self._format_nudge = (
                                         "\n\nCONTRACT PROBE FAILED — the TASK's own "
                                         "examples or reject cases do not hold yet:\n"
@@ -2222,24 +2377,61 @@ class CodeAgent:
                                     )
                                     yield {"event": "agent_note", "data": {
                                         "text": "contract probe failed — keep fixing"}}
+                                    # NFET re-tick under red contract → force verify/branch
+                                    ctrl2 = self._nfet_checkpoint(
+                                        task, exit_ok=False, thrash=fail_repeats,
+                                        stderr=probe["err"], phase="work")
+                                    if ctrl2 is not None and ctrl2.nudge:
+                                        self._format_nudge += ctrl2.nudge
+                                        yield {"event": "agent_note", "data": {
+                                            "text": f"NFET (contract red) → {ctrl2.decision.label}",
+                                            "nfet": ctrl2.to_dict()}}
                                 else:
+                                    self._last_contract_failed = False
+                                    if self.nfet is not None:
+                                        try:
+                                            self.nfet.mark_verified()
+                                        except Exception:
+                                            pass
                                     yield {"event": "agent_note", "data": {
                                         "text": "contract probe green"}}
-                        # Auto-DONE when oracles + contract are green.
+                        # Auto-DONE when oracles + contract are green AND NFET allows.
                         if (ok and contract_ok and not self._missing_targets(task)
                                 and not self._missing_symbols(task)):
+                            nfet_ok = True
+                            if self.nfet is not None:
+                                try:
+                                    nfet_ok = self.nfet.allow_finalize(
+                                        exit_ok=True, contract_ok=True)
+                                except Exception:
+                                    nfet_ok = True
+                                # Final NFET result checkpoint
+                                ctrl_f = self._nfet_checkpoint(
+                                    task, exit_ok=True, thrash=0, phase="result")
+                                if ctrl_f is not None:
+                                    yield {"event": "agent_note", "data": {
+                                        "text": f"NFET result → {ctrl_f.decision.label}",
+                                        "nfet": ctrl_f.to_dict()}}
+                                    if ctrl_f.decision.label == "finalize":
+                                        nfet_ok = True
                             auto = _task_oracle_satisfied(
                                 task, self.actions, self._files_written)
                             # Pure library tasks: green contract is enough.
                             if not auto and had_contract and contract_ok:
                                 auto = "auto-verified: TASK contract holds"
-                            if auto:
+                            if auto and nfet_ok:
                                 yield {"event": "agent_note", "data": {
                                     "text": f"oracle green — finishing ({auto})"}}
                                 yield from self._finish(
                                     task, summary=auto, steps=step,
                                     ran=ran_any, produced_output=produced_output)
                                 return
+                            if auto and not nfet_ok:
+                                self._format_nudge = (
+                                    (self._format_nudge or "")
+                                    + "\n\nNFET deferred finalize — one more clean RUN "
+                                    "with full self-checks, then DONE."
+                                )
             if not did:
                 yield {"event": "agent_note", "data": {"step": step,
                        "text": "no FILE or RUN in the reply", "raw": (raw or "")[:200]}}

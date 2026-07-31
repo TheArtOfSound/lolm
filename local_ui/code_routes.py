@@ -329,7 +329,8 @@ def register_code_routes(app: Any, root: str,
                          runs_per_min: int = 6,
                          stream_fn: Optional[Callable[..., Any]] = None,
                          gen_many_fn: Optional[Callable[..., List[Dict[str, Any]]]] = None,
-                         usage_fn: Optional[Callable[..., Dict[str, Any]]] = None) -> None:
+                         usage_fn: Optional[Callable[..., Dict[str, Any]]] = None,
+                         nfet_state_fn: Optional[Callable[[], Any]] = None) -> None:
     rate: Dict[str, List[float]] = {}
 
     def _ip(req: Request) -> str:
@@ -479,11 +480,19 @@ def register_code_routes(app: Any, root: str,
         # mid-loop repair races) and keep whichever candidate actually runs.
         agent = CodeAgent(sb, _chat_with_history,
                           max_steps=min(max(req.max_steps, 1), step_cap), isolated=True,
-                          gen_many_fn=gen_many_fn)
+                          gen_many_fn=gen_many_fn,
+                          nfet_state_fn=nfet_state_fn)
 
         def gen():
             try:
-                yield _sse("agent_note", {"text": "LOLM Code — multi-file agentic loop (run → fix → verify)"})
+                nfet_mode = "off"
+                if getattr(agent, "nfet", None) is not None:
+                    nfet_mode = ("graft" if agent.nfet.available_graft else "synthetic")
+                yield _sse("agent_note", {
+                    "text": (
+                        "LOLM Code — multi-file agentic loop with NFET control "
+                        f"({nfet_mode}: verify/retrieve/branch/finalize from measured dynamics)"
+                    )})
                 for ev in agent.run(task):
                     if ev.get("event") == "code_receipt":
                         try:

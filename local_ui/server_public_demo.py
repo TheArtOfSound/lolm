@@ -443,7 +443,8 @@ def _operator_gen_many(messages, models, max_tokens=3600):
 register_code_routes(app, str(ROOT / "runs" / "code_sandboxes"), _operator_chat,
                      stream_fn=_operator_stream,
                      gen_many_fn=_operator_gen_many,
-                     usage_fn=usage_limits.check_request)
+                     usage_fn=usage_limits.check_request,
+                     nfet_state_fn=lambda: STATE)
 
 # LOLM Operator: a general multi-tool agent (list/read/write/run/search) that pursues a
 # GOAL over its own bwrap-jailed virtual workspace — plan -> act -> observe -> verify,

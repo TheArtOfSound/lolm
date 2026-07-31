@@ -55,11 +55,14 @@
       <div class="card"><b>Multi-model race</b><span>Opening turns race GLM-class, gpt-oss-120b, and Llama&nbsp;4 Maverick. Keep the candidate that compiles and runs.</span></div>
       <div class="card"><b>Real sandbox</b><span>Write → run → fix in a network-isolated jail. Self-reported failures and broken checks block “shipped”.</span></div>
       <div class="card"><b>Sealed receipts</b><span>Every turn records files, commands, and control decisions in a hash-chained ledger you can audit.</span></div>
-      <div class="card"><b>Uncertainty control</b><span>A local graft measures when the model is unsure and can retrieve, verify, fork, or stop — with the receipt saying so.</span></div>
+      <div class="card"><b>NFET on coding</b><span>After every run, LOLM measures latent dynamics of your code (or honest sandbox proxies) and can force verify, retrieve past receipts, branch to a new approach, or allow finalize — sealed into the receipt.</span></div>
     </div>
 
+    <h2>What NFET is</h2>
+    <p><strong>NFET</strong> is LOLM’s control layer. The five-stream graft (surface · latent SSM · regime · gate · memory) re-reads text and exposes entropy, hidden drift, gate balance, and regime entropy. A policy maps those to five actions: continue, retrieve, verify, branch, finalize. Chat has used this for a while. <strong>Coding now does too</strong> — so “shipped” is not model whim; it is measured dynamics plus a green sandbox.</p>
+
     <h2>What we deliberately hide</h2>
-    <p>Entropy plots, lab backends, and research dashboards live under <strong>More</strong> in the workspace. The product is the loop: describe a task, get working code, keep the receipt.</p>
+    <p>Lab dashboards live under <strong>More</strong> in the workspace. The product is the loop: describe a task, get working code, keep the receipt — with NFET decisions inside it.</p>
 
     <h2>Open models, no restraint on quality</h2>
     <ul>
