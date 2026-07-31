@@ -2,10 +2,16 @@
   "name": "lolm-nfet-ops",
   "version": "0.1.0",
   "private": true,
-  "description": "Repo-ops for the LOLM/NFET self-driving daily learned-update agent. Not published — the client library lives in clients/js.",
+  "description": "Repo-ops for the LOLM/NFET self-driving daily learned-update agent. Not published — the user-facing CLI is clients/cli (npm package lolm-cli).",
   "type": "module",
   "scripts": {
+    "help": "node -e \"const p=require('./package.json'); console.log(p.name+' — private repo-ops, not the product CLI.\\n'); console.log('Product CLI (what users run):'); console.log('  cd clients/cli && npm install && npx lolm status'); console.log('  # or: npm install -g lolm-cli   then: lolm code \\\"…\\\"'); console.log('\\nRepo-ops scripts (need the project venv + env):'); for (const [k,v] of Object.entries(p.scripts)) { if (k==='help') continue; console.log('  npm run '+k); console.log('    → '+v); }\"",
+    "lolm": "node clients/cli/bin/lolm.mjs",
+    "lolm:status": "node clients/cli/bin/lolm.mjs status",
+    "lolm:code": "node clients/cli/bin/lolm.mjs code",
+    "preqira:learning:pull": "node -e \"console.log('[lolm-ops] gathering learning receipts…')\"",
     "qira:learning:pull": "python3 -c \"from lolm.release.learning import gather_learning; import json; print(json.dumps(gather_learning('.'), indent=2))\"",
+    "preqira:hf:ingest": "node -e \"console.log('[lolm-ops] HF ingest — needs network + HF token; dry output if unset')\"",
     "qira:hf:ingest": "python3 scripts/qira_hf_ingest.py",
     "qira:web:research": "python3 scripts/qira_web_research.py",
     "agent:daily-learned-update": "python3 scripts/agent_daily_update.py",
@@ -18,7 +24,9 @@
     "qira:release:stable": "python3 scripts/agent_daily_update.py --allow-fire --commit --push",
     "qira:deploy": "bash deploy/deploy_box.sh",
     "qira:rollback": "bash deploy/rollback_box.sh",
-    "test:all": "python3 -m pytest tests/ -q"
+    "test:all": "python3 -m pytest tests/ -q",
+    "bench": "python3 bench/run_bench.py",
+    "postinstall": "node -e \"console.log('\\n[lolm] This root package is private ops, not the product CLI.\\n  Product CLI:  cd clients/cli && npm install && npx lolm status\\n  Help:         npm run help\\n')\""
   },
   "engines": {
     "node": ">=18"

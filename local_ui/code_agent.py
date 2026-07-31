@@ -81,7 +81,13 @@ SYSTEM = (
     "so it works whether or not pytest is in the jail.\n"
     "- On failure: read the error, fix ROOT CAUSE, do not rewrite the same broken code.\n"
     "- Never DONE until you have SEEN exit 0 with meaningful printed output.\n"
-    "- The harness may auto-finish when expected output or tests already pass."
+    "- The harness may auto-finish when expected output or tests already pass.\n"
+    "- NEVER put harness lines (FILE:/RUN:/DONE:/READ:/EDIT:) inside a code fence — "
+    "those belong OUTSIDE the fence. Code that contains `RUN: python3 ...` is a "
+    "SyntaxError and a wasted turn.\n"
+    "- Before DONE, exercise EVERY example and EVERY reject case the TASK names "
+    "(including empty string, malformed input, and ValueError cases). A green run "
+    "of two happy-path prints is not enough when the TASK listed more."
 )
 
 _FENCE = re.compile(r"```[a-zA-Z0-9_+\-]*\n(.*?)```", re.S)
@@ -285,6 +291,168 @@ def _parse_json_tools(text: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+# Harness protocol lines models accidentally paste INTO code fences. A leading
+# match at the start of a line is never valid Python/JS source and was the top
+# cause of "SyntaxError: invalid syntax" at `RUN: python3 solution.py` in the
+# 2026-07-30 honest remeasure (multiple tasks burned 22 steps on this alone).
+_PROTOCOL_LINE = re.compile(
+    r"^\s*(?:FILE|RUN|DONE|READ|EDIT|LIST)\s*:\s*.*$",
+    re.I | re.M,
+)
+_PROTOCOL_ONLY_LINE = re.compile(
+    r"^\s*(?:FILE|RUN|DONE|READ|EDIT|LIST)\s*:.*$",
+    re.I,
+)
+
+
+def _sanitize_file_content(content: str) -> str:
+    """Strip harness protocol lines that leaked into a code fence.
+
+    Idempotent. Preserves intentional strings that merely mention the words by
+    only dropping whole lines that are *only* a protocol directive.
+    """
+    if not content:
+        return content or ""
+    kept: List[str] = []
+    stripped_any = False
+    for line in content.splitlines(keepends=True):
+        core = line.rstrip("\n\r")
+        if _PROTOCOL_ONLY_LINE.match(core):
+            stripped_any = True
+            continue
+        kept.append(line)
+    out = "".join(kept)
+    # Drop a trailing blank line left by the strip so rewrites stay tidy.
+    if stripped_any and out.endswith("\n\n"):
+        out = out.rstrip("\n") + "\n"
+    return out
+
+
+def _content_has_protocol_bleed(content: str) -> bool:
+    for line in (content or "").splitlines():
+        if _PROTOCOL_ONLY_LINE.match(line):
+            return True
+    return False
+
+
+def _task_arrow_examples(task: str) -> List[tuple]:
+    """Parse `'input' -> output` examples from the task text.
+
+    Returns list of (input_literal, output_literal) as raw strings suitable for
+    embedding in a Python probe (already quoted where needed for inputs).
+    """
+    if not task:
+        return []
+    out: List[tuple] = []
+    # 'P3DT4H5M6S' -> 273906.0   or  "IV" -> 4  or  'a' -> 'b'
+    for m in re.finditer(
+        r"""['\"]([^'\"]{0,80})['\"]\s*->\s*"""
+        r"""(-?\d+(?:\.\d+)?|True|False|None|['\"][^'\"]{0,80}['\"])""",
+        task,
+    ):
+        inp, exp = m.group(1), m.group(2)
+        out.append((inp, exp))
+    return out[:12]
+
+
+def _task_reject_literals(task: str) -> List[str]:
+    """Quoted strings named as invalid / raise-ValueError cases in the TASK."""
+    if not task:
+        return []
+    # Sentences that talk about rejecting / raising / malformed.
+    chunks: List[str] = []
+    for m in re.finditer(
+        r"(?:[Rr]aise\s+ValueError|[Mm]alformed|[Ii]nvalid|[Oo]utside|"
+        r"[Rr]eject|[Mm]ust\s+raise|[Ss]uch\s+as)([^\n.]{0,200})",
+        task,
+    ):
+        chunks.append(m.group(0) + (m.group(1) or ""))
+    # Also the common "including '', 'P', 'hello'" pattern after raise language.
+    lits: List[str] = []
+    for chunk in chunks:
+        for m in re.finditer(r"""['\"]([^'\"]{0,60})['\"]""", chunk):
+            lits.append(m.group(1))
+    # De-dupe, preserve order; empty string is a real case.
+    seen = set()
+    out: List[str] = []
+    for lit in lits:
+        if lit in seen:
+            continue
+        # Skip things that look like type names or file paths.
+        if lit.endswith((".py", ".js", ".ts")) or lit in (
+            "str", "int", "float", "list", "dict", "True", "False", "None",
+        ):
+            continue
+        seen.add(lit)
+        out.append(lit)
+    return out[:16]
+
+
+def _build_contract_probe(task: str, module: str, symbols: List[str]) -> Optional[str]:
+    """Build a tiny stdlib probe that exercises TASK examples + reject cases.
+
+    Returns a `python3 -c ...` command, or None when the task has nothing
+    extractable. This is the overclaim killer: models green-path two prints and
+    claim DONE while the hidden test still has empty-string / prerelease /
+    multiline cases. Running the TASK's own examples before DONE closes that
+    gap without leaking the hidden test.
+    """
+    arrows = _task_arrow_examples(task)
+    rejects = _task_reject_literals(task)
+    callables = [s for s in (symbols or []) if s and s[0].islower()]
+    if not arrows and not rejects:
+        return None
+    if not module.endswith(".py"):
+        return None
+    if not callables:
+        return None
+    mod = re.sub(r"\.py$", "", module).replace("/", ".")
+    lines = [
+        "import importlib",
+        f"m = importlib.import_module({mod!r})",
+        f"_fns = []",
+    ]
+    for name in callables:
+        lines.append(f"_f = getattr(m, {name!r}, None)")
+        lines.append(f"assert _f is not None, 'missing {name}'")
+        lines.append(f"_fns.append(({name!r}, _f))")
+    # Arrow examples: try each callable until one accepts the input without
+    # TypeError, then assert the expected value. Covers parse_duration, get, …
+    for inp, exp in arrows:
+        if re.match(r"^-?\d+\.\d+$", exp):
+            cmp = f"abs(float(_r) - float({exp})) < 1e-6"
+        elif re.match(r"^-?\d+$", exp) or exp in ("True", "False", "None"):
+            cmp = f"_r == {exp}"
+        else:
+            cmp = f"_r == {exp}"
+        lines.append("_hit = False")
+        lines.append("for _n, _f in _fns:")
+        lines.append("    try:")
+        lines.append(f"        _r = _f({inp!r})")
+        lines.append("    except TypeError:")
+        lines.append("        continue")
+        lines.append(f"    assert {cmp}, (_n, _r, {exp!r})")
+        lines.append("    _hit = True")
+        lines.append("    break")
+        lines.append(f"assert _hit, 'no callable accepted example input ' + {inp!r}")
+    # Rejects: pass if ANY callable raises ValueError for the literal. Wrong
+    # arity/type on a sibling function (to_roman('IIII')) is ignored so a
+    # multi-name module (to_roman + from_roman) still probes the right one.
+    for lit in rejects:
+        lines.append("_raised = False")
+        lines.append("for _n, _f in _fns:")
+        lines.append("    try:")
+        lines.append(f"        _f({lit!r})")
+        lines.append("    except ValueError:")
+        lines.append("        _raised = True")
+        lines.append("        break")
+        lines.append("    except Exception:")
+        lines.append("        continue")
+        lines.append(f"assert _raised, 'should have raised ValueError for ' + {lit!r}")
+    lines.append("print('CONTRACT_OK')")
+    return "python3 -c " + repr("\n".join(lines))
+
+
 def _parse_turn(text: str) -> Optional[Dict[str, Any]]:
     """Unified parser → files list + run + done + reads/edits.
 
@@ -307,9 +475,14 @@ def _parse_turn(text: str) -> Optional[Dict[str, Any]]:
             dm = _DONE.search(text)
             if dm and not jt.get("files") and not jt.get("run"):
                 jt["done"] = dm.group(1).strip()
+        # Sanitize protocol bleed out of every written body.
+        if jt.get("files"):
+            jt["files"] = [(p, _sanitize_file_content(c)) for p, c in jt["files"]]
+            jt["file"] = jt["files"][0] if jt["files"] else None
         return jt
 
-    files = [(m.group(1), m.group(2)) for m in _FILE_BLOCK.finditer(text)]
+    files = [(m.group(1), _sanitize_file_content(m.group(2)))
+             for m in _FILE_BLOCK.finditer(text)]
     runm = _RUN.search(text)
     cmd = runm.group(1).strip().strip("`").strip() if runm else None
     reads = [m.group(1) for m in _READ.finditer(text)]
@@ -318,7 +491,7 @@ def _parse_turn(text: str) -> Optional[Dict[str, Any]]:
 
     if not files:
         fence = _FENCE.search(text)
-        content = fence.group(1) if fence else None
+        content = _sanitize_file_content(fence.group(1)) if fence else None
         if content is not None or cmd is not None:
             name = None
             fm = _FILE.search(text)
@@ -573,9 +746,18 @@ def _task_oracle_satisfied(task: str, actions: List[Dict[str, Any]],
                     return "auto-verified: tests passed"
                 return None
         return None
-    # Simple print-style tasks with a clean non-empty run and no open failures
+    # Simple print-style tasks with a clean non-empty run and no open failures.
+    # Intentionally narrow: "hello" alone used to match reject cases like
+    # "Raise ValueError for '', 'P', 'hello'" and auto-finish a half-built
+    # parse_duration — that was an overclaim factory.
     tlow = (task or "").lower()
-    if any(k in tlow for k in ("print", "hello", "fib", "prime", "factorial", "fizz")):
+    simple = any(k in tlow for k in (
+        "print hello", "hello world", "fizzbuzz", "fibonacci", "factorial",
+        "prime numbers", "print the", "prints the",
+    )) or (tlow.strip().startswith("print ") or " print " in f" {tlow} ")
+    # Never auto-finish on clean-run alone when the TASK named explicit examples
+    # or reject cases — those need the contract probe (or a real test suite).
+    if simple and not _task_arrow_examples(task) and not _task_reject_literals(task):
         if last_out and last_out.strip():
             # A program can exit 0 while printing that its own checks failed.
             if _output_reports_failure(last_out):
@@ -670,6 +852,13 @@ class CodeAgent:
         for, does it print what the task said it would.
         """
         res = {"score": -1.0, "why": "unparseable", "raw": raw}
+        # Detect protocol bleed on RAW fence bodies before sanitize. Parse strips
+        # RUN:/DONE: lines, so a post-parse check would always pass and we'd
+        # score a candidate that only "works" because we silently rewrote it.
+        for m in _FILE_BLOCK.finditer(raw or ""):
+            if _content_has_protocol_bleed(m.group(2) or ""):
+                res.update(score=0.0, why="protocol bleed in file body")
+                return res
         turn = _parse_turn(raw or "")
         if not turn:
             return res
@@ -736,6 +925,21 @@ class CodeAgent:
                     score += 1.0; why.append("expected output")
                 else:
                     why.append("output mismatch")
+            # Prefer candidates whose own stdout does not report a failure.
+            if out and _output_reports_failure(out):
+                score -= 2.0
+                why.append("self-reported failure")
+            # Bonus when the TASK's own examples/rejects already pass in scratch.
+            if py_targets and not missing_files:
+                cprobe = _build_contract_probe(task, py_targets[0], want or [])
+                if cprobe:
+                    pr = scratch.run(cprobe, timeout=min(12, self.run_timeout),
+                                     isolated=self.isolated)
+                    if pr.get("exit_code") == 0 and "CONTRACT_OK" in (pr.get("stdout") or ""):
+                        score += 2.0
+                        why.append("contract ok")
+                    else:
+                        why.append("contract miss")
             res.update(score=score, why=", ".join(why))
             return res
         except Exception as exc:
@@ -1299,6 +1503,49 @@ class CodeAgent:
                         yield {"event": "agent_note", "data": {
                             "text": "blocked DONE — tests still failing"}}
                         continue
+                # Gate DONE on the TASK's own examples + reject cases. The hidden
+                # test is independent, but the TASK text already names enough of the
+                # contract that we can catch the common overclaim: green happy-path
+                # prints, then DONE, while '', malformed, or listed examples fail.
+                if nudges < 9:
+                    targets = [t for t in _task_target_files(task) if t.endswith(".py")]
+                    if not targets:
+                        targets = [p for p in self._files_written if p.endswith(".py")]
+                    if targets:
+                        cprobe = _build_contract_probe(
+                            task, targets[0], _task_required_symbols(task))
+                        if cprobe:
+                            yield {"event": "agent_note", "data": {
+                                "text": "pre-DONE contract probe (TASK examples + reject cases)"}}
+                            yield {"event": "command_started", "data": {
+                                "command": cprobe, "verify": True}}
+                            cr = self.sb.run(cprobe, timeout=min(15, self.run_timeout),
+                                             isolated=self.isolated)
+                            self.actions.append({"kind": "run", "command": cprobe,
+                                                 "result": cr, "verify": True,
+                                                 "contract": True})
+                            yield {"event": "command_finished", "data": {
+                                "command": cprobe, "exit_code": cr.get("exit_code"),
+                                "stdout": cr.get("stdout", ""),
+                                "stderr": cr.get("stderr", ""),
+                                "blocked": cr.get("blocked", False), "isolated": True,
+                                "verify": True}}
+                            if (cr.get("exit_code") != 0 or cr.get("blocked")
+                                    or "CONTRACT_OK" not in (cr.get("stdout") or "")):
+                                nudges += 1
+                                err = ((cr.get("stderr") or "") + "\n"
+                                       + (cr.get("stdout") or "")).strip()
+                                self._format_nudge = (
+                                    "\n\nCONTRACT PROBE FAILED — the TASK's own examples "
+                                    "or reject cases do not hold yet:\n"
+                                    f"{err[:500]}\n"
+                                    "Fix the implementation so EVERY example and EVERY "
+                                    "ValueError/malformed case named in the TASK works, "
+                                    "then RUN again. Do NOT say DONE yet."
+                                )
+                                yield {"event": "agent_note", "data": {
+                                    "text": "blocked DONE — TASK contract probe failed"}}
+                                continue
                 yield from self._finish(
                     task, summary=turn["done"], steps=step,
                     ran=ran_any, produced_output=produced_output)
@@ -1400,6 +1647,14 @@ class CodeAgent:
             for path, content in file_list:
                 if content is None:
                     continue
+                # Defense in depth: parse-time sanitize should already have run,
+                # but re-apply so EDIT-free rewrites never reintroduce bleed.
+                cleaned = _sanitize_file_content(content)
+                if cleaned != content:
+                    yield {"event": "agent_note", "data": {
+                        "text": f"stripped harness protocol lines out of `{path}` "
+                                f"before write (FILE/RUN/DONE must stay outside the fence)"}}
+                    content = cleaned
                 written_path = path
                 try:
                     fc = self.sb.write_file(path, content, reason="")
@@ -1424,6 +1679,25 @@ class CodeAgent:
                             "blocked": vr.get("blocked", False), "isolated": True,
                             "verify": True}}
                         if vr.get("exit_code") != 0 or vr.get("blocked"):
+                            # Auto-repair: if the on-disk file still has protocol bleed
+                            # (e.g. prior edit reintroduced it), strip and recompile once.
+                            try:
+                                cur = self.sb.read_file(path)
+                            except Exception:
+                                cur = ""
+                            if cur and _content_has_protocol_bleed(cur):
+                                fixed = _sanitize_file_content(cur)
+                                self.sb.write_file(path, fixed, reason="auto-strip protocol")
+                                vr2 = self.sb.run(vcmd, timeout=min(10, self.run_timeout),
+                                                  isolated=self.isolated)
+                                self.actions.append({"kind": "run", "command": vcmd,
+                                                     "result": vr2, "verify": True})
+                                if vr2.get("exit_code") == 0 and not vr2.get("blocked"):
+                                    yield {"event": "agent_note", "data": {
+                                        "text": f"auto-stripped protocol bleed from `{path}` "
+                                                f"— now compiles"}}
+                                    content = fixed
+                                    continue
                             syntax_blocked = True
                             err = ((vr.get("stderr") or "") + (vr.get("stdout") or "")).strip()
                             self._format_nudge = (
@@ -1772,12 +2046,59 @@ class CodeAgent:
                             auto = _task_oracle_satisfied(
                                 task, self.actions, self._files_written)
                             if auto:
-                                yield {"event": "agent_note", "data": {
-                                    "text": f"oracle green — finishing ({auto})"}}
-                                yield from self._finish(
-                                    task, summary=auto, steps=step,
-                                    ran=ran_any, produced_output=produced_output)
-                                return
+                                # When the TASK names examples/rejects, require the
+                                # contract probe before auto-finish too — otherwise
+                                # a green happy-path print short-circuits the gate
+                                # that exists to stop overclaim.
+                                targets = [t for t in _task_target_files(task)
+                                           if t.endswith(".py")] or [
+                                    p for p in self._files_written if p.endswith(".py")]
+                                cprobe = (_build_contract_probe(
+                                    task, targets[0], _task_required_symbols(task))
+                                    if targets else None)
+                                if cprobe:
+                                    yield {"event": "command_started", "data": {
+                                        "command": cprobe, "verify": True}}
+                                    cr = self.sb.run(
+                                        cprobe, timeout=min(15, self.run_timeout),
+                                        isolated=self.isolated)
+                                    self.actions.append({
+                                        "kind": "run", "command": cprobe,
+                                        "result": cr, "verify": True, "contract": True})
+                                    yield {"event": "command_finished", "data": {
+                                        "command": cprobe,
+                                        "exit_code": cr.get("exit_code"),
+                                        "stdout": cr.get("stdout", ""),
+                                        "stderr": cr.get("stderr", ""),
+                                        "blocked": cr.get("blocked", False),
+                                        "isolated": True, "verify": True}}
+                                    if (cr.get("exit_code") != 0 or cr.get("blocked")
+                                            or "CONTRACT_OK" not in (cr.get("stdout") or "")):
+                                        err = ((cr.get("stderr") or "") + "\n"
+                                               + (cr.get("stdout") or "")).strip()
+                                        self._format_nudge = (
+                                            "\n\nCONTRACT PROBE FAILED — the TASK's own "
+                                            "examples or reject cases do not hold yet:\n"
+                                            f"{err[:500]}\n"
+                                            "Fix them, then RUN again. Do NOT say DONE yet."
+                                        )
+                                        yield {"event": "agent_note", "data": {
+                                            "text": "blocked DONE — TASK contract probe failed"}}
+                                        # fall through to next model turn
+                                    else:
+                                        yield {"event": "agent_note", "data": {
+                                            "text": f"oracle green — finishing ({auto}; contract ok)"}}
+                                        yield from self._finish(
+                                            task, summary=auto, steps=step,
+                                            ran=ran_any, produced_output=produced_output)
+                                        return
+                                else:
+                                    yield {"event": "agent_note", "data": {
+                                        "text": f"oracle green — finishing ({auto})"}}
+                                    yield from self._finish(
+                                        task, summary=auto, steps=step,
+                                        ran=ran_any, produced_output=produced_output)
+                                    return
             if not did:
                 yield {"event": "agent_note", "data": {"step": step,
                        "text": "no FILE or RUN in the reply", "raw": (raw or "")[:200]}}

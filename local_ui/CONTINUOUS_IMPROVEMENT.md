@@ -1,5 +1,27 @@
 # Continuous improvement log
 
+## 2026-07-30 night — resume after Claude usage limit (Grok)
+
+### Diagnosis (honest remeasure of ensemble)
+- Ensemble arm had hit **76.7%** pass / **10%** overclaim (n=60).
+- Honesty-guard remeasure finished at **65%** pass / **18.3%** overclaim.
+- Dominant failure modes:
+  1. **Protocol bleed** — models paste `RUN: python3 …` *inside* the FILE fence → `SyntaxError`, 22-step thrash (roman, expr_eval, semver, jsonpath).
+  2. **Overclaim on incomplete self-tests** — green happy-path prints, then DONE, while TASK reject cases (`''`, malformed, multiline CSV) still fail.
+  3. Auto-finish oracle treated the word **"hello"** (as a reject example) as a "hello world" task and finished early.
+
+### Shipped fixes
+- Strip FILE/RUN/DONE/READ/EDIT lines out of code fences at parse + write; auto-strip on py_compile fail.
+- Ensemble scorer zeros candidates with protocol bleed in the *raw* fence (before sanitize).
+- **Contract probe** before DONE (and before auto-finish): runs the TASK's own `'x' -> y` examples and raise-ValueError literals against the delivered module.
+- Tightened clean-run auto-finish keywords so reject-case words cannot short-circuit.
+- Root `package.json`: `npm run help` / `lolm` / `lolm:status` so private ops scripts stop looking like a dead CLI.
+
+### Still open (next loop)
+1. Re-bench n=60 on prod after deploy — target ≥ ensemble 76.7% with overclaim ≤ 10%.
+2. Hard tasks still soft: `fix_csv_parser` (multiline + doubled quotes), `jsonpath` negatives, `expr_eval`.
+3. Embedding-backed memory; visual builder verify+retry.
+
 ## Live now (https://lolm.imagineqira.com)
 - Dialog intelligence: idk/yes/no follow-ups (no dictionary nonsense)
 - Web search gated off for short/social/dialog turns

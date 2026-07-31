@@ -415,3 +415,104 @@ def test_clean_run_oracle_does_not_auto_finish_over_a_printed_failure():
     ok = [{"kind": "run", "command": "python3 solution.py",
            "result": {"exit_code": 0, "stdout": "hello-world-123\n", "blocked": False}}]
     assert _task_oracle_satisfied("print the slug", ok, ["solution.py"]) is not None
+
+
+# ── protocol bleed + contract probe (2026-07-30 honest remeasure) ─────────────
+
+def test_sanitize_strips_run_lines_from_file_bodies():
+    from local_ui.code_agent import _sanitize_file_content, _parse_turn
+    raw = "def f():\n    return 1\nRUN: python3 solution.py\nprint(f())\n"
+    clean = _sanitize_file_content(raw)
+    assert "RUN:" not in clean
+    assert "def f()" in clean
+    # Parser must sanitize FILE blocks so bleed never reaches the sandbox.
+    t = _parse_turn(
+        "FILE: solution.py\n```\ndef go():\n    return 1\nRUN: python3 solution.py\n"
+        "print(go())\n```\nRUN: python3 solution.py"
+    )
+    assert t is not None
+    body = t["files"][0][1]
+    assert "RUN:" not in body
+    assert "def go" in body
+    assert t["run"] == "python3 solution.py"
+
+
+def test_protocol_bleed_candidate_scores_zero(tmp_path):
+    from local_ui.code_agent import CodeAgent
+    sb = Sandbox(tmp_path)
+    agent = CodeAgent(sb, lambda m: "DONE: x", isolated=None)
+    bled = ("FILE: solution.py\n```\ndef go():\n    return 1\n"
+            "RUN: python3 solution.py\nprint(go())\n```\nRUN: python3 solution.py")
+    s = agent._score_candidate(bled, "Create solution.py defining go()")
+    assert s["score"] == 0.0
+    assert "protocol bleed" in s["why"]
+
+
+def test_task_arrow_and_reject_extraction():
+    from local_ui.code_agent import (
+        _task_arrow_examples, _task_reject_literals, _build_contract_probe,
+    )
+    task = (
+        "Create solution.py defining parse_duration(s) -> float. "
+        "Examples: 'P3DT4H5M6S' -> 273906.0, 'PT0.5S' -> 0.5, '-PT5M' -> -300.0. "
+        "Raise ValueError for input that is not a valid duration, including '', 'P', "
+        "'hello', and '3D' (no leading P)."
+    )
+    arrows = _task_arrow_examples(task)
+    assert ("P3DT4H5M6S", "273906.0") in arrows
+    assert ("PT0.5S", "0.5") in arrows
+    rejects = _task_reject_literals(task)
+    assert "" in rejects and "P" in rejects and "hello" in rejects and "3D" in rejects
+    probe = _build_contract_probe(task, "solution.py", ["parse_duration"])
+    assert probe and "CONTRACT_OK" in probe and "parse_duration" in probe
+
+
+def test_done_blocked_when_contract_probe_fails(tmp_path):
+    # Happy-path only: green run, but TASK reject cases never exercised.
+    sb = Sandbox(tmp_path)
+    # Implements only the happy path — empty string returns 0 instead of raising.
+    body = (
+        "def parse_duration(s):\n"
+        "    if s == 'PT1H':\n"
+        "        return 3600.0\n"
+        "    return 0.0\n"
+        "print(parse_duration('PT1H'))\n"
+    )
+    fixed = (
+        "def parse_duration(s):\n"
+        "    if not s or not s.lstrip('-').startswith('P'):\n"
+        "        raise ValueError('bad')\n"
+        "    if s in ('P', '-P'):\n"
+        "        raise ValueError('bad')\n"
+        "    if s == 'PT1H':\n"
+        "        return 3600.0\n"
+        "    if s == 'P3DT4H5M6S':\n"
+        "        return 273906.0\n"
+        "    if s == 'PT0.5S':\n"
+        "        return 0.5\n"
+        "    if s == '-PT5M':\n"
+        "        return -300.0\n"
+        "    if s == 'P1Y':\n"
+        "        return 31536000.0\n"
+        "    raise ValueError('bad')\n"
+        "print(parse_duration('PT1H'))\n"
+    )
+    task = (
+        "Create solution.py defining parse_duration(s) -> float that converts an "
+        "ISO-8601 duration. Examples: 'P3DT4H5M6S' -> 273906.0, 'PT0.5S' -> 0.5, "
+        "'P1Y' -> 31536000.0, '-PT5M' -> -300.0, 'PT1H' -> 3600.0. "
+        "Raise ValueError for '', 'P', 'hello', and '3D'."
+    )
+    seq = iter([
+        f"FILE: solution.py\n```\n{body}```\nRUN: python3 solution.py",
+        "DONE: shipped",
+        f"FILE: solution.py\n```\n{fixed}```\nRUN: python3 solution.py",
+        "DONE: really done",
+    ])
+    agent = CodeAgent(sb, lambda m: next(seq), isolated=None)
+    events = list(agent.run(task))
+    notes = [e["data"].get("text", "") for e in events if e["event"] == "agent_note"]
+    assert any("contract probe failed" in n for n in notes), notes
+    # Final tree must implement rejects.
+    final = sb.read_file("solution.py")
+    assert "raise ValueError" in final
