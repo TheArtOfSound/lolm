@@ -236,6 +236,9 @@ function providerChain(env) {
     url: GROQ, model: "qwen/qwen3-32b" });
   if (env.GROQ_API_KEY) chain.push({
     name: "groq", kind: "openai", key: env.GROQ_API_KEY,
+    url: GROQ, model: "moonshotai/kimi-k2-instruct" });
+  if (env.GROQ_API_KEY) chain.push({
+    name: "groq", kind: "openai", key: env.GROQ_API_KEY,
     url: GROQ, model: "meta-llama/llama-4-scout-17b-16e-instruct" });
   if (env.GROQ_API_KEY) chain.push({
     name: "groq", kind: "openai", key: env.GROQ_API_KEY,
