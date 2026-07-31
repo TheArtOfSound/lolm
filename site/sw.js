@@ -12,7 +12,7 @@
  * but their failure degrades gracefully in the page, not here.
  */
 
-const CACHE = "lolm-nfet-v5";   // bump on any shell/asset change so returning
+const CACHE = "lolm-nfet-v6";   // bump on any shell/asset change so returning
                                 // visitors get the update (activate clears old)
                                 // v5: homepage demo video (media/ is served
                                 // network-first and never precached).

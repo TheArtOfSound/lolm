@@ -719,8 +719,13 @@ def register_code_routes(app: Any, root: str,
             return JSONResponse({"error": "empty task"}, status_code=400)
         max_tries = 4
 
-        # Three independent frontier brains for the ensemble race (two keys).
-        ROUND1 = ["zai-glm-4.7", "openai/gpt-oss-120b", "meta-llama/llama-4-scout-17b-16e-instruct"]
+        # Strongest open brains available on the cascade keys — race them all.
+        ROUND1 = [
+            "zai-glm-4.7",
+            "openai/gpt-oss-120b",
+            "meta-llama/llama-4-maverick-17b-128e-instruct",
+            "qwen/qwen3-32b",
+        ]
 
         def gen():
             best_html: Optional[str] = None

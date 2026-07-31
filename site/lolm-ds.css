@@ -345,6 +345,219 @@ button[disabled] {
   border-color: var(--line-2);
   background: var(--panel2);
 }
+/* ── 9. premium product shell ────────────────────────────────────────────────
+   Shared chrome so marketing pages stop inventing their own nav / spacing and
+   the workspace reads as one product, not a research lab with extra panels. */
+
+.lolm-shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 22px;
+}
+.lolm-nav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 56px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+.lolm-nav .mark {
+  font-weight: 720;
+  letter-spacing: -.02em;
+  font-size: 15px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.lolm-nav .mark b,
+.lolm-nav .mark em {
+  font-style: normal;
+  font-weight: 720;
+  background: var(--lolm-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.lolm-nav .links {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.lolm-nav .links a {
+  color: var(--dim);
+  text-decoration: none;
+  font-size: 13.5px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  transition: color var(--fast), background var(--fast);
+}
+.lolm-nav .links a:hover { color: var(--ink); background: var(--panel2); }
+.lolm-nav .links a.primary {
+  background: var(--lolm-grad);
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+  font-weight: 600;
+  padding: 8px 14px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.14) inset, var(--shadow-sm);
+}
+.lolm-nav .links a.primary:hover { filter: brightness(1.06); color: #fff; }
+
+.lolm-hero {
+  padding: clamp(48px, 8vw, 88px) 0 clamp(28px, 4vw, 40px);
+  text-align: center;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.lolm-hero .kicker {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 18px;
+}
+.lolm-hero h1 {
+  font-size: clamp(34px, 5.6vw, 52px);
+  line-height: 1.08;
+  letter-spacing: -.03em;
+  color: var(--t-hi);
+  margin: 0 0 18px;
+  font-weight: 680;
+}
+.lolm-hero h1 em {
+  font-style: normal;
+  background: var(--lolm-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.lolm-hero p {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--dim);
+  margin: 0 auto;
+  max-width: 34em;
+}
+.lolm-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 28px;
+}
+.lolm-cta-row a, .lolm-cta-row button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-size: 14.5px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.lolm-cta-row .primary {
+  background: var(--lolm-grad);
+  color: #fff;
+  box-shadow: 0 1px 0 rgba(255,255,255,.14) inset, var(--shadow-sm);
+}
+.lolm-cta-row .ghost {
+  background: var(--surface-raised);
+  color: var(--ink);
+  border-color: var(--line);
+  box-shadow: var(--ring);
+}
+.lolm-cta-row .ghost:hover { border-color: var(--line-2); background: var(--panel2); }
+
+.lolm-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 8px auto 36px;
+  max-width: 860px;
+}
+@media (max-width: 700px) {
+  .lolm-strip { grid-template-columns: 1fr; }
+  .lolm-nav .links a:not(.primary):not(.keep) { display: none; }
+}
+.lolm-strip .cell {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+  box-shadow: var(--ring);
+}
+.lolm-strip .cell b {
+  display: block;
+  font-size: 13.5px;
+  color: var(--ink);
+  margin-bottom: 4px;
+  font-weight: 650;
+}
+.lolm-strip .cell span {
+  font-size: 12.5px;
+  color: var(--dim);
+  line-height: 1.45;
+}
+
+/* Workspace empty state — quiet, editorial, not a feature dump */
+.empty {
+  max-width: 520px !important;
+}
+.empty h2 {
+  font-size: clamp(26px, 3.5vw, 32px) !important;
+  letter-spacing: -.025em !important;
+  font-weight: 680 !important;
+}
+.empty p {
+  color: var(--dim) !important;
+  font-size: 15px !important;
+  line-height: 1.55 !important;
+}
+.empty .starters {
+  margin-top: 28px !important;
+}
+.empty .starters button {
+  border-radius: 12px !important;
+  padding: 11px 15px !important;
+  font-size: 13px !important;
+}
+
+/* Sidebar: one product, not a research index */
+.side .nav-more {
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.side .nav-more summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 11px;
+  font-family: var(--mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 6px 10px;
+  border-radius: 7px;
+  user-select: none;
+}
+.side .nav-more summary::-webkit-details-marker { display: none; }
+.side .nav-more summary:hover { color: var(--dim); background: var(--panel2); }
+.side .nav-more[open] summary { color: var(--dim); margin-bottom: 4px; }
+
+/* Quiet the mode row until forced open — Auto is the product */
+.modes .auto-pill {
+  font-size: 11.5px !important;
+  color: var(--faint) !important;
+  letter-spacing: .02em;
+}
+.modes .modes-toggle {
+  opacity: .7;
+}
+
 .mode.on {
   background: var(--lolm-grad-soft);
   border-color: color-mix(in srgb, var(--accent2) 46%, transparent);

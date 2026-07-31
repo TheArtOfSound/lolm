@@ -210,12 +210,11 @@ async function brainStats(env) {
 // account (no key); the rest are OpenAI-compatible and activate only when their
 // key secret exists. Adding any free key (Groq is fastest) keeps 70B alive even
 // when Cloudflare's neuron quota is exhausted.
-// BIGGEST BRAIN FIRST, interleaved ACROSS providers (a smaller model on one key
-// must not shadow a bigger one on another). Ordered by what the keys actually
-// serve today (verified via /ai/models): GLM-4.7 on Cerebras (~355B-class MoE)
-// > GPT-OSS-120B (Groq, with a Cerebras twin as an independent-key backup)
-// > Llama-4-Scout (109B MoE) > the proven Llama-3.3-70B tier. Any failure
-// falls through to the next entry, so the floor is never worse than before.
+// BIGGEST BRAIN FIRST, interleaved ACROSS providers. Strongest open models we
+// can reach on the available keys — no restraint on quality:
+//   GLM-4.7 (Cerebras MoE) > gpt-oss-120b (Groq + Cerebras twin)
+//   > Llama-4 Maverick > Qwen3-32B > Llama-3.3-70B floor > Workers AI.
+// Any failure falls through, so the floor is never worse than before.
 function providerChain(env) {
   const GROQ = "https://api.groq.com/openai/v1/chat/completions";
   const CEREBRAS = "https://api.cerebras.ai/v1/chat/completions";
@@ -229,6 +228,12 @@ function providerChain(env) {
   if (env.CEREBRAS_API_KEY) chain.push({
     name: "cerebras", kind: "openai", key: env.CEREBRAS_API_KEY,
     url: CEREBRAS, model: "gpt-oss-120b" });
+  if (env.GROQ_API_KEY) chain.push({
+    name: "groq", kind: "openai", key: env.GROQ_API_KEY,
+    url: GROQ, model: "meta-llama/llama-4-maverick-17b-128e-instruct" });
+  if (env.GROQ_API_KEY) chain.push({
+    name: "groq", kind: "openai", key: env.GROQ_API_KEY,
+    url: GROQ, model: "qwen/qwen3-32b" });
   if (env.GROQ_API_KEY) chain.push({
     name: "groq", kind: "openai", key: env.GROQ_API_KEY,
     url: GROQ, model: "meta-llama/llama-4-scout-17b-16e-instruct" });

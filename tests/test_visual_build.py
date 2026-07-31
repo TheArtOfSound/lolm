@@ -102,16 +102,20 @@ def test_build_loop_retries_until_a_real_browser_confirms_it_works(monkeypatch):
 
 
 def test_ensemble_races_brains_and_ships_the_browser_verified_winner(monkeypatch):
-    """A HARD build fans out to 3 brains in parallel; the browser verifies each and
-    the one that RUNS wins — even though two of the three produced broken games."""
+    """A HARD build fans out to the ROUND1 brains in parallel; the browser verifies
+    each and the one that RUNS wins — even though the others produced broken games."""
     texts = {
         "zai-glm-4.7": DOC.format(tag="glm-broken"),
         "openai/gpt-oss-120b": DOC.format(tag="gptoss-works"),
+        "meta-llama/llama-4-maverick-17b-128e-instruct": DOC.format(tag="mav-broken"),
+        "qwen/qwen3-32b": DOC.format(tag="qwen-broken"),
+        # legacy id still accepted if a caller passes it
         "meta-llama/llama-4-scout-17b-16e-instruct": DOC.format(tag="scout-broken"),
     }
 
     def fake_gen_many(msgs, models, max_tokens=3600):
-        return [{"model": m, "provider": "grp", "text": texts[m]} for m in models]
+        return [{"model": m, "provider": "grp",
+                 "text": texts.get(m, DOC.format(tag="unknown-broken"))} for m in models]
 
     def fake_verify(html, wait_ms=1400, timeout=55):
         ok = "works" in html
@@ -128,7 +132,7 @@ def test_ensemble_races_brains_and_ships_the_browser_verified_winner(monkeypatch
     evs = list(_sse_events(r.text))
     cands = [d for n, d in evs if n == "candidate"]
     done = [d for n, d in evs if n == "done"][-1]
-    assert len(cands) == 3                          # all three brains raced in parallel
+    assert len(cands) >= 3                          # multi-brain race (currently 4)
     assert sum(1 for c in cands if c["working"]) == 1
     assert done["verified"] is True and done["mode"] == "ensemble"
     assert done["winner"] == "openai/gpt-oss-120b"  # the only one the browser confirmed

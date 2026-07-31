@@ -19,11 +19,14 @@ from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from local_ui.sandbox import Sandbox
 
-# Brains raced on the opening turn, matching the set the visual builder already uses.
+# Brains raced on the opening turn — strongest open models we can fan out to
+# without restraint. Maverick replaces Scout; Qwen3-32B is a fast fourth when
+# the gateway allows four candidates (generate_many caps at 4).
 ENSEMBLE_MODELS = [
     "zai-glm-4.7",
     "openai/gpt-oss-120b",
-    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
+    "qwen/qwen3-32b",
 ]
 SYSTEM = (
     "You are LOLM Code — an agentic coding system competing with Claude Code and Codex.\n"

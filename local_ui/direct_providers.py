@@ -31,7 +31,7 @@ from local_ui.claude_reasoner import _split_messages, telemetry_traces_from_text
 PROVIDERS: List[Dict[str, str]] = [
     {"name": "groq", "key_env": "GROQ_API_KEY", "model_env": "GROQ_MODEL",
      "url": "https://api.groq.com/openai/v1/chat/completions",
-     "model": "llama-3.3-70b-versatile"},
+     "model": "openai/gpt-oss-120b"},
     {"name": "cerebras", "key_env": "CEREBRAS_API_KEY", "model_env": "CEREBRAS_MODEL",
      "url": "https://api.cerebras.ai/v1/chat/completions",
      "model": "zai-glm-4.7"},
@@ -52,8 +52,13 @@ _CASCADE_TO_PROVIDER = {
     "zai-glm-4.7": ("cerebras", "zai-glm-4.7"),
     "gpt-oss-120b": ("cerebras", "gpt-oss-120b"),
     "openai/gpt-oss-120b": ("groq", "openai/gpt-oss-120b"),
-    "meta-llama/llama-4-scout-17b-16e-instruct": ("groq", "meta-llama/llama-4-scout-17b-16e-instruct"),
+    "meta-llama/llama-4-maverick-17b-128e-instruct": (
+        "groq", "meta-llama/llama-4-maverick-17b-128e-instruct"),
+    "meta-llama/llama-4-scout-17b-16e-instruct": (
+        "groq", "meta-llama/llama-4-scout-17b-16e-instruct"),
+    "qwen/qwen3-32b": ("groq", "qwen/qwen3-32b"),
     "llama-3.3-70b-versatile": ("groq", "llama-3.3-70b-versatile"),
+    "moonshotai/kimi-k2-instruct": ("groq", "moonshotai/kimi-k2-instruct"),
 }
 
 

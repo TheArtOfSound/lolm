@@ -140,27 +140,29 @@
 </head>
 <body>
 
-<header><div class="wrap"><nav>
-  <span class="brand">LO<b>LM</b> agent</span>
-  <a href="/why-switch.html" style="margin-left:auto;font-size:13px;color:var(--dim)">why switch</a>
-  <a href="/receipts.html" style="font-size:13px;color:var(--dim)">receipts</a>
-  <a href="/pricing.html" style="font-size:13px;color:var(--dim)">pricing</a>
-  <a class="right" href="/" style="margin-left:12px">workspace →</a>
+<header><div class="wrap"><nav class="lolm-nav" style="height:54px">
+  <a class="mark" href="/">LO<em>LM</em></a>
+  <div class="links">
+    <a class="keep" href="/pricing.html">Pricing</a>
+    <a class="keep primary" href="/">Open workspace</a>
+  </div>
 </nav></div></header>
 
 <div class="wrap">
 
-<div class="hero">
-  <h1>An AI that <em>knows when it's unsure</em> — and does something about it.</h1>
-  <p>Most chatbots just keep talking. This one measures its own uncertainty while it writes.
-  When the signal spikes it can stop to check its notes or re-read its draft; when it's confident
-  it just wraps up — and on easy questions it stays out of the way. You watch every decision happen,
-  and the receipt is honest about the checks it didn't need.</p>
-  <div class="honest">A <b>70-billion-parameter model (Llama 3.3)</b> writes the answers — so they're
-  genuinely useful — while LOLM's local graft reads its uncertainty per token and decides, at each
-  segment, when to check notes, verify, or stop. The big model is the voice; the <b>measured
-  self-control, and an honest receipt of what it did, is the point</b>. It doesn't prove the answer
-  is "better" — it proves the controller acted on uncertainty this run, with the raw trace visible.</div>
+<div class="lolm-hero" style="padding-top:40px;padding-bottom:12px">
+  <div class="kicker">Coding agent · with receipts</div>
+  <h1>Ship real work.<br><em>Prove what happened.</em></h1>
+  <p>Write and run code in a network-isolated jail. Race several open models and keep the one that actually works. Every turn ends with a sealed receipt — not a vibe check.</p>
+  <div class="lolm-cta-row">
+    <a class="primary" href="/">Open workspace</a>
+    <a class="ghost" href="#live">Try live below</a>
+  </div>
+</div>
+<div class="lolm-strip">
+  <div class="cell"><b>Multi-model race</b><span>GLM-class + gpt-oss-120b + Llama 4 Maverick — keep the candidate that runs green.</span></div>
+  <div class="cell"><b>Real sandbox</b><span>Write → run → fix in a jail. No fake “done” when the code fails.</span></div>
+  <div class="cell"><b>Sealed receipt</b><span>Hash-chained record of files, commands, and control decisions.</span></div>
 </div>
 
 <style>
@@ -182,8 +184,8 @@
 @media (prefers-reduced-motion: reduce){ .demo-frame video{display:none} .demo-poster{display:block} }
 .demo-poster{display:none;width:100%;height:auto}
 </style>
-<div class="demo">
-  <div class="demo-label">Watch it actually work — a real run, unedited</div>
+<div class="demo" id="live">
+  <div class="demo-label">A real run — unedited</div>
   <div class="demo-frame">
     <video id="demoVid" muted loop playsinline preload="none"
            poster="/media/cli-demo.jpg" aria-label="A real LOLM coding run: it races several models, writes the file, compiles it, runs it, and prints a sealed receipt.">
@@ -256,12 +258,12 @@
   <span>conversation continues — ask a follow-up above, the model remembers the last turn</span>
   <button id="newConvo">↺ new conversation</button>
 </div>
-<div class="backend-row" id="backendRow">
-  <button class="be-chip active" id="be06" data-base="/api/demo">Llama 70B + LOLM</button>
-  <button class="be-chip" id="be4b" data-base="/api/demo4b" disabled><span class="lab">4B · lab line</span></button>
+<div class="backend-row" id="backendRow" style="display:none" aria-hidden="true">
+  <button class="be-chip active" id="be06" data-base="/api/demo">default</button>
+  <button class="be-chip" id="be4b" data-base="/api/demo4b" disabled><span class="lab">lab</span></button>
 </div>
-<p class="ask-note" id="askNote">checking the live backend…</p>
-<p class="ask-note" id="brainStat" style="display:none;color:var(--purple)"></p>
+<p class="ask-note" id="askNote" style="min-height:0"></p>
+<p class="ask-note" id="brainStat" style="display:none"></p>
 
 <div class="stage" id="stage">
   <div class="q-bubble" id="qBubble"></div>
@@ -278,27 +280,15 @@
   </details>
 </div>
 
-<div class="explainer">
-  <h2>What you're watching</h2>
-  <p style="text-align:center;color:var(--dim);font-size:14px;max-width:560px;margin:0 auto">
-  While it writes, the model's inner signals are measured on every word.
-  A trained controller turns those signals into one of five moves:</p>
-  <div class="steps">
-    <div class="step"><span class="tag" style="color:var(--faint)">steady</span><b>Keep writing</b>Signals look healthy — carry on.</div>
-    <div class="step"><span class="tag" style="color:var(--blue)">unsure</span><b>Check notes</b>Uncertainty is rising — go find evidence.</div>
-    <div class="step"><span class="tag" style="color:var(--amber)">wobble</span><b>Double-check</b>Something shifted — re-read the draft.</div>
-    <div class="step"><span class="tag" style="color:var(--purple)">stuck</span><b>Try two paths</b>In a rut — fork and keep the steadier one.</div>
-    <div class="step"><span class="tag" style="color:var(--green)">confident</span><b>Finish</b>Calm and sure — write the final answer.</div>
+<details class="source-box" style="margin-top:48px">
+  <summary>How control works <span>— only if you care</span></summary>
+  <div style="padding:8px 15px 16px;font-size:13.5px;color:var(--dim);line-height:1.55">
+    While a frontier model writes, LOLM measures uncertainty per token and can retrieve notes, verify a draft, fork, or finish. The receipt shows which moves fired — including when none were needed. <a href="/about.html">More on the mechanism →</a>
   </div>
-  <p style="text-align:center;margin-top:22px;font-size:13.5px"><a href="/#demo">Want the full instruments — entropy, drift, z-scores? Open the technical demo →</a></p>
-</div>
+</details>
 
-<footer>
-  © 2026 <b>Qira LLC</b> · Bryan Leonard &amp; Brandyn Leonard · all rights reserved · patent pending<br>
-  <a href="https://www.npmjs.com/package/lolm-nfet-client">npm: lolm-nfet-client</a> ·
-  <a href="https://lolm-edge.bryanleonard237.workers.dev">status</a> ·
-  <a href="https://secure.imagineqira.com">vault</a> ·
-  <a href="https://imagineqira.com">imagineqira.com</a>
+<footer style="margin-top:48px;border-top:1px solid var(--line);padding:28px 0 40px;color:var(--faint);font-size:12.5px;text-align:center">
+  © 2026 Qira LLC · <a href="/">Workspace</a> · <a href="/pricing.html">Pricing</a> · <a href="https://www.npmjs.com/package/lolm-cli">CLI</a>
 </footer>
 </div>
 

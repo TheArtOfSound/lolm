@@ -235,33 +235,33 @@
 <div class="app">
   <!-- LEFT -->
   <aside class="side" id="side">
-    <div class="brand" style="display:flex;align-items:center;gap:6px"><span class="dot"></span> LOLM Workspace <small id="freshStamp" title="when this UI was last deployed">updated 2026-07-10</small><button onclick="toggleSide()" title="hide conversations" style="margin-left:auto;border:0;background:transparent;cursor:pointer;font-size:15px;color:var(--dim);padding:2px 6px">‹</button></div>
-    <button class="newbtn" id="newConv">＋ New conversation</button>
-    <input class="search" id="search" placeholder="search conversations…">
+    <div class="brand" style="display:flex;align-items:center;gap:6px"><span class="dot"></span> LO<span class="lm">LM</span> <small id="freshStamp" title="when this UI was last deployed">live</small><button onclick="toggleSide()" title="hide conversations" style="margin-left:auto;border:0;background:transparent;cursor:pointer;font-size:15px;color:var(--dim);padding:2px 6px">‹</button></div>
+    <button class="newbtn" id="newConv">＋ New chat</button>
+    <input class="search" id="search" placeholder="Search…">
     <div class="side-scroll">
-      <div class="sec-label">Conversations</div>
+      <div class="sec-label">Chats</div>
       <div id="convList"></div>
       <div class="sec-label">Projects</div>
-      <div id="projList"><div class="nav-link" id="newProj">＋ Add a project</div></div>
-      <div class="sec-label">Inspect</div>
-      <a class="nav-link" href="/research.html" target="_blank">Background research →</a>
-      <a class="nav-link" href="/hf.html" target="_blank">Daily learning →</a>
-      <a class="nav-link" href="/operator.html" target="_blank">Operator (autonomy) →</a>
-      <a class="nav-link" href="/about.html">About · the science →</a>
-      <div id="lifeChip" onclick="openLifeTab()" title="LOLM's continuous mind — click to watch it think" style="display:flex;align-items:center;gap:8px;margin:14px 2px 0;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer">
+      <div id="projList"><div class="nav-link" id="newProj">＋ New project</div></div>
+      <div id="lifeChip" onclick="openLifeTab()" title="Continuous mind" style="display:flex;align-items:center;gap:8px;margin:14px 2px 0;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer">
         <span id="lifeDot" style="width:9px;height:9px;border-radius:50%;background:#9ca3af;flex:none"></span>
-        <span id="lifeTxt" style="font-size:11.5px;color:var(--faint)">checking pulse…</span>
+        <span id="lifeTxt" style="font-size:11.5px;color:var(--faint)">checking…</span>
       </div>
       <style>@keyframes lifebeat{0%{box-shadow:0 0 0 0 rgba(22,163,74,.45)}70%{box-shadow:0 0 0 7px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}</style>
-      <div class="sec-label" style="margin-top:14px">Sovereign</div>
-      <div style="color:var(--faint);font-size:11px;line-height:1.55;padding:0 2px">Runs on your machine · evolves its own weights · bring your own keys.</div>
-      <a class="nav-link" id="pricingLink" href="/pricing.html" style="font-weight:650;color:var(--accent)">Pricing</a>
-      <a class="nav-link" href="/why-switch.html">Why switch</a>
-      <a class="nav-link" href="/receipts.html" title="Live hash-chained audit ledger">Receipts</a>
-      <a class="nav-link" id="shareLink" href="#" title="Copy invite link">Share LOLM</a>
-      <a class="nav-link" id="tryLink" href="/try.html">Try free</a>
-      <div id="usageChip" class="dim" style="font-size:11px;margin:8px 4px 0;line-height:1.4;display:none"></div>
-      <a class="nav-link" id="supportLink" href="#" style="display:none;color:#e11d48;font-weight:600;margin-top:6px">♥ Support this project →</a>
+      <div id="usageChip" class="dim" style="font-size:11px;margin:10px 4px 0;line-height:1.4;display:none"></div>
+      <a class="nav-link" id="pricingLink" href="/pricing.html" style="font-weight:650;margin-top:8px">Pricing</a>
+      <a class="nav-link" id="shareLink" href="#" title="Copy invite link">Share</a>
+      <a class="nav-link" id="supportLink" href="#" style="display:none;color:var(--accent);font-weight:600">Support →</a>
+      <details class="nav-more">
+        <summary>More</summary>
+        <a class="nav-link" href="/try.html">Public demo</a>
+        <a class="nav-link" href="/receipts.html">Receipt ledger</a>
+        <a class="nav-link" href="/why-switch.html">Why switch</a>
+        <a class="nav-link" href="/about.html">How it works</a>
+        <a class="nav-link" href="/operator.html" target="_blank">Operator</a>
+        <a class="nav-link" href="/research.html" target="_blank">Research jobs</a>
+        <a class="nav-link" href="/hf.html" target="_blank">Daily learning</a>
+      </details>
     </div>
   </aside>
 
@@ -269,7 +269,7 @@
   <section class="main">
     <div class="conv-head">
       <button class="menu-btn" id="menuBtn" title="conversations">☰</button>
-      <h1 id="convTitle">LOLM Workspace</h1>
+      <h1 id="convTitle">LOLM</h1>
       <div class="meta" id="convMeta"></div>
       <button class="dock-toggle" id="dockToggle" title="open the workbench / inspector">⧉ Panel</button>
     </div>
@@ -281,26 +281,21 @@
         <div style="display:flex;gap:8px"><input id="lifeAskInput" placeholder="Tell it…" style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-size:13px;box-sizing:border-box" onkeydown="if(event.key==='Enter')answerLife()"><button onclick="answerLife()" style="padding:9px 15px;border:0;border-radius:9px;background:#7c3aed;color:#fff;font-weight:600;cursor:pointer">Reply</button><button onclick="dismissLifeAsk()" title="not now" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer">Later</button></div>
       </div>
       <div class="empty" id="emptyState">
-        <h2>What do you want to do?</h2>
-        <p>Just describe it — LOLM reads your prompt and picks the right tool on its own:
-        answer &amp; <b>search the web</b>, <b>write, edit &amp; run real code</b>, or build something visual you can play.
-        It can run <b>100% on your own machine</b>, <b>learns from what you tell it</b> (into its own weights),
-        and gives an auditable receipt for every turn.</p>
+        <h2>What should we build?</h2>
+        <p>Describe the task. LOLM writes and runs code in a real jail, searches when it needs facts, and seals a receipt for every turn — without you picking tools.</p>
         <div class="starters" id="starters">
-          <button data-q="Write a Python function that finds prime numbers up to N and run it for N=50. Print the list.">⌨️ Run Python (primes)</button>
-          <button data-q="Build a snake game with arrow keys and a score.">🎮 Build a snake game</button>
-          <button data-q="Remember my name is Alex and I prefer dark mode. What should I try next on LOLM?">🧠 Memory + next step</button>
-          <button data-q="What's going on with AI agents this week?">📰 AI agents this week</button>
-          <button data-q="In one short paragraph: why would someone switch from Claude Code to LOLM for daily coding?">🧾 Why switch?</button>
+          <button data-q="Write a Python function that finds prime numbers up to N and run it for N=50. Print the list.">Run Python</button>
+          <button data-q="Build a snake game with arrow keys and a score.">Build a game</button>
+          <button data-q="What's going on with AI agents this week? Cite sources.">Research this week</button>
         </div>
-        <p style="font-size:11.5px;font-family:var(--mono);color:var(--faint)">Code runs live in a network-isolated sandbox · every turn gets a receipt · <a href="/receipts.html">live ledger</a> · <a href="/why-switch.html">why switch</a> · <a href="/about.html">the science</a></p>
+        <p style="font-size:11.5px;font-family:var(--mono);color:var(--faint);margin-top:18px">Isolated sandbox · multi-model race · sealed receipts</p>
       </div>
     </div>
     <div class="composer">
       <div class="composer-inner">
         <div class="modes" id="modeRow"></div>
         <div class="crow">
-          <textarea id="prompt" placeholder="Ask anything, or describe a task — it figures out whether to answer, search the web, write & run code, or build something visual."></textarea>
+          <textarea id="prompt" placeholder="Ask, code, research, or build…"></textarea>
           <button class="send" id="send">Send</button>
         </div>
       </div>
