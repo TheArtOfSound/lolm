@@ -1,5 +1,32 @@
 # Continuous improvement log
 
+## 2026-07-31 — surpass-frontier push (Grok)
+
+### Goal
+Make LOLM's coding agent beat Claude Code / Codex / Grok Build on the things that
+matter for a switcher: real sandbox loop, multi-model race, sealed receipts, and
+honest ship/no-ship.
+
+### Agent upgrades this loop
+- **Repair re-ensemble**: after thrash (same error twice) and on steps 3/7/12, race
+  a second model mix (GLM + gpt-oss-120b + Kimi K2 + Scout) and install the winner.
+- **Always-on contract probe** after every green run — auto-finish when the TASK's
+  own examples + rejects hold (no waiting for the model to say DONE).
+- **Clamp-not-raise coach** when the TASK says clamp (percentile p, etc.).
+- **Step budget** 22 → 28; API default max_steps 18 → 26.
+- **SYSTEM** edge-case bar: roman non-standard, semver prerelease, CSV trailing NL,
+  even median, negative indices, clamp vs raise.
+
+### Model stack (no restraint)
+Opening race: GLM-4.7 · gpt-oss-120b · Llama-4 Maverick · Qwen3-32B  
+Repair race: GLM-4.7 · gpt-oss-120b · Kimi K2 · Llama-4 Scout  
+Cascade floor unchanged.
+
+### Next (do not wait)
+1. Land AB-surge n=60 on prod; target ≥ 80% pass, ≤ 8% overclaim.
+2. Hidden-test feedback channel for multi-file seeds (read-first discipline).
+3. Workspace UX: single-column focus mode matching Claude Code density.
+
 ## 2026-07-30 night — resume after Claude usage limit (Grok)
 
 ### Diagnosis (honest remeasure of ensemble)

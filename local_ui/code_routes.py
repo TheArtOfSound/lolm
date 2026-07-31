@@ -156,7 +156,7 @@ from local_ui.sandbox import Sandbox, _HAS_BWRAP
 
 class CodeTask(BaseModel):
     task: str
-    max_steps: int = 18
+    max_steps: int = 26
     # Optional prior chat turns so coding continues the conversation (switch-from-Claude UX)
     history: Optional[List[Dict[str, str]]] = None
 
@@ -473,11 +473,10 @@ def register_code_routes(app: Any, root: str,
             and any(k in tlow for k in ("print ", "hello", "fizz", "prime", "factorial", "fib"))
             and "game" not in tlow and "server" not in tlow
         )
-        step_cap = 10 if simple else 22
-        # gen_many_fn lets the agent race several brains on the OPENING turn and keep
-        # whichever candidate actually runs — the same ensemble the visual builder uses,
-        # already wired into this module. None on hosts without the gateway, in which
-        # case the agent silently uses the single-model path.
+        # Hard tasks need headroom for repair re-ensemble + contract probes.
+        step_cap = 12 if simple else 28
+        # gen_many_fn lets the agent race several brains on the OPENING turn (and
+        # mid-loop repair races) and keep whichever candidate actually runs.
         agent = CodeAgent(sb, _chat_with_history,
                           max_steps=min(max(req.max_steps, 1), step_cap), isolated=True,
                           gen_many_fn=gen_many_fn)

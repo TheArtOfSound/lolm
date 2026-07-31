@@ -348,7 +348,9 @@ def test_ensemble_failure_falls_back_to_the_single_model(tmp_path):
     assert "def go" in sb.read_file("solution.py")
 
 
-def test_ensemble_only_runs_on_the_first_turn(tmp_path):
+def test_ensemble_runs_opening_and_bounded_repair(tmp_path):
+    # Opening race always; repair races only when stuck and budget remains.
+    # A clean first candidate should still fire the ensemble exactly once.
     sb = Sandbox(tmp_path)
     calls = {"n": 0}
     def many(msgs, models):
@@ -357,7 +359,7 @@ def test_ensemble_only_runs_on_the_first_turn(tmp_path):
     seq = iter(["DONE: done"] * 6)
     agent = CodeAgent(sb, lambda m: next(seq), isolated=None, gen_many_fn=many)
     list(agent.run("Create solution.py"))
-    assert calls["n"] == 1, f"ensemble should fire once, fired {calls['n']}x"
+    assert calls["n"] == 1, f"clean run should race once, fired {calls['n']}x"
 
 
 # ── the program's own output is evidence ─────────────────────────────────────

@@ -213,7 +213,7 @@ def main() -> int:
     ap.add_argument("--tasks", default="")
     ap.add_argument("--repeat", type=int, default=1)
     ap.add_argument("--workers", type=int, default=4)
-    ap.add_argument("--max-steps", type=int, default=22)
+    ap.add_argument("--max-steps", type=int, default=28)
     ap.add_argument("--run-timeout", type=int, default=25)
     ap.add_argument("--model", default="")
     ap.add_argument("--ensemble", action="store_true",

@@ -19,14 +19,21 @@ from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from local_ui.sandbox import Sandbox
 
-# Brains raced on the opening turn — strongest open models we can fan out to
-# without restraint. Maverick replaces Scout; Qwen3-32B is a fast fourth when
-# the gateway allows four candidates (generate_many caps at 4).
+# Brains raced on the opening turn AND on repair re-races — strongest open
+# models we can fan out to without restraint. generate_many caps at 4.
 ENSEMBLE_MODELS = [
     "zai-glm-4.7",
     "openai/gpt-oss-120b",
     "meta-llama/llama-4-maverick-17b-128e-instruct",
     "qwen/qwen3-32b",
+]
+# Second-wave race when the first ensemble still fails contract: different
+# diversity (Kimi + Scout + 70B) so we do not re-sample the same three losers.
+REPAIR_ENSEMBLE_MODELS = [
+    "zai-glm-4.7",
+    "openai/gpt-oss-120b",
+    "moonshotai/kimi-k2-instruct",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
 ]
 SYSTEM = (
     "You are LOLM Code — an agentic coding system competing with Claude Code and Codex.\n"
@@ -90,7 +97,15 @@ SYSTEM = (
     "SyntaxError and a wasted turn.\n"
     "- Before DONE, exercise EVERY example and EVERY reject case the TASK names "
     "(including empty string, malformed input, and ValueError cases). A green run "
-    "of two happy-path prints is not enough when the TASK listed more."
+    "of two happy-path prints is not enough when the TASK listed more.\n"
+    "- READ THE TASK'S VERB carefully: if it says CLAMP / coerce / accept out-of-range "
+    "by clamping, do NOT raise for those inputs. If it says RAISE for malformed, raise "
+    "ValueError (or the named type) — never return a silent default for a hard reject.\n"
+    "- Edge cases that win real evals: empty string, negative indices, prerelease vs "
+    "release semver (1.0.0-alpha < 1.0.0), even-length median average, trailing CSV "
+    "newlines, Roman non-standard forms (IIII/VV/IC), unary minus in expressions.\n"
+    "- When fixing existing files (CURRENT WORKSPACE is non-empty): READ then EDIT — "
+    "do not rewrite from scratch and delete required modules."
 )
 
 _FENCE = re.compile(r"```[a-zA-Z0-9_+\-]*\n(.*?)```", re.S)
@@ -838,12 +853,10 @@ class CodeAgent:
         self.actions: List[Dict[str, Any]] = []
         self._format_nudge = ""
         self._files_written: List[str] = []
-        # Best-of-N on the FIRST turn only. The opening implementation decides most
-        # runs — later turns are repairs against a real error, where a second opinion
-        # adds little. Bounding it to step 0 keeps the extra cost to one multi-model
-        # call per run instead of one per step. Same shape the visual builder already
-        # uses (race brains, verify each, keep what actually works), but with a
-        # stronger oracle: each candidate is RUN in a throwaway sandbox.
+        self._repair_races = 0  # how many mid-loop re-ensembles we have spent
+        # Best-of-N on the opening turn, plus up to two repair re-races when the
+        # loop is stuck. Each candidate is RUN in a throwaway sandbox and scored
+        # against the TASK contract — not vibes.
         self.gen_many = gen_many_fn
         self.ensemble_models = list(ensemble_models or ENSEMBLE_MODELS)
 
@@ -954,6 +967,53 @@ class CodeAgent:
                     scratch.destroy()
                 except Exception:
                     pass
+
+    def _race(self, msgs: List[Dict[str, str]], models: List[str],
+              task: str) -> Optional[Dict[str, Any]]:
+        """Race several brains; return the best scored candidate or None."""
+        if not self.gen_many:
+            return None
+        try:
+            cands = self.gen_many(msgs, models) or []
+        except Exception:
+            return None
+        scored = []
+        for cnd in cands:
+            text = (cnd or {}).get("text") or ""
+            if not text.strip():
+                continue
+            s = self._score_candidate(text, task)
+            s["model"] = (cnd or {}).get("model")
+            scored.append(s)
+        if not scored:
+            return None
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        best = scored[0]
+        best["all"] = [
+            {"model": c.get("model"), "score": c["score"], "why": c["why"]}
+            for c in scored
+        ]
+        return best if best["score"] > 0 else None
+
+    def _run_contract_probe(self, task: str) -> Optional[Dict[str, Any]]:
+        """Run the TASK-derived contract probe against the live sandbox.
+
+        Returns None if no probe can be built; else a result dict with ok/err.
+        """
+        targets = [t for t in _task_target_files(task) if t.endswith(".py")] or [
+            p for p in self._files_written if p.endswith(".py")
+        ]
+        if not targets:
+            return None
+        cprobe = _build_contract_probe(task, targets[0], _task_required_symbols(task))
+        if not cprobe:
+            return None
+        cr = self.sb.run(cprobe, timeout=min(15, self.run_timeout),
+                         isolated=self.isolated)
+        ok = (cr.get("exit_code") == 0 and not cr.get("blocked")
+              and "CONTRACT_OK" in (cr.get("stdout") or ""))
+        err = ((cr.get("stderr") or "") + "\n" + (cr.get("stdout") or "")).strip()
+        return {"ok": ok, "err": err[:500], "command": cprobe, "result": cr}
 
     # Total chars of file content rendered per turn. The gateway caps OUTPUT tokens but
     # never the prompt, so this is the only guard against pushing SYSTEM out of the
@@ -1297,35 +1357,36 @@ class CodeAgent:
             yield {"event": "code_thinking", "data": {"step": step, "of": self.max_steps,
                    "ran": ran_any}}
             raw = None
-            # Best-of-N on the opening turn: race several brains, RUN each candidate in
-            # a throwaway sandbox, and keep the one that actually works. Falls through
-            # to the single-model path on any failure, so the loop never depends on it.
-            if step == 0 and self.gen_many is not None:
-                try:
-                    cands = self.gen_many(msgs, self.ensemble_models) or []
-                except Exception:
-                    cands = []
-                scored = []
-                for cnd in cands:
-                    text = (cnd or {}).get("text") or ""
-                    if not text.strip():
-                        continue
-                    s = self._score_candidate(text, task)
-                    s["model"] = (cnd or {}).get("model")
-                    scored.append(s)
-                if scored:
-                    scored.sort(key=lambda x: x["score"], reverse=True)
-                    best = scored[0]
+            # Best-of-N: opening turn always; repair turns when we still have budget
+            # and the last run failed. Different model mix on repair so we do not
+            # re-sample the same losers.
+            want_race = (
+                self.gen_many is not None
+                and (
+                    step == 0
+                    or (step in (3, 7, 12) and self._repair_races < 2 and ran_any)
+                )
+            )
+            if want_race:
+                models = (self.ensemble_models if step == 0
+                          else REPAIR_ENSEMBLE_MODELS)
+                best = self._race(msgs, models, task)
+                if best is not None:
+                    if step > 0:
+                        self._repair_races += 1
                     yield {"event": "agent_note", "data": {
                         "step": step,
-                        "text": "raced %d brains on the opening turn — kept %s (%s)" % (
-                            len(scored), best.get("model") or "candidate", best["why"]),
-                        "candidates": [
-                            {"model": c.get("model"), "score": c["score"], "why": c["why"]}
-                            for c in scored],
+                        "text": (
+                            "raced %d brains %s — kept %s (%s)" % (
+                                len(best.get("all") or []),
+                                "on the opening turn" if step == 0 else "for repair",
+                                best.get("model") or "candidate",
+                                best.get("why") or "",
+                            )
+                        ),
+                        "candidates": best.get("all") or [],
                     }}
-                    if best["score"] > 0:
-                        raw = best["raw"]
+                    raw = best.get("raw")
             if raw is None:
                 try:
                     raw = self.chat(msgs)
@@ -1871,6 +1932,17 @@ class CodeAgent:
                         )
                         yield {"event": "agent_note", "data": {
                             "text": "AssertionError — fix logic/tests before DONE"}}
+                    # Models love to RAISE where the TASK said CLAMP (esp. percentile
+                    # p out of 0..100). Catch that specific wrong instinct.
+                    if re.search(r"Percentile must be between|must be between 0 and 100|out of range",
+                                 err_full, re.I) and re.search(r"clamp", task or "", re.I):
+                        self._format_nudge = (
+                            "\n\nCLAMP, DO NOT RAISE: the TASK says out-of-range values are "
+                            "clamped (e.g. percentile p to 0..100). Remove the ValueError for "
+                            "those bounds and clamp instead, then RUN again."
+                        )
+                        yield {"event": "agent_note", "data": {
+                            "text": "clamp-not-raise — TASK says clamp out-of-range inputs"}}
                     # Timeouts / kills → force finite, non-interactive rewrite
                     if re.search(r"timeout|timed out|killed|time.?limit", err_full, re.I):
                         self._format_nudge = (
@@ -1979,7 +2051,85 @@ class CodeAgent:
                             "text": f"runtime error — {label[:80]}"}}
                     fail_repeats = fail_repeats + 1 if sig == fail_sig else 0
                     fail_sig = sig
+                    # One free re-ensemble before declaring thrash death — the
+                    # same error twice often means the model is stuck in a local
+                    # minimum; a different brain lineup breaks it more often than
+                    # a third identical rewrite.
                     if fail_repeats >= 2:
+                        if self.gen_many is not None and self._repair_races < 2:
+                            self._repair_races += 1
+                            fail_repeats = 0
+                            self._format_nudge = (
+                                "\n\nSTUCK on the same error. Rewrite the solution "
+                                "cleanly from the TASK contract (examples + rejects). "
+                                "Prefer a correct full FILE rewrite over another bad EDIT."
+                            )
+                            yield {"event": "agent_note", "data": {
+                                "text": "same error twice — spending a repair ensemble race"}}
+                            # Force next loop iteration to race (step+1 may not hit
+                            # 3/7/12); race immediately here.
+                            best = self._race(msgs, REPAIR_ENSEMBLE_MODELS, task)
+                            if best and best.get("raw"):
+                                raw = best["raw"]
+                                yield {"event": "agent_note", "data": {
+                                    "text": "repair race kept %s (%s)" % (
+                                        best.get("model") or "candidate",
+                                        best.get("why") or ""),
+                                    "candidates": best.get("all") or [],
+                                }}
+                                # Apply the repair candidate as this turn's write by
+                                # re-parsing into the normal FILE/RUN path below —
+                                # easiest: inject as the next model reply via a
+                                # synthetic continue after writing files.
+                                turn2 = _parse_turn(raw)
+                                if turn2 and (turn2.get("files") or turn2.get("file")):
+                                    # Fall through by replacing turn and re-entering
+                                    # write path: set format empty and process as if
+                                    # the model just replied. We do this by writing
+                                    # files here and auto-running.
+                                    for path, content in (
+                                        turn2.get("files")
+                                        or ([turn2["file"]] if turn2.get("file") else [])
+                                    ):
+                                        if content is None:
+                                            continue
+                                        content = _sanitize_file_content(content)
+                                        try:
+                                            self.sb.write_file(path, content, reason="repair-race")
+                                            if path not in self._files_written:
+                                                self._files_written.append(path)
+                                            yield {"event": "file_changed", "data": {
+                                                "path": path, "bytes": len(content),
+                                                "repair_race": True}}
+                                        except Exception as exc:
+                                            yield {"event": "agent_note", "data": {
+                                                "text": f"repair write failed: {exc}"[:160]}}
+                                    rcmd = turn2.get("run") or (
+                                        self._auto_run_cmd(
+                                            (turn2.get("files") or [turn2.get("file")])[0][0]
+                                        ) if (turn2.get("files") or turn2.get("file")) else ""
+                                    )
+                                    if rcmd:
+                                        yield {"event": "command_started", "data": {
+                                            "command": rcmd}}
+                                        rr = self.sb.run(
+                                            rcmd, timeout=self.run_timeout,
+                                            isolated=self.isolated)
+                                        self.actions.append({
+                                            "kind": "run", "command": rcmd, "result": rr})
+                                        yield {"event": "command_finished", "data": {
+                                            "command": rcmd,
+                                            "exit_code": rr.get("exit_code"),
+                                            "stdout": rr.get("stdout", ""),
+                                            "stderr": rr.get("stderr", ""),
+                                            "blocked": rr.get("blocked", False)}}
+                                        if rr.get("exit_code") == 0 and not rr.get("blocked"):
+                                            ran_any = True
+                                            if (rr.get("stdout") or "").strip():
+                                                produced_output = True
+                                            fail_repeats = 0
+                                            fail_sig = None
+                            continue
                         yield from self._finish(
                             task,
                             summary=("Couldn't get a clean run in the sandbox — the same error "
@@ -2039,69 +2189,57 @@ class CodeAgent:
                                         "\n\nVERIFY FAILED. Fix syntax/tests, then RUN again. "
                                         "Do not say DONE."
                                     )
-                        # Auto-DONE when oracles are green — speed-to-value without
-                        # burning another model turn waiting for "DONE:".
-                        # A green oracle on the wrong filename is still a failure, so the
-                        # required-path check gates the auto-finish too — otherwise this
-                        # path just routes around it.
-                        if (ok and not self._missing_targets(task)
+                        # ALWAYS run the TASK contract probe after a green run when
+                        # the task named examples/rejects. Overclaim killer + early
+                        # finish accelerator.
+                        contract_ok = True
+                        had_contract = False
+                        if ok and not self._missing_targets(task) and not self._missing_symbols(task):
+                            probe = self._run_contract_probe(task)
+                            if probe is not None:
+                                had_contract = True
+                                self.actions.append({
+                                    "kind": "run", "command": probe["command"],
+                                    "result": probe["result"], "verify": True,
+                                    "contract": True})
+                                yield {"event": "command_started", "data": {
+                                    "command": probe["command"], "verify": True}}
+                                yield {"event": "command_finished", "data": {
+                                    "command": probe["command"],
+                                    "exit_code": probe["result"].get("exit_code"),
+                                    "stdout": probe["result"].get("stdout", ""),
+                                    "stderr": probe["result"].get("stderr", ""),
+                                    "blocked": probe["result"].get("blocked", False),
+                                    "isolated": True, "verify": True}}
+                                if not probe["ok"]:
+                                    contract_ok = False
+                                    ok = False
+                                    self._format_nudge = (
+                                        "\n\nCONTRACT PROBE FAILED — the TASK's own "
+                                        "examples or reject cases do not hold yet:\n"
+                                        f"{probe['err']}\n"
+                                        "Fix them, then RUN again. Do NOT say DONE yet."
+                                    )
+                                    yield {"event": "agent_note", "data": {
+                                        "text": "contract probe failed — keep fixing"}}
+                                else:
+                                    yield {"event": "agent_note", "data": {
+                                        "text": "contract probe green"}}
+                        # Auto-DONE when oracles + contract are green.
+                        if (ok and contract_ok and not self._missing_targets(task)
                                 and not self._missing_symbols(task)):
                             auto = _task_oracle_satisfied(
                                 task, self.actions, self._files_written)
+                            # Pure library tasks: green contract is enough.
+                            if not auto and had_contract and contract_ok:
+                                auto = "auto-verified: TASK contract holds"
                             if auto:
-                                # When the TASK names examples/rejects, require the
-                                # contract probe before auto-finish too — otherwise
-                                # a green happy-path print short-circuits the gate
-                                # that exists to stop overclaim.
-                                targets = [t for t in _task_target_files(task)
-                                           if t.endswith(".py")] or [
-                                    p for p in self._files_written if p.endswith(".py")]
-                                cprobe = (_build_contract_probe(
-                                    task, targets[0], _task_required_symbols(task))
-                                    if targets else None)
-                                if cprobe:
-                                    yield {"event": "command_started", "data": {
-                                        "command": cprobe, "verify": True}}
-                                    cr = self.sb.run(
-                                        cprobe, timeout=min(15, self.run_timeout),
-                                        isolated=self.isolated)
-                                    self.actions.append({
-                                        "kind": "run", "command": cprobe,
-                                        "result": cr, "verify": True, "contract": True})
-                                    yield {"event": "command_finished", "data": {
-                                        "command": cprobe,
-                                        "exit_code": cr.get("exit_code"),
-                                        "stdout": cr.get("stdout", ""),
-                                        "stderr": cr.get("stderr", ""),
-                                        "blocked": cr.get("blocked", False),
-                                        "isolated": True, "verify": True}}
-                                    if (cr.get("exit_code") != 0 or cr.get("blocked")
-                                            or "CONTRACT_OK" not in (cr.get("stdout") or "")):
-                                        err = ((cr.get("stderr") or "") + "\n"
-                                               + (cr.get("stdout") or "")).strip()
-                                        self._format_nudge = (
-                                            "\n\nCONTRACT PROBE FAILED — the TASK's own "
-                                            "examples or reject cases do not hold yet:\n"
-                                            f"{err[:500]}\n"
-                                            "Fix them, then RUN again. Do NOT say DONE yet."
-                                        )
-                                        yield {"event": "agent_note", "data": {
-                                            "text": "blocked DONE — TASK contract probe failed"}}
-                                        # fall through to next model turn
-                                    else:
-                                        yield {"event": "agent_note", "data": {
-                                            "text": f"oracle green — finishing ({auto}; contract ok)"}}
-                                        yield from self._finish(
-                                            task, summary=auto, steps=step,
-                                            ran=ran_any, produced_output=produced_output)
-                                        return
-                                else:
-                                    yield {"event": "agent_note", "data": {
-                                        "text": f"oracle green — finishing ({auto})"}}
-                                    yield from self._finish(
-                                        task, summary=auto, steps=step,
-                                        ran=ran_any, produced_output=produced_output)
-                                    return
+                                yield {"event": "agent_note", "data": {
+                                    "text": f"oracle green — finishing ({auto})"}}
+                                yield from self._finish(
+                                    task, summary=auto, steps=step,
+                                    ran=ran_any, produced_output=produced_output)
+                                return
             if not did:
                 yield {"event": "agent_note", "data": {"step": step,
                        "text": "no FILE or RUN in the reply", "raw": (raw or "")[:200]}}
