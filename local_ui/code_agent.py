@@ -419,11 +419,12 @@ def _task_reject_literals(task: str) -> List[str]:
 def _build_contract_probe(task: str, module: str, symbols: List[str]) -> Optional[str]:
     """Build a tiny stdlib probe that exercises TASK examples + reject cases.
 
-    Returns a `python3 -c ...` command, or None when the task has nothing
-    extractable. This is the overclaim killer: models green-path two prints and
-    claim DONE while the hidden test still has empty-string / prerelease /
-    multiline cases. Running the TASK's own examples before DONE closes that
-    gap without leaking the hidden test.
+    Returns the **Python source** of the probe (not a shell command). Callers
+    MUST write it to a file and run ``python3 <file>`` — embedding multiline
+    source in ``python3 -c '...'`` breaks under bash single-quoting (literal
+    ``\\n``), which used to make every contract probe SyntaxError and block
+    honest DONE. Running the TASK's own examples before DONE closes the
+    overclaim gap without leaking the hidden test.
     """
     arrows = _task_arrow_examples(task)
     rejects = _task_reject_literals(task)
@@ -478,7 +479,7 @@ def _build_contract_probe(task: str, module: str, symbols: List[str]) -> Optiona
         lines.append("        continue")
         lines.append(f"assert _raised, 'should have raised ValueError for ' + {lit!r}")
     lines.append("print('CONTRACT_OK')")
-    return "python3 -c " + repr("\n".join(lines))
+    return "\n".join(lines)
 
 
 def _parse_turn(text: str) -> Optional[Dict[str, Any]]:
@@ -981,11 +982,9 @@ class CodeAgent:
                 why.append("self-reported failure")
             # Bonus when the TASK's own examples/rejects already pass in scratch.
             if py_targets and not missing_files:
-                cprobe = _build_contract_probe(task, py_targets[0], want or [])
-                if cprobe:
-                    pr = scratch.run(cprobe, timeout=min(12, self.run_timeout),
-                                     isolated=self.isolated)
-                    if pr.get("exit_code") == 0 and "CONTRACT_OK" in (pr.get("stdout") or ""):
+                pres = self._run_contract_probe(task, sandbox=scratch)
+                if pres is not None:
+                    if pres.get("ok"):
                         score += 2.0
                         why.append("contract ok")
                     else:
@@ -1029,25 +1028,43 @@ class CodeAgent:
         ]
         return best if best["score"] > 0 else None
 
-    def _run_contract_probe(self, task: str) -> Optional[Dict[str, Any]]:
-        """Run the TASK-derived contract probe against the live sandbox.
+    def _run_contract_probe(self, task: str, sandbox: Any = None) -> Optional[Dict[str, Any]]:
+        """Run the TASK-derived contract probe against a sandbox.
 
-        Returns None if no probe can be built; else a result dict with ok/err.
+        Writes ``_lolm_contract_probe.py`` then runs it (never ``python3 -c``
+        with multiline source — bash quoting breaks that). Returns None if no
+        probe can be built; else a result dict with ok/err.
         """
+        sb = sandbox if sandbox is not None else self.sb
+        try:
+            written = list(self._files_written)
+        except Exception:
+            written = []
+        if sandbox is not None and sandbox is not self.sb:
+            try:
+                written = list(sb.list_files(limit=50))
+            except Exception:
+                written = written
         targets = [t for t in _task_target_files(task) if t.endswith(".py")] or [
-            p for p in self._files_written if p.endswith(".py")
+            p for p in written if (p or "").endswith(".py")
         ]
         if not targets:
             return None
-        cprobe = _build_contract_probe(task, targets[0], _task_required_symbols(task))
-        if not cprobe:
+        script = _build_contract_probe(task, targets[0], _task_required_symbols(task))
+        if not script:
             return None
-        cr = self.sb.run(cprobe, timeout=min(15, self.run_timeout),
-                         isolated=self.isolated)
+        probe_path = "_lolm_contract_probe.py"
+        try:
+            sb.write_file(probe_path, script, reason="contract-probe")
+        except Exception as exc:
+            return {"ok": False, "err": f"write probe failed: {exc}"[:200],
+                    "command": f"python3 {probe_path}", "result": {}}
+        cmd = f"python3 {probe_path}"
+        cr = sb.run(cmd, timeout=min(15, self.run_timeout), isolated=self.isolated)
         ok = (cr.get("exit_code") == 0 and not cr.get("blocked")
               and "CONTRACT_OK" in (cr.get("stdout") or ""))
         err = ((cr.get("stderr") or "") + "\n" + (cr.get("stdout") or "")).strip()
-        return {"ok": ok, "err": err[:500], "command": cprobe, "result": cr}
+        return {"ok": ok, "err": err[:500], "command": cmd, "result": cr}
 
     # Total chars of file content rendered per turn. The gateway caps OUTPUT tokens but
     # never the prompt, so this is the only guard against pushing SYSTEM out of the
@@ -1683,49 +1700,39 @@ class CodeAgent:
                         yield {"event": "agent_note", "data": {
                             "text": "blocked DONE — tests still failing"}}
                         continue
-                # Gate DONE on the TASK's own examples + reject cases. The hidden
-                # test is independent, but the TASK text already names enough of the
-                # contract that we can catch the common overclaim: green happy-path
-                # prints, then DONE, while '', malformed, or listed examples fail.
+                # Gate DONE on the TASK's own examples + reject cases.
                 if nudges < 9:
-                    targets = [t for t in _task_target_files(task) if t.endswith(".py")]
-                    if not targets:
-                        targets = [p for p in self._files_written if p.endswith(".py")]
-                    if targets:
-                        cprobe = _build_contract_probe(
-                            task, targets[0], _task_required_symbols(task))
-                        if cprobe:
+                    pres = self._run_contract_probe(task)
+                    if pres is not None:
+                        yield {"event": "agent_note", "data": {
+                            "text": "pre-DONE contract probe (TASK examples + reject cases)"}}
+                        yield {"event": "command_started", "data": {
+                            "command": pres["command"], "verify": True}}
+                        self.actions.append({
+                            "kind": "run", "command": pres["command"],
+                            "result": pres["result"], "verify": True, "contract": True})
+                        yield {"event": "command_finished", "data": {
+                            "command": pres["command"],
+                            "exit_code": (pres["result"] or {}).get("exit_code"),
+                            "stdout": (pres["result"] or {}).get("stdout", ""),
+                            "stderr": (pres["result"] or {}).get("stderr", ""),
+                            "blocked": (pres["result"] or {}).get("blocked", False),
+                            "isolated": True, "verify": True}}
+                        if not pres.get("ok"):
+                            nudges += 1
+                            self._last_contract_failed = True
+                            self._format_nudge = (
+                                "\n\nCONTRACT PROBE FAILED — the TASK's own examples "
+                                "or reject cases do not hold yet:\n"
+                                f"{pres.get('err', '')[:500]}\n"
+                                "Fix the implementation so EVERY example and EVERY "
+                                "ValueError/malformed case named in the TASK works, "
+                                "then RUN again. Do NOT say DONE yet."
+                            )
                             yield {"event": "agent_note", "data": {
-                                "text": "pre-DONE contract probe (TASK examples + reject cases)"}}
-                            yield {"event": "command_started", "data": {
-                                "command": cprobe, "verify": True}}
-                            cr = self.sb.run(cprobe, timeout=min(15, self.run_timeout),
-                                             isolated=self.isolated)
-                            self.actions.append({"kind": "run", "command": cprobe,
-                                                 "result": cr, "verify": True,
-                                                 "contract": True})
-                            yield {"event": "command_finished", "data": {
-                                "command": cprobe, "exit_code": cr.get("exit_code"),
-                                "stdout": cr.get("stdout", ""),
-                                "stderr": cr.get("stderr", ""),
-                                "blocked": cr.get("blocked", False), "isolated": True,
-                                "verify": True}}
-                            if (cr.get("exit_code") != 0 or cr.get("blocked")
-                                    or "CONTRACT_OK" not in (cr.get("stdout") or "")):
-                                nudges += 1
-                                err = ((cr.get("stderr") or "") + "\n"
-                                       + (cr.get("stdout") or "")).strip()
-                                self._format_nudge = (
-                                    "\n\nCONTRACT PROBE FAILED — the TASK's own examples "
-                                    "or reject cases do not hold yet:\n"
-                                    f"{err[:500]}\n"
-                                    "Fix the implementation so EVERY example and EVERY "
-                                    "ValueError/malformed case named in the TASK works, "
-                                    "then RUN again. Do NOT say DONE yet."
-                                )
-                                yield {"event": "agent_note", "data": {
-                                    "text": "blocked DONE — TASK contract probe failed"}}
-                                continue
+                                "text": "blocked DONE — TASK contract probe failed"}}
+                            continue
+                        self._last_contract_failed = False
                 yield from self._finish(
                     task, summary=turn["done"], steps=step,
                     ran=ran_any, produced_output=produced_output)
