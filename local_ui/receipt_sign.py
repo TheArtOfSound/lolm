@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 import os
 import secrets
 import time
@@ -125,7 +126,26 @@ def _signed_core(receipt: Dict[str, Any]) -> Dict[str, Any]:
     # timelines and task-state blobs contain nested lists that can advance after
     # the receipt is built; a shallow dict copy lets those later mutations
     # invalidate the already-computed hash and signature.
-    return json.loads(canonical_bytes(filtered).decode("utf-8"))
+    return _normalize_json_numbers(
+        json.loads(canonical_bytes(filtered).decode("utf-8"))
+    )
+
+
+def _normalize_json_numbers(value: Any) -> Any:
+    """Normalize numeric forms that JSON.parse/stringify changes in JavaScript."""
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("receipt contains a non-finite number")
+        if value.is_integer():
+            if abs(value) > 9_007_199_254_740_991:
+                raise ValueError("receipt integer exceeds JavaScript safe range")
+            return int(value)
+        return value
+    if isinstance(value, dict):
+        return {key: _normalize_json_numbers(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_normalize_json_numbers(item) for item in value]
+    return value
 
 
 def sign_code_receipt(core: Dict[str, Any]) -> Dict[str, Any]:

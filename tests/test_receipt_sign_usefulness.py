@@ -76,6 +76,27 @@ def test_signed_receipt_is_a_frozen_snapshot_of_nested_runtime_state():
     assert verify_code_receipt(sealed)["integrity"]["verified"] is True
 
 
+def test_signed_receipt_normalizes_integral_floats_for_javascript_roundtrip():
+    """JSON.parse/stringify turns 0.0 and 2.0 into 0 and 2; the seal must agree."""
+    from local_ui.receipt_sign import sign_code_receipt, verify_code_receipt
+
+    sealed = sign_code_receipt({
+        "schema": "lolm.code.receipt.v2", "run_id": "run_numbers",
+        "ok": True, "syntax_ok": True, "verdict": "shipped",
+        "nfet": {"zscores": {"gate": 0.0}},
+        "task_state": {"integrity": {"denominator": 2.0}},
+        "verification": {
+            "syntax_ok": True, "execution_ok": True, "contract_ok": True,
+            "artifact_manifest_ok": True,
+            "artifact_manifest_sha256": "f" * 64,
+        },
+    })
+
+    assert type(sealed["nfet"]["zscores"]["gate"]) is int
+    assert type(sealed["task_state"]["integrity"]["denominator"]) is int
+    assert verify_code_receipt(sealed)["integrity"]["verified"] is True
+
+
 def test_incomplete_artifact_manifest_cannot_verify_as_shippable():
     from local_ui.receipt_sign import sign_code_receipt, verify_code_receipt
     core = {
