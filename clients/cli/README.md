@@ -1,114 +1,97 @@
 # lolm-cli
 
-Command-line client for the [LOLM agent](https://lolm.imagineqira.com). Run a coding
-task in a network-isolated sandbox, watch the real write → run → read-the-error → fix
-loop, and end with a sealed receipt of what actually happened.
+Hardened beta control console for the LOLM agent. Version `0.3.0-beta.1`
+fails closed on incomplete streams and receipts, verifies signed artifacts before
+installing them, and bounds every network operation.
+
+The beta is deliberately **not described as pipeline-safe**. That label remains
+blocked until the release workflow has passed on Linux, macOS, and Windows and
+the packed CLI has passed its clean-install smoke test.
 
 ```bash
-npx lolm-cli code "write fizzbuzz to 20 in solution.py and run it" --save ./out
+npm install -g lolm-cli
+export LOLM_API_KEY=lolm_…
+lolm doctor
+lolm code "write fizzbuzz to 20 in solution.py and run it" --save ./out
+lolm receipt verify ./run.receipt.json
 ```
 
-```
-· step 1/10
-  write  solution.py (218b)
-  run    python3 -m py_compile solution.py [verify]
-         exit 0
-  run    python3 solution.py
-         exit 0
-         │ 1
-         │ 2
-         │ Fizz
+## Security contract
 
-saved 1 file(s) → ./out
-
-verdict   shipped
-files     solution.py
-runs      2 green / 0 failed
-receipt   0f5e12f682d212b438a7d3ba
-```
-
-The package is `lolm-cli`; the command it installs is `lolm`. (npm rejects the bare
-name `lolm` as too similar to existing packages.)
-
-No API key needed for the free tier. Nothing is installed globally unless you want it:
-
-```bash
-npm install -g lolm-cli   # installs the `lolm` command
-# or run it without installing:  npx lolm-cli <command>
-```
+- `--save` accepts only a complete `lolm.artifact.manifest.v1` bound to a locally
+  verified Ed25519 receipt. Absolute, traversal, reserved, colliding, NUL, and
+  oversized paths are rejected. Installation stages into a private sibling
+  directory, verifies every full SHA-256, and atomically renames only after all
+  files pass.
+- The destination must not exist. This intentional breaking change prevents
+  symlink traversal, partial replacement, deletion ambiguity, and unsafe
+  overwrites. Choose a fresh directory and move it into place in your own
+  deployment transaction.
+- `code` exits `0` only when `code_done` and `code_receipt` are both present,
+  their run IDs match, every required verification field is explicitly true,
+  the signed timestamp is present and not in the future, the receipt hash and
+  signature verify locally, and a requested save verifies.
+- `build` writes or streams HTML only after the visual receipt, run binding,
+  byte count, browser verdict, signature, and content hash all verify. Raw
+  `--stdout` output is refused on a terminal; redirect it to a file or pipe.
+- Human output removes CSI, OSC, DCS, APC, PM, C0/C1, carriage-return, and bidi
+  controls. JSON output contains exactly one complete JSON document.
+- Requests default to a 120-second total deadline and streaming calls to a
+  30-second idle deadline. Use `--timeout` and `--idle-timeout` within the
+  documented bounds.
+- Persistent memory requires `X-LOLM-Api-Key`; caller-supplied owner namespaces
+  are ignored.
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `lolm code <task>` | Agentic coding loop in a jail. `--save <dir>` writes the files it produced. |
-| `lolm ask <question>` | Streams an answer plus the control decisions made while writing it. |
-| `lolm build <app>` | Builds a self-contained HTML app. `-o <file>` (default `lolm-app.html`). |
-| `lolm receipts` | Recent sealed receipts from the public audit ledger. |
-| `lolm status` | Model/API status and current run limits. |
-| `lolm memory list\|add\|forget` | Durable facts the agent remembers about you. |
+- `lolm doctor`
+- `lolm code <task> [--save <new-dir>] [--receipt <file>]`
+- `lolm ask <question> [--fail-on red]`
+- `lolm build <task> [--out <new-file> | --stdout]`
+- `lolm receipt verify <file|sha-prefix>`
+- `lolm receipts`, `status`, `whoami`, `config`
+- `lolm inspect task --id <task_id> | --conversation <id>`
+- `lolm memory list|add|forget`
 
-## Flags
+Unknown flags, missing values, non-integers, values outside their bounds, and
+unsafe base URLs exit `2` before a request is made. HTTP is accepted only for
+loopback development; remote origins require HTTPS. Use `--` before prompt text
+that begins with `-`.
 
-| Flag | Meaning |
-|---|---|
-| `--base <url>` | API base. Defaults to the hosted instance, or `$LOLM_BASE_URL`. Point it at your own box. |
-| `--save <dir>` | `code`: write the produced files to disk. |
-| `-o, --out <file>` | `build`: output path. |
-| `--max-steps <n>` | `code`: cap the loop. |
-| `--limit <n>` | `receipts`: row count. |
-| `--json` | Machine-readable stdout; progress moves to stderr. |
-| `-q, --quiet` | Outcome only, no live loop. |
+## Identity and receipt keys
+
+```bash
+export LOLM_API_KEY=lolm_…
+export LOLM_LICENSE=…
+
+# Optional pinned public keys for offline/high-assurance verification:
+export LOLM_RECEIPT_PUBLIC_KEYS='key-id:base64url-public-key'
+lolm receipt verify ./run.receipt.json
+```
+
+The CLI never asks the receipt issuer to attest its own signature. It fetches
+public key material when online (or uses pinned environment keys), recomputes the
+canonical full SHA-256, and verifies Ed25519 locally. Unknown keys fail closed.
 
 ## Exit codes
 
-`lolm code` is safe to put in a script — it exits **non-zero unless the delivered code
-actually compiled and ran**:
+- `0`: the command's complete success contract passed
+- `1`: remote failure, malformed/incomplete/contradictory evidence, failed gate,
+  invalid receipt, or verification failure
+- `2`: usage or argument error
+- `124`: total or idle timeout
+- `130` / `143`: clean SIGINT / SIGTERM cancellation
 
-| Code | Meaning |
-|---|---|
-| 0 | Receipt verdict `shipped` |
-| 1 | Run finished but the code was incomplete, broken, or the request failed |
-| 2 | Usage error (unknown command or flag, missing argument) |
-
-```bash
-lolm code "$TASK" --save ./out --json | jq -r '.done.receipt.verdict'
-```
-
-## What the receipt covers
-
-Every `code` run ends with a hashed record of the files written, the commands run,
-their real exit codes, and whether the delivered code compiles. The syntax verdict is
-inside the hashed core, so the seal covers it — a tree that does not compile is
-reported as `broken`, never as `shipped`.
-
-## Honest limits
-
-- **The sandbox has no network and no pip.** Standard library only, no servers, no GUI.
-  The task must run and exit in about 20 seconds. `pytest` is not available; ask for
-  `unittest` if you want tests.
-- **`--save` replays the streamed diffs**, and the API truncates each diff at 2500
-  characters. For a large file the full body never arrives, so that file is *skipped
-  with a reason* rather than written as corrupt content. Small and medium files
-  reconstruct exactly.
-- **This is a 70B-class model**, not a frontier coding model. On an internal 12-task
-  hidden-test benchmark the agent scores about 61% — good for well-specified single-file
-  work and small bug fixes, well short of a frontier coding agent on hard multi-file
-  tasks. The receipt tells you which kind of run you got.
-
-## Self-hosting
-
-Point `--base` at your own instance and everything works the same:
+## Tests and packaging
 
 ```bash
-LOLM_BASE_URL=http://localhost:7866 lolm status
+npm ci
+npm test --workspace lolm-nfet-client
+npm test --workspace lolm-cli
+npm run test:release-gauntlet
+npm pack --dry-run --prefix clients/js
+npm pack --dry-run --prefix clients/cli
 ```
 
-## Library
-
-For programmatic use, [`lolm-nfet-client`](https://www.npmjs.com/package/lolm-nfet-client)
-is the underlying library this CLI wraps.
-
----
-
-MIT © 2026 Qira LLC · [lolm.imagineqira.com](https://lolm.imagineqira.com) · patent pending
+See the [audit remediation matrix](https://github.com/TheArtOfSound/lolm/blob/main/CLI_AUDIT_REMEDIATION.md)
+for the finding-by-finding disposition and release gates.

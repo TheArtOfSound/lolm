@@ -38,7 +38,6 @@ grant_proposal.js
 patent_spec.js
 plan.md
 node_modules/
-package-lock.json
 dashboard.py
 fix_checkpoint.py
 qira_hq.py

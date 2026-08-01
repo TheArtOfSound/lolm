@@ -174,6 +174,8 @@ def _seal_visual_receipt(task: str, done: Dict[str, Any]) -> Dict[str, Any]:
     import hashlib
     v = done.get("verdict") or {}
     core = {
+        "schema": "lolm.visual.receipt.v2",
+        "run_id": str(done.get("run_id") or f"visual_{int(time.time() * 1000)}"),
         "kind": "visual_build",
         "task": (task or "")[:400],
         "verified": bool(done.get("verified")),
@@ -196,14 +198,25 @@ def _seal_visual_receipt(task: str, done: Dict[str, Any]) -> Dict[str, Any]:
     }
     # Do not store full HTML in the ledger (can be large); store content hash only.
     html = done.get("html") or ""
-    core["html_sha"] = hashlib.sha256(html.encode("utf-8")).hexdigest()[:24] if html else ""
-    core["receipt_sha"] = hashlib.sha256(
-        json.dumps(core, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()[:24]
+    html_sha = hashlib.sha256(html.encode("utf-8")).hexdigest() if html else ""
+    core["html_sha"] = html_sha
+    core["verification"] = {
+        "browser_ok": bool(done.get("verified")),
+        "html_sha256": html_sha,
+        "byte_count": len(html.encode("utf-8")),
+    }
+    from local_ui.receipt_sign import sign_code_receipt
+    core = sign_code_receipt(core)
     try:
         sealed = code_receipt_ledger.append(core, source="api.demo.code.visual.build")
     except Exception:
         sealed = core
+    # Teach the technique library: verified games become future curriculum fuel.
+    try:
+        from local_ui import code_techniques as techlib
+        techlib.learn_from_code_receipt(sealed)
+    except Exception:
+        pass
     return sealed
 
 
@@ -211,6 +224,7 @@ def _emit_visual_done(done: Dict[str, Any], task: str):
     """Yield done + visual_receipt events; always attach receipt_sha on done."""
     sealed = _seal_visual_receipt(task, done)
     payload = dict(done)
+    payload["run_id"] = sealed.get("run_id")
     payload["receipt_sha"] = sealed.get("receipt_sha") or sealed.get("ledger_sha")
     payload["ledger_sha"] = sealed.get("ledger_sha")
     yield _sse("done", payload)
@@ -372,7 +386,8 @@ def register_code_routes(app: Any, root: str,
             pass
         rows = code_receipt_ledger.tail(max(lim, 50))
         want = (kind or "").strip().lower()
-        # Strip bulky stdout tails for the list view; full sha remains.
+        # Return the complete sealed object. Removing signed fields would make
+        # independent local verification impossible.
         slim = []
         for r in rows:
             rkind = (r.get("kind") or (
@@ -382,27 +397,30 @@ def register_code_routes(app: Any, root: str,
                 continue
             if want in ("visual", "visual_build") and "visual" not in str(rkind):
                 continue
-            slim.append({
-                "ledger_sha": r.get("ledger_sha"),
-                "prev_ledger_sha": r.get("prev_ledger_sha"),
-                "receipt_sha": r.get("receipt_sha"),
-                "kind": rkind,
-                "task": (r.get("task") or "")[:160],
-                "verdict": r.get("verdict"),
-                "ok": r.get("ok"),
-                "files": r.get("files") or [],
-                "green_runs": r.get("green_runs"),
-                "failed_runs": r.get("failed_runs"),
-                "verifies": r.get("verifies"),
-                "attempts": r.get("attempts"),
-                "html_sha": r.get("html_sha"),
-                "ts": r.get("ledger_ts") or r.get("ts"),
-                "source": r.get("source"),
-                "demo": bool(r.get("demo")),
-                "selftest": bool(r.get("selftest")),
-            })
+            slim.append(dict(r))
         slim = slim[-lim:]
         return {"receipts": slim, "stats": code_receipt_ledger.stats()}
+
+    @app.get("/api/demo/receipts/keys")
+    def receipt_keys_status():
+        """Public status of rotating receipt keys (kids only — never secrets)."""
+        from local_ui.receipt_sign import public_key_status
+        return public_key_status()
+
+    @app.post("/api/demo/receipts/verify")
+    async def receipt_verify_endpoint(request: Request):
+        """Compatibility diagnostic only; clients must verify signatures locally."""
+        from local_ui.receipt_sign import verify_code_receipt
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        receipt = body.get("receipt") if isinstance(body, dict) and isinstance(body.get("receipt"), dict) else body
+        if not isinstance(receipt, dict) or not receipt:
+            return JSONResponse({"error": "receipt object required"}, status_code=400)
+        out = verify_code_receipt(receipt)
+        out["attestation"] = "server"
+        return out
 
     @app.post("/api/demo/code/run")
     def code_run(req: CodeTask, request: Request):

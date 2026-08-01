@@ -113,6 +113,15 @@ make agent-ui
 The importer is heading-aware, frontmatter-aware, idempotent, and never
 sends a byte off your machine. JS clients: `npm install lolm-nfet-client`.
 
+### Hardened CLI beta
+
+`lolm-cli` `0.3.0-beta.1` requires authenticated memory, fails closed on
+incomplete or contradictory receipts, and installs only complete signed
+artifacts into fresh destinations. It is intentionally not labeled
+pipeline-safe until its release commit passes the Linux/macOS/Windows and
+clean-package gates. See [SECURITY.md](SECURITY.md) and the
+[audit remediation matrix](CLI_AUDIT_REMEDIATION.md).
+
 Read [AGENT.md](AGENT.md) for the architecture and the self-improvement
 flywheel.
 

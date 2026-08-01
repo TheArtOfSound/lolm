@@ -53,6 +53,10 @@ DEVICE = os.environ.get("DEMO_DEVICE", "cpu")
 GRAFT_CKPT = os.environ.get("DEMO_GRAFT_CKPT", "runs/nfet_controller/bootstrap_qwen06b.pt")
 REPLAYS_DIR = Path(os.environ.get("DEMO_REPLAYS_DIR", str(ROOT / "site" / "replays")))
 usage_limits.init(ROOT / "runs")   # usage tiers: counters live under runs/usage/
+from local_ui import receipt_sign
+receipt_sign.init(ROOT / "runs")
+from local_ui.api_key_routes import register_api_key_routes
+register_api_key_routes(app)
 
 # Optional frontier brain: a strong model (Llama 70B via Cloudflare Workers AI)
 # writes, the local graft telemeters it. Activated when WORKERS_AI_URL/SECRET

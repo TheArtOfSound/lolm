@@ -25,6 +25,47 @@ const ok = (name) => { passed++; console.log("  ✓", name); };
   ok("parseSSEStream handles chunked frames");
 }
 
+// 1b. EventSource framing: CRLF/CR/LF, optional spaces, multiline data, EOF flush.
+{
+  const raw = [
+    ": keepalive\r\n",
+    "event:token\r\n",
+    "data: {\"token\":\"hi\"}\r\n\r\n",
+    "event: note\r",
+    "data:first\r",
+    "data: second\r\r",
+    "event: run_done\n",
+    "data:{\"ended_by\":\"natural_eos\"}",
+  ].join("");
+  const bytes = new TextEncoder().encode(raw);
+  const stream = new ReadableStream({
+    start(c) {
+      for (let i = 0; i < bytes.length; i += 3) c.enqueue(bytes.slice(i, i + 3));
+      c.close();
+    },
+  });
+  const events = [];
+  for await (const ev of parseSSEStream(stream)) events.push(ev);
+  assert.deepEqual(events, [
+    { event: "token", data: { token: "hi" } },
+    { event: "note", data: "first\nsecond" },
+    { event: "run_done", data: { ended_by: "natural_eos" } },
+  ]);
+  ok("parseSSEStream implements EventSource framing and EOF dispatch");
+}
+
+// 1c. Event and cumulative stream limits fail closed.
+{
+  const oversized = new ReadableStream({
+    start(c) { c.enqueue(new TextEncoder().encode("data: 123456789\n\n")); c.close(); },
+  });
+  await assert.rejects(
+    async () => { for await (const _ of parseSSEStream(oversized, { maxEventBytes: 4 })) void _; },
+    (err) => err instanceof AgentRunError && err.code === "SSE_EVENT_TOO_LARGE",
+  );
+  ok("parseSSEStream enforces event size bounds");
+}
+
 // 2. Replay playback over the REAL recorded replay shipped with the site.
 {
   const replay = JSON.parse(await readFile(join(here, "../../../site/replays/credit-score.json"), "utf-8"));
@@ -96,15 +137,32 @@ const ok = (name) => { passed++; console.log("  ✓", name); };
   ok("runAgent threads history + cross-session memory into the request");
 }
 
-// 7. buildVisual returns the HTML document.
+// 7. buildVisual returns only a terminal result paired with a receipt.
 {
   const mockFetch = async (url) => {
-    assert.match(String(url), /\/api\/demo\/code\/visual$/);
-    return new Response(JSON.stringify({ html: "<!DOCTYPE html><canvas>", bytes: 22 }), { status: 200, headers: { "Content-Type": "application/json" } });
+    assert.match(String(url), /\/api\/demo\/code\/visual\/build$/);
+    return new Response(
+      'event: done\ndata: {"html":"<!DOCTYPE html><canvas>","bytes":22,"verified":true,"run_id":"v1"}\n\n' +
+      'event: visual_receipt\ndata: {"schema":"lolm.visual.receipt.v2","run_id":"v1"}\n\n',
+      { status: 200, headers: { "Content-Type": "text/event-stream" } },
+    );
   };
   const r = await buildVisual({ task: "snake game", fetch: mockFetch });
-  assert.ok(r.html.startsWith("<!DOCTYPE") && r.bytes === 22);
-  ok("buildVisual returns a self-contained HTML app");
+  assert.ok(r.html.startsWith("<!DOCTYPE") && r.bytes === 22 && r.receipt.run_id === "v1");
+  ok("buildVisual requires done + visual_receipt terminal events");
+}
+
+{
+  const mockFetch = async () => new Response(
+    'event: done\ndata: {"html":"<!DOCTYPE html>","bytes":15,"verified":true,"run_id":"v1"}\n\n' +
+    'event: visual_receipt\ndata: {"schema":"lolm.visual.receipt.v2","run_id":"v2"}\n\n',
+    { status: 200 },
+  );
+  await assert.rejects(
+    () => buildVisual({ task: "x", fetch: mockFetch }),
+    (err) => err instanceof AgentRunError && err.code === "VISUAL_RUN_MISMATCH",
+  );
+  ok("buildVisual rejects contradictory done and receipt identities");
 }
 
 // 8. runCode streams the agentic loop and returns code_done + code_receipt.
@@ -138,22 +196,58 @@ const ok = (name) => { passed++; console.log("  ✓", name); };
   ok("listCodeReceipts reads the public audit ledger");
 }
 
-// 9. memory helpers hit the right routes + send the owner header.
+// 8c. Missing terminal events are typed protocol failures.
+{
+  const mockFetch = async () => new Response('event: code_receipt\ndata: {"verdict":"shipped"}\n\n', { status: 200 });
+  await assert.rejects(
+    () => runCode({ task: "x", fetch: mockFetch }),
+    (err) => err instanceof AgentRunError && err.code === "MISSING_CODE_DONE",
+  );
+  ok("runCode rejects streams without code_done");
+}
+
+// 8d. Every network call has a bounded deadline and cancels its request.
+{
+  const hangingFetch = async (_url, { signal } = {}) => new Promise((resolve, reject) => {
+    signal?.addEventListener("abort", () => reject(signal.reason || new DOMException("Aborted", "AbortError")), { once: true });
+  });
+  await assert.rejects(
+    () => getMemory({ apiKey: "lolm_test", fetch: hangingFetch, timeoutMs: 20 }),
+    (err) => err instanceof AgentRunError && err.code === "TIMEOUT",
+  );
+  await assert.rejects(
+    () => playReplay("https://example.test/replay.json", { fetch: hangingFetch, timeoutMs: 20 }),
+    (err) => err instanceof AgentRunError && err.code === "TIMEOUT",
+  );
+  ok("network helpers enforce configured timeouts");
+}
+
+// 9. memory helpers require authentication and never use caller-owned namespaces.
 {
   const calls = [];
   const mockFetch = async (url, init = {}) => {
-    calls.push({ url: String(url), method: init.method || "GET", owner: (init.headers || {})["X-Workspace-Owner"] });
+    calls.push({
+      url: String(url),
+      method: init.method || "GET",
+      apiKey: (init.headers || {})["X-LOLM-Api-Key"],
+      owner: (init.headers || {})["X-Workspace-Owner"],
+    });
     if (String(url).endsWith("/memory") && (init.method || "GET") === "GET")
       return new Response(JSON.stringify({ memories: [{ id: "m1", text: "The user's name is Bryan." }] }), { status: 200 });
     return new Response(JSON.stringify({ saved: { id: "m2" }, deleted: true }), { status: 200 });
   };
-  const mems = await getMemory({ owner: "u1", fetch: mockFetch });
+  await assert.rejects(
+    () => getMemory({ fetch: mockFetch }),
+    (err) => err instanceof AgentRunError && /authentication/i.test(err.message),
+  );
+  const mems = await getMemory({ apiKey: "lolm_test_secret", owner: "spoofed", fetch: mockFetch });
   assert.equal(mems[0].text, "The user's name is Bryan.");
-  await rememberFact({ text: "The user prefers Python.", owner: "u1", fetch: mockFetch });
-  await forgetMemory({ id: "m1", owner: "u1", fetch: mockFetch });
-  assert.ok(calls.every((c) => c.owner === "u1"), "owner header sent");
+  await rememberFact({ text: "The user prefers Python.", apiKey: "lolm_test_secret", owner: "spoofed", fetch: mockFetch });
+  await forgetMemory({ id: "m1", apiKey: "lolm_test_secret", owner: "spoofed", fetch: mockFetch });
+  assert.ok(calls.every((c) => c.apiKey === "lolm_test_secret"), "API key sent");
+  assert.ok(calls.every((c) => c.owner === undefined), "caller owner header omitted");
   assert.equal(calls[2].method, "DELETE");
-  ok("memory helpers (list/remember/forget) use the right routes + owner");
+  ok("memory helpers require auth and omit caller-owned namespace headers");
 }
 
 console.log(`\n${passed} passed`);

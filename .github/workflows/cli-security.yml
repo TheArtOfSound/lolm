@@ -1,0 +1,96 @@
+name: cli-security
+
+on:
+  push:
+    branches: [main, 'codex/**']
+    paths:
+      - 'clients/cli/**'
+      - 'clients/js/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'verification/**'
+      - 'local_ui/**'
+      - 'tests/test_workspace_auth.py'
+      - 'tests/test_receipt_sign_usefulness.py'
+      - '.github/workflows/cli-security.yml'
+  pull_request:
+    paths:
+      - 'clients/cli/**'
+      - 'clients/js/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'verification/**'
+      - 'local_ui/**'
+      - 'tests/test_workspace_auth.py'
+      - 'tests/test_receipt_sign_usefulness.py'
+      - '.github/workflows/cli-security.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node-clients:
+    name: Node ${{ matrix.node }} / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ['20', '22']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Reproducible workspace install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: JavaScript client adversarial suite
+        run: node clients/js/test/run.mjs
+      - name: CLI adversarial suite
+        run: node clients/cli/test/run.mjs
+      - name: Packed-surface release gauntlet
+        run: node verification/release_gauntlet.mjs
+
+  package-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Pack and clean-install both tarballs
+        shell: bash
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          mkdir -p "$RUNNER_TEMP/lolm-packs" "$RUNNER_TEMP/lolm-smoke"
+          npm pack ./clients/js --pack-destination "$RUNNER_TEMP/lolm-packs"
+          npm pack ./clients/cli --pack-destination "$RUNNER_TEMP/lolm-packs"
+          cd "$RUNNER_TEMP/lolm-smoke"
+          npm init -y >/dev/null
+          npm install "$RUNNER_TEMP"/lolm-packs/lolm-nfet-client-*.tgz --ignore-scripts --no-audit --no-fund
+          npm install "$RUNNER_TEMP"/lolm-packs/lolm-cli-*.tgz --ignore-scripts --no-audit --no-fund
+          ./node_modules/.bin/lolm --version | grep -Fx '0.3.0-beta.1'
+          ./node_modules/.bin/lolm --help | grep -q 'USAGE'
+          ./node_modules/.bin/lolm code >/dev/null 2>&1 && exit 1 || test "$?" -eq 2
+
+  python-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements.txt pytest httpx pynacl
+      - name: Authentication and receipt controls
+        run: >-
+          PYTHONPATH="$PWD:$(dirname "$PWD")" python -m pytest -q
+          tests/test_workspace_auth.py tests/test_receipt_sign_usefulness.py

@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -29,7 +29,6 @@ class NewConversation(BaseModel):
     title: str = "New conversation"
     project_id: str = ""
     mode: str = "chat"
-    owner: str = ""
 
 
 class PatchConversation(BaseModel):
@@ -42,13 +41,11 @@ class NewMemory(BaseModel):
     text: str
     kind: str = "fact"
     source_conv: str = ""
-    owner: str = ""
 
 
 class ExtractMemory(BaseModel):
     user_message: str
     conv_id: str = ""
-    owner: str = ""
 
 
 class NewMessage(BaseModel):
@@ -97,33 +94,39 @@ AGENT_MODES = [
 
 def register_workspace_routes(app: Any, store: WorkspaceStore, chat_fn=None) -> None:
 
-    def _owner(request: Request, body_owner: str = "") -> str:
-        return (body_owner or request.headers.get("X-Workspace-Owner", "")).strip()[:64]
+    def _principal(request: Request) -> str:
+        """Return an immutable server-validated principal, never a caller namespace."""
+        from local_ui import api_keys
+        token = api_keys.extract_api_key(request.headers)
+        row = api_keys.read_api_key(token) if token else None
+        if not row:
+            raise HTTPException(status_code=401, detail="authentication required")
+        return f"api:{row['key_id']}"
 
     # ── cross-session user memory (owner-scoped, fully visible/deletable) ──────
     @app.get("/api/demo/workspace/memory")
     def list_memory(request: Request):
-        return {"memories": store.list_memories(_owner(request))}
+        return {"memories": store.list_memories(_principal(request))}
 
     @app.post("/api/demo/workspace/memory")
     def add_memory(req: NewMemory, request: Request):
-        m = store.add_memory(_owner(request, req.owner), req.text,
+        m = store.add_memory(_principal(request), req.text,
                              kind=req.kind or "fact", source_conv=req.source_conv or "")
         return {"saved": m, "duplicate": m is None}
 
     @app.delete("/api/demo/workspace/memory/{mem_id}")
     def delete_memory(mem_id: str, request: Request):
-        return {"deleted": store.delete_memory(_owner(request), mem_id)}
+        return {"deleted": store.delete_memory(_principal(request), mem_id)}
 
     @app.post("/api/demo/workspace/memory/clear")
     def clear_memory(request: Request):
-        return {"cleared": store.clear_memories(_owner(request))}
+        return {"cleared": store.clear_memories(_principal(request))}
 
     @app.post("/api/demo/workspace/memory/extract")
     def extract_memory(req: ExtractMemory, request: Request):
         """After a turn, pull any DURABLE fact about the user and remember it.
         Runs the model once; honest no-op if no extractor is wired or nothing durable."""
-        owner = _owner(request, req.owner)
+        owner = _principal(request)
         msg = (req.user_message or "").strip()
         if chat_fn is None or len(msg) < 4:
             return {"saved": []}
@@ -188,38 +191,39 @@ def register_workspace_routes(app: Any, store: WorkspaceStore, chat_fn=None) -> 
     @app.post("/api/demo/workspace/conversations")
     def create_conversation(req: NewConversation, request: Request):
         return store.create_conversation(title=req.title, project_id=req.project_id,
-                                         mode=req.mode, owner=_owner(request, req.owner))
+                                         mode=req.mode, owner_id=_principal(request))
 
     @app.get("/api/demo/workspace/conversations")
     def list_conversations(request: Request, archived: bool = False,
                            project_id: str = "", q: str = ""):
         return {"conversations": store.list_conversations(
-            owner=_owner(request), include_archived=archived,
+            _principal(request), include_archived=archived,
             project_id=project_id, query=q)}
 
     @app.get("/api/demo/workspace/conversations/{conv_id}")
-    def get_conversation(conv_id: str):
-        c = store.get_conversation(conv_id)
+    def get_conversation(conv_id: str, request: Request):
+        c = store.get_conversation(_principal(request), conv_id)
         if not c:
             return JSONResponse({"error": "unknown conversation"}, status_code=404)
         return c
 
     @app.patch("/api/demo/workspace/conversations/{conv_id}")
-    def patch_conversation(conv_id: str, req: PatchConversation):
+    def patch_conversation(conv_id: str, req: PatchConversation, request: Request):
+        owner_id = _principal(request)
         out = None
         if req.title is not None:
-            out = store.rename_conversation(conv_id, req.title)
+            out = store.rename_conversation(owner_id, conv_id, req.title)
         if req.archived is not None:
-            out = store.set_archived(conv_id, req.archived)
+            out = store.set_archived(owner_id, conv_id, req.archived)
         if req.mode is not None:
-            out = store.set_mode(conv_id, req.mode)
+            out = store.set_mode(owner_id, conv_id, req.mode)
         if out is None:
             return JSONResponse({"error": "unknown conversation"}, status_code=404)
         return out
 
     @app.post("/api/demo/workspace/conversations/{conv_id}/messages")
-    def append_message(conv_id: str, req: NewMessage):
-        msg = store.append_message(conv_id, req.role, req.content,
+    def append_message(conv_id: str, req: NewMessage, request: Request):
+        msg = store.append_message(_principal(request), conv_id, req.role, req.content,
                                    model_used=req.model_used, receipt_id=req.receipt_id,
                                    verdict=req.verdict, meta=req.meta)
         if msg is None:
@@ -228,13 +232,13 @@ def register_workspace_routes(app: Any, store: WorkspaceStore, chat_fn=None) -> 
 
     # ── projects ─────────────────────────────────────────────────────────────
     @app.post("/api/demo/workspace/projects")
-    def create_project(req: NewProject):
-        return store.create_project(req.name, repo_url=req.repo_url, framework=req.framework,
+    def create_project(req: NewProject, request: Request):
+        return store.create_project(_principal(request), req.name, repo_url=req.repo_url, framework=req.framework,
                                     package_manager=req.package_manager, scripts=req.scripts)
 
     @app.get("/api/demo/workspace/projects")
-    def list_projects():
-        return {"projects": store.list_projects()}
+    def list_projects(request: Request):
+        return {"projects": store.list_projects(_principal(request))}
 
     # ── modes + honest capability state ──────────────────────────────────────
     @app.get("/api/demo/workspace/modes")
@@ -265,5 +269,5 @@ def register_workspace_routes(app: Any, store: WorkspaceStore, chat_fn=None) -> 
         }
 
     @app.get("/api/demo/workspace/stats")
-    def workspace_stats():
-        return store.stats()
+    def workspace_stats(request: Request):
+        return store.stats(_principal(request))

@@ -229,12 +229,13 @@ def test_broken_final_tree_is_reported_as_broken_not_shipped(tmp_path):
     assert rec["ok"] is False, "broken code must never read as ok"
     assert rec["verdict"] == "broken", rec["verdict"]
     assert "solution.py" in rec["syntax_checked"]
-    # the seal must cover the syntax verdict, not be bolted on after hashing
-    import json, hashlib
-    core = {k: v for k, v in rec.items() if k not in ("receipt_sha", "verdict")}
-    blob = json.dumps(core, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-    assert hashlib.sha256(blob.encode()).hexdigest()[:24] == rec["receipt_sha"], \
-        "receipt_sha must cover syntax_ok"
+    # The v2 Ed25519 seal must cover the syntax verdict and full verification core.
+    from local_ui.receipt_sign import verify_code_receipt
+    verified = verify_code_receipt(rec)
+    assert verified["receipt_hash_match"] is True
+    assert verified["signature_valid"] is True
+    # Broken is an honest, authentic receipt but not a successful delivery.
+    assert verified["integrity"]["verified"] is False
 
 
 def test_compiling_code_still_reports_shipped(tmp_path):
