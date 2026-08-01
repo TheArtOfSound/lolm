@@ -58,5 +58,10 @@ jobs:
         run: |
           cd "$RUNNER_TEMP"
           mkdir smoke && cd smoke && npm init -y >/dev/null
-          npm install "lolm-nfet-client@$CANARY_VERSION"
+          installed=0
+          for i in 1 2 3 4 5 6; do
+            if npm install "lolm-nfet-client@$CANARY_VERSION"; then installed=1; break; fi
+            sleep 10
+          done
+          [ "$installed" -eq 1 ]
           node -e "import('lolm-nfet-client').then(m=>{if(!m)process.exit(1);console.log('canary import OK')})"

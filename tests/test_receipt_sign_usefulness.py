@@ -52,6 +52,30 @@ def test_tamper_breaks_signature():
     assert v["integrity"]["verified"] is False
 
 
+def test_signed_receipt_is_a_frozen_snapshot_of_nested_runtime_state():
+    """A later controller-state mutation must not corrupt an emitted receipt."""
+    from local_ui.receipt_sign import sign_code_receipt, verify_code_receipt
+
+    timeline = [{"label": "continue", "scores": [0.25]}]
+    core = {
+        "schema": "lolm.code.receipt.v2", "run_id": "run_nested",
+        "kind": "code_agent", "task": "x", "ok": True,
+        "syntax_ok": True, "verdict": "shipped", "nfet": {"timeline": timeline},
+        "verification": {
+            "syntax_ok": True, "execution_ok": True, "contract_ok": True,
+            "artifact_manifest_ok": True,
+            "artifact_manifest_sha256": "e" * 64,
+        },
+    }
+    sealed = sign_code_receipt(core)
+
+    timeline[0]["scores"].append(0.75)
+    timeline.append({"label": "finalize"})
+
+    assert sealed["nfet"]["timeline"] == [{"label": "continue", "scores": [0.25]}]
+    assert verify_code_receipt(sealed)["integrity"]["verified"] is True
+
+
 def test_incomplete_artifact_manifest_cannot_verify_as_shippable():
     from local_ui.receipt_sign import sign_code_receipt, verify_code_receipt
     core = {
