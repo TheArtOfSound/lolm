@@ -36,7 +36,8 @@ jobs:
         run: |
           V="${{ inputs.version }}"
           if [ -z "$V" ]; then V="$(node -p "require('./package.json').version")-canary.$(date +%Y%m%d).${{ github.run_number }}"; fi
-          npm version "$V" --no-git-tag-version
+          CURRENT="$(node -p "require('./package.json').version")"
+          if [ "$V" != "$CURRENT" ]; then npm version "$V" --no-git-tag-version; fi
           echo "CANARY_VERSION=$V" >> "$GITHUB_ENV"
       - name: Test + inspect package contents
         run: |
