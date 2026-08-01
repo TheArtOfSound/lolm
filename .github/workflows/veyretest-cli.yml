@@ -71,11 +71,13 @@ jobs:
           const out = process.env.RUNNER_TEMP + '/veyretest-out/veyretest-proof.txt';
           const body = fs.readFileSync(out);
           if (!body.equals(Buffer.from('independent retest passed\n'))) throw new Error('artifact bytes differ');
-          const receipt = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/veyretest-receipt.json', 'utf8'));
-          if (receipt.receipt_sha !== result.receipt.receipt_sha) throw new Error('receipt file mismatch');
+          const envelope = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP + '/veyretest-receipt.json', 'utf8'));
+          if (envelope.receipt?.receipt_sha !== result.receipt.receipt_sha) throw new Error('receipt envelope mismatch');
+          if (envelope.done?.run_id !== result.done?.run_id) throw new Error('done envelope mismatch');
+          if (envelope.integrity?.integrity?.verified !== true) throw new Error('exported integrity evidence is not verified');
           console.log(JSON.stringify({
             ok: true,
-            receipt_sha: receipt.receipt_sha,
+            receipt_sha: envelope.receipt.receipt_sha,
             manifest_sha256: result.saved.manifest_sha256,
             artifact_sha256: result.saved.files[0].sha256,
             bytes: body.length,
