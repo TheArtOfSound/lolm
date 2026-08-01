@@ -1,0 +1,74 @@
+name: verify-published-cli
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Published lolm-cli version to verify'
+        required: true
+        default: '0.3.0-beta.1'
+
+permissions:
+  contents: read
+
+jobs:
+  clean-install:
+    name: Clean install / Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install the public package in an unrelated project
+        run: |
+          mkdir "$RUNNER_TEMP/clean-${{ matrix.node }}"
+          cd "$RUNNER_TEMP/clean-${{ matrix.node }}"
+          npm init -y >/dev/null
+          npm install "lolm-cli@${{ inputs.version }}" --ignore-scripts --no-audit --no-fund
+          test "$(./node_modules/.bin/lolm --version)" = "${{ inputs.version }}"
+          ./node_modules/.bin/lolm --help | grep -q USAGE
+          ./node_modules/.bin/lolm status --json > status.json
+          node -e "const x=require('./status.json'); if(x.model_ready!==true)process.exit(1)"
+
+  live-signed-save:
+    name: Live signed artifact save
+    needs: clean-install
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install public CLI and verify a real hosted artifact
+        run: |
+          mkdir "$RUNNER_TEMP/live"
+          cd "$RUNNER_TEMP/live"
+          npm init -y >/dev/null
+          npm install "lolm-cli@${{ inputs.version }}" --ignore-scripts --no-audit --no-fund
+          ./node_modules/.bin/lolm code \
+            "Create exactly one file named proof.txt containing exactly the text published release verified followed by one newline. Do not create any other file." \
+            --save "$RUNNER_TEMP/live/out" \
+            --receipt "$RUNNER_TEMP/live/receipt.json" \
+            --json --max-steps 5 > result.json
+          node - <<'JS'
+          const fs = require('node:fs');
+          const result = JSON.parse(fs.readFileSync('result.json', 'utf8'));
+          if (result.ok !== true || result.exit_code !== 0 || result.shipped !== true) process.exit(1);
+          if (result.integrity?.integrity?.verified !== true) process.exit(1);
+          if (result.saved?.verified !== true || result.saved?.committed !== true) process.exit(1);
+          const body = fs.readFileSync('out/proof.txt');
+          if (!body.equals(Buffer.from('published release verified\n'))) process.exit(1);
+          console.log(JSON.stringify({
+            version: '${{ inputs.version }}',
+            receipt_sha: result.receipt.receipt_sha,
+            manifest_sha256: result.saved.manifest_sha256,
+            artifact_sha256: result.saved.files[0].sha256,
+            bytes: body.length,
+          }));
+          JS
