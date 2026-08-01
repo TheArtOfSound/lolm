@@ -6,6 +6,7 @@ on:
       - 'clients/cli/**'
       - 'clients/js/**'
       - 'verification/veyretest_cli.mjs'
+      - 'verification/veyretest_cli_runner.mjs'
       - '.github/workflows/veyretest-cli.yml'
   workflow_dispatch:
 
@@ -35,7 +36,7 @@ jobs:
       - name: Existing packed release gauntlet
         run: node verification/release_gauntlet.mjs
       - name: Independent adversarial retest
-        run: node verification/veyretest_cli.mjs
+        run: node verification/veyretest_cli_runner.mjs
 
   live-hosted:
     name: Live hosted signed save
@@ -63,7 +64,6 @@ jobs:
             --json --max-steps 5 > result.json
           node - <<'JS'
           const fs = require('node:fs');
-          const path = require('node:path');
           const result = JSON.parse(fs.readFileSync('result.json', 'utf8'));
           if (result.ok !== true || result.exit_code !== 0 || result.shipped !== true) throw new Error('run did not ship');
           if (result.integrity?.integrity?.verified !== true) throw new Error('receipt not independently verified');
