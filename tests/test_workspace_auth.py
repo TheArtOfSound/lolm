@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from local_ui import api_keys
+from local_ui.api_key_routes import register_api_key_routes
 from local_ui.workspace_routes import register_workspace_routes
 from local_ui.workspace_store import WorkspaceStore
 
@@ -93,3 +94,16 @@ def test_conversations_and_projects_enforce_object_ownership(tmp_path):
     assert [p["id"] for p in client.get(
         "/api/demo/workspace/projects", headers=headers["alice"]
     ).json()["projects"]] == [project["id"]]
+
+
+def test_browser_can_mint_an_isolated_workspace_principal(tmp_path):
+    api_keys.init(tmp_path / "keys")
+    app = FastAPI()
+    register_api_key_routes(app)
+    response = TestClient(app).post(
+        "/api/demo/api-keys", json={"tier": "free", "label": "browser workspace"}
+    )
+    assert response.status_code == 200
+    token = response.json()["api_key"]
+    principal = api_keys.read_api_key(token)
+    assert principal and principal["key_id"] == response.json()["key_id"]

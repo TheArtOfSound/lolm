@@ -749,6 +749,26 @@ def _last_stdout(actions: List[Dict[str, Any]]) -> str:
     return ""
 
 
+# Interactive / visual deliverables that belong in the browser, not a terminal
+# print loop. Matching these in the code jail used to produce ASCII snake games
+# that exit 0 after "Game Over" and seal as "shipped" — a product failure.
+_PLAYABLE_VISUAL_RE = re.compile(
+    r"\b(game|snake|flappy|pong|tetris|breakout|asteroids|invaders|"
+    r"platformer|arcade|animation|animate|canvas|landing\s*page|"
+    r"web\s*page|web\s*site|bouncing|particles?|visuali[sz]e|"
+    r"interactive|sprite|confetti|starfield|fireworks)\b",
+    re.I,
+)
+
+
+def _is_playable_visual_task(task: str) -> bool:
+    return bool(_PLAYABLE_VISUAL_RE.search(task or ""))
+
+
+def _has_html_deliverable(files_written: List[str]) -> bool:
+    return any((p or "").lower().endswith((".html", ".htm")) for p in (files_written or []))
+
+
 def _task_oracle_satisfied(task: str, actions: List[Dict[str, Any]],
                            files_written: List[str]) -> Optional[str]:
     """Return a DONE summary if objective oracles say the task is complete.
@@ -757,6 +777,9 @@ def _task_oracle_satisfied(task: str, actions: List[Dict[str, Any]],
     without waiting for the model to say DONE — Claude/Codex users expect the
     loop to stop when the check passes.
     """
+    # Never auto-ship a terminal mock for a game/UI request.
+    if _is_playable_visual_task(task) and not _has_html_deliverable(files_written):
+        return None
     last_out = _last_stdout(actions)
     expect = _expected_outputs(task)
     if expect:
@@ -886,6 +909,10 @@ class CodeAgent:
                 self.nfet = None
         else:
             self.nfet = None
+        # Persistent task-state z_t — goals/plan/world/assumptions/uncertainty/
+        # failures/completion. This is what keeps the agent from losing the plot.
+        self.task_state = None
+        self._task_state_session = ""
         self._green_runs = 0
         self._failed_runs = 0
         self._last_contract_failed = False
@@ -1255,7 +1282,8 @@ class CodeAgent:
                       produced_output: bool = False, steps: int = 0,
                       stuck: bool = False, budget_hit: bool = False,
                       error: str = "",
-                      syntax: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                      syntax: Optional[Dict[str, Any]] = None,
+                      manifest: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Auditable trail of the coding loop — the switch reason vs black-box agents."""
         trail: List[Dict[str, Any]] = []
         green_runs = 0
@@ -1301,7 +1329,25 @@ class CodeAgent:
                 if e not in low:
                     expected_ok = False
                     missing.append(e)
+        # Playable game/UI tasks require an HTML deliverable. A terminal print of
+        # "Game Over" must never seal as shipped — that is the wrong medium.
+        visual_missing_html = (
+            _is_playable_visual_task(task)
+            and not _has_html_deliverable(list(self._files_written))
+        )
+        if visual_missing_html:
+            expected_ok = False
+            if "playable HTML (index.html)" not in missing:
+                missing.append("playable HTML (index.html)")
+        artifact_manifest_ok = bool(
+            manifest
+            and manifest.get("schema") == "lolm.artifact.manifest.v1"
+            and manifest.get("complete") is True
+            and len(str(manifest.get("manifest_sha256") or "")) == 64
+        )
         core = {
+            "schema": "lolm.code.receipt.v2",
+            "run_id": str((manifest or {}).get("run_id") or getattr(self.sb, "id", "")),
             "kind": "code_agent",
             "task": (task or "")[:400],
             "summary": (summary or "")[:300],
@@ -1327,7 +1373,9 @@ class CodeAgent:
             "syntax_error": (syntax or {}).get("error", "")[:400],
             "syntax_checked": list((syntax or {}).get("checked", [])),
             "ok": bool(ran and produced_output and green_runs > 0 and expected_ok
-                       and not stuck and (syntax.get("ok", True) if syntax else True)),
+                       and not stuck and (syntax.get("ok", True) if syntax else True)
+                       and not visual_missing_html and artifact_manifest_ok),
+            "visual_missing_html": bool(visual_missing_html),
         }
         # NFET control timeline is part of the sealed core — the receipt proves
         # not only what ran, but what the controller decided and why.
@@ -1336,8 +1384,14 @@ class CodeAgent:
                 core["nfet"] = self.nfet.receipt_blob()
             except Exception as exc:
                 core["nfet"] = {"error": str(exc)[:120]}
-        blob = json.dumps(core, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-        core["receipt_sha"] = hashlib.sha256(blob.encode("utf-8")).hexdigest()[:24]
+        # Persistent task state z_t — intent integrity across the run.
+        if self.task_state is not None:
+            try:
+                from lolm.control.task_state import receipt_blob as ts_blob, save_task_state
+                save_task_state(self.task_state)
+                core["task_state"] = ts_blob(self.task_state)
+            except Exception as exc:
+                core["task_state"] = {"error": str(exc)[:120]}
         core["verdict"] = (
             "shipped" if core["ok"] else
             ("broken" if not core["syntax_ok"] else
@@ -1346,6 +1400,21 @@ class CodeAgent:
                ("missing_output" if not expected_ok else
                 ("ran" if ran else "incomplete")))))
         )
+        core["verification"] = {
+            "syntax_ok": core["syntax_ok"] is True,
+            "execution_ok": bool(ran and produced_output and green_runs > 0),
+            "contract_ok": bool(expected_ok and not stuck and not visual_missing_html
+                                and artifact_manifest_ok),
+            "artifact_manifest_ok": artifact_manifest_ok,
+            "artifact_manifest_sha256": str((manifest or {}).get("manifest_sha256") or ""),
+        }
+        # Seal the complete verdict and verification core with Ed25519.
+        try:
+            from local_ui.receipt_sign import sign_code_receipt
+            core = sign_code_receipt(core)
+        except Exception:
+            blob = json.dumps(core, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+            core["receipt_sha"] = hashlib.sha256(blob.encode("utf-8")).hexdigest()
         return core
 
     def _final_compile_check(self) -> Dict[str, Any]:
@@ -1418,7 +1487,25 @@ class CodeAgent:
             yield {"event": "agent_note", "data": {
                 "text": "final check: delivered code does NOT compile — reporting it as "
                         "incomplete rather than shipped"}}
-        receipt = self.build_receipt(task, syntax=syntax, **kw)
+        manifest: Dict[str, Any] = {}
+        try:
+            manifest = self._artifact_manifest(max_file_bytes=2_000_000,
+                                               max_total_bytes=10_000_000)
+        except Exception as exc:
+            yield {"event": "agent_note", "data": {
+                "text": f"artifact manifest unavailable: {str(exc)[:100]}"}}
+        receipt = self.build_receipt(task, syntax=syntax, manifest=manifest, **kw)
+        # Learn durable techniques from this run (success boosts; failure soft-penalizes).
+        try:
+            from local_ui import code_techniques as techlib
+            learned = techlib.learn_from_code_receipt(receipt)
+            if learned:
+                yield {"event": "agent_note", "data": {
+                    "text": (
+                        f"learned {len(learned)} coding technique(s) for future runs"
+                    )}}
+        except Exception:
+            pass
         data = {
             "summary": kw.get("summary", ""),
             "steps": kw.get("steps", 0),
@@ -1431,9 +1518,100 @@ class CodeAgent:
             "ok": receipt.get("ok"),
             "files": receipt.get("files"),
             "expected_ok": receipt.get("expected_ok"),
+            "run_id": receipt.get("run_id"),
         }
+        # Canonical artifact bodies for CLI --save (not truncated diffs).
+        # Cap total payload so a huge tree cannot blow the SSE channel.
+        if manifest.get("files") is not None:
+            yield {"event": "artifact_manifest", "data": manifest}
+            data["artifact_id"] = manifest.get("artifact_id")
+            data["artifact_files"] = [f.get("path") for f in manifest.get("files") or []]
         yield {"event": "code_done", "data": data}
         yield {"event": "code_receipt", "data": receipt}
+
+    def _artifact_manifest(self, *, max_file_bytes: int = 96_000,
+                           max_total_bytes: int = 400_000) -> Dict[str, Any]:
+        """Canonical final-tree manifest with hashes and exact embedded bytes.
+
+        Paths are validated as relative jail-safe names. Binary / oversized files
+        are listed with sha256 only (no body) so the CLI can refuse incomplete
+        installs rather than writing truncated content.
+        """
+        import hashlib as _hl
+        import re as _re
+        files_out: List[Dict[str, Any]] = []
+        total = 0
+        names = list(dict.fromkeys(self._files_written or []))  # stable unique
+        complete = len(names) <= 40
+        for path in names[:40]:
+            p = (path or "").strip().replace("\\", "/")
+            if not p or p.startswith("/") or ".." in p.split("/"):
+                complete = False
+                continue
+            if not _re.match(r"^[A-Za-z0-9._/@+\-]+$", p) or p.startswith("../"):
+                # keep simple relative paths only
+                if ".." in p:
+                    complete = False
+                    continue
+            try:
+                raw = self.sb.read_file(p)
+            except Exception:
+                complete = False
+                continue
+            if raw is None:
+                complete = False
+                continue
+            if isinstance(raw, bytes):
+                body_b = raw
+                text = None
+            else:
+                text = str(raw)
+                body_b = text.encode("utf-8", errors="replace")
+            sha = _hl.sha256(body_b).hexdigest()
+            entry: Dict[str, Any] = {
+                "path": p,
+                "type": "file",
+                "sha256": sha,
+                "size": len(body_b),
+                "executable": False,
+            }
+            # Include exact bytes for every bounded entry. Text remains readable;
+            # binary data is base64 so newline and encoding boundaries survive.
+            if text is not None and len(body_b) <= max_file_bytes and total + len(body_b) <= max_total_bytes:
+                try:
+                    text.encode("utf-8")
+                    entry["content"] = text
+                    entry["encoding"] = "utf-8"
+                    total += len(body_b)
+                except Exception:
+                    entry["content_omitted"] = "binary_or_invalid_utf8"
+                    complete = False
+            elif isinstance(raw, bytes) and len(body_b) <= max_file_bytes and total + len(body_b) <= max_total_bytes:
+                import base64 as _b64
+                entry["content_base64"] = _b64.b64encode(body_b).decode("ascii")
+                entry["encoding"] = "base64"
+                total += len(body_b)
+            else:
+                entry["content_omitted"] = "too_large" if len(body_b) > max_file_bytes else "budget"
+                complete = False
+            files_out.append(entry)
+        metadata = [{
+            "path": f["path"], "type": f["type"], "size": f["size"],
+            "sha256": f["sha256"], "executable": f["executable"],
+        } for f in files_out]
+        artifact_id = "art_" + _hl.sha256(json.dumps(
+            metadata, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode()).hexdigest()[:24]
+        run_id = str(getattr(self.sb, "id", "") or "run_unknown")
+        manifest_core = {
+            "schema": "lolm.artifact.manifest.v1", "run_id": run_id,
+            "artifact_id": artifact_id, "complete": complete, "files": metadata,
+            "total_bytes": sum(f["size"] for f in files_out),
+        }
+        manifest_sha = _hl.sha256(json.dumps(
+            manifest_core, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode()).hexdigest()
+        return {**manifest_core, "files": files_out, "manifest_sha256": manifest_sha}
 
     def run(self, task: str) -> Iterator[Dict[str, Any]]:
         yield {"event": "code_start", "data": {"task": task, "sandbox": self.sb.id}}

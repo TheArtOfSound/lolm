@@ -99,6 +99,7 @@ def test_build_loop_retries_until_a_real_browser_confirms_it_works(monkeypatch):
     receipts = [d for n, d in evs if n == "visual_receipt"]
     assert receipts and receipts[-1].get("receipt_sha")
     assert done.get("receipt_sha")
+    assert done.get("run_id") == receipts[-1].get("run_id")
 
 
 def test_ensemble_races_brains_and_ships_the_browser_verified_winner(monkeypatch):
