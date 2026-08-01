@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Qira LLC. All rights reserved.
 /** Canonical artifact validation and all-or-nothing local installation. */
-import { chmod, lstat, mkdir, mkdtemp, open, readFile, rename, rm } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, open, readFile, realpath, rename, rm } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { safeDestination } from "./paths.mjs";
@@ -98,6 +98,42 @@ async function mustNotExist(path) {
   }
 }
 
+async function rejectSymlinkAncestors(target) {
+  const absolute = resolve(String(target));
+  const chain = [];
+  for (let current = absolute; ; current = dirname(current)) {
+    chain.push(current);
+    if (dirname(current) === current) break;
+  }
+  chain.reverse();
+  for (const [index, path] of chain.entries()) {
+    try {
+      const stat = await lstat(path);
+      // macOS exposes /var as the stable system alias /private/var. Permit only
+      // that top-level OS alias; user-controlled symlinks deeper in the output
+      // path are rejected.
+      const allowedSystemAlias = stat.isSymbolicLink() && index === 1 && path === "/var";
+      if (stat.isSymbolicLink() && !allowedSystemAlias) {
+        throw new Error(`symbolic-link path component rejected: ${path}`);
+      }
+      if (path !== absolute && !stat.isDirectory() && !allowedSystemAlias) {
+        throw new Error(`non-directory path component rejected: ${path}`);
+      }
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
+  }
+}
+
+async function prepareTrustedParent(parent) {
+  await rejectSymlinkAncestors(parent);
+  await mkdir(parent, { recursive: true, mode: 0o700 });
+  await rejectSymlinkAncestors(parent);
+  const canonical = await realpath(parent);
+  return canonical;
+}
+
 async function verifyTree(root, files) {
   const results = [];
   for (const file of files) {
@@ -119,8 +155,8 @@ export async function installVerifiedArtifacts(destination, manifest) {
   const dest = resolve(String(destination));
   await mustNotExist(dest);
   const parent = dirname(dest);
-  await mkdir(parent, { recursive: true, mode: 0o700 });
-  const staging = await mkdtemp(resolve(parent, `.${basename(dest)}.staging-`));
+  const trustedParent = await prepareTrustedParent(parent);
+  const staging = await mkdtemp(resolve(trustedParent, `.${basename(dest)}.staging-`));
   await chmod(staging, 0o700);
   let committed = false;
   try {
@@ -142,6 +178,8 @@ export async function installVerifiedArtifacts(destination, manifest) {
       await chmod(path, file.executable ? 0o755 : 0o644);
     }
     await verifyTree(staging, manifest.files);
+    if (await realpath(parent) !== trustedParent) throw new Error("destination parent changed during install");
+    await rejectSymlinkAncestors(parent);
     await mustNotExist(dest);
     await rename(staging, dest);
     committed = true;
@@ -168,8 +206,8 @@ export async function installVerifiedFile(destination, content, expectedSha256) 
   }
   await mustNotExist(dest);
   const parent = dirname(dest);
-  await mkdir(parent, { recursive: true, mode: 0o700 });
-  const staging = await mkdtemp(resolve(parent, `.${basename(dest)}.staging-`));
+  const trustedParent = await prepareTrustedParent(parent);
+  const staging = await mkdtemp(resolve(trustedParent, `.${basename(dest)}.staging-`));
   const stagedFile = resolve(staging, "payload");
   let committed = false;
   try {
@@ -184,6 +222,8 @@ export async function installVerifiedFile(destination, content, expectedSha256) 
     if (createHash("sha256").update(check).digest("hex") !== expectedSha256) {
       throw new Error("staged file hash mismatch");
     }
+    if (await realpath(parent) !== trustedParent) throw new Error("destination parent changed during install");
+    await rejectSymlinkAncestors(parent);
     await mustNotExist(dest);
     await rename(stagedFile, dest);
     committed = true;

@@ -13,7 +13,7 @@ export const SEALED_CORE_KEYS = [
 ];
 
 const POST_SEAL_KEYS = new Set([
-  "receipt_sha", "signature", "signed_at", "signing_key",
+  "receipt_sha", "signature", "signing_key",
   "ledger_sha", "prev_ledger_sha", "ledger_ts", "source", "demo", "selftest",
 ]);
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
@@ -151,11 +151,16 @@ export function verifyCodeReceipt(receipt, { publicKeys = {} } = {}) {
     && verification.browser_ok === true
     && /^[0-9a-f]{64}$/.test(String(verification.html_sha256 || ""));
   const runBound = typeof r.run_id === "string" && r.run_id.length > 0;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const timestamp_valid = Number.isSafeInteger(r.signed_at)
+    && r.signed_at > 0
+    && r.signed_at <= nowSeconds + 300;
   const verdict_consistent = !!(codeChecks || visualChecks);
   if (!schema_valid) notes.push("unsupported receipt schema");
   if (!runBound) notes.push("missing run_id");
+  if (!timestamp_valid) notes.push("missing, malformed, or future signed_at");
   if (!verdict_consistent) notes.push("receipt verdict or verification fields are incomplete/contradictory");
-  const verified = schema_valid && runBound && receipt_hash_match
+  const verified = schema_valid && runBound && timestamp_valid && receipt_hash_match
     && signature.signature_valid === true && verdict_consistent;
 
   return {
@@ -166,6 +171,7 @@ export function verifyCodeReceipt(receipt, { publicKeys = {} } = {}) {
     signature_valid: signature.signature_valid,
     signing_key: signature.key_id || signature.kid || r.signature?.key_id || null,
     signature_reason: signature.reason,
+    timestamp_valid,
     ledger_link_present: !!(r.ledger_sha || r.prev_ledger_sha),
     ledger_sha: r.ledger_sha || null,
     prev_ledger_sha: r.prev_ledger_sha || null,

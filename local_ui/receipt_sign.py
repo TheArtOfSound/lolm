@@ -17,7 +17,7 @@ from nacl.signing import SigningKey, VerifyKey
 _KEY_FILE: Optional[Path] = None
 _EPHEMERAL: Optional[Dict[str, SigningKey]] = None
 _POST_SEAL = {
-    "receipt_sha", "signature", "signed_at", "signing_key",
+    "receipt_sha", "signature", "signing_key",
     "ledger_sha", "prev_ledger_sha", "ledger_ts", "source", "demo", "selftest",
 }
 
@@ -126,6 +126,7 @@ def sign_code_receipt(core: Dict[str, Any]) -> Dict[str, Any]:
     kid = active_kid(keys)
     if not kid:
         raise RuntimeError("no receipt signing key available")
+    out["signed_at"] = int(time.time())
     blob = canonical_bytes(out)
     out["receipt_sha"] = content_sha256(blob)
     out["signature"] = {
@@ -134,7 +135,6 @@ def sign_code_receipt(core: Dict[str, Any]) -> Dict[str, Any]:
         "sig": _b64(keys[kid].sign(blob).signature),
     }
     out["signing_key"] = kid
-    out["signed_at"] = int(time.time())
     return out
 
 
@@ -164,6 +164,13 @@ def verify_code_receipt(receipt: Dict[str, Any],
                 signature_valid = False
                 reason = "bad_signature"
     verification = row.get("verification") or {}
+    signed_at = row.get("signed_at")
+    timestamp_valid = (
+        isinstance(signed_at, int)
+        and not isinstance(signed_at, bool)
+        and signed_at > 0
+        and signed_at <= int(time.time()) + 300
+    )
     code_ok = (
         row.get("schema") == "lolm.code.receipt.v2"
         and bool(row.get("run_id"))
@@ -184,7 +191,8 @@ def verify_code_receipt(receipt: Dict[str, Any],
         and verification.get("browser_ok") is True
         and len(str(verification.get("html_sha256") or "")) == 64
     )
-    verified = bool(hash_match and signature_valid is True and (code_ok or visual_ok))
+    verified = bool(hash_match and signature_valid is True and timestamp_valid
+                    and (code_ok or visual_ok))
     return {
         "schema_valid": row.get("schema") in ("lolm.code.receipt.v2", "lolm.visual.receipt.v2"),
         "receipt_hash_match": hash_match,
@@ -193,6 +201,7 @@ def verify_code_receipt(receipt: Dict[str, Any],
         "signature_valid": signature_valid,
         "signing_key": kid or None,
         "signature_reason": reason,
+        "timestamp_valid": timestamp_valid,
         "verified_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "integrity": {"verified": verified, "method": "sha256+Ed25519-v2"},
     }

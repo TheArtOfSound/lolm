@@ -64,3 +64,25 @@ def test_incomplete_artifact_manifest_cannot_verify_as_shippable():
     }
     sealed = sign_code_receipt(core)
     assert verify_code_receipt(sealed)["integrity"]["verified"] is False
+
+
+def test_receipt_signing_timestamp_is_authenticated_and_future_time_fails_closed():
+    import time
+    from local_ui.receipt_sign import sign_code_receipt, verify_code_receipt
+
+    sealed = sign_code_receipt({
+        "schema": "lolm.code.receipt.v2", "run_id": "run_time",
+        "verdict": "shipped", "ok": True, "syntax_ok": True,
+        "verification": {
+            "syntax_ok": True, "execution_ok": True, "contract_ok": True,
+            "artifact_manifest_ok": True,
+            "artifact_manifest_sha256": "d" * 64,
+        },
+    })
+    assert verify_code_receipt(sealed)["integrity"]["verified"] is True
+
+    tampered = dict(sealed)
+    tampered["signed_at"] = int(time.time()) + 86_400
+    result = verify_code_receipt(tampered)
+    assert result["timestamp_valid"] is False
+    assert result["integrity"]["verified"] is False

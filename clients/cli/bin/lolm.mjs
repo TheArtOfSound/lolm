@@ -222,20 +222,21 @@ function parseArgs(argv) {
     idleTimeout: 30_000,
   };
   if (!argv.length) return { flags, rest: [] };
-  if (["--version", "-V"].includes(argv[0])) return { flags: { ...flags, version: true }, rest: [] };
-  if (["--help", "-h"].includes(argv[0])) return { flags: { ...flags, help: true }, rest: [] };
-  const cmd = argv[0];
-  if (cmd.startsWith("-")) fail(`expected a command before ${cmd}`, 2);
-  const allowed = new Set(COMMAND_FLAGS[cmd] || ["help"]);
+  let cmd = null;
+  let allowed = null;
+  const prefixedKeys = [];
   const positionals = [];
   let literal = false;
-  for (let i = 1; i < argv.length; i++) {
+  for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
-    if (!literal && token === "--") { literal = true; continue; }
+    if (!cmd && token === "--") fail("expected a command before --", 2);
+    if (cmd && !literal && token === "--") { literal = true; continue; }
     if (!literal && token.startsWith("-")) {
       const def = FLAG_DEFS[token];
-      if (!def || !allowed.has(def[0])) fail(`unknown flag ${token} for ${cmd}`, 2);
+      if (!def) fail(`unknown flag ${token}${cmd ? ` for ${cmd}` : ""}`, 2);
       const [key, kind] = def;
+      if (cmd && !allowed.has(key)) fail(`unknown flag ${token} for ${cmd}`, 2);
+      if (!cmd) prefixedKeys.push([key, token]);
       if (kind === "boolean") {
         flags[key] = true;
         if (key === "json") JSON_MODE = true;
@@ -249,6 +250,16 @@ function parseArgs(argv) {
       i++;
       continue;
     }
+    if (!cmd) {
+      cmd = token;
+      allowed = new Set(COMMAND_FLAGS[cmd] || ["help"]);
+      for (const [key, original] of prefixedKeys) {
+        if (!["help", "version", "json"].includes(key) && !allowed.has(key)) {
+          fail(`unknown flag ${original} for ${cmd}`, 2);
+        }
+      }
+      continue;
+    }
     positionals.push(token);
   }
   flags.timeout = strictInteger(flags.timeout, "--timeout", 1, 3_600_000);
@@ -256,7 +267,8 @@ function parseArgs(argv) {
   if (flags.maxSteps != null) flags.maxSteps = strictInteger(flags.maxSteps, "--max-steps", 1, 50);
   if (flags.limit != null) flags.limit = strictInteger(flags.limit, "--limit", 1, 100);
   flags.base = normalizeBase(flags.base);
-  return { flags, rest: [cmd, ...positionals] };
+  if (!cmd && !flags.help && !flags.version) fail("expected a command", 2);
+  return { flags, rest: cmd ? [cmd, ...positionals] : [] };
 }
 
 const START = `${bold("lolm")} control console  ${dim("v" + VERSION)}
@@ -740,6 +752,11 @@ async function cmdInspect(sub, args, flags) {
 }
 
 async function cmdMemory(sub, args, flags) {
+  if (sub && !["list", "add", "forget"].includes(sub)) {
+    fail(`unknown: lolm memory ${sub} (list | add | forget)`, 2);
+  }
+  if ((!sub || sub === "list") && args.length) fail("memory list accepts no extra arguments", 2);
+  if (sub === "forget" && args.length) fail("memory forget accepts no extra arguments", 2);
   const o = clientOpts(flags);
   if (!o.apiKey) fail("authentication required for persistent memory (--api-key or LOLM_API_KEY)", 1);
   if (sub === "list" || !sub) {
@@ -779,10 +796,18 @@ async function main() {
     flags.base = normalizeBase(cfg.base);
   }
 
-  if (flags.version) { out(VERSION); return 0; }
+  if (flags.version) {
+    if (JSON_MODE) emit({ schema: "lolm.cli.result.v2", ok: true, exit_code: 0, version: VERSION });
+    else out(VERSION);
+    return 0;
+  }
   const [cmd, ...args] = rest;
   if (!cmd && !flags.help) { out(START); out(dim("Full help: lolm --help")); return 0; }
-  if (flags.help) { out(HELP); return 0; }
+  if (flags.help) {
+    if (JSON_MODE) emit({ schema: "lolm.cli.result.v2", ok: true, exit_code: 0, help: HELP });
+    else out(HELP);
+    return 0;
+  }
 
   const text = args.join(" ").trim();
   switch (cmd) {

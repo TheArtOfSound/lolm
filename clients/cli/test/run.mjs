@@ -47,9 +47,10 @@ function jsonResponse(res, value, status = 200) {
 }
 
 function signedReceipt(core, privateKey, keyId = "test-key") {
-  const blob = pyStyleDumps(core);
+  const signedCore = { ...core, signed_at: core.signed_at ?? Math.floor(Date.now() / 1000) };
+  const blob = pyStyleDumps(signedCore);
   return {
-    ...core,
+    ...signedCore,
     receipt_sha: createHash("sha256").update(blob).digest("hex"),
     signature: {
       alg: "Ed25519", key_id: keyId,
@@ -117,6 +118,12 @@ test("artifact install rejects symlinks, mismatches, collisions, and existing de
   base.manifest_sha256 = manifestSha256(base);
   await assert.rejects(() => installVerifiedArtifacts(linkedDest, base), /exist|symbolic|symlink/i);
   await assert.rejects(access(join(outside, "a.txt")));
+
+  const linkedParent = join(root, "linked-parent");
+  await symlink(outside, linkedParent, "dir");
+  const escapedDest = join(linkedParent, "nested-output");
+  await assert.rejects(() => installVerifiedArtifacts(escapedDest, base), /symbolic|symlink/i);
+  await assert.rejects(access(join(outside, "nested-output")));
 
   const bad = structuredClone(base);
   bad.files[0].sha256 = "0".repeat(64);
@@ -359,6 +366,7 @@ test("verifyCodeReceipt validates a signed v2 receipt and rejects tampering", ()
       artifact_manifest_sha256: "a".repeat(64),
     },
   };
+  core.signed_at = Math.floor(Date.now() / 1000);
   const blob = pyStyleDumps(core);
   const receipt = {
     ...core,
@@ -375,6 +383,19 @@ test("verifyCodeReceipt validates a signed v2 receipt and rejects tampering", ()
   const tampered = structuredClone(receipt);
   tampered.verification.contract_ok = false;
   assert.equal(verifyCodeReceipt(tampered, { publicKeys }).integrity.verified, false);
+});
+
+test("verifyCodeReceipt rejects unsigned or future signing timestamps", () => {
+  const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const core = {
+    schema: "lolm.code.receipt.v2", run_id: "run_time", kind: "code_agent",
+    task: "time bound", verdict: "shipped", ok: true, syntax_ok: true,
+    verification: { syntax_ok: true, execution_ok: true, contract_ok: true,
+      artifact_manifest_ok: true, artifact_manifest_sha256: "a".repeat(64) },
+  };
+  const receipt = signedReceipt({ ...core, signed_at: Math.floor(Date.now() / 1000) + 86_400 }, privateKey);
+  const publicKeys = { "test-key": publicKey.export({ type: "spki", format: "pem" }) };
+  assert.equal(verifyCodeReceipt(receipt, { publicKeys }).integrity.verified, false);
 });
 
 test("verifyCodeReceipt detects tampering", () => {
@@ -426,10 +447,31 @@ test("code with no task exits 2 instead of calling the API", async () => {
   );
 });
 
+test("memory rejects unknown subcommands and unused positionals before authentication", async () => {
+  for (const args of [["memory", "bogus"], ["memory", "list", "extra"], ["memory", "forget", "extra", "--all"]]) {
+    await assert.rejects(
+      run(process.execPath, [BIN, ...args]),
+      (e) => e.code === 2,
+      args.join(" "),
+    );
+  }
+});
+
 test("an unknown flag exits 2", async () => {
   await assert.rejects(
     run(process.execPath, [BIN, "status", "--nope"]),
     (e) => e.code === 2 && /unknown flag/.test(e.stderr),
+  );
+});
+
+test("global flags are accepted before commands and JSON help stays machine-readable", async () => {
+  const { stdout } = await run(process.execPath, [BIN, "--json", "--help"]);
+  const doc = JSON.parse(stdout);
+  assert.equal(doc.ok, true);
+  assert.match(doc.help, /USAGE/);
+  await assert.rejects(
+    run(process.execPath, [BIN, "--json", "frobnicate"]),
+    (e) => e.code === 2 && JSON.parse(e.stdout).error.message.includes("unknown command"),
   );
 });
 
