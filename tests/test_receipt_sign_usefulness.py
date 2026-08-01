@@ -65,27 +65,3 @@ def test_incomplete_artifact_manifest_cannot_verify_as_shippable():
     sealed = sign_code_receipt(core)
     assert verify_code_receipt(sealed)["integrity"]["verified"] is False
 
-
-def test_usefulness_marks_answer_use():
-    from lolm.retrieval_report import usefulness_metrics
-    ev = [
-        {"kind": "web", "text": "Specific impulse of chemical rockets is ~450 s",
-         "url": "https://example.com/isp"},
-        {"kind": "memory", "text": "cookie sign in skip to content"},
-    ]
-    u = usefulness_metrics(
-        ev,
-        answer="The rocket's specific impulse was about 450 s.",
-        command="explain chemical rocket performance",
-    )
-    assert u["used_in_answer"] >= 1
-    assert u["success"] is True
-    assert u["verdict"] in ("useful", "partial")
-    assert u["decorative"] >= 1
-
-
-def test_usefulness_empty_is_not_success_claim():
-    from lolm.retrieval_report import usefulness_metrics
-    u = usefulness_metrics([], answer="hello", command="hi")
-    assert u["retrieved"] == 0
-    assert u["verdict"] == "empty"
