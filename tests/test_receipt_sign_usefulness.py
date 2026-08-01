@@ -64,4 +64,3 @@ def test_incomplete_artifact_manifest_cannot_verify_as_shippable():
     }
     sealed = sign_code_receipt(core)
     assert verify_code_receipt(sealed)["integrity"]["verified"] is False
-
