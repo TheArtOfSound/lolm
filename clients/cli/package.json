@@ -1,7 +1,7 @@
 {
   "name": "lolm-cli",
-  "version": "0.1.0",
-  "description": "Command-line client for the LOLM agent (installs the `lolm` command): run a coding task in a network-isolated sandbox, watch the write-run-fix loop live, and get a sealed receipt for what actually happened.",
+  "version": "0.3.0-beta.1",
+  "description": "LOLM control console: fail-closed code shipping, path-safe --save, independent receipt verification, task-state inspect, and sealed artifact install.",
   "type": "module",
   "bin": {
     "lolm": "bin/lolm.mjs"
@@ -9,14 +9,21 @@
   "files": [
     "bin/lolm.mjs",
     "lib/diff.mjs",
+    "lib/artifacts.mjs",
+    "lib/paths.mjs",
+    "lib/shipped.mjs",
+    "lib/receipt.mjs",
+    "lib/terminal.mjs",
+    "scripts/postinstall.mjs",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "test": "node test/run.mjs"
+    "test": "node test/run.mjs",
+    "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {
-    "lolm-nfet-client": "^0.2.4"
+    "lolm-nfet-client": "^0.3.0-beta.1"
   },
   "engines": {
     "node": ">=20"

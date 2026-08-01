@@ -15,43 +15,198 @@
 
 /** Error thrown when a run cannot start or the stream reports an error. */
 export class AgentRunError extends Error {
-  constructor(message, { status = null, body = null } = {}) {
+  constructor(message, { status = null, body = null, code = "AGENT_RUN_ERROR", cause = null } = {}) {
     super(message);
     this.name = "AgentRunError";
     this.status = status;
     this.body = body;
+    this.code = code;
+    if (cause) this.cause = cause;
   }
+}
+
+const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
+const DEFAULT_JSON_BYTES = 5 * 1024 * 1024;
+const DEFAULT_SSE_EVENT_BYTES = 2 * 1024 * 1024;
+const DEFAULT_SSE_STREAM_BYTES = 32 * 1024 * 1024;
+
+function networkScope({ signal: parentSignal, timeoutMs = DEFAULT_TIMEOUT_MS,
+  idleTimeoutMs = 0 } = {}) {
+  const controller = new AbortController();
+  let reasonCode = null;
+  let deadlineTimer = null;
+  let idleTimer = null;
+  const abort = (code, message) => {
+    if (controller.signal.aborted) return;
+    reasonCode = code;
+    controller.abort(new DOMException(message, "AbortError"));
+  };
+  const onParentAbort = () => abort("CANCELLED", "request cancelled");
+  if (parentSignal?.aborted) onParentAbort();
+  else parentSignal?.addEventListener("abort", onParentAbort, { once: true });
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    deadlineTimer = setTimeout(() => abort("TIMEOUT", "request timed out"), timeoutMs);
+  }
+  const touch = () => {
+    if (!(Number.isFinite(idleTimeoutMs) && idleTimeoutMs > 0)) return;
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => abort("IDLE_TIMEOUT", "stream inactivity timeout"), idleTimeoutMs);
+  };
+  touch();
+  return {
+    signal: controller.signal,
+    touch,
+    cleanup() {
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      if (idleTimer) clearTimeout(idleTimer);
+      parentSignal?.removeEventListener("abort", onParentAbort);
+    },
+    error(error) {
+      if (error instanceof AgentRunError) return error;
+      if (reasonCode) {
+        const message = reasonCode === "TIMEOUT" ? "request timed out"
+          : reasonCode === "IDLE_TIMEOUT" ? "stream inactivity timeout"
+          : "request cancelled";
+        return new AgentRunError(message, { code: reasonCode, cause: error });
+      }
+      return new AgentRunError(error?.message || String(error), {
+        code: "NETWORK_ERROR", cause: error,
+      });
+    },
+  };
+}
+
+async function readJsonResponse(response, maxBytes = DEFAULT_JSON_BYTES) {
+  if (!response.body) {
+    const text = await response.text();
+    if (new TextEncoder().encode(text).byteLength > maxBytes) {
+      throw new AgentRunError("JSON response exceeds size limit", { code: "RESPONSE_TOO_LARGE" });
+    }
+    return JSON.parse(text);
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel("response too large");
+        throw new AgentRunError("JSON response exceeds size limit", { code: "RESPONSE_TOO_LARGE" });
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 /**
  * Parse a fetch-response body (ReadableStream) of Server-Sent Events into
  * `{event, data}` objects. `data:` payloads are JSON-parsed.
  */
-export async function* parseSSEStream(stream) {
+export async function* parseSSEStream(stream, {
+  maxEventBytes = DEFAULT_SSE_EVENT_BYTES,
+  maxStreamBytes = DEFAULT_SSE_STREAM_BYTES,
+  onActivity,
+} = {}) {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buf = "";
+  let streamBytes = 0;
+  let eventName = "message";
+  let dataLines = [];
+  let eventBytes = 0;
+
+  const parseData = (raw) => {
+    try { return JSON.parse(raw); } catch { return raw; }
+  };
+  const dispatchEvent = () => {
+    if (!dataLines.length) {
+      eventName = "message";
+      eventBytes = 0;
+      return null;
+    }
+    const raw = dataLines.join("\n");
+    const event = { event: eventName || "message", data: parseData(raw) };
+    eventName = "message";
+    dataLines = [];
+    eventBytes = 0;
+    return event;
+  };
+  const processLine = (line) => {
+    if (line === "") return dispatchEvent();
+    if (line.startsWith(":")) return null;
+    const colon = line.indexOf(":");
+    const field = colon < 0 ? line : line.slice(0, colon);
+    let value = colon < 0 ? "" : line.slice(colon + 1);
+    if (value.startsWith(" ")) value = value.slice(1);
+    if (field === "event" && !value.includes("\0")) eventName = value || "message";
+    if (field === "data") {
+      eventBytes += new TextEncoder().encode(value).byteLength;
+      if (eventBytes > maxEventBytes) {
+        throw new AgentRunError("SSE event exceeds size limit", { code: "SSE_EVENT_TOO_LARGE" });
+      }
+      dataLines.push(value);
+    }
+    return null;
+  };
+  const nextLine = (eof = false) => {
+    for (let i = 0; i < buf.length; i++) {
+      if (buf[i] === "\n") {
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 1);
+        return line;
+      }
+      if (buf[i] === "\r") {
+        if (i + 1 === buf.length && !eof) return null;
+        const width = buf[i + 1] === "\n" ? 2 : 1;
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + width);
+        return line;
+      }
+    }
+    if (eof && buf.length) {
+      const line = buf;
+      buf = "";
+      return line;
+    }
+    return null;
+  };
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      onActivity?.();
+      streamBytes += value.byteLength;
+      if (streamBytes > maxStreamBytes) {
+        await reader.cancel("stream too large");
+        throw new AgentRunError("SSE stream exceeds size limit", { code: "SSE_STREAM_TOO_LARGE" });
+      }
       buf += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf("\n\n")) >= 0) {
-        const block = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        let event = null;
-        let data = null;
-        for (const line of block.split("\n")) {
-          if (line.startsWith("event: ")) event = line.slice(7).trim();
-          else if (line.startsWith("data: ")) {
-            const raw = line.slice(6);
-            try { data = JSON.parse(raw); } catch { data = raw; }
-          }
-        }
-        if (event) yield { event, data };
+      while (true) {
+        const line = nextLine(false);
+        if (line === null) break;
+        const event = processLine(line);
+        if (event) yield event;
       }
     }
+    buf += decoder.decode();
+    while (true) {
+      const line = nextLine(true);
+      if (line === null) break;
+      const event = processLine(line);
+      if (event) yield event;
+    }
+    const finalEvent = dispatchEvent();
+    if (finalEvent) yield finalEvent;
   } finally {
     reader.releaseLock();
   }
@@ -108,7 +263,8 @@ export async function runAgent(opts) {
     history,
     memory,
     body = {},
-    signal,
+    signal, timeoutMs = DEFAULT_TIMEOUT_MS,
+    idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS,
     fetch: fetchImpl = globalThis.fetch,
   } = opts;
   if (!command || !command.trim()) throw new AgentRunError("command is required");
@@ -118,34 +274,45 @@ export async function runAgent(opts) {
   if (Array.isArray(history) && history.length) payload.history = history;
   if (Array.isArray(memory) && memory.length) payload.user_memory = memory;
 
-  const resp = await fetchImpl(new URL(endpoint, baseUrl), {
-    method: "POST",
-    headers: authHeaders({ apiKey: opts.apiKey, license: opts.license, owner: opts.owner }),
-    body: JSON.stringify(payload),
-    signal,
-  });
-  if (!resp.ok) {
-    let parsed = null;
-    try { parsed = await resp.json(); } catch { /* not json */ }
-    throw new AgentRunError(
-      (parsed && parsed.error) || `run refused with HTTP ${resp.status}`,
-      { status: resp.status, body: parsed },
-    );
-  }
-
-  let result = null;
-  for await (const ev of parseSSEStream(resp.body)) {
-    dispatch(ev, opts);
-    if (ev.event === "run_done") result = ev.data;
-    if (ev.event === "error") {
+  const scope = networkScope({ signal, timeoutMs, idleTimeoutMs });
+  try {
+    const resp = await fetchImpl(new URL(endpoint, baseUrl), {
+      method: "POST",
+      headers: authHeaders({ apiKey: opts.apiKey, license: opts.license }),
+      body: JSON.stringify(payload),
+      signal: scope.signal,
+    });
+    if (!resp.ok) {
+      let parsed = null;
+      try { parsed = await readJsonResponse(resp, opts.maxResponseBytes); } catch { /* not json */ }
       throw new AgentRunError(
-        (ev.data && ev.data.error) || "stream reported an error",
-        { body: ev.data },
+        (parsed && parsed.error) || `run refused with HTTP ${resp.status}`,
+        { status: resp.status, body: parsed, code: "HTTP_ERROR" },
       );
     }
+
+    let result = null;
+    for await (const ev of parseSSEStream(resp.body, {
+      maxEventBytes: opts.maxEventBytes,
+      maxStreamBytes: opts.maxStreamBytes,
+      onActivity: scope.touch,
+    })) {
+      dispatch(ev, opts);
+      if (ev.event === "run_done") result = ev.data;
+      if (ev.event === "error") {
+        throw new AgentRunError(
+          (ev.data && ev.data.error) || "stream reported an error",
+          { body: ev.data, code: "STREAM_ERROR" },
+        );
+      }
+    }
+    if (!result) throw new AgentRunError("stream ended without run_done", { code: "MISSING_RUN_DONE" });
+    return result;
+  } catch (error) {
+    throw scope.error(error);
+  } finally {
+    scope.cleanup();
   }
-  if (!result) throw new AgentRunError("stream ended without run_done");
-  return result;
 }
 
 const REPLAY_DELAYS = { token: 18, decision: 750, action: 600, default: 180 };
@@ -162,12 +329,22 @@ const REPLAY_DELAYS = { token: 18, decision: 750, action: 600, default: 180 };
  * @returns {Promise<Object|null>} the `run_done` payload if present
  */
 export async function playReplay(source, opts = {}) {
-  const { speed = 1, signal, fetch: fetchImpl = globalThis.fetch } = opts;
+  const { speed = 1, signal, fetch: fetchImpl = globalThis.fetch,
+    timeoutMs = DEFAULT_TIMEOUT_MS, maxResponseBytes = DEFAULT_JSON_BYTES } = opts;
   let events = source;
   if (typeof source === "string") {
-    const resp = await fetchImpl(source, { signal });
-    if (!resp.ok) throw new AgentRunError(`replay fetch failed: HTTP ${resp.status}`, { status: resp.status });
-    events = await resp.json();
+    const scope = networkScope({ signal, timeoutMs });
+    try {
+      const resp = await fetchImpl(source, { signal: scope.signal });
+      if (!resp.ok) throw new AgentRunError(`replay fetch failed: HTTP ${resp.status}`, {
+        status: resp.status, code: "HTTP_ERROR",
+      });
+      events = await readJsonResponse(resp, maxResponseBytes);
+    } catch (error) {
+      throw scope.error(error);
+    } finally {
+      scope.cleanup();
+    }
   }
   if (events && !Array.isArray(events)) events = events.events;
   if (!Array.isArray(events)) throw new AgentRunError("replay source has no events");
@@ -187,10 +364,14 @@ export async function playReplay(source, opts = {}) {
 
 const ENDED = {
   nfet_finalize: "it decided on its own that it was done",
+  draft_cap_finalize: "it finished the answer after drafting",
+  audit_verified: "it double-checked a high-stakes answer and finished",
   natural_eos: "it reached a natural stopping point",
-  segment_budget: "it hit the length limit",
+  // Rare: only when no answer could be produced. Never preferred UX copy.
+  segment_budget: "the run hit a safety backstop before an answer formed",
   repetition_stall: "it stopped when the draft had nothing new to add",
   social_direct: "it answered a greeting directly",
+  dialog_direct: "it answered in conversation mode",
 };
 
 /**
@@ -206,10 +387,12 @@ export function friendly(ev) {
     const d = data.decision || {};
     const WHY = {
       head: "its trained controller called this",
-      budget: "limit reached — kept writing instead",
+      budget: "control budget used — kept writing instead",
+      last_segment: "wrapping up on the final draft pass",
       profile: "it recognized a simple greeting",
       repetition: "the draft stopped adding anything new",
       heuristic: "its built-in instincts called this",
+      audit: "high-stakes check",
     };
     const why = WHY[d.source] || WHY.heuristic;
     if (d.source === "profile") return `Simple greeting — answering directly (${why})`;
@@ -279,10 +462,18 @@ export function friendly(ev) {
 }
 
 /** Fetch a workspace's demo status (model readiness, busy flag, limits). */
-export async function getStatus({ baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch, signal } = {}) {
-  const resp = await fetchImpl(new URL("/api/demo/status", baseUrl), { signal });
-  if (!resp.ok) throw new AgentRunError(`status failed: HTTP ${resp.status}`, { status: resp.status });
-  return resp.json();
+export async function getStatus({ baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch,
+  signal, timeoutMs = DEFAULT_TIMEOUT_MS, maxResponseBytes = DEFAULT_JSON_BYTES } = {}) {
+  const scope = networkScope({ signal, timeoutMs });
+  try {
+    const resp = await fetchImpl(new URL("/api/demo/status", baseUrl), { signal: scope.signal });
+    if (!resp.ok) throw new AgentRunError(`status failed: HTTP ${resp.status}`, { status: resp.status, code: "HTTP_ERROR" });
+    return await readJsonResponse(resp, maxResponseBytes);
+  } catch (error) {
+    throw scope.error(error);
+  } finally {
+    scope.cleanup();
+  }
 }
 
 /**
@@ -291,17 +482,49 @@ export async function getStatus({ baseUrl = "https://lolm.imagineqira.com", fetc
  * (`<iframe sandbox="allow-scripts" srcdoc={html}>`); the browser is the runtime.
  * @returns {Promise<{html:string, bytes:number}>}
  */
-export async function buildVisual({ task, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch, signal, apiKey, license, owner } = {}) {
+export async function buildVisual({ task, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch,
+  signal, apiKey, license, timeoutMs = DEFAULT_TIMEOUT_MS,
+  idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS, maxEventBytes = DEFAULT_SSE_EVENT_BYTES,
+  maxStreamBytes = DEFAULT_SSE_STREAM_BYTES, onEvent } = {}) {
   if (!task || !task.trim()) throw new AgentRunError("task is required");
   if (!fetchImpl) throw new AgentRunError("no fetch available; pass opts.fetch");
-  const resp = await fetchImpl(new URL("/api/demo/code/visual", baseUrl), {
-    method: "POST",
-    headers: authHeaders({ apiKey, license, owner }),
-    body: JSON.stringify({ task }), signal,
-  });
-  const j = await resp.json().catch(() => ({}));
-  if (!resp.ok || !j.html) throw new AgentRunError(j.error || `visual build failed: HTTP ${resp.status}`, { status: resp.status, body: j });
-  return j;
+  const scope = networkScope({ signal, timeoutMs, idleTimeoutMs });
+  try {
+    const resp = await fetchImpl(new URL("/api/demo/code/visual/build", baseUrl), {
+      method: "POST",
+      headers: authHeaders({ apiKey, license }),
+      body: JSON.stringify({ task }), signal: scope.signal,
+    });
+    if (!resp.ok) {
+      let body = {};
+      try { body = await readJsonResponse(resp); } catch { /* not json */ }
+      throw new AgentRunError(body.error || `visual build failed: HTTP ${resp.status}`,
+        { status: resp.status, body, code: "HTTP_ERROR" });
+    }
+    let done = null;
+    let receipt = null;
+    for await (const event of parseSSEStream(resp.body, {
+      maxEventBytes, maxStreamBytes, onActivity: scope.touch,
+    })) {
+      onEvent?.(event);
+      if (event.event === "done") done = event.data;
+      if (event.event === "visual_receipt") receipt = event.data;
+      if (event.event === "error") throw new AgentRunError(
+        event.data?.error || "visual build stream error", { body: event.data, code: "STREAM_ERROR" });
+    }
+    if (!done) throw new AgentRunError("stream ended without visual done", { code: "MISSING_VISUAL_DONE" });
+    if (!receipt) throw new AgentRunError("stream ended without visual receipt", { code: "MISSING_VISUAL_RECEIPT" });
+    if (!done.run_id || !receipt.run_id || done.run_id !== receipt.run_id) {
+      throw new AgentRunError("visual done and receipt run_id do not match", {
+        code: "VISUAL_RUN_MISMATCH",
+      });
+    }
+    return { ...done, receipt };
+  } catch (error) {
+    throw scope.error(error);
+  } finally {
+    scope.cleanup();
+  }
 }
 
 /**
@@ -314,54 +537,76 @@ export async function buildVisual({ task, baseUrl = "https://lolm.imagineqira.co
  */
 export async function runCode(opts) {
   const { task, baseUrl = "https://lolm.imagineqira.com", maxSteps, history, signal,
+    timeoutMs = DEFAULT_TIMEOUT_MS, idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS,
     webhookUrl, conversationId, fetch: fetchImpl = globalThis.fetch } = opts;
   if (!task || !task.trim()) throw new AgentRunError("task is required");
   if (!fetchImpl) throw new AgentRunError("no fetch available; pass opts.fetch");
-  const resp = await fetchImpl(new URL("/api/demo/code/run", baseUrl), {
-    method: "POST",
-    headers: authHeaders({ apiKey: opts.apiKey, license: opts.license, owner: opts.owner }),
-    body: JSON.stringify({
-      task,
-      ...(maxSteps ? { max_steps: maxSteps } : {}),
-      ...(history ? { history } : {}),
-      ...(webhookUrl ? { webhook_url: webhookUrl } : {}),
-      ...(conversationId ? { conversation_id: conversationId } : {}),
-    }), signal,
-  });
-  if (!resp.ok) {
-    let p = null; try { p = await resp.json(); } catch { /* not json */ }
-    throw new AgentRunError((p && p.error) || `code run refused: HTTP ${resp.status}`, { status: resp.status, body: p });
-  }
-  let result = null;
-  let receipt = null;
-  for await (const ev of parseSSEStream(resp.body)) {
-    if (opts.onEvent) opts.onEvent(ev);
-    if (ev.event === "code_done") {
-      result = ev.data;
-      if (opts.onCodeDone) opts.onCodeDone(ev.data);
+  const scope = networkScope({ signal, timeoutMs, idleTimeoutMs });
+  try {
+    const resp = await fetchImpl(new URL("/api/demo/code/run", baseUrl), {
+      method: "POST",
+      headers: authHeaders({ apiKey: opts.apiKey, license: opts.license }),
+      body: JSON.stringify({
+        task,
+        ...(maxSteps ? { max_steps: maxSteps } : {}),
+        ...(history ? { history } : {}),
+        ...(webhookUrl ? { webhook_url: webhookUrl } : {}),
+        ...(conversationId ? { conversation_id: conversationId } : {}),
+      }), signal: scope.signal,
+    });
+    if (!resp.ok) {
+      let p = null; try { p = await readJsonResponse(resp, opts.maxResponseBytes); } catch { /* not json */ }
+      throw new AgentRunError((p && p.error) || `code run refused: HTTP ${resp.status}`, { status: resp.status, body: p, code: "HTTP_ERROR" });
     }
-    if (ev.event === "code_receipt") {
-      receipt = ev.data;
-      if (opts.onCodeReceipt) opts.onCodeReceipt(ev.data);
+    let result = null;
+    let receipt = null;
+    for await (const ev of parseSSEStream(resp.body, {
+      maxEventBytes: opts.maxEventBytes,
+      maxStreamBytes: opts.maxStreamBytes,
+      onActivity: scope.touch,
+    })) {
+      if (opts.onEvent) opts.onEvent(ev);
+      if (ev.event === "code_done") {
+        result = ev.data;
+        if (opts.onCodeDone) opts.onCodeDone(ev.data);
+      }
+      if (ev.event === "code_receipt") {
+        receipt = ev.data;
+        if (opts.onCodeReceipt) opts.onCodeReceipt(ev.data);
+      }
+      if (ev.event === "error") throw new AgentRunError((ev.data && ev.data.error) || "code stream error", { body: ev.data, code: "STREAM_ERROR" });
     }
-    if (ev.event === "error") throw new AgentRunError((ev.data && ev.data.error) || "code stream error", { body: ev.data });
-  }
-  // Back-compat: if caller only checked .ran, keep done fields on the root too
-  if (result && typeof result === "object") {
+    if (!result || typeof result !== "object") {
+      throw new AgentRunError("stream ended without code_done", { code: "MISSING_CODE_DONE" });
+    }
+    // Back-compat: callers that checked .ran keep done fields on the root.
     result.receipt = receipt;
     result.receipt_sha = (receipt && receipt.receipt_sha) || result.receipt_sha;
+    return result;
+  } catch (error) {
+    throw scope.error(error);
+  } finally {
+    scope.cleanup();
   }
-  return result;
 }
 
 /** Recent sealed code receipts from the public audit ledger. */
-export async function listCodeReceipts({ baseUrl = "https://lolm.imagineqira.com", limit = 20, fetch: fetchImpl = globalThis.fetch } = {}) {
+export async function listCodeReceipts({ baseUrl = "https://lolm.imagineqira.com", limit = 20,
+  fetch: fetchImpl = globalThis.fetch, signal, timeoutMs = DEFAULT_TIMEOUT_MS,
+  maxResponseBytes = DEFAULT_JSON_BYTES } = {}) {
   if (!fetchImpl) throw new AgentRunError("no fetch available; pass opts.fetch");
   const url = new URL("/api/demo/code/receipts", baseUrl);
   if (limit) url.searchParams.set("limit", String(limit));
-  const resp = await fetchImpl(url);
-  if (!resp.ok) throw new AgentRunError(`code receipts failed: HTTP ${resp.status}`, { status: resp.status });
-  return resp.json();
+  const scope = networkScope({ signal, timeoutMs });
+  try {
+    const resp = await fetchImpl(url, { signal: scope.signal });
+    if (!resp.ok) throw new AgentRunError(`code receipts failed: HTTP ${resp.status}`, { status: resp.status, code: "HTTP_ERROR" });
+    return await readJsonResponse(resp, maxResponseBytes);
+  } catch (error) {
+    throw scope.error(error);
+  } finally {
+    scope.cleanup();
+  }
 }
 
 // ── cross-session memory (authenticated principal scoped) ────────────────────
@@ -376,10 +621,21 @@ function memHeaders({ apiKey, license } = {}) {
 }
 
 /** List the durable facts remembered about a user (recalled in every conversation). */
-export async function getMemory({ apiKey, license, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch } = {}) {
-  const resp = await fetchImpl(new URL("/api/demo/workspace/memory", baseUrl), { headers: memHeaders({ apiKey, license }) });
-  if (!resp.ok) throw new AgentRunError(`memory list failed: HTTP ${resp.status}`, { status: resp.status });
-  return (await resp.json()).memories || [];
+export async function getMemory({ apiKey, license, baseUrl = "https://lolm.imagineqira.com",
+  fetch: fetchImpl = globalThis.fetch, signal, timeoutMs = DEFAULT_TIMEOUT_MS,
+  maxResponseBytes = DEFAULT_JSON_BYTES } = {}) {
+  const scope = networkScope({ signal, timeoutMs });
+  try {
+    const resp = await fetchImpl(new URL("/api/demo/workspace/memory", baseUrl), {
+      headers: memHeaders({ apiKey, license }), signal: scope.signal,
+    });
+    if (!resp.ok) throw new AgentRunError(`memory list failed: HTTP ${resp.status}`, { status: resp.status, code: "HTTP_ERROR" });
+    return (await readJsonResponse(resp, maxResponseBytes)).memories || [];
+  } catch (error) {
+    throw scope.error(error);
+  } finally {
+    scope.cleanup();
+  }
 }
 
 /**
@@ -387,18 +643,38 @@ export async function getMemory({ apiKey, license, baseUrl = "https://lolm.imagi
  * `extract:true` to let the model pull the durable fact(s) out of a raw message.
  * @returns {Promise<Object>} `{saved}` (verbatim) or `{saved:[...]}` (extract)
  */
-export async function rememberFact({ text, apiKey, license, extract = false, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch } = {}) {
+export async function rememberFact({ text, apiKey, license, extract = false,
+  baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch,
+  signal, timeoutMs = DEFAULT_TIMEOUT_MS, maxResponseBytes = DEFAULT_JSON_BYTES } = {}) {
   if (!text || !text.trim()) throw new AgentRunError("text is required");
   const url = new URL(extract ? "/api/demo/workspace/memory/extract" : "/api/demo/workspace/memory", baseUrl);
-  const resp = await fetchImpl(url, { method: "POST", headers: memHeaders({ apiKey, license }), body: JSON.stringify(extract ? { user_message: text } : { text }) });
-  if (!resp.ok) throw new AgentRunError(`remember failed: HTTP ${resp.status}`, { status: resp.status });
-  return resp.json();
+  const scope = networkScope({ signal, timeoutMs });
+  try {
+    const resp = await fetchImpl(url, { method: "POST", headers: memHeaders({ apiKey, license }),
+      body: JSON.stringify(extract ? { user_message: text } : { text }), signal: scope.signal });
+    if (!resp.ok) throw new AgentRunError(`remember failed: HTTP ${resp.status}`, { status: resp.status, code: "HTTP_ERROR" });
+    return await readJsonResponse(resp, maxResponseBytes);
+  } catch (error) {
+    throw scope.error(error);
+  } finally {
+    scope.cleanup();
+  }
 }
 
-/** Forget one fact by `id`, or pass `all:true` to clear everything for this owner. */
-export async function forgetMemory({ id, all = false, apiKey, license, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch } = {}) {
+/** Forget one fact by `id`, or clear everything for the authenticated principal. */
+export async function forgetMemory({ id, all = false, apiKey, license,
+  baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch,
+  signal, timeoutMs = DEFAULT_TIMEOUT_MS, maxResponseBytes = DEFAULT_JSON_BYTES } = {}) {
   const url = new URL(all ? "/api/demo/workspace/memory/clear" : `/api/demo/workspace/memory/${id}`, baseUrl);
-  const resp = await fetchImpl(url, { method: all ? "POST" : "DELETE", headers: memHeaders({ apiKey, license }) });
-  if (!resp.ok) throw new AgentRunError(`forget failed: HTTP ${resp.status}`, { status: resp.status });
-  return resp.json();
+  const scope = networkScope({ signal, timeoutMs });
+  try {
+    const resp = await fetchImpl(url, { method: all ? "POST" : "DELETE",
+      headers: memHeaders({ apiKey, license }), signal: scope.signal });
+    if (!resp.ok) throw new AgentRunError(`forget failed: HTTP ${resp.status}`, { status: resp.status, code: "HTTP_ERROR" });
+    return await readJsonResponse(resp, maxResponseBytes);
+  } catch (error) {
+    throw scope.error(error);
+  } finally {
+    scope.cleanup();
+  }
 }

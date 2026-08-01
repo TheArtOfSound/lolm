@@ -96,6 +96,13 @@ export interface RunAgentOptions extends Handlers {
   memory?: string[];
   body?: Record<string, any>;
   signal?: AbortSignal;
+  timeoutMs?: number;
+  idleTimeoutMs?: number;
+  maxResponseBytes?: number;
+  maxEventBytes?: number;
+  maxStreamBytes?: number;
+  apiKey?: string;
+  license?: string;
   fetch?: typeof fetch;
 }
 
@@ -105,17 +112,20 @@ export interface UserMemory {
   kind: string;
   source_conv: string;
   created_at: string;
-  owner?: string;
 }
 
 export interface VisualResult {
   html: string;
   bytes: number;
+  verified?: boolean;
+  receipt: CodeReceipt;
 }
 
 export interface PlayReplayOptions extends Handlers {
   speed?: number;
   signal?: AbortSignal;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
   fetch?: typeof fetch;
 }
 
@@ -132,10 +142,12 @@ export interface DemoStatus {
 export class AgentRunError extends Error {
   status: number | null;
   body: any;
+  code: string;
 }
 
 export function parseSSEStream(
   stream: ReadableStream<Uint8Array>,
+  options?: { maxEventBytes?: number; maxStreamBytes?: number; onActivity?(): void },
 ): AsyncGenerator<ProtocolEvent>;
 
 export function runAgent(opts: RunAgentOptions): Promise<RunResult>;
@@ -147,10 +159,18 @@ export function playReplay(
 
 export function friendly(ev: ProtocolEvent): string | null;
 
+export function authHeaders(opts?: {
+  apiKey?: string;
+  license?: string;
+  extra?: Record<string, string>;
+}): Record<string, string>;
+
 export function getStatus(opts?: {
   baseUrl?: string;
   fetch?: typeof fetch;
   signal?: AbortSignal;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
 }): Promise<DemoStatus>;
 
 /** Build a self-contained, sandboxed visual app (game/animation/page) from a prompt. */
@@ -159,6 +179,13 @@ export function buildVisual(opts: {
   baseUrl?: string;
   fetch?: typeof fetch;
   signal?: AbortSignal;
+  timeoutMs?: number;
+  idleTimeoutMs?: number;
+  maxEventBytes?: number;
+  maxStreamBytes?: number;
+  onEvent?(event: ProtocolEvent): void;
+  apiKey?: string;
+  license?: string;
 }): Promise<VisualResult>;
 
 export interface CodeReceipt {
@@ -203,6 +230,13 @@ export function runCode(opts: {
   onCodeDone?(done: CodeDoneResult): void;
   onCodeReceipt?(receipt: CodeReceipt): void;
   signal?: AbortSignal;
+  timeoutMs?: number;
+  idleTimeoutMs?: number;
+  maxResponseBytes?: number;
+  maxEventBytes?: number;
+  maxStreamBytes?: number;
+  apiKey?: string;
+  license?: string;
   fetch?: typeof fetch;
 }): Promise<CodeDoneResult>;
 
@@ -211,29 +245,44 @@ export function listCodeReceipts(opts?: {
   baseUrl?: string;
   limit?: number;
   fetch?: typeof fetch;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
 }): Promise<{ receipts: CodeReceipt[]; stats: Record<string, any> }>;
 
 /** List durable facts remembered about a user (cross-session memory). */
 export function getMemory(opts?: {
-  owner?: string;
+  apiKey?: string;
+  license?: string;
   baseUrl?: string;
   fetch?: typeof fetch;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
 }): Promise<UserMemory[]>;
 
 /** Remember a durable fact (verbatim, or `extract:true` to mine it from a message). */
 export function rememberFact(opts: {
   text: string;
-  owner?: string;
+  apiKey?: string;
+  license?: string;
   extract?: boolean;
   baseUrl?: string;
   fetch?: typeof fetch;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
 }): Promise<{ saved: UserMemory | UserMemory[] | null; duplicate?: boolean }>;
 
-/** Forget one fact by id, or `all:true` to clear everything for this owner. */
+/** Forget one fact by id, or `all:true` to clear everything for the authenticated principal. */
 export function forgetMemory(opts: {
   id?: string;
   all?: boolean;
-  owner?: string;
+  apiKey?: string;
+  license?: string;
   baseUrl?: string;
   fetch?: typeof fetch;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
 }): Promise<{ deleted?: boolean; cleared?: number }>;
