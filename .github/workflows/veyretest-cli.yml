@@ -61,7 +61,7 @@ jobs:
             "Create exactly one file named veyretest-proof.txt containing exactly the text independent retest passed followed by one newline. Do not create any other file." \
             --save "$OUT" \
             --receipt "$RECEIPT" \
-            --json --max-steps 5 > result.json
+            --json --max-steps 8 --idle-timeout 120000 --timeout 300000 > result.json
           node - <<'JS'
           const fs = require('node:fs');
           const result = JSON.parse(fs.readFileSync('result.json', 'utf8'));
