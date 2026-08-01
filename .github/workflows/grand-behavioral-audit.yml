@@ -1,0 +1,121 @@
+name: grand-behavioral-audit
+
+on:
+  pull_request:
+    paths:
+      - 'verification/grand_live_campaign.mjs'
+      - 'verification/grand_analyze_results.mjs'
+      - '.github/workflows/grand-behavioral-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grand-behavioral-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deterministic-baseline:
+    name: Deterministic baseline and release gauntlet
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reproducible install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Existing JavaScript client suite
+        run: node clients/js/test/run.mjs 2>&1 | tee deterministic-js.txt
+      - name: Existing CLI suite
+        run: node clients/cli/test/run.mjs 2>&1 | tee deterministic-cli.txt
+      - name: Existing 49,000-assertion release gauntlet
+        run: node verification/release_gauntlet.mjs | tee release-gauntlet.json
+      - name: Package inventory
+        run: |
+          npm pack --dry-run --json --prefix clients/js > js-pack.json
+          npm pack --dry-run --json --prefix clients/cli > cli-pack.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: grand-deterministic-baseline
+          path: |
+            deterministic-js.txt
+            deterministic-cli.txt
+            release-gauntlet.json
+            js-pack.json
+            cli-pack.json
+          if-no-files-found: error
+          retention-days: 7
+
+  live-hosted:
+    name: Hosted behavioral shard ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install the exact public CLI package
+        run: |
+          npm install -g lolm-cli@0.3.0-beta.1 --no-audit --no-fund
+          test "$(lolm --version)" = "0.3.0-beta.1"
+      - name: Confirm hosted service readiness
+        run: |
+          lolm status --json > hosted-status.json
+          node -e "const x=require('./hosted-status.json'); if(x.model_ready!==true)process.exit(1)"
+      - name: Run live behavioral campaign
+        env:
+          SHARD_INDEX: ${{ matrix.shard }}
+          SHARD_COUNT: 8
+          OUTPUT_DIR: grand-audit-results/shard-${{ matrix.shard }}
+        run: node verification/grand_live_campaign.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: grand-live-${{ matrix.shard }}
+          path: |
+            grand-audit-results/shard-${{ matrix.shard }}/**
+            hosted-status.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  aggregate:
+    name: Aggregate behavioral evidence
+    needs: [deterministic-baseline, live-hosted]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: grand-*
+          path: grand-audit-download
+          merge-multiple: false
+      - name: Analyze all completed shards
+        run: node verification/grand_analyze_results.mjs grand-audit-download grand-audit-summary
+      - name: Copy baseline evidence
+        run: |
+          find grand-audit-download -type f -maxdepth 4 -print > grand-audit-summary/artifact-inventory.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: grand-audit-complete-results
+          path: |
+            grand-audit-summary/**
+            grand-audit-download/**
+          if-no-files-found: error
+          retention-days: 7
