@@ -12,10 +12,12 @@ clean-package gates described in
 - Persistent workspace data is keyed by a validated `X-LOLM-Api-Key` (or Bearer
   token). Client-provided owner names are not authorization.
 - A server result is untrusted until the CLI verifies its canonical full SHA-256,
-  Ed25519 signature, schema, run binding, and explicit success fields.
+  Ed25519 signature, signed timestamp policy, schema, run binding, and explicit
+  success fields.
 - Artifact paths and contents are server-controlled input. Saves use a fresh
   destination, strict relative paths, bounded exact bodies, staging, and full
-  verification before atomic commit.
+  verification before atomic commit. Symlinked destination-parent components
+  are refused.
 - Terminal text is untrusted. Human rendering removes terminal and bidi controls;
   exact raw artifact output is allowed only to redirected stdout.
 - Network input is bounded by response/event/stream sizes, total deadlines, idle

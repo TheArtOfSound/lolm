@@ -29,7 +29,8 @@ lolm receipt verify ./run.receipt.json
   deployment transaction.
 - `code` exits `0` only when `code_done` and `code_receipt` are both present,
   their run IDs match, every required verification field is explicitly true,
-  the receipt hash and signature verify locally, and a requested save verifies.
+  the signed timestamp is present and not in the future, the receipt hash and
+  signature verify locally, and a requested save verifies.
 - `build` writes or streams HTML only after the visual receipt, run binding,
   byte count, browser verdict, signature, and content hash all verify. Raw
   `--stdout` output is refused on a terminal; redirect it to a file or pipe.
@@ -84,8 +85,10 @@ canonical full SHA-256, and verifies Ed25519 locally. Unknown keys fail closed.
 ## Tests and packaging
 
 ```bash
-node clients/js/test/run.mjs
-node clients/cli/test/run.mjs
+npm ci
+npm test --workspace lolm-nfet-client
+npm test --workspace lolm-cli
+npm run test:release-gauntlet
 npm pack --dry-run --prefix clients/js
 npm pack --dry-run --prefix clients/cli
 ```

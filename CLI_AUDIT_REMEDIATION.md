@@ -23,18 +23,18 @@ existed when the hardening branch began, then records the implemented control.
 | TERM-001 | Confirmed | Human-mode untrusted output strips ANSI CSI, OSC, DCS/APC/PM, C0/C1, carriage returns, and bidi controls. Raw build stdout is refused on a TTY. |
 | RECEIPT-001 | Partially fixed | Preliminary short hashes/HMAC attestation were replaced by full canonical SHA-256 plus Ed25519. Verification is local using public material; issuer attestation is not trusted. |
 | BUILD-001 | Confirmed | Build output is withheld until a signed visual receipt, browser verdict, run binding, byte count, and HTML hash verify locally. |
-| BUILD-002 | Confirmed | Build uses the same structured completion/exit path as every command; no premature `process.exit()`. |
+| BUILD-002 | Confirmed | Build now has one explicit contract: verified HTML is written to a new file by default; `--stdout` emits raw HTML only when redirected, and the README examples match it. |
 | NET-001 | Confirmed | Every client fetch has a bounded total timeout; SSE streams also have idle timeouts. Abort signals propagate and readers clean up. |
 | SSE-001 | Confirmed | The parser implements CR/LF/CRLF framing, multiline data, comments, optional spaces, arbitrary chunking, UTF-8 flush, and EOF dispatch. |
-| ARG-001 | Confirmed | Numeric options use strict finite decimal-integer parsing; junk suffixes are rejected. |
-| ARG-002 | Confirmed | Flags are command-scoped; unknown flags fail before network activity. |
-| ARG-003 | Confirmed | `timeout`, idle timeout, steps, and limits have explicit positive upper/lower bounds. |
-| ARG-004 | Confirmed | Missing option values and dangling flags are usage errors. `--` preserves option-looking prompt text. |
+| ARG-001 | Confirmed | Missing option values and option-looking would-be values are rejected before a command handler runs. |
+| ARG-002 | Confirmed | Numeric options use strict finite decimal-integer parsing with explicit positive upper/lower bounds. |
+| ARG-003 | Confirmed | `--` preserves arbitrary option-looking UTF-8 prompt text as literal input. |
+| ARG-004 | Confirmed | Flags are command-scoped; unknown, irrelevant, and extra positional arguments fail before network activity. |
 | URL-001 | Confirmed | Remote bases require HTTPS; HTTP is accepted only for loopback. Credentials, query, fragment, and non-origin paths are rejected. |
-| DIFF-001 | Already fixed | The newer diff engine validates context/removals exactly; canonical save does not depend on it. Regression coverage remains. |
-| DIFF-002 | Already fixed | Truncated/malformed hunks are rejected atomically; canonical save does not depend on diff replay. |
-| DIFF-003 | Already fixed | Deletion handling was present in the newer working tree; final-tree manifests make deletions unambiguous by installing a fresh destination. |
-| DIFF-004 | Already fixed | Trailing-newline presence/absence is preserved in diff tests; manifests preserve exact bytes. |
+| DIFF-001 | Already fixed | Trailing-newline presence/absence was already preserved by the newer diff engine; canonical manifests now preserve exact bytes independently of display diffs. |
+| DIFF-002 | Already fixed | Explicit deletion handling was already present in the newer working tree; final-tree manifests make deletion unambiguous by installing a fresh destination. |
+| DIFF-003 | Confirmed | Canonical save validates the full manifest, writes into a fresh private staging tree, verifies every byte, and atomically renames only the complete tree. |
+| DIFF-004 | Confirmed | Canonical manifests, rather than display-oriented/truncated diffs, carry complete text or binary artifact bytes. |
 | CLIENT-001 | Confirmed | `runAgent`, `runCode`, and `buildVisual` require their terminal event(s) and return typed protocol errors otherwise. |
 | PIPE-001 | Confirmed | Large JSON uses a single drained write path; EPIPE is handled without a stack trace or false failure. |
 | SCALE-001 | Confirmed | JSON, event, stream, file-count, per-file, total-artifact, and path-component limits are enforced. |
@@ -63,8 +63,10 @@ from this repository remediation.
 The release gate is:
 
 ```bash
-node clients/js/test/run.mjs
-node clients/cli/test/run.mjs
+npm ci
+npm test --workspace lolm-nfet-client
+npm test --workspace lolm-cli
+npm run test:release-gauntlet
 PYTHONPATH="$(pwd):$(dirname "$(pwd)")" .venv/bin/python -m pytest -q tests
 npm pack --dry-run --prefix clients/js
 npm pack --dry-run --prefix clients/cli

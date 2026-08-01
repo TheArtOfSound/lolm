@@ -6,6 +6,9 @@ on:
     paths:
       - 'clients/cli/**'
       - 'clients/js/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'verification/**'
       - 'local_ui/**'
       - 'tests/test_workspace_auth.py'
       - 'tests/test_receipt_sign_usefulness.py'
@@ -14,6 +17,9 @@ on:
     paths:
       - 'clients/cli/**'
       - 'clients/js/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'verification/**'
       - 'local_ui/**'
       - 'tests/test_workspace_auth.py'
       - 'tests/test_receipt_sign_usefulness.py'
@@ -42,14 +48,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - name: Link repository client into CLI
-        shell: bash
-        working-directory: clients/cli
-        run: npm install ../js --no-save --ignore-scripts --no-audit --no-fund
+      - name: Reproducible workspace install
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: JavaScript client adversarial suite
         run: node clients/js/test/run.mjs
       - name: CLI adversarial suite
         run: node clients/cli/test/run.mjs
+      - name: Packed-surface release gauntlet
+        run: node verification/release_gauntlet.mjs
 
   package-smoke:
     runs-on: ubuntu-latest
@@ -62,6 +68,7 @@ jobs:
       - name: Pack and clean-install both tarballs
         shell: bash
         run: |
+          npm ci --ignore-scripts --no-audit --no-fund
           mkdir -p "$RUNNER_TEMP/lolm-packs" "$RUNNER_TEMP/lolm-smoke"
           npm pack ./clients/js --pack-destination "$RUNNER_TEMP/lolm-packs"
           npm pack ./clients/cli --pack-destination "$RUNNER_TEMP/lolm-packs"

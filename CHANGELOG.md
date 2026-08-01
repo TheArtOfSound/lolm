@@ -13,9 +13,12 @@ Security hardening release candidate:
 - add standards-compliant bounded SSE, request deadlines, idle cancellation, and
   response-size limits;
 - verify full SHA-256 and Ed25519 receipts locally, including visual output and
-  saved artifact hashes;
+  saved artifact hashes; signing timestamps are now inside the signed core and
+  future or missing timestamps fail closed;
 - sanitize terminal control sequences and reject unsafe URLs/arguments;
-- add adversarial regression coverage and cross-platform packaging CI.
+- reject symlinked destination-parent components before staging;
+- commit a reproducible npm workspace lock and add a 49,000-assertion release
+  gauntlet to cross-platform packaging CI.
 
 Intentional breaking changes are documented in
 [`CLI_AUDIT_REMEDIATION.md`](CLI_AUDIT_REMEDIATION.md).
