@@ -5,6 +5,7 @@ on:
     paths:
       - 'verification/grand_live_campaign.mjs'
       - 'verification/grand_analyze_results.mjs'
+      - 'verification/grand_controller_campaign.py'
       - '.github/workflows/grand-behavioral-audit.yml'
   workflow_dispatch:
 
@@ -50,6 +51,30 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  controller-simulation:
+    name: 2,048 local CodeAgent controller simulations
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt pytest httpx pynacl
+      - name: Run scripted controller campaign
+        env:
+          GRAND_CONTROLLER_OUT: grand-controller-results
+        run: PYTHONPATH="$PWD:$(dirname "$PWD")" python verification/grand_controller_campaign.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: grand-controller-simulations
+          path: grand-controller-results/**
+          if-no-files-found: warn
+          retention-days: 7
+
   live-hosted:
     name: Hosted behavioral shard ${{ matrix.shard }}
     runs-on: ubuntu-latest
@@ -91,7 +116,7 @@ jobs:
 
   aggregate:
     name: Aggregate behavioral evidence
-    needs: [deterministic-baseline, live-hosted]
+    needs: [deterministic-baseline, controller-simulation, live-hosted]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -105,11 +130,10 @@ jobs:
           pattern: grand-*
           path: grand-audit-download
           merge-multiple: false
-      - name: Analyze all completed shards
+      - name: Analyze all completed hosted shards
         run: node verification/grand_analyze_results.mjs grand-audit-download grand-audit-summary
-      - name: Copy baseline evidence
-        run: |
-          find grand-audit-download -type f -maxdepth 4 -print > grand-audit-summary/artifact-inventory.txt
+      - name: Copy evidence inventory
+        run: find grand-audit-download -type f -maxdepth 5 -print > grand-audit-summary/artifact-inventory.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
