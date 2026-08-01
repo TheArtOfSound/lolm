@@ -90,5 +90,5 @@ npm pack --dry-run --prefix clients/js
 npm pack --dry-run --prefix clients/cli
 ```
 
-See [`../../docs/CLI_AUDIT_REMEDIATION.md`](../../docs/CLI_AUDIT_REMEDIATION.md)
+See [`../../CLI_AUDIT_REMEDIATION.md`](../../CLI_AUDIT_REMEDIATION.md)
 for the finding-by-finding disposition and release gates.
