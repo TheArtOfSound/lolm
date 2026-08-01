@@ -67,6 +67,16 @@ function dispatch(ev, handlers) {
   else if (ev.event === "phase" && onPhase) onPhase(ev.data);
 }
 
+/** Build auth headers for integrate-anywhere (API key and/or license). */
+export function authHeaders({ apiKey, license, extra } = {}) {
+  const h = { "Content-Type": "application/json", ...(extra || {}) };
+  const key = apiKey || (typeof process !== "undefined" && process.env && process.env.LOLM_API_KEY) || "";
+  const lic = license || (typeof process !== "undefined" && process.env && process.env.LOLM_LICENSE) || "";
+  if (key) h["X-LOLM-Api-Key"] = key;
+  if (lic) h["X-LOLM-License"] = lic;
+  return h;
+}
+
 /**
  * Run the agent live against a LOLM-NFET workspace and stream its events.
  *
@@ -110,7 +120,7 @@ export async function runAgent(opts) {
 
   const resp = await fetchImpl(new URL(endpoint, baseUrl), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ apiKey: opts.apiKey, license: opts.license, owner: opts.owner }),
     body: JSON.stringify(payload),
     signal,
   });
@@ -281,11 +291,12 @@ export async function getStatus({ baseUrl = "https://lolm.imagineqira.com", fetc
  * (`<iframe sandbox="allow-scripts" srcdoc={html}>`); the browser is the runtime.
  * @returns {Promise<{html:string, bytes:number}>}
  */
-export async function buildVisual({ task, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch, signal } = {}) {
+export async function buildVisual({ task, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch, signal, apiKey, license, owner } = {}) {
   if (!task || !task.trim()) throw new AgentRunError("task is required");
   if (!fetchImpl) throw new AgentRunError("no fetch available; pass opts.fetch");
   const resp = await fetchImpl(new URL("/api/demo/code/visual", baseUrl), {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST",
+    headers: authHeaders({ apiKey, license, owner }),
     body: JSON.stringify({ task }), signal,
   });
   const j = await resp.json().catch(() => ({}));
@@ -302,15 +313,19 @@ export async function buildVisual({ task, baseUrl = "https://lolm.imagineqira.co
  *   is the sealed (and server-ledger-chained) code_receipt when present
  */
 export async function runCode(opts) {
-  const { task, baseUrl = "https://lolm.imagineqira.com", maxSteps, history, signal, fetch: fetchImpl = globalThis.fetch } = opts;
+  const { task, baseUrl = "https://lolm.imagineqira.com", maxSteps, history, signal,
+    webhookUrl, conversationId, fetch: fetchImpl = globalThis.fetch } = opts;
   if (!task || !task.trim()) throw new AgentRunError("task is required");
   if (!fetchImpl) throw new AgentRunError("no fetch available; pass opts.fetch");
   const resp = await fetchImpl(new URL("/api/demo/code/run", baseUrl), {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST",
+    headers: authHeaders({ apiKey: opts.apiKey, license: opts.license, owner: opts.owner }),
     body: JSON.stringify({
       task,
       ...(maxSteps ? { max_steps: maxSteps } : {}),
       ...(history ? { history } : {}),
+      ...(webhookUrl ? { webhook_url: webhookUrl } : {}),
+      ...(conversationId ? { conversation_id: conversationId } : {}),
     }), signal,
   });
   if (!resp.ok) {
@@ -349,16 +364,20 @@ export async function listCodeReceipts({ baseUrl = "https://lolm.imagineqira.com
   return resp.json();
 }
 
-// ── cross-session memory (owner-scoped; `owner` is a per-user key your app picks) ──
-function memHeaders(owner) {
-  const h = { "Content-Type": "application/json" };
-  if (owner) h["X-Workspace-Owner"] = owner;
-  return h;
+// ── cross-session memory (authenticated principal scoped) ────────────────────
+function memHeaders({ apiKey, license } = {}) {
+  const key = apiKey
+    || (typeof process !== "undefined" && process.env && process.env.LOLM_API_KEY)
+    || "";
+  if (!key) {
+    throw new AgentRunError("authentication required for persistent memory");
+  }
+  return authHeaders({ apiKey: key, license });
 }
 
 /** List the durable facts remembered about a user (recalled in every conversation). */
-export async function getMemory({ owner, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch } = {}) {
-  const resp = await fetchImpl(new URL("/api/demo/workspace/memory", baseUrl), { headers: memHeaders(owner) });
+export async function getMemory({ apiKey, license, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch } = {}) {
+  const resp = await fetchImpl(new URL("/api/demo/workspace/memory", baseUrl), { headers: memHeaders({ apiKey, license }) });
   if (!resp.ok) throw new AgentRunError(`memory list failed: HTTP ${resp.status}`, { status: resp.status });
   return (await resp.json()).memories || [];
 }
@@ -368,18 +387,18 @@ export async function getMemory({ owner, baseUrl = "https://lolm.imagineqira.com
  * `extract:true` to let the model pull the durable fact(s) out of a raw message.
  * @returns {Promise<Object>} `{saved}` (verbatim) or `{saved:[...]}` (extract)
  */
-export async function rememberFact({ text, owner, extract = false, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch } = {}) {
+export async function rememberFact({ text, apiKey, license, extract = false, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch } = {}) {
   if (!text || !text.trim()) throw new AgentRunError("text is required");
   const url = new URL(extract ? "/api/demo/workspace/memory/extract" : "/api/demo/workspace/memory", baseUrl);
-  const resp = await fetchImpl(url, { method: "POST", headers: memHeaders(owner), body: JSON.stringify(extract ? { user_message: text } : { text }) });
+  const resp = await fetchImpl(url, { method: "POST", headers: memHeaders({ apiKey, license }), body: JSON.stringify(extract ? { user_message: text } : { text }) });
   if (!resp.ok) throw new AgentRunError(`remember failed: HTTP ${resp.status}`, { status: resp.status });
   return resp.json();
 }
 
 /** Forget one fact by `id`, or pass `all:true` to clear everything for this owner. */
-export async function forgetMemory({ id, all = false, owner, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch } = {}) {
+export async function forgetMemory({ id, all = false, apiKey, license, baseUrl = "https://lolm.imagineqira.com", fetch: fetchImpl = globalThis.fetch } = {}) {
   const url = new URL(all ? "/api/demo/workspace/memory/clear" : `/api/demo/workspace/memory/${id}`, baseUrl);
-  const resp = await fetchImpl(url, { method: all ? "POST" : "DELETE", headers: memHeaders(owner) });
+  const resp = await fetchImpl(url, { method: all ? "POST" : "DELETE", headers: memHeaders({ apiKey, license }) });
   if (!resp.ok) throw new AgentRunError(`forget failed: HTTP ${resp.status}`, { status: resp.status });
   return resp.json();
 }

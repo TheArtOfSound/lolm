@@ -138,22 +138,32 @@ const ok = (name) => { passed++; console.log("  ✓", name); };
   ok("listCodeReceipts reads the public audit ledger");
 }
 
-// 9. memory helpers hit the right routes + send the owner header.
+// 9. memory helpers require authentication and never use caller-owned namespaces.
 {
   const calls = [];
   const mockFetch = async (url, init = {}) => {
-    calls.push({ url: String(url), method: init.method || "GET", owner: (init.headers || {})["X-Workspace-Owner"] });
+    calls.push({
+      url: String(url),
+      method: init.method || "GET",
+      apiKey: (init.headers || {})["X-LOLM-Api-Key"],
+      owner: (init.headers || {})["X-Workspace-Owner"],
+    });
     if (String(url).endsWith("/memory") && (init.method || "GET") === "GET")
       return new Response(JSON.stringify({ memories: [{ id: "m1", text: "The user's name is Bryan." }] }), { status: 200 });
     return new Response(JSON.stringify({ saved: { id: "m2" }, deleted: true }), { status: 200 });
   };
-  const mems = await getMemory({ owner: "u1", fetch: mockFetch });
+  await assert.rejects(
+    () => getMemory({ fetch: mockFetch }),
+    (err) => err instanceof AgentRunError && /authentication/i.test(err.message),
+  );
+  const mems = await getMemory({ apiKey: "lolm_test_secret", owner: "spoofed", fetch: mockFetch });
   assert.equal(mems[0].text, "The user's name is Bryan.");
-  await rememberFact({ text: "The user prefers Python.", owner: "u1", fetch: mockFetch });
-  await forgetMemory({ id: "m1", owner: "u1", fetch: mockFetch });
-  assert.ok(calls.every((c) => c.owner === "u1"), "owner header sent");
+  await rememberFact({ text: "The user prefers Python.", apiKey: "lolm_test_secret", owner: "spoofed", fetch: mockFetch });
+  await forgetMemory({ id: "m1", apiKey: "lolm_test_secret", owner: "spoofed", fetch: mockFetch });
+  assert.ok(calls.every((c) => c.apiKey === "lolm_test_secret"), "API key sent");
+  assert.ok(calls.every((c) => c.owner === undefined), "caller owner header omitted");
   assert.equal(calls[2].method, "DELETE");
-  ok("memory helpers (list/remember/forget) use the right routes + owner");
+  ok("memory helpers require auth and omit caller-owned namespace headers");
 }
 
 console.log(`\n${passed} passed`);
