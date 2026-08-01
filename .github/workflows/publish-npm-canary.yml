@@ -45,7 +45,14 @@ jobs:
       - name: Publish canary (provenance)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public --tag canary
+        run: |
+          TAG=canary
+          case "$CANARY_VERSION" in
+            *-beta.*) TAG=beta ;;
+            *-rc.*) TAG=next ;;
+          esac
+          echo "Publishing $CANARY_VERSION with dist-tag $TAG"
+          npm publish --provenance --access public --tag "$TAG"
       - name: Canary smoke in a clean project
         run: |
           cd "$RUNNER_TEMP"

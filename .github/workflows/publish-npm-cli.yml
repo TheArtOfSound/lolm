@@ -50,7 +50,19 @@ jobs:
         if: ${{ !inputs.dry_run }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
+        run: |
+          V="$(node -p "require('./package.json').version")"
+          TAG=latest
+          if [[ "$V" == *-* ]]; then
+            TAG="${V#*-}"
+            TAG="${TAG%%.*}"
+            case "$TAG" in
+              alpha|beta|canary|next|rc) ;;
+              *) TAG=next ;;
+            esac
+          fi
+          echo "Publishing $V with dist-tag $TAG"
+          npm publish --provenance --access public --tag "$TAG"
       - name: Smoke the published binary in a clean project
         if: ${{ !inputs.dry_run }}
         run: |
