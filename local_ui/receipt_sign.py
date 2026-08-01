@@ -117,7 +117,15 @@ def active_kid(keys: Optional[Dict[str, SigningKey]] = None) -> Optional[str]:
 
 
 def _signed_core(receipt: Dict[str, Any]) -> Dict[str, Any]:
-    return {key: value for key, value in (receipt or {}).items() if key not in _POST_SEAL}
+    filtered = {
+        key: value for key, value in (receipt or {}).items()
+        if key not in _POST_SEAL
+    }
+    # Signing must return an immutable-by-construction snapshot. Agent control
+    # timelines and task-state blobs contain nested lists that can advance after
+    # the receipt is built; a shallow dict copy lets those later mutations
+    # invalidate the already-computed hash and signature.
+    return json.loads(canonical_bytes(filtered).decode("utf-8"))
 
 
 def sign_code_receipt(core: Dict[str, Any]) -> Dict[str, Any]:
