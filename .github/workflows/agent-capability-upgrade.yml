@@ -8,11 +8,13 @@ on:
       - "lolm/capability_router.py"
       - "lolm/grounded_qa.py"
       - "lolm/repo_context.py"
+      - "lolm/task_profiler.py"
       - "tests/test_agent_capability_core.py"
       - "tests/test_command_preflight.py"
       - "tests/test_capability_router.py"
       - "tests/test_grounded_qa.py"
       - "tests/test_repo_context.py"
+      - "tests/test_task_profiler.py"
       - "evals/agent_capability_manifest.json"
       - ".github/workflows/agent-capability-upgrade.yml"
   workflow_dispatch:
@@ -46,3 +48,4 @@ jobs:
           tests/test_capability_router.py
           tests/test_grounded_qa.py
           tests/test_repo_context.py
+          tests/test_task_profiler.py
