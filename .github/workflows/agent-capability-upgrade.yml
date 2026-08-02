@@ -3,6 +3,7 @@ name: agent-capability-upgrade
 on:
   pull_request:
     paths:
+      - "local_ui/code_loop_guard.py"
       - "lolm/agent_capability_core.py"
       - "lolm/command_preflight.py"
       - "lolm/capability_router.py"
@@ -13,6 +14,7 @@ on:
       - "tests/test_command_preflight.py"
       - "tests/test_capability_router.py"
       - "tests/test_grounded_qa.py"
+      - "tests/test_live_command_guard.py"
       - "tests/test_repo_context.py"
       - "tests/test_task_profiler.py"
       - "evals/agent_capability_manifest.json"
@@ -47,5 +49,6 @@ jobs:
           tests/test_command_preflight.py
           tests/test_capability_router.py
           tests/test_grounded_qa.py
+          tests/test_live_command_guard.py
           tests/test_repo_context.py
           tests/test_task_profiler.py
