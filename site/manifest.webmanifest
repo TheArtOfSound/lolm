@@ -1,8 +1,8 @@
 {
-  "name": "LOLM-NFET Agent",
+  "name": "LOLM — does not lose the plot",
   "short_name": "LOLM",
-  "description": "An AI agent that measures its own uncertainty and acts on it — with offline resilience.",
-  "start_url": "/try.html",
+  "description": "Persistent task-state control for agents: goals, plan, failures, and verified completion across steps and sessions. Sealed receipts. Honest claims only.",
+  "start_url": "/app.html",
   "display": "standalone",
   "background_color": "#07090d",
   "theme_color": "#07090d",

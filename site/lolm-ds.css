@@ -258,22 +258,52 @@ h1 { font-weight: 680; }
 .conv { transition: background var(--fast), border-color var(--fast); }
 .conv:hover { background: var(--panel2); }
 
-/* INVERTED CONTROLS. Several pages do `background:var(--ink); color:#fff` — a
-   solid near-black button, correct in light mode. When --ink inverts to near-white
-   the fill goes pale and the white label vanishes into it (measured 1.06:1 on the
-   pricing page's "Upgrade to Pro"). Any control filled with --ink must take its
-   label from --bg so it stays legible in BOTH themes. */
-.btn, .btn-secondary, a.ghost, .mode.on, .filters button.on {
-  color: var(--bg);
+/* ── Alias tokens older marketing pages still define for “light only” ────────
+   When those pages later load this file, --ink/--bg flip to dark but leftovers
+   like --soft:#f6f7f9 and --muted stay light → white cards + pale text (receipts).
+   Remap aliases here so any var(--soft)/var(--muted) tracks the active theme. */
+:root {
+  --soft: var(--panel2);
+  --muted: var(--dim);
 }
-.btn, .btn-secondary, a.ghost, .filters button.on {
+
+/* Buttons: do NOT fill every .btn with --ink (that + page color:var(--ink)
+   produced white-on-white / blank labels on install, receipts, why-switch). */
+.btn, a.btn, .btn-secondary, a.ghost, .btn.ghost {
+  background: var(--panel2);
+  color: var(--ink);
+  border: 1px solid var(--line-2);
+}
+.btn:hover, a.btn:hover, .btn-secondary:hover, a.ghost:hover {
+  border-color: var(--faint);
+  color: var(--t-hi);
+}
+/* Solid “ink” secondary (Pro-style) — label must contrast with fill in both themes */
+.btn-secondary, a.btn-secondary {
   background: var(--ink);
+  color: var(--bg);
   border-color: var(--ink);
 }
-/* …except the ones the design system deliberately owns: the gradient primary and
-   the tinted mode chip both set their own fill and label above. */
-.btn.btn-primary, .btn-primary, .cta { color: #fff; }
-.mode.on { background: var(--lolm-grad-soft); color: var(--ink); }
+.btn-secondary:hover, a.btn-secondary:hover {
+  filter: brightness(1.05);
+  color: var(--bg);
+}
+/* Primary gradient always white label */
+.btn.btn-primary, .btn-primary, a.btn-primary, .cta {
+  background: var(--lolm-grad);
+  color: #fff;
+  border: 1px solid transparent;
+}
+.btn.btn-primary:hover, .btn-primary:hover, a.btn-primary:hover, .cta:hover {
+  color: #fff;
+  filter: brightness(1.06);
+}
+.filters button.on, .mode.on {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+.mode.on { background: var(--lolm-grad-soft); color: var(--ink); border-color: var(--line-2); }
 
 /* Element-level rules in the pages hardcode a white background, so a variable
    swap alone leaves them glowing on a dark surface. These are the audited set —
@@ -285,10 +315,31 @@ header {
 }
 .seal-btn, .dock-head, .dseg.on, .dock-toggle, pre.json,
 .card.featured, .btn-ghost, a.outline, .filters button, .btn.ghost,
-.fresh-warn, .verdict.warn, .hi {
+.fresh-warn, .verdict.warn, .hi,
+.row, .pill, .empty, .cmd, pre.cmd, pre:not(.json) {
   background: var(--surface-raised);
   border-color: var(--line);
   color: var(--ink);
+}
+/* Receipt ledger rows + task text must stay high-contrast on themed cards */
+.row, .row.ok, .row.fail {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.row .task, .task { color: var(--ink) !important; }
+.row .meta, .meta, .kind, .sub, .note, .pill { color: var(--dim); }
+.pill b, .empty b { color: var(--ink); }
+.pill { background: var(--panel2); border: 1px solid var(--line); }
+.empty { background: var(--panel2); color: var(--dim); }
+/* Code / command blocks: preserve newlines (install page was one long line) */
+.cmd, pre.cmd, pre:not(.json) {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--mono);
+  color: var(--good);
+  background: var(--panel2);
+  border: 1px solid var(--line);
 }
 pre.json { color: var(--dim); }
 .dseg.on { box-shadow: var(--ring), var(--shadow-sm); }

@@ -643,7 +643,55 @@ def billing_config(request: Request):
                 "visual": status.get("visual"),
             },
             "upgrade_hint": bool(status.get("upgrade_hint")),
-            "enforced": bool(status.get("enforced"))}
+            "enforced": bool(status.get("enforced")),
+            # Honest: one-time packs are not implemented on this deployment.
+            "topups_available": False,
+            "authority": "usage_limits.TIERS"}
+
+
+@app.get("/api/public/product-config")
+def public_product_config(request: Request):
+    """Safe public product + plan snapshot (no secrets). Prefer static
+    /product-config.json for CDN; this endpoint overlays live tier enforcement."""
+    status = usage_limits.usage_status(request)
+    return {
+        "version": 1,
+        "product": {
+            "name": "LOLM",
+            "tagline": "An agent that does not lose the plot.",
+            "publisher": "Qira LLC",
+            "url": "https://lolm.imagineqira.com/",
+        },
+        "plans": usage_limits.public_tiers(),
+        "billing": {
+            "meter": "daily_runs_and_visual_builds",
+            "reset": "UTC midnight",
+            "token_wallet": False,
+            "self_host": "unlimited",
+            "topups_available": False,
+            "checkout_enabled": bool(os.environ.get("STRIPE_SECRET_KEY", "").strip())
+                                and usage_limits.enforced(),
+        },
+        "usage": {
+            "tier": status.get("tier"),
+            "label": status.get("label"),
+            "runs": status.get("runs"),
+            "visual": status.get("visual"),
+            "unlimited": bool(status.get("unlimited")),
+        },
+        "cta": {"primary": "Open app", "href": "/app.html"},
+    }
+
+
+@app.get("/health")
+def public_health():
+    """Simple liveness for monitors and uptime checks (distinct from model ready)."""
+    return {
+        "ok": True,
+        "service": "lolm-demo",
+        "ts": int(time.time()),
+        "status_url": "/api/demo/status",
+    }
 
 
 @app.get("/api/demo/billing/usage")

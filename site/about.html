@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>How LOLM works — Qira</title>
-<meta name="description" content="LOLM is a coding agent that races open models, runs code in a real jail, and seals a receipt for every turn. Uncertainty control, not vibes.">
-<meta property="og:title" content="How LOLM works">
-<meta property="og:description" content="Multi-model coding agent with a real sandbox and sealed receipts.">
+<title>How LOLM works — does not lose the plot · Qira</title>
+<meta name="description" content="LOLM’s product claim is persistent task-state control: structured z_t (goals, plan, world, assumptions, uncertainty, failures, completion) used to choose the next action. NFET, sandbox, and receipts serve that architecture. Honest claims only.">
+<meta property="og:title" content="How LOLM works — task-state control">
+<meta property="og:description" content="Not “a smarter agent.” Structured latent task state, policy over that state, multi-session resume, sealed evidence.">
 <meta property="og:url" content="https://lolm.imagineqira.com/about.html">
 <meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
 <link rel="canonical" href="https://lolm.imagineqira.com/about.html">
@@ -24,11 +24,14 @@
   .prose ul{margin:0 0 14px;padding-left:1.15em;color:var(--dim);font-size:15.5px}
   .prose li{margin:6px 0}
   .prose strong{color:var(--ink);font-weight:650}
+  .prose code{font-family:var(--mono);font-size:13px;background:var(--panel2);padding:2px 6px;border-radius:5px;border:1px solid var(--line)}
   .card-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:22px 0}
   @media(max-width:560px){.card-row{grid-template-columns:1fr}}
   .card{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:var(--panel);box-shadow:var(--ring)}
   .card b{display:block;color:var(--ink);margin-bottom:4px;font-size:14px}
   .card span{font-size:13px;color:var(--dim);line-height:1.45}
+  .note{font-size:13.5px;color:var(--faint);border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:12px 14px;margin:18px 0}
+  .note b{color:var(--dim)}
   footer{border-top:1px solid var(--line);padding:24px 0 40px;color:var(--faint);font-size:12.5px;text-align:center}
 </style>
 </head>
@@ -37,49 +40,71 @@
   <nav class="lolm-nav">
     <a class="mark" href="/">LO<em>LM</em></a>
     <div class="links">
+      <a class="keep" href="/install.html">Install</a>
+      <a class="keep" href="/docs.html">Docs</a>
       <a class="keep" href="/try.html">Demo</a>
+      <a class="keep" href="/why-switch.html">Why switch</a>
       <a class="keep" href="/pricing.html">Pricing</a>
-      <a class="keep primary" href="/">Workspace</a>
+      <a class="keep primary" href="/app.html">App</a>
     </div>
   </nav>
 
   <div class="lolm-hero" style="text-align:left;max-width:640px;margin:0;padding-left:0;padding-right:0">
-    <div class="kicker">How it works</div>
-    <h1 style="font-size:clamp(30px,4.5vw,40px)">One agent.<br><em>No theatre.</em></h1>
-    <p style="margin:0;max-width:none">LOLM is built for people who need code that runs and proof of what happened — not another chat that looks busy.</p>
+    <div class="kicker">Architecture</div>
+    <h1 style="font-size:clamp(30px,4.5vw,40px)">Does not<br><em>lose the plot.</em></h1>
+    <p style="margin:0;max-width:none">LOLM’s product claim is <strong>persistent task-state control</strong> — not “another smarter model.” A structured latent model of the task is maintained and used to choose the next action.</p>
   </div>
 
   <div class="prose">
+    <h2>Latent task state · z<sub>t</sub></h2>
+    <p>
+      After every observation, action, and result, LOLM updates:
+    </p>
+    <p><code>z_t = { G, P, W, A, U, F, C }</code></p>
+    <ul>
+      <li><strong>G</strong> — goals and priority</li>
+      <li><strong>P</strong> — plan / dependency steps</li>
+      <li><strong>W</strong> — world / workspace (files, exits, browser)</li>
+      <li><strong>A</strong> — assumptions and commitments</li>
+      <li><strong>U</strong> — uncertainty and open questions</li>
+      <li><strong>F</strong> — failures, contradictions, dead ends</li>
+      <li><strong>C</strong> — completion criteria + evidence</li>
+    </ul>
+    <p>Policy: <code>a<sub>t+1</sub> = π(z<sub>t+1</sub>)</code> — continue, retrieve, verify, branch, or finalize. Finalize is refused when completion criteria still lack evidence. <strong>Producing output ≠ task complete.</strong></p>
+
     <h2>What you get</h2>
     <div class="card-row">
-      <div class="card"><b>Multi-model race</b><span>Opening turns race GLM-class, gpt-oss-120b, and Llama&nbsp;4 Maverick. Keep the candidate that compiles and runs.</span></div>
-      <div class="card"><b>Real sandbox</b><span>Write → run → fix in a network-isolated jail. Self-reported failures and broken checks block “shipped”.</span></div>
-      <div class="card"><b>Sealed receipts</b><span>Every turn records files, commands, and control decisions in a hash-chained ledger you can audit.</span></div>
-      <div class="card"><b>NFET on coding</b><span>After every run, LOLM measures latent dynamics of your code (or honest sandbox proxies) and can force verify, retrieve past receipts, branch to a new approach, or allow finalize — sealed into the receipt.</span></div>
+      <div class="card"><b>Task state that persists</b><span>Stored under task id / conversation_id. Multi-session resume reloads the same plot after interruptions — not a chat summary.</span></div>
+      <div class="card"><b>Real sandbox</b><span>Write → run → fix in a network-isolated jail. Self-reported failures and broken checks block “shipped.”</span></div>
+      <div class="card"><b>Sealed receipts</b><span>Every turn can seal files, commands, control decisions, and a compact task-state blob in a hash-chained ledger.</span></div>
+      <div class="card"><b>Latent Task Integrity</b><span>We measure continuous z_t vs amnesiac reset on a formal harness (long steps + context wipes). Architecture claim, not frontier leaderboard brag.</span></div>
     </div>
 
-    <h2>What NFET is</h2>
-    <p><strong>NFET</strong> is LOLM’s control layer. The five-stream graft (surface · latent SSM · regime · gate · memory) re-reads text and exposes entropy, hidden drift, gate balance, and regime entropy. A policy maps those to five actions: continue, retrieve, verify, branch, finalize. Chat has used this for a while. <strong>Coding now does too</strong> — so “shipped” is not model whim; it is measured dynamics plus a green sandbox.</p>
+    <div class="note"><b>Honest scope:</b> We do <b>not</b> claim LOLM currently beats Claude Code, Codex, Cursor, or Devin on every multi-hour software job or every public coding benchmark. Those head-to-heads are not published here. We claim the architecture and what we measure on our harness and receipts.</div>
+
+    <h2>Infrastructure that serves z<sub>t</sub></h2>
+    <p><strong>NFET</strong> (five-stream control: surface · latent SSM · regime · gate · memory) measures entropy, drift, and related signals and can force verify, retrieve, branch, or finalize. Coding and visual loops use the same control vocabulary. Multi-model race and free cascade are how LOLM gets candidates — they are not the category claim.</p>
 
     <h2>What we deliberately hide</h2>
-    <p>Lab dashboards live under <strong>More</strong> in the workspace. The product is the loop: describe a task, get working code, keep the receipt — with NFET decisions inside it.</p>
+    <p>Lab dashboards live under <strong>More</strong> in the workspace. The product loop: describe work → hold the plot → run in a jail → verify when required → seal a receipt.</p>
 
-    <h2>Open models, no restraint on quality</h2>
+    <h2>Open models (supporting)</h2>
     <ul>
       <li><strong>zai-glm-4.7</strong> (Cerebras) — large MoE coding brain</li>
       <li><strong>openai/gpt-oss-120b</strong> (Groq / Cerebras) — 120B open weights</li>
-      <li><strong>meta-llama/llama-4-maverick</strong> (Groq) — stronger Llama&nbsp;4 than Scout</li>
-      <li><strong>qwen/qwen3-32b</strong> (Groq) — fast open fallback in the cascade</li>
+      <li><strong>meta-llama/llama-4-maverick</strong> (Groq)</li>
+      <li><strong>qwen/qwen3-32b</strong> (Groq) — cascade fallback</li>
     </ul>
     <p>Bring your own keys (Groq, Cerebras, OpenAI, Together, OpenRouter) and the same ensemble race runs on your account.</p>
 
-    <h2>CLI</h2>
-    <p><code style="font-family:var(--mono);font-size:13px;background:var(--panel2);padding:3px 8px;border-radius:6px;border:1px solid var(--line)">npx lolm-cli code "…"</code> — same loop as the workspace, offline-friendly receipts.</p>
+    <h2>CLI &amp; docs</h2>
+    <p><code>npx lolm-cli code "…"</code> — same loop as the workspace. Spec: task-state control. LTI harness: <code>scripts/lti_harness.py</code>.</p>
 
     <div class="lolm-cta-row" style="justify-content:flex-start;margin-top:36px">
-      <a class="primary" href="/">Open workspace</a>
+      <a class="primary" href="/app.html">Open app</a>
       <a class="ghost" href="/try.html">Public demo</a>
-      <a class="ghost" href="/pricing.html">Pricing</a>
+      <a class="ghost" href="/why-switch.html">Why switch</a>
+      <a class="ghost" href="/receipts.html">Receipts</a>
     </div>
   </div>
 
