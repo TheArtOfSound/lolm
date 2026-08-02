@@ -24,13 +24,18 @@ from lolm.capability_router import TaskKind, TaskProfile, profile_task as profil
 _CODE_ACTION_RE = re.compile(
     r"\b(fix|repair|edit|change|modify|patch|refactor|implement|add|remove|"
     r"replace|upgrade|migrate|debug|build|create|write|generate|compile|run|"
-    r"execute|test|deploy|develop|code)\b",
+    r"execute|test|deploy|develop|code|update)\b",
+    re.IGNORECASE,
+)
+_REPOSITORY_RE = re.compile(
+    r"\b(repo(?:sitory)?|codebase|project|pull\s+request|branch|commit|git)\b",
     re.IGNORECASE,
 )
 _EXPLICIT_FRESHNESS_RE = re.compile(
     r"\b(today|currently?|latest|newest|now|recent(?:ly)?|up[- ]to[- ]date|"
     r"as\s+of|this\s+(?:week|month|year)|released?\s+(?:today|this\s+week)|"
-    r"current\s+version|latest\s+version|newest\s+version|version\s+released)\b",
+    r"current\s+version|latest\s+version|newest\s+version|version\s+released|"
+    r"current\s+release|latest\s+release|newest\s+release)\b",
     re.IGNORECASE,
 )
 _BARE_VERSION_RE = re.compile(r"\bversion\b", re.IGNORECASE)
@@ -56,7 +61,12 @@ def profile_task(
     )
     explicit_freshness = bool(_EXPLICIT_FRESHNESS_RE.search(content))
     code_action = bool(_CODE_ACTION_RE.search(content))
-    repo_action = base.repository_context and code_action
+    repository_context = (
+        has_repository
+        or base.repository_context
+        or bool(_REPOSITORY_RE.search(content))
+    )
+    repo_action = repository_context and code_action
     question = bool(_QUESTION_RE.search(content))
 
     kind = base.kind
@@ -67,6 +77,9 @@ def profile_task(
     requires_structured = base.requires_structured_output
     risk = base.risk
     tags: List[str] = list(base.tags)
+
+    if repository_context and "repository" not in tags:
+        tags.append("repository")
 
     # A language name can be the subject of a question rather than an execution
     # request. "What Python version is required?" must not open a coding agent.
@@ -111,8 +124,6 @@ def profile_task(
         requires_retrieval = True
         requires_structured = True
         risk = max(risk, 0.55)
-        if "repository" not in tags:
-            tags.append("repository")
 
     return replace(
         base,
@@ -122,6 +133,7 @@ def profile_task(
         requires_retrieval=requires_retrieval,
         requires_current_information=requires_current,
         requires_structured_output=requires_structured,
+        repository_context=repository_context,
         risk=risk,
         tags=tuple(tags),
     )
