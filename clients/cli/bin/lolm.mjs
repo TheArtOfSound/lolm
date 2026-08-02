@@ -551,17 +551,38 @@ async function cmdCode(task, flags) {
 
   // runCode returns { done, receipt }
   const done = result?.done || result || {};
+  // Never mutate the sealed receipt object — hash/signature must verify as shipped.
   const r = result?.receipt || done.receipt || {};
-  // Prefer dedicated session_ledger event (not sealed into receipt hash)
-  if (sessionLedger?.resume_package) {
-    r.resume_package = sessionLedger.resume_package;
-    r.session_id = sessionLedger.session_id || r.session_id;
-  }
+  // Session transport is a sibling event, not part of the receipt seal
+  const sessionForLedger = sessionLedger || {
+    session_id: r.session_id,
+    resume_package: r.resume_package,
+  };
   // Persist hosted run into local session ledger for last/retry/resume
-  await persistLocalSessionFromReceipt(task, done, r, flags);
+  await persistLocalSessionFromReceipt(task, done, {
+    ...r,
+    session_id: sessionForLedger.session_id || r.session_id,
+    resume_package: sessionForLedger.resume_package || r.resume_package,
+  }, flags);
   let publicKeys = {};
   try { publicKeys = await receiptPublicKeys(flags); } catch { /* fail closed below */ }
-  const integrity = verifyCodeReceipt(r, { publicKeys });
+  // Verify a clean receipt (strip any client-only fields if a buggy server added them)
+  const rForVerify = { ...r };
+  delete rForVerify.resume_package;
+  delete rForVerify.session_id;
+  let integrity = verifyCodeReceipt(rForVerify, { publicKeys });
+  if (!integrity?.integrity?.verified && (r.resume_package || r.session_id)) {
+    // Keep original attempt recorded; ship gate uses stripped verification
+  } else if (integrity?.integrity?.verified) {
+    // prefer stripped verify when it matches
+  }
+  // If stripped verifies and raw does not, use stripped for the gate
+  const integrityRaw = verifyCodeReceipt(r, { publicKeys });
+  if (!integrityRaw?.integrity?.verified && integrity?.receipt_hash_match) {
+    /* keep integrity from stripped */
+  } else if (integrityRaw?.integrity?.verified) {
+    integrity = integrityRaw;
+  }
   let manifestBound = false;
   if (manifest) {
     try {

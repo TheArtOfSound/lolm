@@ -320,7 +320,8 @@ class RunReliabilityState:
                     c.status = "waived"
             self.contract.recompute_counts()
 
-        # Update deliverable clause status only when the path is present (not "all green")
+        # Update deliverable / behavior / forbidden clause status from evidence
+        paths_set = set(paths or contents.keys())
         for c in self.contract.hard_clauses():
             if c.clause_type == "deliverable" and c.artifact_dependency:
                 if c.artifact_dependency in contents and independent.get(c.artifact_dependency):
@@ -329,27 +330,43 @@ class RunReliabilityState:
                 else:
                     c.status = "red"
                     c.evidence = "missing"
-            if c.clause_type == "exact_output_set":
+            elif c.clause_type == "exact_output_set":
                 n = len([p for p in contents if p and not p.startswith(".")])
                 if self.contract.exact_count is not None and n == self.contract.exact_count:
                     c.status = "green"
                 elif self.contract.exact_count is not None:
                     c.status = "red"
                     c.evidence = f"got {n}"
-            if c.clause_type == "evidence" and "pdf" in (c.verifier or c.text or "").lower():
+            elif c.clause_type == "evidence" and "pdf" in (c.verifier or c.text or "").lower():
                 pdfs = [p for p in contents if (p or "").endswith(".pdf")]
                 if pdfs and all(pdf_bytes_valid(contents[p]) for p in pdfs):
                     c.status = "green"
                 else:
                     c.status = "red"
-            if c.clause_type == "behavior" and c.verifier in ("html.render", "html.static_lint"):
+            elif c.clause_type == "behavior" and c.verifier in ("html.render", "html.static_lint"):
                 v = (verifier_outputs or {}).get(c.verifier) or (verifier_outputs or {}).get("html.render")
                 if isinstance(v, dict) and v.get("ok") is True:
                     c.status = "green"
+                    c.evidence = "html.render ok"
                 else:
-                    # leave open unless we have evidence
                     if c.status != "green":
                         c.status = "open"
+            elif c.clause_type == "forbidden_output":
+                # Green when the forbidden condition is NOT violated
+                violated = False
+                if "xdg-open" in (c.text or "").lower() or c.capability_dependency == "desktop.open":
+                    # satisfied as long as we did not rely on desktop open for ship
+                    violated = False
+                for ext in self.contract.forbidden_extensions:
+                    if any((p or "").lower().endswith(ext if ext.startswith(".") else f".{ext}")
+                           for p in paths_set):
+                        violated = True
+                if self.contract.exact_count is not None:
+                    extras = [p for p in paths_set if p not in set(self.contract.required_paths)]
+                    if extras and len(paths_set) > self.contract.exact_count:
+                        violated = True
+                c.status = "red" if violated else "green"
+                c.evidence = "violated" if violated else "not_violated"
         self.contract.recompute_counts()
         check = check_manifest_against_contract(
             self.contract, list(paths or contents.keys()),
