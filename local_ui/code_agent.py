@@ -25,6 +25,11 @@ except Exception:  # pragma: no cover — optional at import time
     CodeNFET = None  # type: ignore
     build_code_nfet = None  # type: ignore
 
+try:
+    from local_ui import code_loop_guard as _loop_guard
+except Exception:  # pragma: no cover
+    _loop_guard = None  # type: ignore
+
 # Brains raced on the opening turn AND on repair re-races — strongest open
 # models we can fan out to without restraint. generate_many caps at 4.
 # Multi-provider free race — avoid 4× same Groq key (429) and dead 404 ids.
@@ -1218,12 +1223,24 @@ class CodeAgent:
             from lolm.reliability.branch_portfolio import select_candidate
             best, mode = select_candidate(scored)
             if best is not None:
-                if best.get("diagnostic_only"):
-                    # Never advance green checkpoint on diagnostic-only winner
-                    best = dict(best)
-                    best["why"] = (best.get("why") or "") + f" [{mode}]"
-                scored_sorted = [best] + [s for s in scored if s is not best]
-                best = scored_sorted[0]
+                best = dict(best)
+                best["why"] = (best.get("why") or "") + f" [{mode}]"
+                # Repair progress must not select run-failed winners as success
+                if _loop_guard is not None and not _loop_guard.repair_candidate_acceptable(best):
+                    # Prefer any hard-feasible candidate; else refuse race result
+                    ok_rows = [
+                        s for s in scored
+                        if _loop_guard.repair_candidate_acceptable(s)
+                    ]
+                    if ok_rows:
+                        ok_rows.sort(key=lambda x: x.get("score") or 0, reverse=True)
+                        best = ok_rows[0]
+                        best["why"] = (best.get("why") or "") + " [hard_feasible_only]"
+                    else:
+                        # Diagnostic only — do not apply as workspace progress
+                        best["diagnostic_only"] = True
+                        best["score"] = min(float(best.get("score") or 0), 0.0)
+                        best["why"] = (best.get("why") or "") + " [diagnostic_not_progress]"
             else:
                 scored.sort(key=lambda x: x["score"], reverse=True)
                 best = scored[0]
@@ -1231,10 +1248,14 @@ class CodeAgent:
             scored.sort(key=lambda x: x["score"], reverse=True)
             best = scored[0]
         best["all"] = [
-            {"model": c.get("model"), "score": c["score"], "why": c["why"]}
+            {"model": c.get("model"), "score": c["score"], "why": c["why"],
+             "diagnostic_only": bool(c.get("diagnostic_only"))}
             for c in scored
         ]
-        return best if best["score"] > 0 else None
+        # Never return a diagnostic-only candidate as the race winner for apply
+        if best.get("diagnostic_only") or (best.get("score") or 0) <= 0:
+            return None
+        return best
 
     def _run_contract_probe(self, task: str, sandbox: Any = None) -> Optional[Dict[str, Any]]:
         """Run the TASK-derived contract probe against a sandbox.
@@ -1470,13 +1491,46 @@ class CodeAgent:
     def _auto_run_cmd(self, path: str) -> str:
         """Guess a run command when the model forgot RUN:."""
         p = (path or "main.py").lower()
+        # HTML-primary: never auto-run python3 on the deliverable
+        if self.reliability is not None:
+            try:
+                if self.reliability.contract.primary_language == "html":
+                    if p.endswith((".html", ".htm")):
+                        return ""  # verification is html.render, not shell open
+                    if p.endswith(".py"):
+                        return ""  # do not invent python runs for HTML tasks
+            except Exception:
+                pass
         if p.endswith(".py"):
             return f"python3 {path}"
         if p.endswith(".js"):
             return f"node {path}"
         if p.endswith(".sh"):
             return f"bash {path}"
+        if p.endswith((".html", ".htm")):
+            return ""
         return f"python3 {path}"
+
+    def _primary_language(self) -> str:
+        if self.reliability is not None:
+            try:
+                return self.reliability.contract.primary_language or ""
+            except Exception:
+                pass
+        return ""
+
+    def _content_map(self) -> Dict[str, str]:
+        out: Dict[str, str] = {}
+        for p in self._files_written:
+            try:
+                body = self.sb.read_file(p)
+                if body is not None:
+                    out[p] = body if isinstance(body, str) else body.decode(
+                        "utf-8", errors="replace"
+                    )
+            except Exception:
+                pass
+        return out
 
     def build_receipt(self, task: str, *, summary: str = "", ran: bool = False,
                       produced_output: bool = False, steps: int = 0,
@@ -1655,19 +1709,49 @@ class CodeAgent:
         loop used to hand back a tree with a SyntaxError in it and still report DONE.
         A receipt that says "shipped" over code that cannot even be imported is the
         one failure this product cannot afford.
+
+        HTML-primary tasks and HTML-misrouted .py files are not compiled as Python.
         """
-        py = [p for p in self._files_written if (p or "").endswith(".py")]
+        if self._primary_language() == "html":
+            # Only compile genuine python harnesses if any; HTML misroutes skipped
+            py = []
+            for p in self._files_written:
+                if not (p or "").endswith(".py"):
+                    continue
+                try:
+                    body = self.sb.read_file(p) or ""
+                except Exception:
+                    body = ""
+                if _loop_guard is not None and _loop_guard.looks_like_html(body):
+                    continue
+                py.append(p)
+            if not py:
+                return {"checked": [], "ok": True, "error": "", "html_primary": True}
+        else:
+            py = [p for p in self._files_written if (p or "").endswith(".py")]
         if not py:
             return {"checked": [], "ok": True, "error": ""}
+        # Skip py_compile if content is HTML
+        real_py = []
+        for p in py:
+            try:
+                body = self.sb.read_file(p) or ""
+            except Exception:
+                body = ""
+            if _loop_guard is not None and _loop_guard.looks_like_html(body):
+                continue
+            real_py.append(p)
+        if not real_py:
+            return {"checked": [], "ok": True, "error": "", "skipped_html_misroutes": True}
         try:
-            r = self.sb.run("python3 -m py_compile " + " ".join(py),
+            r = self.sb.run("python3 -m py_compile " + " ".join(real_py),
                             timeout=min(15, max(self.run_timeout, 5)),
                             isolated=self.isolated)
         except Exception as exc:
-            return {"checked": py, "ok": True, "error": f"(check skipped: {exc})"[:160]}
+            return {"checked": real_py, "ok": True, "error": f"(check skipped: {exc})"[:160]}
         ok = r.get("exit_code") == 0 and not r.get("blocked")
         err = ((r.get("stderr") or "") + (r.get("stdout") or "")).strip()
-        return {"checked": py, "ok": bool(ok), "error": "" if ok else err[-400:]}
+        return {"checked": real_py, "ok": bool(ok), "error": "" if ok else err[-400:]}
 
     def _source_blob(self) -> str:
         """Concatenate on-disk sources for graft re-read / hotspots."""
@@ -2055,6 +2139,44 @@ class CodeAgent:
                     ),
                     "contract_id": self.reliability.contract.contract_id,
                 }}
+            # Feasibility preflight — never burn budget on impossible browser open
+            if _loop_guard is not None:
+                try:
+                    caps = {
+                        k: v.to_dict() if hasattr(v, "to_dict") else v
+                        for k, v in self.reliability.capabilities.facts.items()
+                    }
+                    # Permanently mark desktop.open unavailable in sandbox coding
+                    self.reliability.capabilities.set_negative(
+                        "desktop.open",
+                        "coding sandbox has no GUI desktop opener",
+                        alternatives=["html.render", "html.static_lint"],
+                        strength="definitive",
+                    )
+                    plan = _loop_guard.feasibility_preflight(
+                        self.reliability.contract.primary_language, caps,
+                    )
+                    self._verify_plan = plan
+                    yield {"event": "agent_note", "data": {
+                        "text": (
+                            f"feasibility: verifier={plan.get('verifier')} "
+                            f"desktop_open=forbidden "
+                            f"substitutes={plan.get('substitutes') or {}}"
+                        ),
+                        "feasibility": plan,
+                    }}
+                    if plan.get("stop_reason"):
+                        yield {"event": "agent_note", "data": {
+                            "text": f"feasibility block: {plan['stop_reason']}"}}
+                    if self.reliability.contract.primary_language == "html":
+                        self._format_nudge = (
+                            (self._format_nudge or "")
+                            + "\n\nHTML-PRIMARY TASK: write ONLY index.html "
+                            "(canvas + JS). NEVER create main.py. NEVER py_compile. "
+                            "NEVER xdg-open. Verification is html.render / static lint."
+                        )
+                except Exception:
+                    self._verify_plan = {}
         except Exception as exc:
             self.reliability = None
             yield {"event": "agent_note", "data": {
@@ -2065,6 +2187,9 @@ class CodeAgent:
         fail_sig = None
         fail_repeats = 0
         parse_fails = 0
+        branch_without_change = 0
+        self._force_html_branch = False
+        self._verify_plan = getattr(self, "_verify_plan", {})
         for step in range(self.max_steps):
             # ACP: after deterministic closure, zero additional model generations
             if self.reliability is not None and not self.reliability.closure.allow_model_turn():
@@ -2171,11 +2296,18 @@ class CodeAgent:
             if turn is None:
                 parse_fails += 1
                 _tf = _task_target_files(task)
-                _pf = _tf[0] if _tf else "main.py"
+                if self._primary_language() == "html" or _is_playable_visual_task(task):
+                    _pf = next((t for t in _tf if t.endswith((".html", ".htm"))), "index.html")
+                    run_hint = (
+                        "After writing, do NOT RUN python. The harness will verify HTML."
+                    )
+                else:
+                    _pf = _tf[0] if _tf else "main.py"
+                    run_hint = f"RUN: {self._auto_run_cmd(_pf) or 'python3 ' + _pf}"
                 self._format_nudge = (
                     "\n\nFORMAT ERROR: Your last reply was not parseable. Reply with ONLY:\n"
                     f"FILE: {_pf}\n```\n# full file contents\n```\n"
-                    f"RUN: {self._auto_run_cmd(_pf)}\n"
+                    f"{run_hint}\n"
                     "No prose outside that format."
                 )
                 yield {"event": "agent_note", "data": {"step": step,
@@ -2548,6 +2680,33 @@ class CodeAgent:
                         "text": f"stripped harness protocol lines out of `{path}` "
                                 f"before write (FILE/RUN/DONE must stay outside the fence)"}}
                     content = cleaned
+                # Language routing: HTML body in main.py → index.html
+                if _loop_guard is not None:
+                    rpath, rcontent, rnote = _loop_guard.redirect_html_misroute(
+                        path, content, primary_language=self._primary_language(),
+                    )
+                    if rnote:
+                        yield {"event": "agent_note", "data": {"text": rnote}}
+                        # If we already wrote garbage to .py, prefer HTML path
+                        if rpath != path and (path or "").endswith(".py"):
+                            path = rpath
+                            content = rcontent
+                # HTML-primary: refuse new Python app files (except tests)
+                if (
+                    self._primary_language() == "html"
+                    and (path or "").endswith(".py")
+                    and not _is_test_path(path)
+                ):
+                    yield {"event": "agent_note", "data": {
+                        "text": (
+                            f"blocked write of `{path}` — HTML-primary task; "
+                            "use index.html only (no Python wrappers)"
+                        )}}
+                    self._format_nudge = (
+                        "\n\nHTML-PRIMARY: Do NOT write Python files. "
+                        "FILE: index.html with complete canvas + JS game only."
+                    )
+                    continue
                 written_path = path
                 try:
                     # ACP: block writes after deterministic closure
@@ -2567,56 +2726,127 @@ class CodeAgent:
                     yield {"event": "file_changed", "data": {"path": path,
                            "diff": (fc.get("diff") or "")[:_DIFF_CAP], "bytes": len(content)}}
                     did = True
-                    # Pre-flight syntax gate: catch SyntaxError before a full RUN
-                    # burns a step (speed + reliability vs Claude/Codex).
+                    # Pre-flight syntax gate — ONLY for genuine Python
                     if (path or "").endswith(".py"):
-                        vcmd = f"python3 -m py_compile {path}"
-                        yield {"event": "command_started", "data": {"command": vcmd, "verify": True}}
-                        vr = self.sb.run(vcmd, timeout=min(10, self.run_timeout),
-                                         isolated=self.isolated)
-                        self.actions.append({"kind": "run", "command": vcmd,
-                                             "result": vr, "verify": True})
-                        yield {"event": "command_finished", "data": {
-                            "command": vcmd, "exit_code": vr.get("exit_code"),
-                            "stdout": vr.get("stdout", ""), "stderr": vr.get("stderr", ""),
-                            "blocked": vr.get("blocked", False), "isolated": True,
-                            "verify": True}}
-                        if vr.get("exit_code") != 0 or vr.get("blocked"):
-                            # Auto-repair: if the on-disk file still has protocol bleed
-                            # (e.g. prior edit reintroduced it), strip and recompile once.
-                            try:
-                                cur = self.sb.read_file(path)
-                            except Exception:
-                                cur = ""
-                            if cur and _content_has_protocol_bleed(cur):
-                                fixed = _sanitize_file_content(cur)
-                                self.sb.write_file(path, fixed, reason="auto-strip protocol")
-                                vr2 = self.sb.run(vcmd, timeout=min(10, self.run_timeout),
-                                                  isolated=self.isolated)
-                                self.actions.append({"kind": "run", "command": vcmd,
-                                                     "result": vr2, "verify": True})
-                                if vr2.get("exit_code") == 0 and not vr2.get("blocked"):
-                                    yield {"event": "agent_note", "data": {
-                                        "text": f"auto-stripped protocol bleed from `{path}` "
-                                                f"— now compiles"}}
-                                    content = fixed
-                                    continue
+                        refuse = False
+                        why_refuse = ""
+                        if _loop_guard is not None:
+                            refuse, why_refuse = _loop_guard.should_refuse_py_compile(
+                                path, content,
+                            )
+                        if refuse:
                             syntax_blocked = True
-                            err = ((vr.get("stderr") or "") + (vr.get("stdout") or "")).strip()
                             self._format_nudge = (
-                                f"\n\nSYNTAX ERROR in `{path}` (py_compile failed).\n"
-                                f"{err[:500]}\nFix it with an EDIT block (copy the old text "
-                                f"verbatim from CURRENT WORKSPACE); use a full FILE rewrite "
-                                f"only if the file needs restructuring. Then RUN."
+                                f"\n\n{why_refuse}\n"
+                                "Write FILE: index.html for browser tasks. "
+                                "Never put HTML/CSS into .py files."
                             )
                             yield {"event": "agent_note", "data": {
-                                "text": f"py_compile failed for {path} — fix before RUN"}}
+                                "text": why_refuse[:200]}}
+                        else:
+                            vcmd = f"python3 -m py_compile {path}"
+                            yield {"event": "command_started", "data": {
+                                "command": vcmd, "verify": True}}
+                            vr = self.sb.run(vcmd, timeout=min(10, self.run_timeout),
+                                             isolated=self.isolated)
+                            self.actions.append({"kind": "run", "command": vcmd,
+                                                 "result": vr, "verify": True})
+                            yield {"event": "command_finished", "data": {
+                                "command": vcmd, "exit_code": vr.get("exit_code"),
+                                "stdout": vr.get("stdout", ""),
+                                "stderr": vr.get("stderr", ""),
+                                "blocked": vr.get("blocked", False), "isolated": True,
+                                "verify": True}}
+                            if vr.get("exit_code") != 0 or vr.get("blocked"):
+                                try:
+                                    cur = self.sb.read_file(path)
+                                except Exception:
+                                    cur = ""
+                                if cur and _content_has_protocol_bleed(cur):
+                                    fixed = _sanitize_file_content(cur)
+                                    self.sb.write_file(path, fixed, reason="auto-strip protocol")
+                                    vr2 = self.sb.run(vcmd, timeout=min(10, self.run_timeout),
+                                                      isolated=self.isolated)
+                                    self.actions.append({"kind": "run", "command": vcmd,
+                                                         "result": vr2, "verify": True})
+                                    if vr2.get("exit_code") == 0 and not vr2.get("blocked"):
+                                        yield {"event": "agent_note", "data": {
+                                            "text": f"auto-stripped protocol bleed from `{path}` "
+                                                    f"— now compiles"}}
+                                        content = fixed
+                                        continue
+                                syntax_blocked = True
+                                err = ((vr.get("stderr") or "") + (vr.get("stdout") or "")).strip()
+                                self._format_nudge = (
+                                    f"\n\nSYNTAX ERROR in `{path}` (py_compile failed).\n"
+                                    f"{err[:500]}\nFix with EDIT or FILE rewrite, then RUN."
+                                )
+                                yield {"event": "agent_note", "data": {
+                                    "text": f"py_compile failed for {path} — fix before RUN"}}
+                    # HTML: snapshot candidate + run html.render immediately
+                    if (path or "").endswith((".html", ".htm")) and _loop_guard is not None:
+                        try:
+                            from local_ui.code_routes import _verify_html
+                            from lolm.reliability.evidence import (
+                                html_verdict_ok, normalize_verifier_output,
+                            )
+                            verdict = _verify_html(content)
+                            ok_v, why_v = html_verdict_ok(verdict)
+                            vnorm = normalize_verifier_output("html.render", verdict)
+                            yield {"event": "agent_note", "data": {
+                                "text": f"html.render on write of {path}: "
+                                        f"{'green' if ok_v else 'red'} ({why_v})",
+                                "normalized": vnorm,
+                            }}
+                            if self.reliability is not None and ok_v:
+                                ck = self.reliability.snapshot_if_green(
+                                    self._content_map(), step=step,
+                                    verifier_outputs={"html.render": vnorm},
+                                )
+                                if ck:
+                                    yield {"event": "agent_note", "data": {
+                                        "text": f"last-known-green (HTML) {ck.checkpoint_id}",
+                                        "checkpoint_id": ck.checkpoint_id,
+                                    }}
+                                close_info = self.reliability.evaluate_and_maybe_close(
+                                    list(self._content_map().keys()),
+                                    file_contents=self._content_map(),
+                                    validators_green=True,
+                                    verifier_outputs={"html.render": vnorm},
+                                    step=step,
+                                    checkpoint_id=ck.checkpoint_id if ck else "",
+                                )
+                                if close_info.get("closure", {}).get("closed"):
+                                    yield {"event": "agent_note", "data": {
+                                        "text": "ACP: HTML closed after html.render green",
+                                        "closure": close_info,
+                                    }}
+                                    yield from self._finish(
+                                        task,
+                                        summary="closed after html.render verification",
+                                        ran=True, produced_output=True, steps=step,
+                                    )
+                                    return
+                        except Exception as exc:
+                            yield {"event": "agent_note", "data": {
+                                "text": f"html write-verify skipped: {exc}"[:120]}}
                 except Exception as exc:
                     yield {"event": "agent_note", "data": {"text": f"write failed: {exc}"[:160]}}
-            # py_compile any edit-touched files not already covered by write preflight
+            # py_compile edit-touched Python only (never HTML misroutes)
             for path in turn.get("_py_touch") or []:
                 if any(p == path for p, _ in (file_list or [])):
                     continue
+                if self._primary_language() == "html":
+                    continue
+                try:
+                    body = self.sb.read_file(path) or ""
+                except Exception:
+                    body = ""
+                if _loop_guard is not None:
+                    refuse, why_refuse = _loop_guard.should_refuse_py_compile(path, body)
+                    if refuse:
+                        yield {"event": "agent_note", "data": {"text": why_refuse[:160]}}
+                        continue
                 vcmd = f"python3 -m py_compile {path}"
                 yield {"event": "command_started", "data": {"command": vcmd, "verify": True}}
                 vr = self.sb.run(vcmd, timeout=min(10, self.run_timeout), isolated=self.isolated)
@@ -2639,10 +2869,82 @@ class CodeAgent:
             cmd = turn.get("run")
             if syntax_blocked:
                 cmd = None
+            # Block impossible / wrong-language commands before shell
+            if cmd and _loop_guard is not None:
+                blocked, why_b = _loop_guard.command_blocked_by_language(
+                    cmd,
+                    primary_language=self._primary_language(),
+                    files_written=self._files_written,
+                    file_contents=self._content_map(),
+                )
+                if blocked:
+                    yield {"event": "agent_note", "data": {"text": why_b[:200]}}
+                    self._format_nudge = (self._format_nudge or "") + f"\n\n{why_b}"
+                    cmd = None
+            if cmd and self.reliability is not None:
+                # Permanent capability block (xdg-open after first definitive fail)
+                allowed, why_cap, alt_v = self.reliability.may_run_command(cmd)
+                if not allowed:
+                    yield {"event": "agent_note", "data": {
+                        "text": f"capability permanently blocked: {why_cap[:140]}",
+                        "alternative_verifier": alt_v,
+                    }}
+                    # Route to typed HTML verifier instead of shell open
+                    if alt_v in ("html.render", "html.static_lint") or self._primary_language() == "html":
+                        html_paths = [
+                            p for p in self._files_written
+                            if (p or "").endswith((".html", ".htm"))
+                        ]
+                        if html_paths:
+                            try:
+                                from local_ui.code_routes import _verify_html
+                                from lolm.reliability.evidence import (
+                                    html_verdict_ok, normalize_verifier_output,
+                                )
+                                body = self.sb.read_file(html_paths[0]) or ""
+                                verdict = _verify_html(body)
+                                ok_v, why_v = html_verdict_ok(verdict)
+                                vnorm = normalize_verifier_output("html.render", verdict)
+                                yield {"event": "agent_note", "data": {
+                                    "text": f"alternate html.render: "
+                                            f"{'green' if ok_v else 'red'} ({why_v})",
+                                }}
+                                if ok_v and self.reliability is not None:
+                                    contents = self._content_map()
+                                    ck = self.reliability.snapshot_if_green(
+                                        contents, step=step,
+                                        verifier_outputs={"html.render": vnorm},
+                                    )
+                                    close_info = self.reliability.evaluate_and_maybe_close(
+                                        list(contents.keys()),
+                                        file_contents=contents,
+                                        validators_green=True,
+                                        verifier_outputs={"html.render": vnorm},
+                                        step=step,
+                                        checkpoint_id=ck.checkpoint_id if ck else "",
+                                    )
+                                    if close_info.get("closure", {}).get("closed"):
+                                        yield from self._finish(
+                                            task,
+                                            summary="closed after html.render (capability alternate)",
+                                            ran=True, produced_output=True, steps=step,
+                                        )
+                                        return
+                            except Exception as exc:
+                                yield {"event": "agent_note", "data": {
+                                    "text": f"html alternate verify failed: {exc}"[:120]}}
+                    cmd = None
             if not cmd and written_path and did and (file_list or turn.get("edits")) and not syntax_blocked:
-                cmd = self._auto_run_cmd(written_path)
-                yield {"event": "agent_note", "data": {
-                    "text": f"no RUN line — auto-running `{cmd}`"}}
+                auto = self._auto_run_cmd(written_path)
+                if auto:
+                    cmd = auto
+                    yield {"event": "agent_note", "data": {
+                        "text": f"no RUN line — auto-running `{cmd}`"}}
+                elif self._primary_language() == "html" and (written_path or "").endswith(
+                    (".html", ".htm")
+                ):
+                    yield {"event": "agent_note", "data": {
+                        "text": "HTML write complete — skipping shell RUN (html.render path)"}}
             if cmd:
                 # VCG: block repeated unavailable capabilities (e.g. xdg-open)
                 if self.reliability is not None:
@@ -3062,7 +3364,15 @@ class CodeAgent:
                             if self.task_state is not None:
                                 try:
                                     from lolm.control.task_state import policy_action
-                                    ts_action = policy_action(self.task_state) or ""
+                                    pol_z = policy_action(self.task_state) or {}
+                                    if isinstance(pol_z, dict):
+                                        ts_action = (
+                                            pol_z.get("action")
+                                            or ("branch" if pol_z.get("force_branch") else "")
+                                            or ("verify" if pol_z.get("force_verify") else "")
+                                        )
+                                    else:
+                                        ts_action = str(pol_z)
                                 except Exception:
                                     # Infer branch from failures in z_t
                                     if getattr(self.task_state, "F", None) and len(self.task_state.F) >= 2:
@@ -3098,11 +3408,57 @@ class CodeAgent:
                             if decision.action == "BRANCH_WITH_CONSTRAINTS":
                                 nfet_ctrl.force_branch = True
                                 nfet_ctrl.force_verify = False
+                                nfet_ctrl.block_finalize = True
                                 req = (decision.payload or {}).get("required_change") or "strategy_vector"
-                                self._format_nudge = (self._format_nudge or "") + (
-                                    f"\n\nEGCA BRANCH: change causal lever `{req}` — "
-                                    "do not retry the same tool/schema/verifier."
-                                )
+                                # Binding branch: force a different strategy vector
+                                if _loop_guard is not None and self._primary_language() == "html":
+                                    strat = _loop_guard.branch_strategy_for_html_dead_end()
+                                    try:
+                                        from lolm.reliability.branch_portfolio import StrategyVector
+                                        sv = StrategyVector(**{
+                                            k: strat[k] for k in (
+                                                "artifact_schema", "implementation_pattern",
+                                                "dependency_plan", "tool_plan", "verifier_plan",
+                                                "label",
+                                            ) if k in strat
+                                        })
+                                        ok_b, why_b = self.reliability.branches.accept_branch(
+                                            sv, required_lever="verifier_plan",
+                                        )
+                                        if not ok_b:
+                                            branch_without_change += 1
+                                        else:
+                                            branch_without_change = 0
+                                            self.reliability.current_strategy = sv
+                                            self._force_html_branch = True
+                                    except Exception:
+                                        branch_without_change += 1
+                                    self._format_nudge = (
+                                        "\n\nEGCA BRANCH (binding): abandon Python and xdg-open. "
+                                        "FILE: index.html only — single-file canvas + JS game. "
+                                        f"Verifier={strat.get('verifier_plan')}. "
+                                        f"Causal lever: {req}. Do NOT write main.py."
+                                    )
+                                else:
+                                    self._format_nudge = (self._format_nudge or "") + (
+                                        f"\n\nEGCA BRANCH: change causal lever `{req}` — "
+                                        "do not retry the same tool/schema/verifier."
+                                    )
+                                    branch_without_change += 1
+                                # Force repair race next turn with different models
+                                if self.nfet is not None:
+                                    try:
+                                        self.nfet._branch_debt = max(
+                                            getattr(self.nfet, "_branch_debt", 0), 2)
+                                        self.nfet._verify_debt = 0
+                                    except Exception:
+                                        pass
+                                yield {"event": "agent_note", "data": {
+                                    "text": (
+                                        f"EGCA branch binding: force_branch=True "
+                                        f"force_verify=False lever={req}"
+                                    ),
+                                }}
                             elif decision.action == "BLOCK_ACTION":
                                 self._format_nudge = (self._format_nudge or "") + (
                                     f"\n\nEGCA BLOCK: {decision.reason[:200]}"
@@ -3110,7 +3466,24 @@ class CodeAgent:
                             elif decision.action == "FINALIZE_DETERMINISTICALLY":
                                 nfet_ctrl.block_finalize = False
                             elif decision.action == "VERIFY":
-                                nfet_ctrl.force_verify = True
+                                # Capability infeasibility must not verify the same dead path
+                                if self.reliability.failures.current_root_cause():
+                                    root = self.reliability.failures.current_root_cause()
+                                    if (root.normalized_root_cause or "").startswith(
+                                        "capability_missing"
+                                    ):
+                                        nfet_ctrl.force_verify = False
+                                        nfet_ctrl.force_branch = True
+                                        yield {"event": "agent_note", "data": {
+                                            "text": (
+                                                "EGCA: capability missing vetoes verify — "
+                                                "forcing branch instead"
+                                            ),
+                                        }}
+                                    else:
+                                        nfet_ctrl.force_verify = True
+                                else:
+                                    nfet_ctrl.force_verify = True
                         except Exception as exc:
                             yield {"event": "agent_note", "data": {
                                 "text": f"EGCA unavailable: {exc}"[:100]}}
@@ -3399,6 +3772,50 @@ class CodeAgent:
                             "text": f"runtime error — {label[:80]}"}}
                     fail_repeats = fail_repeats + 1 if sig == fail_sig else 0
                     fail_sig = sig
+                    # Semantic + capability early stop (do not burn remaining budget)
+                    if self.reliability is not None and _loop_guard is not None:
+                        try:
+                            cur = self.reliability.failures.current_root_cause()
+                            sem_n = cur.recurrence if cur else fail_repeats
+                            cap_bad = bool(
+                                cur and (cur.normalized_root_cause or "").startswith(
+                                    "capability_missing"
+                                )
+                            ) or (
+                                "xdg-open" in (cmd or "").lower()
+                                or "desktop" in (sig or "").lower()
+                            )
+                            stop, stop_why = _loop_guard.should_early_stop(
+                                semantic_recurrence=sem_n,
+                                fail_repeats=fail_repeats,
+                                capability_infeasible=cap_bad,
+                                branch_without_change=branch_without_change,
+                            )
+                            if stop and fail_repeats >= 2:
+                                if self.reliability.checkpoints.best() is not None:
+                                    try:
+                                        self.reliability.checkpoints.materialize_to_sandbox(
+                                            self.sb,
+                                        )
+                                        yield {"event": "agent_note", "data": {
+                                            "text": "early stop — restored last-known-green",
+                                        }}
+                                    except Exception:
+                                        pass
+                                yield {"event": "agent_note", "data": {
+                                    "text": f"early stop: {stop_why}",
+                                }}
+                                yield from self._finish(
+                                    task,
+                                    summary=f"stuck: {stop_why}"[:200],
+                                    ran=ran_any,
+                                    produced_output=produced_output,
+                                    steps=step,
+                                    stuck=True,
+                                )
+                                return
+                        except Exception:
+                            pass
                     # One free re-ensemble before declaring thrash death — the
                     # same error twice often means the model is stuck in a local
                     # minimum; a different brain lineup breaks it more often than

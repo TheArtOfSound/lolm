@@ -86,3 +86,24 @@ Addressed before re-review:
 11. Evidence progress budget fed from the live loop.
 
 Independent tests: `tests/test_reliability_invariants.py`.
+
+
+## Coding-loop language routing (Snake retest)
+
+Product-level failures from the hosted snake run are addressed structurally:
+
+1. **Artifact language routing** (`code_loop_guard.py`): HTML body in `.py` is refused for `py_compile` and redirected to `index.html`. HTML-primary tasks block new Python app files.
+2. **Permanent capability blocks**: `desktop.open` is marked definitive-negative at run start; repeated `xdg-open` never re-executes; alternates route to `html.render`.
+3. **Binding branch**: EGCA `BRANCH_WITH_CONSTRAINTS` sets `force_branch`, clears verify debt, accepts a non-Python strategy vector, and injects a binding format nudge (index.html only).
+4. **Feasibility preflight**: verifier plan chosen before mutation; desktop open never an acceptance criterion.
+5. **Repair race**: run-failed candidates cannot win as progress (`repair_candidate_acceptable`).
+6. **Early stop**: semantic root-cause recurrence + empty branches + capability infeasibility restore LGTS and finish stuck.
+7. **HTML write-time verify**: `html.render`/static lint on write; green snapshots preserved.
+
+Retest:
+
+```bash
+lolm code "Build a complete playable Snake game as a single index.html file. ..." \
+  --save ./snake-game --max-steps 12 --idle-timeout 120000 --timeout 300000 \
+  --receipt ./snake-game.receipt.json
+```
