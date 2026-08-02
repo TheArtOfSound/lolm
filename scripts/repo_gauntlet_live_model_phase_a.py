@@ -616,12 +616,22 @@ def main() -> int:
             print("lolm-code-sse requires LOLM_LIVE_BASE_URL and LOLM_LIVE_API_KEY (or QIRA_API_KEY)")
             print("LOLM_LIVE_MODEL is not required — server reports model_id")
             return 2
-        # Refuse accidental production origin for qualification
-        if "imagineqira.com" in base and os.environ.get("LOLM_ALLOW_PRODUCTION_2B") != "1":
+        # Refuse accidental *production* agent origin. Path-prefixed Track 2B
+        # staging on the same host (/api/track2b/) is allowed when identity is pinned.
+        code_path_probe = (
+            os.environ.get("LOLM_CODE_RUN_PATH", "").strip() or "/api/demo/code/run"
+        )
+        staging_path = "/api/track2b/" in (code_path_probe + "/")
+        if (
+            "imagineqira.com" in base
+            and not staging_path
+            and os.environ.get("LOLM_ALLOW_PRODUCTION_2B") != "1"
+        ):
             print(
                 "Refusing production origin for Track 2B. "
-                "Deploy SHA-pinned staging and set LOLM_LIVE_BASE_URL to it "
-                "(or LOLM_ALLOW_PRODUCTION_2B=1 only for explicit non-qual experiments)."
+                "Use path-prefixed staging (/api/track2b/code/run) on a SHA-pinned "
+                "deployment, a dedicated staging host, or "
+                "LOLM_ALLOW_PRODUCTION_2B=1 only for explicit non-qual experiments."
             )
             return 2
         # Refuse private signing keys on the runner (trust-boundary)
