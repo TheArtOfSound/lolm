@@ -6,9 +6,10 @@ This v2 layer corrects high-impact ambiguities before model/tool routing:
 
 * repository action verbs such as fix, repair, edit, patch, and refactor imply
   code execution even when the prompt also says research;
+* mentioning a programming language does not imply code generation when the
+  user is asking a factual question about that language;
 * the noun ``version`` is not inherently time-sensitive. Freshness is required
-  only when it is paired with explicit temporal language such as latest,
-  current, released today, or as of a date.
+  only when paired with explicit temporal language such as latest or current.
 """
 
 from __future__ import annotations
@@ -20,9 +21,10 @@ from typing import List
 from lolm.capability_router import TaskKind, TaskProfile, profile_task as profile_task_v1
 
 
-_REPO_ACTION_RE = re.compile(
+_CODE_ACTION_RE = re.compile(
     r"\b(fix|repair|edit|change|modify|patch|refactor|implement|add|remove|"
-    r"replace|upgrade|migrate|debug|build|create|write|update)\b",
+    r"replace|upgrade|migrate|debug|build|create|write|generate|compile|run|"
+    r"execute|test|deploy|develop|code)\b",
     re.IGNORECASE,
 )
 _EXPLICIT_FRESHNESS_RE = re.compile(
@@ -32,6 +34,11 @@ _EXPLICIT_FRESHNESS_RE = re.compile(
     re.IGNORECASE,
 )
 _BARE_VERSION_RE = re.compile(r"\bversion\b", re.IGNORECASE)
+_QUESTION_RE = re.compile(
+    r"\?|^\s*(?:according\s+to\s+[^,]+,\s*)?"
+    r"(?:what|why|how|when|where|who|which|is|are|does|do|can|could|should|would)\b",
+    re.IGNORECASE,
+)
 
 
 def profile_task(
@@ -48,7 +55,9 @@ def profile_task(
         supplied_sources=supplied_sources,
     )
     explicit_freshness = bool(_EXPLICIT_FRESHNESS_RE.search(content))
-    repo_action = base.repository_context and bool(_REPO_ACTION_RE.search(content))
+    code_action = bool(_CODE_ACTION_RE.search(content))
+    repo_action = base.repository_context and code_action
+    question = bool(_QUESTION_RE.search(content))
 
     kind = base.kind
     requires_execution = base.requires_execution
@@ -59,6 +68,20 @@ def profile_task(
     risk = base.risk
     tags: List[str] = list(base.tags)
 
+    # A language name can be the subject of a question rather than an execution
+    # request. "What Python version is required?" must not open a coding agent.
+    if question and base.language and not code_action and not repo_action:
+        kind = TaskKind.CURRENT_QA if explicit_freshness else TaskKind.FACTUAL_QA
+        requires_execution = False
+        requires_structured = False
+        requires_current = explicit_freshness
+        requires_retrieval = supplied_sources or explicit_freshness
+        requires_tools = explicit_freshness
+        risk = 0.40 if explicit_freshness else 0.15
+        tags = [tag for tag in tags if tag not in {"shell", "freshness"}]
+        if explicit_freshness:
+            tags.append("freshness")
+
     # "Python version" and "API version" are stable/source questions unless the
     # user actually asks for the current/latest release.
     if _BARE_VERSION_RE.search(content) and not explicit_freshness:
@@ -66,8 +89,9 @@ def profile_task(
         tags = [tag for tag in tags if tag != "freshness"]
         if kind == TaskKind.CURRENT_QA:
             kind = TaskKind.FACTUAL_QA
-        # Retrieval may still be required because sources were supplied.
         requires_retrieval = supplied_sources or kind in {TaskKind.RESEARCH, TaskKind.REPO_EDIT}
+        if kind == TaskKind.FACTUAL_QA:
+            requires_tools = False
 
     if explicit_freshness:
         requires_current = True
@@ -75,7 +99,7 @@ def profile_task(
         requires_tools = True
         if "freshness" not in tags:
             tags.append("freshness")
-        if kind == TaskKind.FACTUAL_QA:
+        if question and not repo_action:
             kind = TaskKind.CURRENT_QA
 
     # Action on an existing repository dominates research wording. Research is
