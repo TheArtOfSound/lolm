@@ -516,6 +516,14 @@ def register_code_routes(app: Any, root: str,
                           resume_package=getattr(req, "resume_package", None) or None)
 
         def gen():
+            import os as _os
+            # Staging identity: require LOLM_SERVER_SHA on SHA-pinned deploys
+            identity = {
+                "server_sha": (_os.environ.get("LOLM_SERVER_SHA") or "").strip(),
+                "model_id": (_os.environ.get("LOLM_MODEL_ID") or "").strip(),
+                "provider": (_os.environ.get("LOLM_MODEL_PROVIDER") or "").strip(),
+                "deployment_id": (_os.environ.get("LOLM_DEPLOYMENT_ID") or "").strip(),
+            }
             try:
                 nfet_mode = "off"
                 if getattr(agent, "nfet", None) is not None:
@@ -526,21 +534,37 @@ def register_code_routes(app: Any, root: str,
                         f"({nfet_mode}: verify/retrieve/branch/finalize from measured dynamics)"
                     )})
                 for ev in agent.run(task):
+                    data = dict(ev.get("data") or {})
+                    # Ensure deployment identity on critical events (do not strip agent fields)
+                    if ev.get("event") in ("code_start", "code_done", "code_receipt", "final_workspace"):
+                        for k, v in identity.items():
+                            if v and not data.get(k):
+                                data[k] = v
                     if ev.get("event") == "code_receipt":
                         try:
-                            sealed = code_receipt_ledger.append(ev.get("data") or {},
+                            sealed = code_receipt_ledger.append(data,
                                                                 source="api.demo.code.run")
-                            # stream the ledger-chained row (still includes trail)
-                            yield _sse("code_receipt", sealed)
+                            if isinstance(sealed, dict):
+                                for k, v in identity.items():
+                                    if v and not sealed.get(k):
+                                        sealed[k] = v
+                            yield _sse("code_receipt", sealed if isinstance(sealed, dict) else data)
                             continue
                         except Exception as lexc:
-                            # never fail the user stream on ledger IO
                             note = {"text": f"receipt ledger write skipped: {lexc}"[:160]}
                             yield _sse("agent_note", note)
-                    yield _sse(ev["event"], ev["data"])
+                    yield _sse(ev["event"], data)
             except Exception as exc:
-                yield _sse("error", {"error": str(exc)[:200]})
+                # Never echo secrets in error streams
+                msg = str(exc)[:200]
+                for secret_env in ("LOLM_LIVE_API_KEY", "QIRA_API_KEY", "LOLM_API_KEY"):
+                    s = _os.environ.get(secret_env) or ""
+                    if len(s) >= 8 and s in msg:
+                        msg = msg.replace(s, "***REDACTED***")
+                yield _sse("error", {"error": msg})
             finally:
+                # Destroy only after final_workspace has been streamed (agent emits it
+                # before code_done/code_receipt in _finish).
                 try:
                     sb.destroy()
                 except Exception:

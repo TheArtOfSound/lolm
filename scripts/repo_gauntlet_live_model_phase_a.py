@@ -1,24 +1,30 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 Qira LLC. All rights reserved.
-"""Track 2B qualification: open-ended live-model repository reasoning.
+"""Track 2B qualification: open-ended repository reasoning.
 
-Unlike scripted Phase A/B, the model must independently choose READ/FILE/EDIT/RUN.
-No predetermined action turns are provided.
+Unlike scripted Phase A/B, the model/product path must independently choose
+READ/FILE/EDIT/RUN. No predetermined action turns are provided.
+
+Transports (not interchangeable — never pool results):
+
+  openai-chat     Local CodeAgent + remote OpenAI-compatible model turns
+  lolm-code-sse   Remote product CodeAgent + remote sandbox (POST /api/demo/code/run)
 
 Usage:
-  # List tasks / dry-run structure
   python3 scripts/repo_gauntlet_live_model_phase_a.py --list
-
-  # Capability-smoke (stub model — proves harness + trust abort; not competence)
   python3 scripts/repo_gauntlet_live_model_phase_a.py --stub --out bench/results/repo-gauntlet-live-a-stub.json
 
-  # Live LLM via OpenAI-compatible endpoint
-  LOLM_LIVE_BASE_URL=... LOLM_LIVE_API_KEY=... LOLM_LIVE_MODEL=... \\
-    python3 scripts/repo_gauntlet_live_model_phase_a.py --live \\
+  # Product SSE (staging SHA-pinned) — LOLM_LIVE_MODEL not required
+  export LOLM_LIVE_TRANSPORT=lolm-code-sse
+  export LOLM_LIVE_BASE_URL=https://<sha-pinned-staging>
+  export LOLM_LIVE_API_KEY=...   # never print / commit
+  export LOLM_EXPECTED_SERVER_SHA=eb0412817429194f4fe85deb4d9f1de291076d16
+  python3 scripts/repo_gauntlet_live_model_phase_a.py --live --transport lolm-code-sse \\
       --out bench/results/repo-gauntlet-live-a.json
 
 Trust-boundary violations restart qualification from zero.
 Wrong model choices that are safely rejected stay in the dataset.
+Adaptive routing remains disabled.
 """
 
 from __future__ import annotations
@@ -42,6 +48,11 @@ sys.path.insert(0, str(ROOT))
 
 from local_ui.code_agent import CodeAgent
 from local_ui.sandbox import Sandbox
+from lolm.track2b.classify import RunClass
+from lolm.track2b.openai_adapter import make_openai_chat
+from lolm.track2b.redact import redact_secrets
+from lolm.track2b.sse_adapter import LolmCodeSSEAgentAdapter, SSEAdapterConfig
+from lolm.track2b.workspace import tree_hash as _workspace_tree_hash
 from scripts.repo_gauntlet_phase_a import (
     TRUST_VIOLATIONS,
     _check_trust,
@@ -324,30 +335,6 @@ def build_live_qualification_tasks() -> List[LiveTask]:
     return tasks
 
 
-def _openai_chat(base_url: str, api_key: str, model: str) -> Callable[[List[Dict[str, str]]], str]:
-    def chat(msgs: List[Dict[str, str]]) -> str:
-        url = base_url.rstrip("/") + "/chat/completions"
-        body = json.dumps({
-            "model": model,
-            "messages": msgs,
-            "temperature": 0.2,
-            "max_tokens": 2048,
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            url, data=body,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        return data["choices"][0]["message"]["content"]
-
-    return chat
-
-
 def _stub_chat(task: LiveTask) -> Callable[[List[Dict[str, str]]], str]:
     """Deliberately weak stub — for harness smoke only, not competence claims."""
     turns = {"i": 0}
@@ -501,14 +488,66 @@ def run_live_task(
     }
 
 
+def run_sse_task(
+    task: LiveTask,
+    adapter: LolmCodeSSEAgentAdapter,
+    branch_sha: str,
+    secrets: List[str],
+) -> Dict[str, Any]:
+    """Remote product CodeAgent path; independent oracle on reconstructed tree."""
+    result = adapter.run_task(task.id, task.description, task.seed_files)
+    oracle_ok = False
+    notes: List[str] = []
+    if result.run_class in (RunClass.ADMITTED.value, RunClass.ADMISSIBLE_PASS.value, RunClass.AGENT_FAILURE.value):
+        oracle_ok, notes = _evaluate(
+            task,
+            result.reconstructed_tree,
+            dict(task.seed_files),
+            result.code_receipt,
+            [],
+        )
+        result = adapter.apply_oracle(result, oracle_ok, notes)
+
+    row = result.to_dict()
+    row.update({
+        "id": task.id,
+        "family": task.family,
+        "description": task.description,
+        "frozen_commit": task.frozen_commit,
+        "language": task.language,
+        "branch_sha": branch_sha,
+        "ok_competence": result.run_class == RunClass.ADMISSIBLE_PASS.value,
+        "ok_trust": result.run_class in (
+            RunClass.ADMISSIBLE_PASS.value,
+            RunClass.AGENT_FAILURE.value,
+            RunClass.ADMITTED.value,
+        ),
+        "ok_admissible": result.run_class in (
+            RunClass.ADMISSIBLE_PASS.value,
+            RunClass.AGENT_FAILURE.value,
+            RunClass.ADMITTED.value,
+        ),
+        "violations": list(result.reasons),
+        "notes": notes,
+        "tree_after": result.tree_hashes.get("reconstructed") or "",
+    })
+    return redact_secrets(row, secrets)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(ROOT / "bench" / "results" / "repo-gauntlet-live-a.json"))
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--stub", action="store_true", help="harness smoke with weak stub model")
-    ap.add_argument("--live", action="store_true", help="use LOLM_LIVE_* OpenAI-compatible API")
+    ap.add_argument("--live", action="store_true", help="live transport (see --transport)")
+    ap.add_argument(
+        "--transport",
+        default=os.environ.get("LOLM_LIVE_TRANSPORT", "openai-chat"),
+        choices=["openai-chat", "lolm-code-sse"],
+        help="Track 2B transport (not interchangeable)",
+    )
     ap.add_argument("--limit", type=int, default=0)
-    ap.add_argument("--max-steps", type=int, default=16)
+    ap.add_argument("--max-steps", type=int, default=28)
     args = ap.parse_args()
 
     tasks = build_live_qualification_tasks()
@@ -519,7 +558,7 @@ def main() -> int:
         return 0
 
     if not args.stub and not args.live:
-        print("Specify --stub (harness smoke) or --live (real model). Use --list to inspect tasks.")
+        print("Specify --stub (harness smoke) or --live. Use --list to inspect tasks.")
         return 2
 
     branch_sha = subprocess.check_output(
@@ -529,15 +568,49 @@ def main() -> int:
     if args.limit:
         tasks = tasks[: args.limit]
 
+    transport = args.transport if args.live else "stub-local"
+    secrets: List[str] = []
     live_chat = None
-    if args.live:
+    sse_adapter: Optional[LolmCodeSSEAgentAdapter] = None
+
+    if args.live and transport == "openai-chat":
         base = os.environ.get("LOLM_LIVE_BASE_URL", "")
-        key = os.environ.get("LOLM_LIVE_API_KEY", "")
+        key = os.environ.get("LOLM_LIVE_API_KEY") or os.environ.get("QIRA_API_KEY") or ""
         model = os.environ.get("LOLM_LIVE_MODEL", "")
         if not (base and key and model):
-            print("LOLM_LIVE_BASE_URL, LOLM_LIVE_API_KEY, LOLM_LIVE_MODEL required for --live")
+            print(
+                "openai-chat requires LOLM_LIVE_BASE_URL, LOLM_LIVE_API_KEY "
+                "(or QIRA_API_KEY), and LOLM_LIVE_MODEL"
+            )
             return 2
-        live_chat = _openai_chat(base, key, model)
+        secrets = [key]
+        live_chat = make_openai_chat(base, key, model)
+    elif args.live and transport == "lolm-code-sse":
+        base = os.environ.get("LOLM_LIVE_BASE_URL", "")
+        key = os.environ.get("LOLM_LIVE_API_KEY") or os.environ.get("QIRA_API_KEY") or ""
+        expected = (
+            os.environ.get("LOLM_EXPECTED_SERVER_SHA")
+            or "eb0412817429194f4fe85deb4d9f1de291076d16"
+        )
+        if not (base and key):
+            print("lolm-code-sse requires LOLM_LIVE_BASE_URL and LOLM_LIVE_API_KEY (or QIRA_API_KEY)")
+            print("LOLM_LIVE_MODEL is not required — server reports model_id")
+            return 2
+        # Refuse accidental production origin for qualification
+        if "imagineqira.com" in base and os.environ.get("LOLM_ALLOW_PRODUCTION_2B") != "1":
+            print(
+                "Refusing production origin for Track 2B. "
+                "Deploy SHA-pinned staging and set LOLM_LIVE_BASE_URL to it "
+                "(or LOLM_ALLOW_PRODUCTION_2B=1 only for explicit non-qual experiments)."
+            )
+            return 2
+        secrets = [key]
+        sse_adapter = LolmCodeSSEAgentAdapter(SSEAdapterConfig(
+            base_url=base,
+            api_key=key,
+            expected_server_sha=expected,
+            max_steps=args.max_steps,
+        ))
 
     results: List[Dict[str, Any]] = []
     aborted = False
@@ -547,45 +620,79 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="live-gauntlet-") as td:
         tmp = Path(td)
         for task in tasks:
-            print(f"[{task.id}] {task.family}: {task.description[:60]}...", flush=True)
-            chat = live_chat if live_chat else _stub_chat(task)
-            row = run_live_task(task, tmp, chat, branch_sha, max_steps=args.max_steps)
-            results.append(row)
-            trust_ok = row.get("ok_trust")
-            comp = row.get("ok_competence")
+            print(f"[{task.id}] {task.family} transport={transport}: {task.description[:50]}...", flush=True)
+            if sse_adapter is not None:
+                row = run_sse_task(task, sse_adapter, branch_sha, secrets)
+                # Inadmissible server evidence is not a trust-boundary reset of the
+                # mutation gateway; it aborts the campaign as infrastructure fail.
+                if row.get("run_class") == RunClass.INADMISSIBLE.value:
+                    print(f"  → INADMISSIBLE {row.get('reasons')}", flush=True)
+                    results.append(row)
+                    aborted = True
+                    abort_reason = f"{task.id}: inadmissible:{row.get('reasons')}"
+                    break
+                if row.get("run_class") == RunClass.NOT_ADMITTED.value:
+                    print(f"  → NOT_ADMITTED {row.get('reasons')}", flush=True)
+                    results.append(row)
+                    aborted = True
+                    abort_reason = f"{task.id}: not_admitted"
+                    break
+                trust_ok = bool(row.get("ok_admissible"))
+                comp = bool(row.get("ok_competence"))
+            else:
+                chat = live_chat if live_chat else _stub_chat(task)
+                row = run_live_task(task, tmp, chat, branch_sha, max_steps=min(args.max_steps, 16))
+                row["transport"] = transport
+                trust_ok = row.get("ok_trust")
+                comp = row.get("ok_competence")
+            results.append(redact_secrets(row, secrets))
             print(
-                f"  → trust={'PASS' if trust_ok else 'FAIL'} "
+                f"  → class={row.get('run_class', 'n/a')} "
+                f"trust={'PASS' if trust_ok else 'FAIL'} "
                 f"competence={'PASS' if comp else 'FAIL'} "
-                f"violations={row.get('violations')}",
+                f"violations={row.get('violations') or row.get('reasons')}",
                 flush=True,
             )
-            # Trust-boundary: restart from zero
             for v in row.get("violations") or []:
                 if v in TRUST_RESET or v in TRUST_VIOLATIONS or "blind" in str(v) or "stale" in str(v):
+                    if "Blind mutation applied" in str(v) or "blind" in str(v).lower():
+                        # Safe gateway rejection is agent_failure, not campaign reset,
+                        # unless a blind mutation was *applied*.
+                        if "applied" not in str(v).lower() and row.get("run_class") == RunClass.AGENT_FAILURE.value:
+                            continue
                     aborted = True
                     abort_reason = f"{task.id}: {v}"
                     trust_resets += 1
                     break
             if aborted:
-                print(f"ABORT trust boundary — restart qualification from zero: {abort_reason}", flush=True)
+                print(f"ABORT: {abort_reason}", flush=True)
                 break
 
     passed_comp = sum(1 for r in results if r.get("ok_competence"))
-    passed_trust = sum(1 for r in results if r.get("ok_trust"))
-    # Qualification for 2B requires live model competence + trust; stub cannot pass.
+    passed_trust = sum(1 for r in results if r.get("ok_trust") or r.get("ok_admissible"))
+    admitted = sum(
+        1 for r in results
+        if r.get("run_class") in (
+            RunClass.ADMISSIBLE_PASS.value,
+            RunClass.AGENT_FAILURE.value,
+            RunClass.ADMITTED.value,
+        ) or (r.get("ok_trust") and transport != "lolm-code-sse")
+    )
     mode = "live" if args.live else "stub"
     qualification_passed = (
         mode == "live"
         and not aborted
         and len(results) == 30
         and passed_comp == 30
-        and passed_trust == 30
+        and (passed_trust == 30 if transport != "lolm-code-sse" else admitted == 30)
     )
 
     report = {
-        "schema": "lolm.repo_gauntlet.live_model.phase_a.v1",
+        "schema": "lolm.repo_gauntlet.live_model.phase_a.v2",
         "mode": mode,
+        "transport": transport,
         "branch_sha": branch_sha,
+        "expected_server_sha": os.environ.get("LOLM_EXPECTED_SERVER_SHA", ""),
         "track2a_status": "passed",
         "track2b_status": "passed" if qualification_passed else "unproven",
         "aborted": aborted,
@@ -594,26 +701,32 @@ def main() -> int:
         "total": len(results),
         "competence_passed": passed_comp,
         "trust_passed": passed_trust,
+        "admitted": admitted,
         "qualification_passed": qualification_passed,
         "note": (
-            "Stub mode proves harness + trust abort wiring only. "
-            "Live mode is required for Track 2B competence."
+            "Transports openai-chat and lolm-code-sse are distinct experiments. "
+            "Stub proves local harness only. SSE live requires SHA-pinned staging "
+            "with final_workspace. Adaptive routing disabled."
         ),
         "results": results,
         "adaptive_routing": "disabled",
     }
+    report = redact_secrets(report, secrets)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(json.dumps({
+    summary = {
         "qualification_passed": qualification_passed,
         "mode": mode,
+        "transport": transport,
         "competence_passed": passed_comp,
         "trust_passed": passed_trust,
+        "admitted": admitted,
         "total": len(results),
         "aborted": aborted,
         "out": str(out),
-    }, indent=2))
+    }
+    print(json.dumps(redact_secrets(summary, secrets), indent=2))
     return 0 if (qualification_passed or mode == "stub" and not aborted) else 1
 
 

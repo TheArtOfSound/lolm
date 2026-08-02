@@ -1978,7 +1978,23 @@ class CodeAgent:
             except Exception:
                 session_event = None
 
+        # Final workspace tree hash is part of the sealed receipt when available.
+        final_workspace_blob: Dict[str, Any] = {}
+        try:
+            final_workspace_blob = self._build_final_workspace_event(
+                run_id=str(getattr(self.sb, "id", "") or ""),
+            )
+            kw = dict(kw)
+            # stashed for build_receipt via kw; also set after if core supports it
+        except Exception:
+            final_workspace_blob = {}
         receipt = self.build_receipt(task, syntax=syntax, manifest=manifest, **kw)
+        if final_workspace_blob.get("tree_hash"):
+            # Post-seal evidence fields for Track 2B (final_workspace event is authoritative).
+            # Do not re-sign; harness compares final_workspace.tree_hash with this echo.
+            receipt = dict(receipt)
+            receipt["tree_hash"] = final_workspace_blob["tree_hash"]
+            receipt["workspace_tree_hash"] = final_workspace_blob["tree_hash"]
         # Update ledger status from sealed receipt (local file only; not re-hashed)
         if self.reliability is not None and self.reliability.session is not None:
             try:
@@ -2037,6 +2053,21 @@ class CodeAgent:
         if session_event:
             yield {"event": "session_ledger", "data": session_event}
             data["session_id"] = session_event.get("session_id")
+        # Track 2B: authoritative final workspace BEFORE sandbox destruction.
+        identity = self._deployment_identity()
+        if final_workspace_blob:
+            fw = dict(final_workspace_blob)
+            fw["run_id"] = str(receipt.get("run_id") or fw.get("run_id") or "")
+            fw.update(identity)
+            yield {"event": "final_workspace", "data": fw}
+            data["tree_hash"] = fw.get("tree_hash")
+        else:
+            yield {"event": "agent_note", "data": {
+                "text": "final_workspace unavailable"}}
+        data.update(identity)
+        if isinstance(receipt, dict):
+            receipt = dict(receipt)
+            receipt.update(identity)
         yield {"event": "code_done", "data": data}
         yield {"event": "code_receipt", "data": receipt}
         # Complete Track 3 passive shadow observation from receipt evidence.
@@ -2160,8 +2191,85 @@ class CodeAgent:
         ).encode()).hexdigest()
         return {**manifest_core, "files": files_out, "manifest_sha256": manifest_sha}
 
+    def _deployment_identity(self) -> Dict[str, Any]:
+        """SHA-pinned deployment fields for Track 2B admission (env-driven)."""
+        import os as _os
+        sha = (
+            _os.environ.get("LOLM_SERVER_SHA")
+            or _os.environ.get("LOLM_EXPECTED_SERVER_SHA")
+            or _os.environ.get("GIT_COMMIT")
+            or ""
+        ).strip()
+        return {
+            "server_sha": sha,
+            "model_id": (_os.environ.get("LOLM_MODEL_ID") or "").strip(),
+            "provider": (_os.environ.get("LOLM_MODEL_PROVIDER") or "").strip(),
+            "deployment_id": (_os.environ.get("LOLM_DEPLOYMENT_ID") or "").strip(),
+        }
+
+    def _build_final_workspace_event(self, *, run_id: str = "") -> Dict[str, Any]:
+        """Full text tree for independent oracle reconstruction."""
+        from lolm.track2b.workspace import build_final_workspace
+        files: Dict[str, str] = {}
+        binary_meta: Dict[str, Dict[str, Any]] = {}
+        try:
+            paths = list(self.sb.list_files(limit=500))
+        except Exception:
+            paths = list(self._files_written or [])
+        for path in paths:
+            p = (path or "").strip().replace("\\", "/")
+            if not p or p.startswith("/") or ".." in p.split("/"):
+                continue
+            try:
+                raw = self.sb.read_file(p)
+            except Exception:
+                continue
+            if raw is None:
+                continue
+            if isinstance(raw, bytes):
+                if b"\x00" in raw:
+                    import hashlib as _hl
+                    binary_meta[p] = {
+                        "reason": "binary",
+                        "size": len(raw),
+                        "sha256": _hl.sha256(raw).hexdigest(),
+                    }
+                    continue
+                try:
+                    text = raw.decode("utf-8")
+                except Exception:
+                    import hashlib as _hl
+                    binary_meta[p] = {
+                        "reason": "non_utf8",
+                        "size": len(raw),
+                        "sha256": _hl.sha256(raw).hexdigest(),
+                    }
+                    continue
+            else:
+                text = str(raw)
+                if "\x00" in text:
+                    import hashlib as _hl
+                    binary_meta[p] = {
+                        "reason": "binary_nul",
+                        "size": len(text.encode("utf-8", "replace")),
+                        "sha256": _hl.sha256(text.encode("utf-8", "replace")).hexdigest(),
+                    }
+                    continue
+            files[p] = text
+        return build_final_workspace(
+            files, binary_meta=binary_meta, run_id=run_id or str(getattr(self.sb, "id", "")),
+        )
+
     def run(self, task: str) -> Iterator[Dict[str, Any]]:
-        yield {"event": "code_start", "data": {"task": task, "sandbox": self.sb.id}}
+        start_data = {"task": task, "sandbox": self.sb.id}
+        start_data.update(self._deployment_identity())
+        # Echo fixture binding when resume package is a benchmark fixture
+        if self.resume_package:
+            fh = self.resume_package.get("fixture_hash")
+            if fh:
+                start_data["fixture_hash"] = fh
+            start_data["resume_token"] = str(self.resume_package.get("resume_token") or "")[:80]
+        yield {"event": "code_start", "data": start_data}
         # Track 3 passive shadow: recommend a route, never apply adaptive selection.
         self._shadow_decision = None
         self._shadow_t0 = time.time()
