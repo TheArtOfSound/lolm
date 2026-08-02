@@ -216,11 +216,22 @@ def check_staging_identity(
     rows: List[Dict[str, Any]] = []
     base = base_url.rstrip("/")
 
-    # Prefer /health or /api/demo/status for identity probe (no secrets in output)
+    # Prefer Track 2B path prefix, then /health /api/demo/status
     body: Dict[str, Any] = {}
     status_code = 0
-    for path in ("/health", "/api/demo/status"):
-        url = base + path
+    paths = []
+    custom = os.environ.get("LOLM_STATUS_PATH", "").strip()
+    if custom:
+        paths.append(custom if custom.startswith("/") else "/" + custom)
+    paths.extend([
+        "/api/track2b/status",
+        "/api/track2b/code/health",
+        "/api/demo/status",
+        "/api/demo/code/health",
+        "/health",
+    ])
+    for path in paths:
+        url = base.rstrip("/") + path
         try:
             req = urllib.request.Request(
                 url,
@@ -238,6 +249,7 @@ def check_staging_identity(
                 body = json.loads(raw)
             except Exception:
                 body = {"_raw": raw[:200]}
+            body["_status_path"] = path
             break
         except urllib.error.HTTPError as e:
             status_code = e.code
@@ -302,12 +314,17 @@ def check_staging_identity(
     })
 
     # Route existence: OPTIONS/POST probe without starting a full agent run
-    route = "/api/demo/code/run"
+    route = (
+        os.environ.get("LOLM_CODE_RUN_PATH", "").strip()
+        or "/api/track2b/code/run"
+    )
+    if not route.startswith("/"):
+        route = "/" + route
     route_ok = False
     route_detail = ""
     try:
         req = urllib.request.Request(
-            base + route,
+            base.rstrip("/") + route,
             data=b"{}",
             headers={
                 "Content-Type": "application/json",

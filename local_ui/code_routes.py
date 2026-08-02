@@ -354,6 +354,10 @@ def register_code_routes(app: Any, root: str,
                          gen_many_fn: Optional[Callable[..., List[Dict[str, Any]]]] = None,
                          usage_fn: Optional[Callable[..., Dict[str, Any]]] = None,
                          nfet_state_fn: Optional[Callable[[], Any]] = None) -> None:
+    import os as _os_mod
+    # Staging Track 2B: raise rate limit when isolated staging key is configured
+    if (_os_mod.environ.get("LOLM_STAGING_API_KEY") or "").strip():
+        runs_per_min = max(int(runs_per_min or 6), 30)
     rate: Dict[str, List[float]] = {}
 
     def _ip(req: Request) -> str:
@@ -373,11 +377,28 @@ def register_code_routes(app: Any, root: str,
 
     @app.get("/api/demo/code/health")
     def code_health():
-        return {"enabled": bool(_HAS_BWRAP and chat_fn is not None),
-                "isolated": True, "runs_per_min": runs_per_min,
-                "note": "the 70B writes code, runs it in a bwrap jail, reads the failure, "
-                        "and fixes it — every command isolated (no host FS/network)",
-                "receipts": code_receipt_ledger.stats()}
+        import os as _os
+        payload = {
+            "enabled": bool(_HAS_BWRAP and chat_fn is not None),
+            "isolated": True,
+            "isolation": "bwrap" if _HAS_BWRAP else "none",
+            "bwrap": bool(_HAS_BWRAP),
+            "runs_per_min": runs_per_min,
+            "note": "the 70B writes code, runs it in a bwrap jail, reads the failure, "
+                    "and fixes it — every command isolated (no host FS/network)",
+            "receipts": code_receipt_ledger.stats(),
+        }
+        sha = (_os.environ.get("LOLM_SERVER_SHA") or _os.environ.get("GIT_COMMIT") or "").strip()
+        if sha or _os.environ.get("LOLM_ENVIRONMENT"):
+            payload.update({
+                "server_sha": sha,
+                "deployment_id": (_os.environ.get("LOLM_DEPLOYMENT_ID") or "").strip(),
+                "environment": (_os.environ.get("LOLM_ENVIRONMENT") or "").strip(),
+                "model_id": (_os.environ.get("LOLM_MODEL_ID") or "").strip(),
+                "provider": (_os.environ.get("LOLM_MODEL_PROVIDER") or "").strip(),
+                "adaptive_routing": False,
+            })
+        return payload
 
     @app.get("/api/demo/code/receipts")
     def code_receipts_tail(limit: int = 20, kind: str = ""):
@@ -433,6 +454,13 @@ def register_code_routes(app: Any, root: str,
 
     @app.post("/api/demo/code/run")
     def code_run(req: CodeTask, request: Request):
+        import os as _os
+        # Optional staging gate: require X-LOLM-Api-Key when LOLM_STAGING_API_KEY is set.
+        staging_key = (_os.environ.get("LOLM_STAGING_API_KEY") or "").strip()
+        if staging_key:
+            presented = (request.headers.get("x-lolm-api-key") or "").strip()
+            if presented != staging_key:
+                return JSONResponse({"error": "unauthorized"}, status_code=401)
         if not (_HAS_BWRAP and chat_fn is not None):
             return JSONResponse({"error": "agentic code execution unavailable on this host"},
                                 status_code=503)

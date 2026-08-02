@@ -22,7 +22,7 @@ class SSEAdapterConfig:
     base_url: str
     api_key: str
     expected_server_sha: str
-    path: str = "/api/demo/code/run"
+    path: str = "/api/demo/code/run"  # override e.g. /api/track2b/code/run
     max_steps: int = 28
     idle_timeout_s: float = 180.0
     hard_timeout_s: float = 600.0

@@ -644,10 +644,17 @@ def main() -> int:
             )
             return 2
         secrets = [key]
+        code_path = (
+            os.environ.get("LOLM_CODE_RUN_PATH", "").strip()
+            or "/api/demo/code/run"
+        )
+        if not code_path.startswith("/"):
+            code_path = "/" + code_path
         sse_adapter = LolmCodeSSEAgentAdapter(SSEAdapterConfig(
             base_url=base,
             api_key=key,
             expected_server_sha=manifest.expected_server_sha,
+            path=code_path,
             max_steps=args.max_steps,
             require_trusted_signature=manifest.require_trusted_signature,
             allow_untrusted_local_receipts=manifest.allow_untrusted_local_receipts,

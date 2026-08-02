@@ -282,7 +282,9 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
 
     @app.get("/api/demo/status")
     def demo_status():
-        return {
+        from local_ui.sandbox import _HAS_BWRAP
+        from lolm.shadow_telemetry import ADAPTIVE_ROUTING_ENABLED, adaptive_routing_active
+        payload = {
             "model_ready": bool(model_ready_fn()),
             "busy": gate.busy,
             "limits": limits.to_dict(),
@@ -291,6 +293,22 @@ def register_demo_routes(app: Any, agent: NFETAgent, replays_dir: Path,
             "last_run_seconds": gate.last_run_seconds,
             "replays": len(load_replay_index(replays_dir).get("replays", [])),
         }
+        # Track 2B / SHA-pinned staging identity (env-driven; empty when unset)
+        env = os.environ
+        sha = (env.get("LOLM_SERVER_SHA") or env.get("GIT_COMMIT") or "").strip()
+        if sha or env.get("LOLM_ENVIRONMENT", "").strip():
+            payload.update({
+                "server_sha": sha,
+                "deployment_id": (env.get("LOLM_DEPLOYMENT_ID") or "").strip(),
+                "isolation": "bwrap" if _HAS_BWRAP else "none",
+                "bwrap": bool(_HAS_BWRAP),
+                "adaptive_routing": bool(ADAPTIVE_ROUTING_ENABLED and adaptive_routing_active()),
+                "environment": (env.get("LOLM_ENVIRONMENT") or "").strip() or "default",
+                "model_id": (env.get("LOLM_MODEL_ID") or "").strip(),
+                "provider": (env.get("LOLM_MODEL_PROVIDER") or "").strip(),
+                "build_time": (env.get("LOLM_BUILD_TIME") or "").strip(),
+            })
+        return payload
 
     @app.get("/api/demo/agent/level")
     def demo_agent_level():
