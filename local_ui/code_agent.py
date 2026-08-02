@@ -1120,14 +1120,17 @@ class CodeAgent:
         creating: Optional[bool] = None,
         old_fragment: str = "",
         step: int = 0,
+        task: str = "",
     ) -> Dict[str, Any]:
-        """Write via mutation gateway when available; never blind-edit existing files."""
-        gw = self.mutations
+        """Write via mutation gateway only — never blind-edit the active repository."""
+        gw = self.mutations or self._ensure_mutation_gateway(task or "")
         if gw is None:
-            # Fallback only for scratch/scoring sandboxes without a gateway
-            return self.sb.write_file(path, content, reason=reason or "unguarded")
+            raise PermissionError(
+                "mutation gateway unavailable — active repository writes are blocked"
+            )
         gw.step = step
-        # Existing files must be read first
+        # Existing files require a prior explicit READ in this run (no auto-read).
+        # Auto-reading here would defeat the read-before-edit contract.
         exists = False
         try:
             cur = self.sb.read_file(path)
@@ -1135,10 +1138,10 @@ class CodeAgent:
         except Exception:
             exists = False
         if exists and creating is not True:
-            try:
-                gw.read(path, scope="full", step=step)
-            except Exception as exc:
-                raise PermissionError(f"read-before-edit failed for {path}: {exc}") from exc
+            if path not in gw._reads and path not in gw.guard._read_hashes:
+                raise PermissionError(
+                    f"read_required_before_edit: READ `{path}` before mutating it"
+                )
         rec = gw.write(
             path,
             content,
@@ -1158,6 +1161,8 @@ class CodeAgent:
             "mutation_id": rec.mutation_id,
             "post_sha256": rec.post_apply_sha256,
             "compare_and_swap_passed": rec.compare_and_swap_passed,
+            "read_sha256": rec.read_sha256,
+            "pre_apply_sha256": rec.pre_apply_sha256,
         }
 
     def _score_candidate(self, raw: str, task: str) -> Dict[str, Any]:
@@ -1363,7 +1368,14 @@ class CodeAgent:
             return None
         probe_path = "_lolm_contract_probe.py"
         try:
-            sb.write_file(probe_path, script, reason="contract-probe")
+            # Active repository: always gateway. Scratch sandboxes may write directly.
+            if sb is self.sb:
+                self._gateway_write(
+                    probe_path, script, reason="contract-probe",
+                    creating=True, task=task,
+                )
+            else:
+                sb.write_file(probe_path, script, reason="contract-probe")
         except Exception as exc:
             return {"ok": False, "err": f"write probe failed: {exc}"[:200],
                     "command": f"python3 {probe_path}", "result": {}}
@@ -2767,18 +2779,12 @@ class CodeAgent:
                     did = True
                     continue
                 try:
-                    if self.mutations is not None:
-                        from lolm.mutation_gateway import MutationOp
-                        # Re-read already recorded; CAS edit with fragment
-                        fc = self._gateway_write(
-                            path, new, reason="edit", creating=False,
-                            old_fragment=old, step=step,
-                        )
-                        # _gateway_write with old_fragment uses EDIT op via write()
-                        # which uses FULL_REWRITE path with old_fragment - fix write to pass EDIT
-                    else:
-                        updated = cur.replace(old, new, 1)
-                        fc = self.sb.write_file(path, updated, reason="edit")
+                    # Active repository edits always go through the mutation gateway
+                    fc = self._gateway_write(
+                        path, new, reason="edit", creating=False,
+                        old_fragment=old, step=step, task=task,
+                    )
+                    updated = cur.replace(old, new, 1)
                     self.actions.append({"kind": "edit_file", "path": path, "ok": True,
                                          "note": f"{len(old)}→{len(new)} chars",
                                          "mutation_id": fc.get("mutation_id")})
@@ -2787,9 +2793,10 @@ class CodeAgent:
                     written_path = path
                     yield {"event": "file_changed", "data": {"path": path,
                            "diff": (fc.get("diff") or "")[:_DIFF_CAP],
-                           "bytes": len(new) if self.mutations else len(cur.replace(old, new, 1)),
+                           "bytes": len(updated),
                            "edit": True,
-                           "mutation_id": fc.get("mutation_id")}}
+                           "mutation_id": fc.get("mutation_id"),
+                           "compare_and_swap_passed": fc.get("compare_and_swap_passed")}}
                     did = True
                     if (path or "").endswith(".py"):
                         turn.setdefault("_py_touch", []).append(path)
@@ -2922,11 +2929,16 @@ class CodeAgent:
                                 if cur and _content_has_protocol_bleed(cur):
                                     fixed = _sanitize_file_content(cur)
                                     try:
+                                        # Explicit read authorization for auto-sanitizer
                                         if self.mutations is not None:
                                             self.mutations.read(path, scope="full", step=step)
+                                        else:
+                                            self._ensure_mutation_gateway(task)
+                                            if self.mutations is not None:
+                                                self.mutations.read(path, scope="full", step=step)
                                         self._gateway_write(
                                             path, fixed, reason="auto-strip protocol",
-                                            creating=False, step=step,
+                                            creating=False, step=step, task=task,
                                         )
                                     except Exception as exc:
                                         yield {"event": "agent_note", "data": {
@@ -4034,11 +4046,14 @@ class CodeAgent:
                                                     exists = self.sb.read_file(path) is not None
                                                 except Exception:
                                                     exists = False
+                                                # Repair-race promotion: read active tree first (fresh RBE)
                                                 if exists and self.mutations is not None:
-                                                    self.mutations.read(path, scope="full", step=step)
+                                                    self.mutations.read(
+                                                        path, scope="full", step=step,
+                                                    )
                                                 self._gateway_write(
                                                     path, content, reason="repair-race",
-                                                    creating=not exists, step=step,
+                                                    creating=not exists, step=step, task=task,
                                                 )
                                             except PermissionError as exc:
                                                 yield {"event": "agent_note", "data": {

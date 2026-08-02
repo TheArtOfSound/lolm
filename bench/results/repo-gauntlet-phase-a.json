@@ -1,0 +1,4158 @@
+{
+  "schema": "lolm.repo_gauntlet.phase_a.v1",
+  "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+  "aborted": false,
+  "abort_reason": "",
+  "total": 20,
+  "passed": 20,
+  "failed": 0,
+  "qualification_passed": true,
+  "results": [
+    {
+      "id": "A01",
+      "family": "existing_bugfix",
+      "description": "Fix off-by-one in clamp()",
+      "expect": "pass",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.203,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "033dcfb125e79191ba99c1b457d2fab5ec779be26ddaba9ef5b4a63634d1d90c",
+      "tree_after": "d03e7812e284e7953f498fbed79f008cd53499f4b7c76ad561be91e092f2e0cc",
+      "files_after": [
+        "test_util.py",
+        "util.py"
+      ],
+      "final_tree": {
+        "test_util.py": "import unittest\nfrom util import clamp\nclass T(unittest.TestCase):\n    def test_mid(self):\n        self.assertEqual(clamp(5, 0, 10), 5)\n",
+        "util.py": "def clamp(x, lo, hi):\n    if x < lo:\n        return lo\n    if x > hi:\n        return hi\n    return x\n"
+      },
+      "seed_tree": {
+        "util.py": "def clamp(x, lo, hi):\n    if x < lo:\n        return lo\n    if x > hi:\n        return hi\n    return x + 1  # bug\n",
+        "test_util.py": "import unittest\nfrom util import clamp\nclass T(unittest.TestCase):\n    def test_mid(self):\n        self.assertEqual(clamp(5, 0, 10), 5)\n"
+      },
+      "selection": [
+        {
+          "path": "util.py",
+          "score": 4.346573590279973,
+          "reason": [
+            "symbol_match=1",
+            "centrality=0.69"
+          ],
+          "symbols": [
+            "clamp"
+          ],
+          "estimated_tokens": 38,
+          "excerpt": "util.py [python]\ndef clamp(x, lo, hi)\ndef clamp(x, lo, hi):\n    if x < lo:\n        return lo\n    if x > hi:\n        return hi\n    return x + 1  # bug"
+        },
+        {
+          "path": "test_util.py",
+          "score": 0.8,
+          "reason": [
+            "reference_match=1"
+          ],
+          "symbols": [
+            "T",
+            "T.test_mid"
+          ],
+          "estimated_tokens": 59,
+          "excerpt": "test_util.py [python]\nclass T(unittest.TestCase)\nclass T(unittest.TestCase):\n    def test_mid(self):\n        self.assertEqual(clamp(5, 0, 10), 5)\ndef test_mid(self)\n    def test_mid(self):\n        self.assertEqual(clamp(5, 0, 10), 5)"
+        }
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_ed2e90b4a4ec",
+          "path": "util.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "31f42d6e96d61d5078e68f1aa3032895ea94e8b9d191d73d67ada9253240dc98",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646412.092284,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_5221eba02730",
+          "path": "util.py",
+          "operation": "full_rewrite",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "31f42d6e96d61d5078e68f1aa3032895ea94e8b9d191d73d67ada9253240dc98",
+          "pre_apply_sha256": "31f42d6e96d61d5078e68f1aa3032895ea94e8b9d191d73d67ada9253240dc98",
+          "post_apply_sha256": "88b6062bb77ddba8f4ea200d4565f050781ef7a0e824d355c03c1c3d346595d0",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646412.092683,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "shipped",
+      "receipt_ok": true,
+      "receipt_sha": "54e8ec3f372c0232b156aae5f3c94460d63cf4b8b5cd923237642ac0e9e20f46",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "util.py",
+            "score": 4.346573590279973,
+            "reason": [
+              "symbol_match=1",
+              "centrality=0.69"
+            ],
+            "symbols": [
+              "clamp"
+            ],
+            "estimated_tokens": 38,
+            "excerpt": "util.py [python]\ndef clamp(x, lo, hi)\ndef clamp(x, lo, hi):\n    if x < lo:\n        return lo\n    if x > hi:\n        return hi\n    return x + 1  # bug"
+          },
+          {
+            "path": "test_util.py",
+            "score": 0.8,
+            "reason": [
+              "reference_match=1"
+            ],
+            "symbols": [
+              "T",
+              "T.test_mid"
+            ],
+            "estimated_tokens": 59,
+            "excerpt": "test_util.py [python]\nclass T(unittest.TestCase)\nclass T(unittest.TestCase):\n    def test_mid(self):\n        self.assertEqual(clamp(5, 0, 10), 5)\ndef test_mid(self)\n    def test_mid(self):\n        self.assertEqual(clamp(5, 0, 10), 5)"
+          }
+        ],
+        "map": {
+          "test_util.py": {
+            "path": "test_util.py",
+            "language": "python",
+            "sha256": "42275ac378d749307a22af9a7e68b73d757a49bfec28c9e8805626501bf708a4",
+            "symbols": [
+              "T",
+              "T.test_mid"
+            ],
+            "imports": [
+              "unittest",
+              "util"
+            ],
+            "references": [
+              "TestCase",
+              "assertEqual",
+              "clamp",
+              "self",
+              "unittest"
+            ],
+            "test_links": [
+              "test_util.py"
+            ],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "util.py": {
+            "path": "util.py",
+            "language": "python",
+            "sha256": "88b6062bb77ddba8f4ea200d4565f050781ef7a0e824d355c03c1c3d346595d0",
+            "symbols": [
+              "clamp"
+            ],
+            "imports": [],
+            "references": [
+              "hi",
+              "lo",
+              "x"
+            ],
+            "test_links": [
+              "test_util.py"
+            ],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 1
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_ed2e90b4a4ec",
+            "path": "util.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "31f42d6e96d61d5078e68f1aa3032895ea94e8b9d191d73d67ada9253240dc98",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646412.092284,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_5221eba02730",
+            "path": "util.py",
+            "operation": "full_rewrite",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "31f42d6e96d61d5078e68f1aa3032895ea94e8b9d191d73d67ada9253240dc98",
+            "pre_apply_sha256": "31f42d6e96d61d5078e68f1aa3032895ea94e8b9d191d73d67ada9253240dc98",
+            "post_apply_sha256": "88b6062bb77ddba8f4ea200d4565f050781ef7a0e824d355c03c1c3d346595d0",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646412.092683,
+            "prior_existed": true,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "util.py": {
+            "path": "util.py",
+            "sha256": "88b6062bb77ddba8f4ea200d4565f050781ef7a0e824d355c03c1c3d346595d0",
+            "size": 101,
+            "revision": 1,
+            "scope": "full",
+            "step": 1,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: util.py(symbol_match=1,centrality=0.69), test_util.py(reference_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read util.py (112 bytes) sha=31f42d6e96d6 rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "last-known-green checkpoint ckpt_7a87a2c52bb0c335"
+        },
+        {
+          "event": "agent_note",
+          "text": "learned 1 coding technique(s) for future runs"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A02",
+      "family": "existing_bugfix",
+      "description": "Fix name error in greet()",
+      "expect": "pass",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.162,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "000be395efa61438f8971c3766bbf09ee41015ee5633e2ef09f52e06e8562d79",
+      "tree_after": "77d9d12c7baa18d9cbae5c9908d76ec8fea85ad8321c361b9dff346a7ea064ae",
+      "files_after": [
+        "greet.py"
+      ],
+      "final_tree": {
+        "greet.py": "def greet(name):\n    return 'Hello, ' + name + '!'\n"
+      },
+      "seed_tree": {
+        "greet.py": "def greet(name):\n    return 'Hello, ' + nam + '!'\n"
+      },
+      "selection": [
+        {
+          "path": "greet.py",
+          "score": 7.0,
+          "reason": [
+            "path_match=1",
+            "symbol_match=1"
+          ],
+          "symbols": [
+            "greet"
+          ],
+          "estimated_tokens": 21,
+          "excerpt": "greet.py [python]\ndef greet(name)\ndef greet(name):\n    return 'Hello, ' + nam + '!'"
+        }
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_5dc333ae2a3f",
+          "path": "greet.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "81c6faf41196d5acbaebd5c98b58c9021d2b2d3587c7e6a2b1716dea9a4dd78f",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646412.2744691,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_04fd2ff09a55",
+          "path": "greet.py",
+          "operation": "full_rewrite",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "81c6faf41196d5acbaebd5c98b58c9021d2b2d3587c7e6a2b1716dea9a4dd78f",
+          "pre_apply_sha256": "81c6faf41196d5acbaebd5c98b58c9021d2b2d3587c7e6a2b1716dea9a4dd78f",
+          "post_apply_sha256": "30606cf0e9c2eb93e5bbc1f9844df14c368c244c9a200fdcbc7a49e0685c1770",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646412.274764,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "shipped",
+      "receipt_ok": true,
+      "receipt_sha": "6749fac6770aa079535d04cde8b326ada9bca93d917eb54199544da2e8c4163b",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "greet.py",
+            "score": 7.0,
+            "reason": [
+              "path_match=1",
+              "symbol_match=1"
+            ],
+            "symbols": [
+              "greet"
+            ],
+            "estimated_tokens": 21,
+            "excerpt": "greet.py [python]\ndef greet(name)\ndef greet(name):\n    return 'Hello, ' + nam + '!'"
+          }
+        ],
+        "map": {
+          "greet.py": {
+            "path": "greet.py",
+            "language": "python",
+            "sha256": "30606cf0e9c2eb93e5bbc1f9844df14c368c244c9a200fdcbc7a49e0685c1770",
+            "symbols": [
+              "greet"
+            ],
+            "imports": [],
+            "references": [
+              "name"
+            ],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 1
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_5dc333ae2a3f",
+            "path": "greet.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "81c6faf41196d5acbaebd5c98b58c9021d2b2d3587c7e6a2b1716dea9a4dd78f",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646412.2744691,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_04fd2ff09a55",
+            "path": "greet.py",
+            "operation": "full_rewrite",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "81c6faf41196d5acbaebd5c98b58c9021d2b2d3587c7e6a2b1716dea9a4dd78f",
+            "pre_apply_sha256": "81c6faf41196d5acbaebd5c98b58c9021d2b2d3587c7e6a2b1716dea9a4dd78f",
+            "post_apply_sha256": "30606cf0e9c2eb93e5bbc1f9844df14c368c244c9a200fdcbc7a49e0685c1770",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646412.274764,
+            "prior_existed": true,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "greet.py": {
+            "path": "greet.py",
+            "sha256": "30606cf0e9c2eb93e5bbc1f9844df14c368c244c9a200fdcbc7a49e0685c1770",
+            "size": 51,
+            "revision": 1,
+            "scope": "full",
+            "step": 1,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: greet.py(path_match=1,symbol_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read greet.py (50 bytes) sha=81c6faf41196 rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "last-known-green checkpoint ckpt_a852e77240b93273"
+        },
+        {
+          "event": "agent_note",
+          "text": "learned 1 coding technique(s) for future runs"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A03",
+      "family": "existing_bugfix",
+      "description": "JS fix double count",
+      "expect": "pass",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.078,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "681fb0077bba3a59d42227233e7d33ff303f776904884fcf5bb3225f3db721c3",
+      "tree_after": "65b9a6e388c5e45336b3d767e7a071dad4d9a0951e10046c40d799515c4bba9d",
+      "files_after": [
+        "counter.js"
+      ],
+      "final_tree": {
+        "counter.js": "function inc(n){ return n+1; }\nmodule.exports={inc};\n"
+      },
+      "seed_tree": {
+        "counter.js": "function inc(n){ return n+2; }\nmodule.exports={inc};\n"
+      },
+      "selection": [
+        {
+          "path": "counter.js",
+          "score": 3.0,
+          "reason": [
+            "path_match=1"
+          ],
+          "symbols": [
+            "inc"
+          ],
+          "estimated_tokens": 18,
+          "excerpt": "counter.js [javascript]\nfunction inc(n)\nfunction inc(n){ return n+2; }"
+        }
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_3daa2d56015f",
+          "path": "counter.js",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "51c3c2febe1f0da2aa689b4bfc3554658c4fae1e93d95491daf57f4abf826e89",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646412.434877,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_0c5c4631bf22",
+          "path": "counter.js",
+          "operation": "full_rewrite",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "51c3c2febe1f0da2aa689b4bfc3554658c4fae1e93d95491daf57f4abf826e89",
+          "pre_apply_sha256": "51c3c2febe1f0da2aa689b4bfc3554658c4fae1e93d95491daf57f4abf826e89",
+          "post_apply_sha256": "6886687edd3758cdeac8a7118738a0b0c88b20063273adfde1db6a7c4a32b417",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646412.435174,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "shipped",
+      "receipt_ok": true,
+      "receipt_sha": "297a490f81a5f7c94a68525ca556a7c63821fa65efa05fca0c85eeb591298211",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "counter.js",
+            "score": 3.0,
+            "reason": [
+              "path_match=1"
+            ],
+            "symbols": [
+              "inc"
+            ],
+            "estimated_tokens": 18,
+            "excerpt": "counter.js [javascript]\nfunction inc(n)\nfunction inc(n){ return n+2; }"
+          }
+        ],
+        "map": {
+          "counter.js": {
+            "path": "counter.js",
+            "language": "javascript",
+            "sha256": "6886687edd3758cdeac8a7118738a0b0c88b20063273adfde1db6a7c4a32b417",
+            "symbols": [
+              "inc"
+            ],
+            "imports": [],
+            "references": [
+              "exports",
+              "function",
+              "module",
+              "n",
+              "return"
+            ],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 1
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_3daa2d56015f",
+            "path": "counter.js",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "51c3c2febe1f0da2aa689b4bfc3554658c4fae1e93d95491daf57f4abf826e89",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646412.434877,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_0c5c4631bf22",
+            "path": "counter.js",
+            "operation": "full_rewrite",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "51c3c2febe1f0da2aa689b4bfc3554658c4fae1e93d95491daf57f4abf826e89",
+            "pre_apply_sha256": "51c3c2febe1f0da2aa689b4bfc3554658c4fae1e93d95491daf57f4abf826e89",
+            "post_apply_sha256": "6886687edd3758cdeac8a7118738a0b0c88b20063273adfde1db6a7c4a32b417",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646412.435174,
+            "prior_existed": true,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "counter.js": {
+            "path": "counter.js",
+            "sha256": "6886687edd3758cdeac8a7118738a0b0c88b20063273adfde1db6a7c4a32b417",
+            "size": 53,
+            "revision": 1,
+            "scope": "full",
+            "step": 1,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: counter.js(path_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read counter.js (53 bytes) sha=51c3c2febe1f rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "learned 1 coding technique(s) for future runs"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A04",
+      "family": "existing_bugfix",
+      "description": "Config typo fix",
+      "expect": "pass",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.068,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "90d3851173552980aedf54b9b5f070f1800a9d916b5cabd0fc78ab72d6e10247",
+      "tree_after": "d9d5d8139fd5827adac980a21a0d433880008f3f9e66b1e73133272f9cc397ce",
+      "files_after": [
+        "config.json"
+      ],
+      "final_tree": {
+        "config.json": "{\"port\": 8000, \"debug\": true}\n"
+      },
+      "seed_tree": {
+        "config.json": "{\"port\": 8000, \"debug\": \"ture\"}\n"
+      },
+      "selection": [
+        {
+          "path": "config.json",
+          "score": 3.0,
+          "reason": [
+            "path_match=1"
+          ],
+          "symbols": [],
+          "estimated_tokens": 13,
+          "excerpt": "config.json [text]\n{\"port\": 8000, \"debug\": \"ture\"}"
+        }
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_41c27b003098",
+          "path": "config.json",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "28489f2ae2395662b215009fa14694a1837208db923808ea4c1fcb9ac1823c98",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646412.513002,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_627c91f5852e",
+          "path": "config.json",
+          "operation": "full_rewrite",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "28489f2ae2395662b215009fa14694a1837208db923808ea4c1fcb9ac1823c98",
+          "pre_apply_sha256": "28489f2ae2395662b215009fa14694a1837208db923808ea4c1fcb9ac1823c98",
+          "post_apply_sha256": "829fd37141d87db4fcad707d542ae17ea34cfdc69e5a43b8b757890d4b68e86c",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646412.5133052,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "shipped",
+      "receipt_ok": true,
+      "receipt_sha": "4bf7e86e8ea354236319b01c2efc27836407767adad49d725e304482bea28cba",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "config.json",
+            "score": 3.0,
+            "reason": [
+              "path_match=1"
+            ],
+            "symbols": [],
+            "estimated_tokens": 13,
+            "excerpt": "config.json [text]\n{\"port\": 8000, \"debug\": \"ture\"}"
+          }
+        ],
+        "map": {
+          "config.json": {
+            "path": "config.json",
+            "language": "text",
+            "sha256": "829fd37141d87db4fcad707d542ae17ea34cfdc69e5a43b8b757890d4b68e86c",
+            "symbols": [],
+            "imports": [],
+            "references": [
+              "debug",
+              "port",
+              "true"
+            ],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 1
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_41c27b003098",
+            "path": "config.json",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "28489f2ae2395662b215009fa14694a1837208db923808ea4c1fcb9ac1823c98",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646412.513002,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_627c91f5852e",
+            "path": "config.json",
+            "operation": "full_rewrite",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "28489f2ae2395662b215009fa14694a1837208db923808ea4c1fcb9ac1823c98",
+            "pre_apply_sha256": "28489f2ae2395662b215009fa14694a1837208db923808ea4c1fcb9ac1823c98",
+            "post_apply_sha256": "829fd37141d87db4fcad707d542ae17ea34cfdc69e5a43b8b757890d4b68e86c",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646412.5133052,
+            "prior_existed": true,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "config.json": {
+            "path": "config.json",
+            "sha256": "829fd37141d87db4fcad707d542ae17ea34cfdc69e5a43b8b757890d4b68e86c",
+            "size": 30,
+            "revision": 1,
+            "scope": "full",
+            "step": 1,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: config.json(path_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read config.json (32 bytes) sha=28489f2ae239 rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "learned 1 coding technique(s) for future runs"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A05",
+      "family": "existing_bugfix",
+      "description": "HTML title fix",
+      "expect": "pass",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.038,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "0e22fb0c9e3b7ee85516e55ac77aeaae17b76341a1eba794967771d242712081",
+      "tree_after": "606f5a7c7d705f0e72d752edd92946df77fb1cf23a6ff9b78116d746e1b58a33",
+      "files_after": [
+        "index.html"
+      ],
+      "final_tree": {
+        "index.html": "<!doctype html><html><head><title>App</title></head><body><h1>App</h1><script>console.log(1)</script></body></html>\n"
+      },
+      "seed_tree": {
+        "index.html": "<!doctype html><html><head><title>Wrong</title></head><body><h1>App</h1><script>console.log(1)</script></body></html>\n"
+      },
+      "selection": [
+        {
+          "path": "index.html",
+          "score": 4.6,
+          "reason": [
+            "path_match=1",
+            "reference_match=2"
+          ],
+          "symbols": [],
+          "estimated_tokens": 34,
+          "excerpt": "index.html [html]\n<!doctype html><html><head><title>Wrong</title></head><body><h1>App</h1><script>console.log(1)</script></body></html>"
+        }
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_0e71cad399fb",
+          "path": "index.html",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "a7f195c56578af23a829eadc0e13d16b0a0cfcd89591d04a31194e1decc22cb2",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646412.582834,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_590f01242b7f",
+          "path": "index.html",
+          "operation": "full_rewrite",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "a7f195c56578af23a829eadc0e13d16b0a0cfcd89591d04a31194e1decc22cb2",
+          "pre_apply_sha256": "a7f195c56578af23a829eadc0e13d16b0a0cfcd89591d04a31194e1decc22cb2",
+          "post_apply_sha256": "bab23b24ddcd12c0000e89d2c65c9e64cec78f0b81061d42abacc9e7cdf208ce",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646412.5831099,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "budget_hit",
+      "receipt_ok": false,
+      "receipt_sha": "3fe62b64ac7e195b9e089d02c08f9fb0c150171a1cd1e62d889008422663fbc8",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "index.html",
+            "score": 4.6,
+            "reason": [
+              "path_match=1",
+              "reference_match=2"
+            ],
+            "symbols": [],
+            "estimated_tokens": 34,
+            "excerpt": "index.html [html]\n<!doctype html><html><head><title>Wrong</title></head><body><h1>App</h1><script>console.log(1)</script></body></html>"
+          }
+        ],
+        "map": {
+          "index.html": {
+            "path": "index.html",
+            "language": "html",
+            "sha256": "bab23b24ddcd12c0000e89d2c65c9e64cec78f0b81061d42abacc9e7cdf208ce",
+            "symbols": [],
+            "imports": [],
+            "references": [
+              "App",
+              "body",
+              "console",
+              "doctype",
+              "h1",
+              "head",
+              "html",
+              "log",
+              "script",
+              "title"
+            ],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 1
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_0e71cad399fb",
+            "path": "index.html",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "a7f195c56578af23a829eadc0e13d16b0a0cfcd89591d04a31194e1decc22cb2",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646412.582834,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_590f01242b7f",
+            "path": "index.html",
+            "operation": "full_rewrite",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "a7f195c56578af23a829eadc0e13d16b0a0cfcd89591d04a31194e1decc22cb2",
+            "pre_apply_sha256": "a7f195c56578af23a829eadc0e13d16b0a0cfcd89591d04a31194e1decc22cb2",
+            "post_apply_sha256": "bab23b24ddcd12c0000e89d2c65c9e64cec78f0b81061d42abacc9e7cdf208ce",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646412.5831099,
+            "prior_existed": true,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "index.html": {
+            "path": "index.html",
+            "sha256": "bab23b24ddcd12c0000e89d2c65c9e64cec78f0b81061d42abacc9e7cdf208ce",
+            "size": 116,
+            "revision": 1,
+            "scope": "full",
+            "step": 1,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: index.html(path_match=1,reference_match=2)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read index.html (118 bytes) sha=a7f195c56578 rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "html write-verify skipped: No module named 'fastapi'"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A06",
+      "family": "existing_bugfix",
+      "description": "TS export fix",
+      "expect": "pass",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.064,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "14829e00fa2697979ab91226ebbe1caf54f59f31e5dee7d552f7d83ef09abb95",
+      "tree_after": "09112b2ff8d761074932d0ef29d5ba03a4d1f22bf937aab3ab5efc607aaecad2",
+      "files_after": [
+        "math.ts"
+      ],
+      "final_tree": {
+        "math.ts": "export function add(a: number, b: number) { return a + b; }\n"
+      },
+      "seed_tree": {
+        "math.ts": "export function add(a: number, b: number) { return a - b; }\n"
+      },
+      "selection": [
+        {
+          "path": "math.ts",
+          "score": 3.8,
+          "reason": [
+            "path_match=1",
+            "reference_match=1"
+          ],
+          "symbols": [
+            "add"
+          ],
+          "estimated_tokens": 29,
+          "excerpt": "math.ts [typescript]\nfunction add(a: number, b: number)\nexport function add(a: number, b: number) { return a - b; }"
+        }
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_522ca0375f93",
+          "path": "math.ts",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "e0fb1449a381dffe5cdd932e7a68f833b6d16a8e9d90adc7f0cc84e003539eae",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646412.619117,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_8d8dab1ff780",
+          "path": "math.ts",
+          "operation": "full_rewrite",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "e0fb1449a381dffe5cdd932e7a68f833b6d16a8e9d90adc7f0cc84e003539eae",
+          "pre_apply_sha256": "e0fb1449a381dffe5cdd932e7a68f833b6d16a8e9d90adc7f0cc84e003539eae",
+          "post_apply_sha256": "d0ea6f33d17132678d4ecd944c2a2dd48dc55a7f7063c21c10d19320645bd2c4",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646412.6193979,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "budget_hit",
+      "receipt_ok": false,
+      "receipt_sha": "2e3365f0580e4995ffd33b943834a5ce1b20901d853b948a3c44cc6c380775f4",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "math.ts",
+            "score": 3.8,
+            "reason": [
+              "path_match=1",
+              "reference_match=1"
+            ],
+            "symbols": [
+              "add"
+            ],
+            "estimated_tokens": 29,
+            "excerpt": "math.ts [typescript]\nfunction add(a: number, b: number)\nexport function add(a: number, b: number) { return a - b; }"
+          }
+        ],
+        "map": {
+          "math.ts": {
+            "path": "math.ts",
+            "language": "typescript",
+            "sha256": "d0ea6f33d17132678d4ecd944c2a2dd48dc55a7f7063c21c10d19320645bd2c4",
+            "symbols": [
+              "add"
+            ],
+            "imports": [],
+            "references": [
+              "a",
+              "b",
+              "export",
+              "function",
+              "number",
+              "return"
+            ],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 1
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_522ca0375f93",
+            "path": "math.ts",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "e0fb1449a381dffe5cdd932e7a68f833b6d16a8e9d90adc7f0cc84e003539eae",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646412.619117,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_8d8dab1ff780",
+            "path": "math.ts",
+            "operation": "full_rewrite",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "e0fb1449a381dffe5cdd932e7a68f833b6d16a8e9d90adc7f0cc84e003539eae",
+            "pre_apply_sha256": "e0fb1449a381dffe5cdd932e7a68f833b6d16a8e9d90adc7f0cc84e003539eae",
+            "post_apply_sha256": "d0ea6f33d17132678d4ecd944c2a2dd48dc55a7f7063c21c10d19320645bd2c4",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646412.6193979,
+            "prior_existed": true,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "math.ts": {
+            "path": "math.ts",
+            "sha256": "d0ea6f33d17132678d4ecd944c2a2dd48dc55a7f7063c21c10d19320645bd2c4",
+            "size": 60,
+            "revision": 1,
+            "scope": "full",
+            "step": 1,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: math.ts(path_match=1,reference_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read math.ts (60 bytes) sha=e0fb1449a381 rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "no RUN line \u2014 auto-running `python3 math.ts`"
+        },
+        {
+          "event": "agent_note",
+          "text": "SyntaxError line 1 in math.ts \u2014 surgical fix"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish but nothing was printed \u2014 making it produce output"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish but nothing was printed \u2014 making it produce output"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A07",
+      "family": "multi_file",
+      "description": "Add helper and wire import",
+      "expect": "multi",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.235,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "ae0f990e3686a1e262ad64665a01df07478a32330606edbee42b3b064ef37c4d",
+      "tree_after": "9b6045b1ff9541e4d11a4426b93e3778c66cafbf259c2f85ae12c53a71ec5f0d",
+      "files_after": [
+        "app.py",
+        "helper.py"
+      ],
+      "final_tree": {
+        "app.py": "from helper import shout\ndef main():\n    print(shout('hi'))\n",
+        "helper.py": "def shout(s):\n    return s.upper()\n"
+      },
+      "seed_tree": {
+        "app.py": "def main():\n    print('hi')\n"
+      },
+      "selection": [],
+      "mutations": [
+        {
+          "mutation_id": "read_40af50b8d849",
+          "path": "app.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "029c70f48bda10bd45463e0c7398d778605b5262a3bf9c3e091000c978e87a8a",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646412.681649,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_1a9991c678fc",
+          "path": "helper.py",
+          "operation": "create",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "5fd603d2000303866bbf51e8743a29db70fbbb5c1e123c6e9a427bf88a2130aa",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646412.681916,
+          "prior_existed": false,
+          "created_path": "helper.py"
+        },
+        {
+          "mutation_id": "mut_072230ce6247",
+          "path": "app.py",
+          "operation": "full_rewrite",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "029c70f48bda10bd45463e0c7398d778605b5262a3bf9c3e091000c978e87a8a",
+          "pre_apply_sha256": "029c70f48bda10bd45463e0c7398d778605b5262a3bf9c3e091000c978e87a8a",
+          "post_apply_sha256": "395fe18761517ea7f10c1193bb6a2377abaf53656c197288b4e3e8c3b76f8bf3",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 2,
+          "ts": 1785646412.733239,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "shipped",
+      "receipt_ok": true,
+      "receipt_sha": "fb407d944fb4d9f03634d71f147bb8b5dca037aba19af5e4efa8959bf40efb2d",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [],
+        "map": {
+          "app.py": {
+            "path": "app.py",
+            "language": "python",
+            "sha256": "395fe18761517ea7f10c1193bb6a2377abaf53656c197288b4e3e8c3b76f8bf3",
+            "symbols": [
+              "main"
+            ],
+            "imports": [
+              "helper"
+            ],
+            "references": [
+              "print",
+              "shout"
+            ],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 2
+          },
+          "helper.py": {
+            "path": "helper.py",
+            "language": "python",
+            "sha256": "5fd603d2000303866bbf51e8743a29db70fbbb5c1e123c6e9a427bf88a2130aa",
+            "symbols": [
+              "shout"
+            ],
+            "imports": [],
+            "references": [
+              "s",
+              "upper"
+            ],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 1
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_40af50b8d849",
+            "path": "app.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "029c70f48bda10bd45463e0c7398d778605b5262a3bf9c3e091000c978e87a8a",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646412.681649,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_1a9991c678fc",
+            "path": "helper.py",
+            "operation": "create",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "5fd603d2000303866bbf51e8743a29db70fbbb5c1e123c6e9a427bf88a2130aa",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646412.681916,
+            "prior_existed": false,
+            "created_path": "helper.py"
+          },
+          {
+            "mutation_id": "mut_072230ce6247",
+            "path": "app.py",
+            "operation": "full_rewrite",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "029c70f48bda10bd45463e0c7398d778605b5262a3bf9c3e091000c978e87a8a",
+            "pre_apply_sha256": "029c70f48bda10bd45463e0c7398d778605b5262a3bf9c3e091000c978e87a8a",
+            "post_apply_sha256": "395fe18761517ea7f10c1193bb6a2377abaf53656c197288b4e3e8c3b76f8bf3",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 2,
+            "ts": 1785646412.733239,
+            "prior_existed": true,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "app.py": {
+            "path": "app.py",
+            "sha256": "395fe18761517ea7f10c1193bb6a2377abaf53656c197288b4e3e8c3b76f8bf3",
+            "size": 60,
+            "revision": 1,
+            "scope": "full",
+            "step": 2,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          },
+          "helper.py": {
+            "path": "helper.py",
+            "sha256": "5fd603d2000303866bbf51e8743a29db70fbbb5c1e123c6e9a427bf88a2130aa",
+            "size": 35,
+            "revision": 1,
+            "scope": "full",
+            "step": 1,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read app.py (28 bytes) sha=029c70f48bda rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "no RUN line \u2014 auto-running `python3 helper.py`"
+        },
+        {
+          "event": "agent_note",
+          "text": "last-known-green checkpoint ckpt_0b5dc1945f6f9441"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "last-known-green checkpoint ckpt_197bb547d912dd7f"
+        },
+        {
+          "event": "agent_note",
+          "text": "verify: `python3 -m py_compile helper.py app.py`"
+        },
+        {
+          "event": "agent_note",
+          "text": "learned 1 coding technique(s) for future runs"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A08",
+      "family": "multi_file",
+      "description": "Split utils into two modules",
+      "expect": "multi",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.255,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "58cb1a553d892215642e3852b114927f3216b0aa7481b11b53e0c2f872b262d0",
+      "tree_after": "f8f493d7f2c09ca5ea6b20a61e6beef2a0c85cd0efe52f248c35b036a8fbdecf",
+      "files_after": [
+        "a_mod.py",
+        "b_mod.py",
+        "main.py",
+        "utils.py"
+      ],
+      "final_tree": {
+        "a_mod.py": "def a():\n    return 1\n",
+        "b_mod.py": "def b():\n    return 2\n",
+        "main.py": "from a_mod import a\nfrom b_mod import b\nprint(a()+b())\n",
+        "utils.py": "def a():\n    return 1\ndef b():\n    return 2\n"
+      },
+      "seed_tree": {
+        "utils.py": "def a():\n    return 1\ndef b():\n    return 2\n",
+        "main.py": "from utils import a, b\nprint(a()+b())\n"
+      },
+      "selection": [
+        {
+          "path": "utils.py",
+          "score": 3.6931471805599454,
+          "reason": [
+            "path_match=1",
+            "centrality=1.39"
+          ],
+          "symbols": [
+            "a",
+            "b"
+          ],
+          "estimated_tokens": 20,
+          "excerpt": "utils.py [python]\ndef a()\ndef a():\n    return 1\ndef b()\ndef b():\n    return 2"
+        }
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_b4f0705382fc",
+          "path": "utils.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "d38529f421e9c2176e6d79cd110d465922cf7da9c83eeb728354ce53a9b698e0",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646412.918824,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "read_5d842b71ed81",
+          "path": "main.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "37c6f65331c30d8b9368b8ddb4c47d1590981fed8386734016675fbf18a3ead2",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646412.919059,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_0175b8a518cf",
+          "path": "a_mod.py",
+          "operation": "create",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "0c2863d70c1f0e4d3682a1608c1e161ec2fad5bc4d911fc69e314677ca080149",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 2,
+          "ts": 1785646412.919347,
+          "prior_existed": false,
+          "created_path": "a_mod.py"
+        },
+        {
+          "mutation_id": "mut_b8c743a9fc1e",
+          "path": "b_mod.py",
+          "operation": "create",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "ab2d38dcad7f5eb7611e1b3fd17e182ffaa2858eeffda846be2392697d9b048d",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 3,
+          "ts": 1785646412.9709902,
+          "prior_existed": false,
+          "created_path": "b_mod.py"
+        },
+        {
+          "mutation_id": "mut_8901f6dfa1b3",
+          "path": "main.py",
+          "operation": "full_rewrite",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "37c6f65331c30d8b9368b8ddb4c47d1590981fed8386734016675fbf18a3ead2",
+          "pre_apply_sha256": "37c6f65331c30d8b9368b8ddb4c47d1590981fed8386734016675fbf18a3ead2",
+          "post_apply_sha256": "1eb0d39bda9b4b8c5e6c3439dd9b0b054ff0c046c4151bbffc87c469681d7cec",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 4,
+          "ts": 1785646413.022315,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "stuck",
+      "receipt_ok": false,
+      "receipt_sha": "8bd7e5cd401545e1e5dfdac7bf5567bae06b8a569183a8745f614c403bb568d6",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "utils.py",
+            "score": 3.6931471805599454,
+            "reason": [
+              "path_match=1",
+              "centrality=1.39"
+            ],
+            "symbols": [
+              "a",
+              "b"
+            ],
+            "estimated_tokens": 20,
+            "excerpt": "utils.py [python]\ndef a()\ndef a():\n    return 1\ndef b()\ndef b():\n    return 2"
+          }
+        ],
+        "map": {
+          "main.py": {
+            "path": "main.py",
+            "language": "python",
+            "sha256": "1eb0d39bda9b4b8c5e6c3439dd9b0b054ff0c046c4151bbffc87c469681d7cec",
+            "symbols": [],
+            "imports": [
+              "a_mod",
+              "b_mod"
+            ],
+            "references": [
+              "a",
+              "b",
+              "print"
+            ],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 1,
+            "last_modified_step": 4
+          },
+          "utils.py": {
+            "path": "utils.py",
+            "language": "python",
+            "sha256": "d38529f421e9c2176e6d79cd110d465922cf7da9c83eeb728354ce53a9b698e0",
+            "symbols": [
+              "a",
+              "b"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "a_mod.py": {
+            "path": "a_mod.py",
+            "language": "python",
+            "sha256": "0c2863d70c1f0e4d3682a1608c1e161ec2fad5bc4d911fc69e314677ca080149",
+            "symbols": [
+              "a"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 2
+          },
+          "b_mod.py": {
+            "path": "b_mod.py",
+            "language": "python",
+            "sha256": "ab2d38dcad7f5eb7611e1b3fd17e182ffaa2858eeffda846be2392697d9b048d",
+            "symbols": [
+              "b"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 3
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_b4f0705382fc",
+            "path": "utils.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "d38529f421e9c2176e6d79cd110d465922cf7da9c83eeb728354ce53a9b698e0",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646412.918824,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "read_5d842b71ed81",
+            "path": "main.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "37c6f65331c30d8b9368b8ddb4c47d1590981fed8386734016675fbf18a3ead2",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646412.919059,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_0175b8a518cf",
+            "path": "a_mod.py",
+            "operation": "create",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "0c2863d70c1f0e4d3682a1608c1e161ec2fad5bc4d911fc69e314677ca080149",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 2,
+            "ts": 1785646412.919347,
+            "prior_existed": false,
+            "created_path": "a_mod.py"
+          },
+          {
+            "mutation_id": "mut_b8c743a9fc1e",
+            "path": "b_mod.py",
+            "operation": "create",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "ab2d38dcad7f5eb7611e1b3fd17e182ffaa2858eeffda846be2392697d9b048d",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 3,
+            "ts": 1785646412.9709902,
+            "prior_existed": false,
+            "created_path": "b_mod.py"
+          },
+          {
+            "mutation_id": "mut_8901f6dfa1b3",
+            "path": "main.py",
+            "operation": "full_rewrite",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "37c6f65331c30d8b9368b8ddb4c47d1590981fed8386734016675fbf18a3ead2",
+            "pre_apply_sha256": "37c6f65331c30d8b9368b8ddb4c47d1590981fed8386734016675fbf18a3ead2",
+            "post_apply_sha256": "1eb0d39bda9b4b8c5e6c3439dd9b0b054ff0c046c4151bbffc87c469681d7cec",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 4,
+            "ts": 1785646413.022315,
+            "prior_existed": true,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "utils.py": {
+            "path": "utils.py",
+            "sha256": "d38529f421e9c2176e6d79cd110d465922cf7da9c83eeb728354ce53a9b698e0",
+            "size": 44,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          },
+          "main.py": {
+            "path": "main.py",
+            "sha256": "1eb0d39bda9b4b8c5e6c3439dd9b0b054ff0c046c4151bbffc87c469681d7cec",
+            "size": 55,
+            "revision": 1,
+            "scope": "full",
+            "step": 4,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          },
+          "a_mod.py": {
+            "path": "a_mod.py",
+            "sha256": "0c2863d70c1f0e4d3682a1608c1e161ec2fad5bc4d911fc69e314677ca080149",
+            "size": 22,
+            "revision": 1,
+            "scope": "full",
+            "step": 2,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          },
+          "b_mod.py": {
+            "path": "b_mod.py",
+            "sha256": "ab2d38dcad7f5eb7611e1b3fd17e182ffaa2858eeffda846be2392697d9b048d",
+            "size": 22,
+            "revision": 1,
+            "scope": "full",
+            "step": 3,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: utils.py(path_match=1,centrality=1.39)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read utils.py (44 bytes) sha=d38529f421e9 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "read main.py (38 bytes) sha=37c6f65331c3 rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "no RUN line \u2014 auto-running `python3 a_mod.py`"
+        },
+        {
+          "event": "agent_note",
+          "text": "last-known-green checkpoint ckpt_94eda13313f7509e"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "no RUN line \u2014 auto-running `python3 b_mod.py`"
+        },
+        {
+          "event": "agent_note",
+          "text": "last-known-green checkpoint ckpt_51187ae0fb99437a"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "last-known-green checkpoint ckpt_f0983340099896c7"
+        },
+        {
+          "event": "agent_note",
+          "text": "verify: `python3 -m py_compile a_mod.py b_mod.py main.py`"
+        },
+        {
+          "event": "agent_note",
+          "text": "budget freeze \u2014 restored last-known-green (3 consecutive non-positive evidence deltas \u2014 next action must change a declar"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A09",
+      "family": "multi_file",
+      "description": "JS client+server pair",
+      "expect": "multi",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.07,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "3eb79a389e154984e82ecbe16e08e066e2d6ab075a500ad93f9ec463db3bed82",
+      "tree_after": "e6f684edc11b9a156154d38f4b9b340996be4def9cd71e34eb8e00812d8953c4",
+      "files_after": [
+        "client.js",
+        "server.js"
+      ],
+      "final_tree": {
+        "client.js": "const {handle}=require('./server');\nconsole.log(handle());\n",
+        "server.js": "function handle(){ return {ok:true}; }\nmodule.exports={handle};\n"
+      },
+      "seed_tree": {
+        "server.js": "function handle(){ return {ok:false}; }\nmodule.exports={handle};\n",
+        "client.js": "const {handle}=require('./server');\nconsole.log(handle());\n"
+      },
+      "selection": [
+        {
+          "path": "client.js",
+          "score": 6.8,
+          "reason": [
+            "path_match=2",
+            "reference_match=1"
+          ],
+          "symbols": [],
+          "estimated_tokens": 21,
+          "excerpt": "client.js [javascript]\nconst {handle}=require('./server');\nconsole.log(handle());"
+        },
+        {
+          "path": "server.js",
+          "score": 6.346573590279973,
+          "reason": [
+            "path_match=2",
+            "centrality=0.69"
+          ],
+          "symbols": [
+            "handle"
+          ],
+          "estimated_tokens": 20,
+          "excerpt": "server.js [javascript]\nfunction handle()\nfunction handle(){ return {ok:false}; }"
+        }
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_504796eebc72",
+          "path": "server.js",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "8536cdf50facf14bb3468f15468a9b0f5ea0382f912a6839631dfd3130174cf1",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646413.173795,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_34821e9c6b78",
+          "path": "server.js",
+          "operation": "full_rewrite",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "8536cdf50facf14bb3468f15468a9b0f5ea0382f912a6839631dfd3130174cf1",
+          "pre_apply_sha256": "8536cdf50facf14bb3468f15468a9b0f5ea0382f912a6839631dfd3130174cf1",
+          "post_apply_sha256": "0cb6aa0ca2a2c409f0159afbf5f5c57d6783ee05b76b8f27282834fd5251d3c4",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646413.174137,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "shipped",
+      "receipt_ok": true,
+      "receipt_sha": "087ce680e2afeeb83bc5c59dfb91330d8f563720382f09d36c5ac34d9a08663f",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "client.js",
+            "score": 6.8,
+            "reason": [
+              "path_match=2",
+              "reference_match=1"
+            ],
+            "symbols": [],
+            "estimated_tokens": 21,
+            "excerpt": "client.js [javascript]\nconst {handle}=require('./server');\nconsole.log(handle());"
+          },
+          {
+            "path": "server.js",
+            "score": 6.346573590279973,
+            "reason": [
+              "path_match=2",
+              "centrality=0.69"
+            ],
+            "symbols": [
+              "handle"
+            ],
+            "estimated_tokens": 20,
+            "excerpt": "server.js [javascript]\nfunction handle()\nfunction handle(){ return {ok:false}; }"
+          }
+        ],
+        "map": {
+          "client.js": {
+            "path": "client.js",
+            "language": "javascript",
+            "sha256": "36d721fc8cdbfe5e04ad38a5913be60fa2d9fb7fe044da54f88cac5eb2b5dead",
+            "symbols": [],
+            "imports": [
+              "./server"
+            ],
+            "references": [
+              "console",
+              "const",
+              "handle",
+              "log",
+              "require",
+              "server"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "server.js": {
+            "path": "server.js",
+            "language": "javascript",
+            "sha256": "0cb6aa0ca2a2c409f0159afbf5f5c57d6783ee05b76b8f27282834fd5251d3c4",
+            "symbols": [
+              "handle"
+            ],
+            "imports": [],
+            "references": [
+              "exports",
+              "function",
+              "module",
+              "ok",
+              "return",
+              "true"
+            ],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 1
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_504796eebc72",
+            "path": "server.js",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "8536cdf50facf14bb3468f15468a9b0f5ea0382f912a6839631dfd3130174cf1",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646413.173795,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_34821e9c6b78",
+            "path": "server.js",
+            "operation": "full_rewrite",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "8536cdf50facf14bb3468f15468a9b0f5ea0382f912a6839631dfd3130174cf1",
+            "pre_apply_sha256": "8536cdf50facf14bb3468f15468a9b0f5ea0382f912a6839631dfd3130174cf1",
+            "post_apply_sha256": "0cb6aa0ca2a2c409f0159afbf5f5c57d6783ee05b76b8f27282834fd5251d3c4",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646413.174137,
+            "prior_existed": true,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "server.js": {
+            "path": "server.js",
+            "sha256": "0cb6aa0ca2a2c409f0159afbf5f5c57d6783ee05b76b8f27282834fd5251d3c4",
+            "size": 64,
+            "revision": 1,
+            "scope": "full",
+            "step": 1,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: client.js(path_match=2,reference_match=1), server.js(path_match=2,centrality=0.69)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read server.js (65 bytes) sha=8536cdf50fac rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "learned 1 coding technique(s) for future runs"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A10",
+      "family": "multi_file",
+      "description": "Add test for product function",
+      "expect": "multi",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.19,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "c59ce0b4f460ec370a7fcd701344cc04b7863ca4f3d058f349a16e80fbbf6dea",
+      "tree_after": "593a0d9bc22cb31d60f607018903482f68f22256e73f9fa6f457e8366e7a0bd1",
+      "files_after": [
+        "prod.py",
+        "test_prod.py"
+      ],
+      "final_tree": {
+        "prod.py": "def double(x):\n    return x * 2\n",
+        "test_prod.py": "import unittest\nfrom prod import double\nclass T(unittest.TestCase):\n    def test_double(self):\n        self.assertEqual(double(3), 6)\n"
+      },
+      "seed_tree": {
+        "prod.py": "def double(x):\n    return x * 2\n"
+      },
+      "selection": [],
+      "mutations": [
+        {
+          "mutation_id": "read_6a32647e10c5",
+          "path": "prod.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "0adcb531f78a384cb8bbd8939cd48524aab0dcfd4aa17deca3d3eef5598e809e",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646413.2445939,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_8834d44ace9b",
+          "path": "test_prod.py",
+          "operation": "create",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "7219e1b4ce900013427632c5cd990d017b0108dd6b1320f19bad991761998272",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646413.244899,
+          "prior_existed": false,
+          "created_path": "test_prod.py"
+        }
+      ],
+      "receipt_verdict": "shipped",
+      "receipt_ok": true,
+      "receipt_sha": "32bb648a415107bcda322ae4c719c1c53ad1516caa2f82e3fc6616142c49733c",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [],
+        "map": {
+          "prod.py": {
+            "path": "prod.py",
+            "language": "python",
+            "sha256": "0adcb531f78a384cb8bbd8939cd48524aab0dcfd4aa17deca3d3eef5598e809e",
+            "symbols": [
+              "double"
+            ],
+            "imports": [],
+            "references": [
+              "x"
+            ],
+            "test_links": [
+              "test_prod.py"
+            ],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "test_prod.py": {
+            "path": "test_prod.py",
+            "language": "python",
+            "sha256": "7219e1b4ce900013427632c5cd990d017b0108dd6b1320f19bad991761998272",
+            "symbols": [
+              "T",
+              "T.test_double"
+            ],
+            "imports": [
+              "prod",
+              "unittest"
+            ],
+            "references": [
+              "TestCase",
+              "assertEqual",
+              "double",
+              "self",
+              "unittest"
+            ],
+            "test_links": [
+              "test_prod.py"
+            ],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 1
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_6a32647e10c5",
+            "path": "prod.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "0adcb531f78a384cb8bbd8939cd48524aab0dcfd4aa17deca3d3eef5598e809e",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646413.2445939,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_8834d44ace9b",
+            "path": "test_prod.py",
+            "operation": "create",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "7219e1b4ce900013427632c5cd990d017b0108dd6b1320f19bad991761998272",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646413.244899,
+            "prior_existed": false,
+            "created_path": "test_prod.py"
+          }
+        ],
+        "reads": {
+          "prod.py": {
+            "path": "prod.py",
+            "sha256": "0adcb531f78a384cb8bbd8939cd48524aab0dcfd4aa17deca3d3eef5598e809e",
+            "size": 32,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          },
+          "test_prod.py": {
+            "path": "test_prod.py",
+            "sha256": "7219e1b4ce900013427632c5cd990d017b0108dd6b1320f19bad991761998272",
+            "size": 134,
+            "revision": 1,
+            "scope": "full",
+            "step": 1,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['main.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read prod.py (32 bytes) sha=0adcb531f78a rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "last-known-green checkpoint ckpt_33c24063c3d91eba"
+        },
+        {
+          "event": "agent_note",
+          "text": "verify: `python3 -c \"import importlib.util as u,sys; sys.exit(0 if u.find_spec('pytest') else 1)\" && python3 -m pytest -"
+        },
+        {
+          "event": "agent_note",
+          "text": "oracle green \u2014 finishing (auto-verified: tests passed)"
+        },
+        {
+          "event": "agent_note",
+          "text": "learned 1 coding technique(s) for future runs"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A11",
+      "family": "misleading_selection",
+      "description": "Same symbol name in wrong module \u2014 must edit auth.py not colors.py",
+      "expect": "pass",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.212,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "c29144daff83ddd3d372502c8964571015e5a4cf46faf858c81c508a9e9955c9",
+      "tree_after": "1e4fcf418ad99d69d68598d8c3184a49a43f30638973e438953521f015d5476d",
+      "files_after": [
+        "auth.py",
+        "colors.py"
+      ],
+      "final_tree": {
+        "auth.py": "def verify_token(t):\n    return t == 'ok'\n",
+        "colors.py": "def verify_token(t):\n    return 'red'\n"
+      },
+      "seed_tree": {
+        "auth.py": "def verify_token(t):\n    return False  # bug should be True for 'ok'\n",
+        "colors.py": "def verify_token(t):\n    return 'red'\n"
+      },
+      "selection": [
+        {
+          "path": "colors.py",
+          "score": 6.0,
+          "reason": [
+            "path_match=2",
+            "language_match"
+          ],
+          "symbols": [
+            "verify_token"
+          ],
+          "estimated_tokens": 19,
+          "excerpt": "colors.py [python]\ndef verify_token(t)\ndef verify_token(t):\n    return 'red'"
+        },
+        {
+          "path": "auth.py",
+          "score": 6.0,
+          "reason": [
+            "path_match=2",
+            "language_match"
+          ],
+          "symbols": [
+            "verify_token"
+          ],
+          "estimated_tokens": 27,
+          "excerpt": "auth.py [python]\ndef verify_token(t)\ndef verify_token(t):\n    return False  # bug should be True for 'ok'"
+        }
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_79e39757be03",
+          "path": "auth.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "1efa0ba3c6c0bbdbebaa0ed4c30bf7662340a42f218f3c6f12b24144873b8957",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646413.438436,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_a4731d9795a3",
+          "path": "auth.py",
+          "operation": "full_rewrite",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "1efa0ba3c6c0bbdbebaa0ed4c30bf7662340a42f218f3c6f12b24144873b8957",
+          "pre_apply_sha256": "1efa0ba3c6c0bbdbebaa0ed4c30bf7662340a42f218f3c6f12b24144873b8957",
+          "post_apply_sha256": "4abe2e61028f7693ce97fc5001c856731a0c1b265c7f517e7206caa58b6fbe42",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646413.438758,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "budget_hit",
+      "receipt_ok": false,
+      "receipt_sha": "fab997c348035b0083688ff2ae8eaef40ce9a560db28a7bab96577f427f28e9c",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "colors.py",
+            "score": 6.0,
+            "reason": [
+              "path_match=2",
+              "language_match"
+            ],
+            "symbols": [
+              "verify_token"
+            ],
+            "estimated_tokens": 19,
+            "excerpt": "colors.py [python]\ndef verify_token(t)\ndef verify_token(t):\n    return 'red'"
+          },
+          {
+            "path": "auth.py",
+            "score": 6.0,
+            "reason": [
+              "path_match=2",
+              "language_match"
+            ],
+            "symbols": [
+              "verify_token"
+            ],
+            "estimated_tokens": 27,
+            "excerpt": "auth.py [python]\ndef verify_token(t)\ndef verify_token(t):\n    return False  # bug should be True for 'ok'"
+          }
+        ],
+        "map": {
+          "auth.py": {
+            "path": "auth.py",
+            "language": "python",
+            "sha256": "4abe2e61028f7693ce97fc5001c856731a0c1b265c7f517e7206caa58b6fbe42",
+            "symbols": [
+              "verify_token"
+            ],
+            "imports": [],
+            "references": [
+              "t"
+            ],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 1
+          },
+          "colors.py": {
+            "path": "colors.py",
+            "language": "python",
+            "sha256": "c23e7a755d394a20b2ec0a5ba5ae335454c9f0cc448c25cb053a71b5762993c0",
+            "symbols": [
+              "verify_token"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_79e39757be03",
+            "path": "auth.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "1efa0ba3c6c0bbdbebaa0ed4c30bf7662340a42f218f3c6f12b24144873b8957",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646413.438436,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_a4731d9795a3",
+            "path": "auth.py",
+            "operation": "full_rewrite",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "1efa0ba3c6c0bbdbebaa0ed4c30bf7662340a42f218f3c6f12b24144873b8957",
+            "pre_apply_sha256": "1efa0ba3c6c0bbdbebaa0ed4c30bf7662340a42f218f3c6f12b24144873b8957",
+            "post_apply_sha256": "4abe2e61028f7693ce97fc5001c856731a0c1b265c7f517e7206caa58b6fbe42",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646413.438758,
+            "prior_existed": true,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "auth.py": {
+            "path": "auth.py",
+            "sha256": "4abe2e61028f7693ce97fc5001c856731a0c1b265c7f517e7206caa58b6fbe42",
+            "size": 42,
+            "revision": 1,
+            "scope": "full",
+            "step": 1,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['auth.py', 'colors.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: colors.py(path_match=2,language_match), auth.py(path_match=2,language_match)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read auth.py (69 bytes) sha=1efa0ba3c6c0 rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "last-known-green checkpoint ckpt_5280d6a3feffc78d"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish but nothing was printed \u2014 making it produce output"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish but nothing was printed \u2014 making it produce output"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish but nothing was printed \u2014 making it produce output"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A12",
+      "family": "misleading_selection",
+      "description": "Stack-ish: fix dependency not caller",
+      "expect": "pass",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.216,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "7ae7b6dd8a13224700ddd5f32406ae32f9e8b2099fe385e4a817460f53f58932",
+      "tree_after": "d983c588835654d9157fa489a8fb68d5d7ad58fb2b2fc7277a31f9a6c4a0dbae",
+      "files_after": [
+        "caller.py",
+        "dep.py"
+      ],
+      "final_tree": {
+        "caller.py": "from dep import value\ndef run():\n    return value()\n",
+        "dep.py": "def value():\n    return 42\n"
+      },
+      "seed_tree": {
+        "dep.py": "def value():\n    return 0  # should be 42\n",
+        "caller.py": "from dep import value\ndef run():\n    return value()\n"
+      },
+      "selection": [
+        {
+          "path": "caller.py",
+          "score": 3.0,
+          "reason": [
+            "path_match=1"
+          ],
+          "symbols": [
+            "run"
+          ],
+          "estimated_tokens": 15,
+          "excerpt": "caller.py [python]\ndef run()\ndef run():\n    return value()"
+        },
+        {
+          "path": "dep.py",
+          "score": 0.34657359027997264,
+          "reason": [
+            "centrality=0.69"
+          ],
+          "symbols": [
+            "value"
+          ],
+          "estimated_tokens": 18,
+          "excerpt": "dep.py [python]\ndef value()\ndef value():\n    return 0  # should be 42"
+        }
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_889b7ed0b08a",
+          "path": "dep.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "930013d7d466e251a1bf915e8948a92f6cd017dbeca42c4555a8491cf2cab95a",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646413.6541,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_1a34f7a9f99b",
+          "path": "dep.py",
+          "operation": "full_rewrite",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "930013d7d466e251a1bf915e8948a92f6cd017dbeca42c4555a8491cf2cab95a",
+          "pre_apply_sha256": "930013d7d466e251a1bf915e8948a92f6cd017dbeca42c4555a8491cf2cab95a",
+          "post_apply_sha256": "2f8974f06364c943a202b6a6971a24e891683fa2dc6233ad2a5c478dce8fd0b3",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646413.6544251,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "budget_hit",
+      "receipt_ok": false,
+      "receipt_sha": "eda8b88d8d50b3bc98e5a4475a3d622fe84827979fb490e6e0ce0f5fd987058f",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "caller.py",
+            "score": 3.0,
+            "reason": [
+              "path_match=1"
+            ],
+            "symbols": [
+              "run"
+            ],
+            "estimated_tokens": 15,
+            "excerpt": "caller.py [python]\ndef run()\ndef run():\n    return value()"
+          },
+          {
+            "path": "dep.py",
+            "score": 0.34657359027997264,
+            "reason": [
+              "centrality=0.69"
+            ],
+            "symbols": [
+              "value"
+            ],
+            "estimated_tokens": 18,
+            "excerpt": "dep.py [python]\ndef value()\ndef value():\n    return 0  # should be 42"
+          }
+        ],
+        "map": {
+          "caller.py": {
+            "path": "caller.py",
+            "language": "python",
+            "sha256": "76f08f405a1770370910c89a605d868c9a486364bdd39a93e902346d446eec30",
+            "symbols": [
+              "run"
+            ],
+            "imports": [
+              "dep"
+            ],
+            "references": [
+              "value"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "dep.py": {
+            "path": "dep.py",
+            "language": "python",
+            "sha256": "2f8974f06364c943a202b6a6971a24e891683fa2dc6233ad2a5c478dce8fd0b3",
+            "symbols": [
+              "value"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 1
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_889b7ed0b08a",
+            "path": "dep.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "930013d7d466e251a1bf915e8948a92f6cd017dbeca42c4555a8491cf2cab95a",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646413.6541,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_1a34f7a9f99b",
+            "path": "dep.py",
+            "operation": "full_rewrite",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "930013d7d466e251a1bf915e8948a92f6cd017dbeca42c4555a8491cf2cab95a",
+            "pre_apply_sha256": "930013d7d466e251a1bf915e8948a92f6cd017dbeca42c4555a8491cf2cab95a",
+            "post_apply_sha256": "2f8974f06364c943a202b6a6971a24e891683fa2dc6233ad2a5c478dce8fd0b3",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646413.6544251,
+            "prior_existed": true,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "dep.py": {
+            "path": "dep.py",
+            "sha256": "2f8974f06364c943a202b6a6971a24e891683fa2dc6233ad2a5c478dce8fd0b3",
+            "size": 27,
+            "revision": 1,
+            "scope": "full",
+            "step": 1,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: caller.py(path_match=1), dep.py(centrality=0.69)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read dep.py (42 bytes) sha=930013d7d466 rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "last-known-green checkpoint ckpt_7a5d75d0a27048e6"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish but nothing was printed \u2014 making it produce output"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish but nothing was printed \u2014 making it produce output"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish but nothing was printed \u2014 making it produce output"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A13",
+      "family": "misleading_selection",
+      "description": "Do not create duplicate util.py",
+      "expect": "reject_create",
+      "ok": true,
+      "violations": [],
+      "notes": [
+        "has_dup=False rejected=True"
+      ],
+      "elapsed_s": 0.038,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "74ad81148e31c378b73443a8fd8d8517538f8ab7af8dc8deca9e15469108d7ec",
+      "tree_after": "74ad81148e31c378b73443a8fd8d8517538f8ab7af8dc8deca9e15469108d7ec",
+      "files_after": [
+        "main.py",
+        "pkg/util.py"
+      ],
+      "final_tree": {
+        "main.py": "from pkg.util import f\nprint(f())\n",
+        "pkg/util.py": "def f():\n    return 1\n"
+      },
+      "seed_tree": {
+        "pkg/util.py": "def f():\n    return 1\n",
+        "main.py": "from pkg.util import f\nprint(f())\n"
+      },
+      "selection": [
+        {
+          "path": "pkg/util.py",
+          "score": 6.346573590279973,
+          "reason": [
+            "path_match=2",
+            "centrality=0.69",
+            "language_match"
+          ],
+          "symbols": [
+            "f"
+          ],
+          "estimated_tokens": 13,
+          "excerpt": "pkg/util.py [python]\ndef f()\ndef f():\n    return 1"
+        },
+        {
+          "path": "main.py",
+          "score": 3.0,
+          "reason": [
+            "path_match=1",
+            "language_match"
+          ],
+          "symbols": [],
+          "estimated_tokens": 13,
+          "excerpt": "main.py [python]\nfrom pkg.util import f\nprint(f())"
+        }
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_38c7247d9c9a",
+          "path": "pkg/util.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "5b76d0962c09ab4ee309fac65fad3568c97abdec983b405146ae3e86a235e352",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646413.870008,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "budget_hit",
+      "receipt_ok": false,
+      "receipt_sha": "0bc9dc53312549761386b2333813aa6c4bb9862a81d04365a526dda318f7ff0e",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "pkg/util.py",
+            "score": 6.346573590279973,
+            "reason": [
+              "path_match=2",
+              "centrality=0.69",
+              "language_match"
+            ],
+            "symbols": [
+              "f"
+            ],
+            "estimated_tokens": 13,
+            "excerpt": "pkg/util.py [python]\ndef f()\ndef f():\n    return 1"
+          },
+          {
+            "path": "main.py",
+            "score": 3.0,
+            "reason": [
+              "path_match=1",
+              "language_match"
+            ],
+            "symbols": [],
+            "estimated_tokens": 13,
+            "excerpt": "main.py [python]\nfrom pkg.util import f\nprint(f())"
+          }
+        ],
+        "map": {
+          "main.py": {
+            "path": "main.py",
+            "language": "python",
+            "sha256": "9067792d5ade04ca8f8a378abdd2830d7aee1c7f26836df744c813bf18f7d823",
+            "symbols": [],
+            "imports": [
+              "pkg.util"
+            ],
+            "references": [
+              "f",
+              "print"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "pkg/util.py": {
+            "path": "pkg/util.py",
+            "language": "python",
+            "sha256": "5b76d0962c09ab4ee309fac65fad3568c97abdec983b405146ae3e86a235e352",
+            "symbols": [
+              "f"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_38c7247d9c9a",
+            "path": "pkg/util.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "5b76d0962c09ab4ee309fac65fad3568c97abdec983b405146ae3e86a235e352",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646413.870008,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "pkg/util.py": {
+            "path": "pkg/util.py",
+            "sha256": "5b76d0962c09ab4ee309fac65fad3568c97abdec983b405146ae3e86a235e352",
+            "size": 22,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['util.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: pkg/util.py(path_match=2,centrality=0.69), main.py(path_match=1,language_match)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read pkg/util.py (22 bytes) sha=5b76d0962c09 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "mutation rejected for `util.py`: create rejected: duplicates existing pkg/util.py"
+        },
+        {
+          "event": "agent_note",
+          "text": "no FILE or RUN in the reply"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A14",
+      "family": "stale_cas",
+      "description": "Blind edit without READ must fail",
+      "expect": "reject_blind",
+      "ok": true,
+      "violations": [],
+      "notes": [
+        "unchanged=True rejected_note=True"
+      ],
+      "elapsed_s": 0.116,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "e4d18bfbb07e404e0f0c0debb192b16ed9f42f31d739049f1f437cefd06fc84f",
+      "tree_after": "e4d18bfbb07e404e0f0c0debb192b16ed9f42f31d739049f1f437cefd06fc84f",
+      "files_after": [
+        "a.py"
+      ],
+      "final_tree": {
+        "a.py": "x=1\n"
+      },
+      "seed_tree": {
+        "a.py": "x=1\n"
+      },
+      "selection": [],
+      "mutations": [],
+      "receipt_verdict": "incomplete",
+      "receipt_ok": false,
+      "receipt_sha": "94e6094b04c4b9f680c3873b817766d7583d1a58c30d4eee6212c3ca45c7f0bb",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [],
+        "map": {
+          "a.py": {
+            "path": "a.py",
+            "language": "python",
+            "sha256": "98752ee28d5484bdc2814fb70adb6a0b2fb31f6a9b8ee7ae81fd2fc9cf300b3b",
+            "symbols": [],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [],
+        "reads": {}
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "mutation rejected for `a.py`: read_required_before_edit: READ `a.py` before mutating it"
+        },
+        {
+          "event": "agent_note",
+          "text": "no FILE or RUN in the reply"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A15",
+      "family": "stale_cas",
+      "ok": true,
+      "expect": "reject_stale",
+      "violations": [],
+      "detail": {
+        "special": true,
+        "second": {
+          "mutation_id": "mut_29c3b9b68e37",
+          "path": "a.py",
+          "operation": "full_rewrite",
+          "state": "rejected",
+          "selection_reason": "authorized_edit",
+          "read_before_edit": true,
+          "read_sha256": "03396c1f4d5ed5c646560102f33fad142e48946d79dafb13ba9e99f0ae18972c",
+          "pre_apply_sha256": "efe72491e50f0c2e6ac063971da919ce3d898892c35bba6fb95cc61ae6003493",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "stale_revision",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646414.00261,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      },
+      "final_tree_hash": "7588e22d87c3aaebd4dc30c615fc9c680611a48e32933518562e1446c8d5b516",
+      "gateway": {
+        "mutation_gateway": {
+          "schema": "lolm.mutation_gateway.v1",
+          "primary_language": "",
+          "selection": [],
+          "map": {
+            "a.py": {
+              "path": "a.py",
+              "language": "python",
+              "sha256": "efe72491e50f0c2e6ac063971da919ce3d898892c35bba6fb95cc61ae6003493",
+              "symbols": [],
+              "imports": [],
+              "references": [],
+              "test_links": [],
+              "revision": 1,
+              "last_read_step": 0,
+              "last_modified_step": 0
+            }
+          },
+          "mutations": [
+            {
+              "mutation_id": "read_b3b302debd49",
+              "path": "a.py",
+              "operation": "read",
+              "state": "read",
+              "selection_reason": "",
+              "read_before_edit": true,
+              "read_sha256": "03396c1f4d5ed5c646560102f33fad142e48946d79dafb13ba9e99f0ae18972c",
+              "pre_apply_sha256": "",
+              "post_apply_sha256": "",
+              "compare_and_swap_passed": false,
+              "accepted": false,
+              "rollback": false,
+              "rejection_reason": "",
+              "verification": {},
+              "selected_symbols": [],
+              "step": 0,
+              "ts": 1785646414.002141,
+              "prior_existed": false,
+              "created_path": ""
+            },
+            {
+              "mutation_id": "mut_29c3b9b68e37",
+              "path": "a.py",
+              "operation": "full_rewrite",
+              "state": "applied",
+              "selection_reason": "authorized_edit",
+              "read_before_edit": true,
+              "read_sha256": "03396c1f4d5ed5c646560102f33fad142e48946d79dafb13ba9e99f0ae18972c",
+              "pre_apply_sha256": "03396c1f4d5ed5c646560102f33fad142e48946d79dafb13ba9e99f0ae18972c",
+              "post_apply_sha256": "efe72491e50f0c2e6ac063971da919ce3d898892c35bba6fb95cc61ae6003493",
+              "compare_and_swap_passed": true,
+              "accepted": false,
+              "rollback": false,
+              "rejection_reason": "",
+              "verification": {},
+              "selected_symbols": [],
+              "step": 0,
+              "ts": 1785646414.002208,
+              "prior_existed": true,
+              "created_path": ""
+            },
+            {
+              "mutation_id": "mut_29c3b9b68e37",
+              "path": "a.py",
+              "operation": "full_rewrite",
+              "state": "rejected",
+              "selection_reason": "authorized_edit",
+              "read_before_edit": true,
+              "read_sha256": "03396c1f4d5ed5c646560102f33fad142e48946d79dafb13ba9e99f0ae18972c",
+              "pre_apply_sha256": "efe72491e50f0c2e6ac063971da919ce3d898892c35bba6fb95cc61ae6003493",
+              "post_apply_sha256": "",
+              "compare_and_swap_passed": false,
+              "accepted": false,
+              "rollback": false,
+              "rejection_reason": "stale_revision",
+              "verification": {},
+              "selected_symbols": [],
+              "step": 0,
+              "ts": 1785646414.00261,
+              "prior_existed": false,
+              "created_path": ""
+            }
+          ],
+          "reads": {
+            "a.py": {
+              "path": "a.py",
+              "sha256": "efe72491e50f0c2e6ac063971da919ce3d898892c35bba6fb95cc61ae6003493",
+              "size": 4,
+              "revision": 1,
+              "scope": "full",
+              "step": 0,
+              "symbols": [],
+              "line_start": 0,
+              "line_end": 0
+            }
+          }
+        }
+      },
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac"
+    },
+    {
+      "id": "A16",
+      "family": "stale_cas",
+      "description": "Read then successful CAS edit",
+      "expect": "pass",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.164,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "424b4f2d7e9e2564a499fd4d605dd34427825bea6f24383fd26cac117de4acf8",
+      "tree_after": "ddb0a456d118c00b010f5993e8ba1596bf04f8f2f92a152f2a75ec568ec33a18",
+      "files_after": [
+        "cfg.py"
+      ],
+      "final_tree": {
+        "cfg.py": "DEBUG=True\n"
+      },
+      "seed_tree": {
+        "cfg.py": "DEBUG=False\n"
+      },
+      "selection": [],
+      "mutations": [
+        {
+          "mutation_id": "read_26f897e1b9db",
+          "path": "cfg.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "060aad8e13133a1a15cd3c9f90304c28d36747421a26fc295092885c8f67df4a",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646414.027427,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "read_c20f2e69c056",
+          "path": "cfg.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "060aad8e13133a1a15cd3c9f90304c28d36747421a26fc295092885c8f67df4a",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646414.027609,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_0054d158b0a2",
+          "path": "cfg.py",
+          "operation": "edit",
+          "state": "applied",
+          "selection_reason": "edit",
+          "read_before_edit": true,
+          "read_sha256": "060aad8e13133a1a15cd3c9f90304c28d36747421a26fc295092885c8f67df4a",
+          "pre_apply_sha256": "060aad8e13133a1a15cd3c9f90304c28d36747421a26fc295092885c8f67df4a",
+          "post_apply_sha256": "fd57ec254a47d665629fb484331192850cf0c92a9197d4278c4207f358f8d9b8",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 1,
+          "ts": 1785646414.027735,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      ],
+      "receipt_verdict": "shipped",
+      "receipt_ok": true,
+      "receipt_sha": "4a6e3f328e7faa4096ea8b5b5dcd6008428a6c6e3f32fd356b38a9f683b892ef",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [],
+        "map": {
+          "cfg.py": {
+            "path": "cfg.py",
+            "language": "python",
+            "sha256": "fd57ec254a47d665629fb484331192850cf0c92a9197d4278c4207f358f8d9b8",
+            "symbols": [],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 1,
+            "last_modified_step": 1
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_26f897e1b9db",
+            "path": "cfg.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "060aad8e13133a1a15cd3c9f90304c28d36747421a26fc295092885c8f67df4a",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646414.027427,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "read_c20f2e69c056",
+            "path": "cfg.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "060aad8e13133a1a15cd3c9f90304c28d36747421a26fc295092885c8f67df4a",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646414.027609,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_0054d158b0a2",
+            "path": "cfg.py",
+            "operation": "edit",
+            "state": "applied",
+            "selection_reason": "edit",
+            "read_before_edit": true,
+            "read_sha256": "060aad8e13133a1a15cd3c9f90304c28d36747421a26fc295092885c8f67df4a",
+            "pre_apply_sha256": "060aad8e13133a1a15cd3c9f90304c28d36747421a26fc295092885c8f67df4a",
+            "post_apply_sha256": "fd57ec254a47d665629fb484331192850cf0c92a9197d4278c4207f358f8d9b8",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 1,
+            "ts": 1785646414.027735,
+            "prior_existed": true,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "cfg.py": {
+            "path": "cfg.py",
+            "sha256": "fd57ec254a47d665629fb484331192850cf0c92a9197d4278c4207f358f8d9b8",
+            "size": 11,
+            "revision": 1,
+            "scope": "full",
+            "step": 1,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read cfg.py (12 bytes) sha=060aad8e1313 rev=0"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "last-known-green checkpoint ckpt_69b07c6d4a053c42"
+        },
+        {
+          "event": "agent_note",
+          "text": "learned 1 coding technique(s) for future runs"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "A17",
+      "family": "rollback",
+      "ok": true,
+      "expect": "rollback",
+      "violations": [],
+      "detail": {
+        "special": true,
+        "rollback": {
+          "mutation_id": "mut_12693b9f7c6b",
+          "path": "r.py",
+          "operation": "full_rewrite",
+          "state": "rolled_back",
+          "selection_reason": "authorized_edit",
+          "read_before_edit": true,
+          "read_sha256": "b3dc49ebfa42611066e5b80c6ce65f243c126573a4279de265993c16d8ae3e98",
+          "pre_apply_sha256": "b3dc49ebfa42611066e5b80c6ce65f243c126573a4279de265993c16d8ae3e98",
+          "post_apply_sha256": "dbb6375b062e63a82f2a0cdf55de621fc207c074d237308884e3ae32db3fbb59",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": true,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646414.168384,
+          "prior_existed": true,
+          "created_path": ""
+        }
+      },
+      "final_tree_hash": "6b7a51efc08be3e8762cb59a52c2071503ba41222bc3e2e756ab6d343dd8c120",
+      "gateway": {
+        "mutation_gateway": {
+          "schema": "lolm.mutation_gateway.v1",
+          "primary_language": "",
+          "selection": [],
+          "map": {
+            "r.py": {
+              "path": "r.py",
+              "language": "python",
+              "sha256": "b3dc49ebfa42611066e5b80c6ce65f243c126573a4279de265993c16d8ae3e98",
+              "symbols": [],
+              "imports": [],
+              "references": [],
+              "test_links": [],
+              "revision": 1,
+              "last_read_step": 0,
+              "last_modified_step": 0
+            }
+          },
+          "mutations": [
+            {
+              "mutation_id": "read_be96b9edd2e7",
+              "path": "r.py",
+              "operation": "read",
+              "state": "read",
+              "selection_reason": "",
+              "read_before_edit": true,
+              "read_sha256": "b3dc49ebfa42611066e5b80c6ce65f243c126573a4279de265993c16d8ae3e98",
+              "pre_apply_sha256": "",
+              "post_apply_sha256": "",
+              "compare_and_swap_passed": false,
+              "accepted": false,
+              "rollback": false,
+              "rejection_reason": "",
+              "verification": {},
+              "selected_symbols": [],
+              "step": 0,
+              "ts": 1785646414.168284,
+              "prior_existed": false,
+              "created_path": ""
+            },
+            {
+              "mutation_id": "mut_12693b9f7c6b",
+              "path": "r.py",
+              "operation": "full_rewrite",
+              "state": "rolled_back",
+              "selection_reason": "authorized_edit",
+              "read_before_edit": true,
+              "read_sha256": "b3dc49ebfa42611066e5b80c6ce65f243c126573a4279de265993c16d8ae3e98",
+              "pre_apply_sha256": "b3dc49ebfa42611066e5b80c6ce65f243c126573a4279de265993c16d8ae3e98",
+              "post_apply_sha256": "dbb6375b062e63a82f2a0cdf55de621fc207c074d237308884e3ae32db3fbb59",
+              "compare_and_swap_passed": true,
+              "accepted": false,
+              "rollback": true,
+              "rejection_reason": "",
+              "verification": {},
+              "selected_symbols": [],
+              "step": 0,
+              "ts": 1785646414.168384,
+              "prior_existed": true,
+              "created_path": ""
+            }
+          ],
+          "reads": {
+            "r.py": {
+              "path": "r.py",
+              "sha256": "dbb6375b062e63a82f2a0cdf55de621fc207c074d237308884e3ae32db3fbb59",
+              "size": 5,
+              "revision": 1,
+              "scope": "full",
+              "step": 0,
+              "symbols": [],
+              "line_start": 0,
+              "line_end": 0
+            }
+          }
+        }
+      },
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac"
+    },
+    {
+      "id": "A18",
+      "family": "rollback",
+      "ok": true,
+      "expect": "rollback",
+      "violations": [],
+      "detail": {
+        "special": true
+      },
+      "final_tree_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "gateway": {
+        "mutation_gateway": {
+          "schema": "lolm.mutation_gateway.v1",
+          "primary_language": "",
+          "selection": [],
+          "map": {
+            "new.py": {
+              "path": "new.py",
+              "language": "python",
+              "sha256": "cc42155088fca5730758db72b2a5bca33112a941dfaa2d43098ec422ce4ea213",
+              "symbols": [],
+              "imports": [],
+              "references": [
+                "print"
+              ],
+              "test_links": [],
+              "revision": 1,
+              "last_read_step": 0,
+              "last_modified_step": 0
+            }
+          },
+          "mutations": [
+            {
+              "mutation_id": "mut_ca2f8ace862d",
+              "path": "new.py",
+              "operation": "create",
+              "state": "rolled_back",
+              "selection_reason": "task_authorized_create",
+              "read_before_edit": true,
+              "read_sha256": "",
+              "pre_apply_sha256": "",
+              "post_apply_sha256": "cc42155088fca5730758db72b2a5bca33112a941dfaa2d43098ec422ce4ea213",
+              "compare_and_swap_passed": true,
+              "accepted": false,
+              "rollback": true,
+              "rejection_reason": "",
+              "verification": {},
+              "selected_symbols": [],
+              "step": 0,
+              "ts": 1785646414.1695051,
+              "prior_existed": false,
+              "created_path": "new.py"
+            }
+          ],
+          "reads": {
+            "new.py": {
+              "path": "new.py",
+              "sha256": "cc42155088fca5730758db72b2a5bca33112a941dfaa2d43098ec422ce4ea213",
+              "size": 9,
+              "revision": 1,
+              "scope": "full",
+              "step": 0,
+              "symbols": [],
+              "line_start": 0,
+              "line_end": 0
+            }
+          }
+        }
+      },
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac"
+    },
+    {
+      "id": "A19",
+      "family": "new_file_auth",
+      "ok": true,
+      "expect": "reject_create",
+      "violations": [],
+      "detail": {
+        "special": true,
+        "rejected": "create rejected: Python product file main.py on HTML-primary task"
+      },
+      "final_tree_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "gateway": {
+        "mutation_gateway": {
+          "schema": "lolm.mutation_gateway.v1",
+          "primary_language": "html",
+          "selection": [],
+          "map": {},
+          "mutations": [],
+          "reads": {}
+        }
+      },
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac"
+    },
+    {
+      "id": "A20",
+      "family": "new_file_auth",
+      "description": "Authorized create of solution.py",
+      "expect": "pass",
+      "ok": true,
+      "violations": [],
+      "notes": [],
+      "elapsed_s": 0.156,
+      "branch_sha": "eedd057f89b590bf502edee81efd1cb83950c3ac",
+      "tree_before": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "tree_after": "dc8e1504764cbf6ceb8fad44d7fde4e06bf3b61bbbcb0c5fb51a6eebf5b9a962",
+      "files_after": [
+        "solution.py"
+      ],
+      "final_tree": {
+        "solution.py": "def f():\n    return 42\nprint(f())\n"
+      },
+      "seed_tree": {},
+      "selection": [],
+      "mutations": [
+        {
+          "mutation_id": "mut_0ea3b583f110",
+          "path": "solution.py",
+          "operation": "create",
+          "state": "applied",
+          "selection_reason": "file_write",
+          "read_before_edit": true,
+          "read_sha256": "",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "3d4db135f0a04182e6c9ea3384cc085dc326c8bc5f2bc54b481f7ed729ce2377",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785646414.192886,
+          "prior_existed": false,
+          "created_path": "solution.py"
+        }
+      ],
+      "receipt_verdict": "shipped",
+      "receipt_ok": true,
+      "receipt_sha": "23bb0a98f358c0ba46486505f38d4cb0173043a11de827b921a639cde4a318c2",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [],
+        "map": {
+          "solution.py": {
+            "path": "solution.py",
+            "language": "python",
+            "sha256": "3d4db135f0a04182e6c9ea3384cc085dc326c8bc5f2bc54b481f7ed729ce2377",
+            "symbols": [
+              "f"
+            ],
+            "imports": [],
+            "references": [
+              "f",
+              "print"
+            ],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "mut_0ea3b583f110",
+            "path": "solution.py",
+            "operation": "create",
+            "state": "applied",
+            "selection_reason": "file_write",
+            "read_before_edit": true,
+            "read_sha256": "",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "3d4db135f0a04182e6c9ea3384cc085dc326c8bc5f2bc54b481f7ed729ce2377",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785646414.192886,
+            "prior_existed": false,
+            "created_path": "solution.py"
+          }
+        ],
+        "reads": {
+          "solution.py": {
+            "path": "solution.py",
+            "sha256": "3d4db135f0a04182e6c9ea3384cc085dc326c8bc5f2bc54b481f7ed729ce2377",
+            "size": 34,
+            "revision": 1,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['solution.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "file_changed",
+          "text": ""
+        },
+        {
+          "event": "agent_note",
+          "text": "last-known-green checkpoint ckpt_071933e199e239fd"
+        },
+        {
+          "event": "agent_note",
+          "text": "learned 1 coding technique(s) for future runs"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    }
+  ],
+  "helper_path_audit": {
+    "active_repo_must_use_gateway": true,
+    "known_bypass_surfaces": [
+      "local_ui/agent_operator.py:write_file (operator loop \u2014 not CodeAgent)",
+      "local_ui/sandbox_routes.py:write_file (HTTP sandbox API)",
+      "local_ui/code_agent.py scratch Sandbox scoring (isolated candidates)",
+      "lolm/reliability LGTS materialize (explicit restore path)",
+      "resume_checkpoint writes (restore, not agent proposal)"
+    ],
+    "code_agent_product_path": "mutation_gateway required for FILE/EDIT/auto-strip/repair-race"
+  },
+  "metrics": {
+    "blind_existing_file_mutations": 0,
+    "stale_applied": 0,
+    "receipt_fs_mismatch": 0
+  }
+}
