@@ -1,0 +1,55 @@
+name: ecc9-independent-invariants
+
+on:
+  pull_request:
+    paths:
+      - 'tests/test_grok_grand_audit_independent_ecc9.py'
+      - '.github/workflows/ecc9-independent-invariants.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ecc9-independent-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  independent-adversarial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install focused dependencies
+        run: |
+          python -m pip install -U pip
+          pip install pytest cryptography pynacl pydantic fastapi
+      - name: Run independent invariants
+        env:
+          PYTHONPATH: .
+        run: python -m pytest tests/test_grok_grand_audit_independent_ecc9.py -vv -ra --tb=short
+
+  focused-claimed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install focused dependencies
+        run: |
+          python -m pip install -U pip
+          pip install pytest cryptography pynacl pydantic fastapi
+      - name: Reproduce claimed focused suite
+        env:
+          PYTHONPATH: .
+        run: >-
+          python -m pytest
+          tests/test_code_loop_guard.py
+          tests/test_reliability_architecture.py
+          tests/test_code_agent_context.py
+          -q -ra --durations=20
