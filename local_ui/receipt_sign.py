@@ -89,6 +89,7 @@ def init(root: Path) -> None:
 
 
 def load_keys() -> Dict[str, SigningKey]:
+    """Load private signing keys (server-side only). Never give these to runners."""
     global _EPHEMERAL
     configured = _parse_keys(os.environ.get("LOLM_RECEIPT_SIGNING_KEYS", ""))
     if configured:
@@ -102,6 +103,75 @@ def load_keys() -> Dict[str, SigningKey]:
     if _EPHEMERAL is None:
         _EPHEMERAL = {"ephemeral-test": SigningKey.generate()}
     return _EPHEMERAL
+
+
+def _parse_verify_keys(raw: str) -> Dict[str, VerifyKey]:
+    """Parse public verification keys: ``kid:base64url_public_key[,kid2:...]``."""
+    out: Dict[str, VerifyKey] = {}
+    for part in (raw or "").split(","):
+        if ":" not in part:
+            continue
+        kid, pub = part.split(":", 1)
+        kid, pub = kid.strip(), pub.strip()
+        if not kid or not pub:
+            continue
+        try:
+            raw_bytes = _unb64(pub)
+            if len(raw_bytes) == 32:
+                out[kid] = VerifyKey(raw_bytes)
+                continue
+        except Exception:
+            pass
+        try:
+            raw_bytes = bytes.fromhex(pub)
+            if len(raw_bytes) == 32:
+                out[kid] = VerifyKey(raw_bytes)
+        except Exception:
+            continue
+    return out
+
+
+def load_verify_keys() -> Dict[str, VerifyKey]:
+    """Load trusted public verification keys for runners / benchmark clients.
+
+    Preferred env: ``LOLM_RECEIPT_VERIFY_KEYS`` (public only).
+
+    Does **not** load private signing material. Callers that need local unit-test
+    verification against ephemeral signing keys should pass verify_keys explicitly
+    or set LOLM_ALLOW_UNTRUSTED_LOCAL_RECEIPTS on the adapter, not here.
+    """
+    configured = _parse_verify_keys(os.environ.get("LOLM_RECEIPT_VERIFY_KEYS", ""))
+    if configured:
+        return configured
+    # Optional file of public keys (never secrets)
+    path = os.environ.get("LOLM_RECEIPT_VERIFY_KEYS_FILE", "").strip()
+    if path and Path(path).is_file():
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+            # formats: {"keys": {"kid": "b64..."}} or list of {key_id, public_key}
+            if isinstance(data.get("keys"), dict):
+                parts = [f"{k}:{v}" for k, v in data["keys"].items()]
+                return _parse_verify_keys(",".join(parts))
+            if isinstance(data.get("keys"), list):
+                parts = [
+                    f"{row.get('key_id')}:{row.get('public_key')}"
+                    for row in data["keys"]
+                    if row.get("key_id") and row.get("public_key")
+                ]
+                return _parse_verify_keys(",".join(parts))
+        except Exception:
+            pass
+    return {}
+
+
+def verify_keys_from_signing(keys: Optional[Dict[str, SigningKey]] = None) -> Dict[str, VerifyKey]:
+    """Derive public VerifyKeys from private SigningKeys (local tests only)."""
+    sks = keys if keys is not None else load_keys()
+    return {kid: sk.verify_key for kid, sk in sks.items()}
+
+
+def public_key_sha256(verify_key: VerifyKey) -> str:
+    return hashlib.sha256(bytes(verify_key)).hexdigest()
 
 
 def active_kid(keys: Optional[Dict[str, SigningKey]] = None) -> Optional[str]:
@@ -168,8 +238,17 @@ def sign_code_receipt(core: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def verify_code_receipt(receipt: Dict[str, Any],
-                        keys: Optional[Dict[str, SigningKey]] = None) -> Dict[str, Any]:
+def verify_code_receipt(
+    receipt: Dict[str, Any],
+    keys: Optional[Dict[str, SigningKey]] = None,
+    *,
+    verify_keys: Optional[Dict[str, VerifyKey]] = None,
+) -> Dict[str, Any]:
+    """Verify receipt hash and Ed25519 signature.
+
+    Prefer ``verify_keys`` (public only) for runners. Private ``keys`` are accepted
+    for backward-compatible unit tests that still hold SigningKey objects.
+    """
     row = dict(receipt or {})
     core = _signed_core(row)
     blob = canonical_bytes(core)
@@ -180,19 +259,41 @@ def verify_code_receipt(receipt: Dict[str, Any],
     kid = str(signature.get("key_id") or signature.get("kid") or "")
     signature_valid: Optional[bool] = False
     reason = "missing_or_unsupported_signature"
-    available = keys if keys is not None else load_keys()
+    pub_key_fp = ""
+
+    # Resolve verification material: explicit verify_keys > SigningKey map > env public
+    vk_map: Dict[str, VerifyKey] = {}
+    if verify_keys is not None:
+        vk_map = dict(verify_keys)
+    elif keys is not None:
+        vk_map = verify_keys_from_signing(keys)
+    else:
+        vk_map = load_verify_keys()
+        # Local unit tests / same-process: fall back to derive from signing keys
+        # only when no public trust set is configured.
+        if not vk_map:
+            try:
+                vk_map = verify_keys_from_signing(load_keys())
+            except Exception:
+                vk_map = {}
+
     if signature.get("alg") == "Ed25519" and signature.get("sig"):
-        if kid not in available:
+        if kid not in vk_map:
             signature_valid = None
             reason = "unknown_key"
         else:
             try:
-                available[kid].verify_key.verify(blob, _unb64(str(signature["sig"])))
+                vk_map[kid].verify(blob, _unb64(str(signature["sig"])))
                 signature_valid = True
                 reason = "ok"
+                pub_key_fp = public_key_sha256(vk_map[kid])
             except (BadSignatureError, ValueError):
                 signature_valid = False
                 reason = "bad_signature"
+                try:
+                    pub_key_fp = public_key_sha256(vk_map[kid])
+                except Exception:
+                    pub_key_fp = ""
     verification = row.get("verification") or {}
     signed_at = row.get("signed_at")
     timestamp_valid = (
@@ -231,9 +332,11 @@ def verify_code_receipt(receipt: Dict[str, Any],
         "signature_valid": signature_valid,
         "signing_key": kid or None,
         "signature_reason": reason,
+        "public_key_sha256": pub_key_fp,
         "timestamp_valid": timestamp_valid,
         "verified_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "integrity": {"verified": verified, "method": "sha256+Ed25519-v2"},
+        "trusted_key_ids": sorted(vk_map.keys()),
     }
 
 
@@ -243,7 +346,12 @@ def public_key_status() -> Dict[str, Any]:
         "schema": "lolm.receipt.keys.v1",
         "active_key_id": active_kid(keys),
         "keys": [
-            {"key_id": kid, "alg": "Ed25519", "public_key": _b64(bytes(key.verify_key))}
+            {
+                "key_id": kid,
+                "alg": "Ed25519",
+                "public_key": _b64(bytes(key.verify_key)),
+                "public_key_sha256": public_key_sha256(key.verify_key),
+            }
             for kid, key in sorted(keys.items())
         ],
     }

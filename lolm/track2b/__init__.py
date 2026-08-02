@@ -9,6 +9,7 @@ Transports are intentionally non-interchangeable experiments:
 Results must retain ``transport`` and never be pooled as one experiment.
 """
 
+from lolm.track2b.campaign_manifest import Track2BCampaignManifest, manifest_from_env
 from lolm.track2b.classify import RunClass, classify_run
 from lolm.track2b.fixtures import (
     MAX_FIXTURE_BYTES,
@@ -26,6 +27,7 @@ from lolm.track2b.workspace import (
 
 __all__ = [
     "RunClass",
+    "Track2BCampaignManifest",
     "MAX_FIXTURE_BYTES",
     "build_resume_package",
     "fixture_hash",
@@ -37,4 +39,5 @@ __all__ = [
     "tree_hash",
     "trees_equal",
     "classify_run",
+    "manifest_from_env",
 ]

@@ -51,6 +51,7 @@ from local_ui.sandbox import Sandbox
 from lolm.track2b.classify import RunClass
 from lolm.track2b.openai_adapter import make_openai_chat
 from lolm.track2b.redact import redact_secrets
+from lolm.track2b.campaign_manifest import load_manifest, manifest_from_env
 from lolm.track2b.sse_adapter import LolmCodeSSEAgentAdapter, SSEAdapterConfig
 from lolm.track2b.workspace import tree_hash as _workspace_tree_hash
 from scripts.repo_gauntlet_phase_a import (
@@ -548,6 +549,11 @@ def main() -> int:
     )
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--max-steps", type=int, default=28)
+    ap.add_argument(
+        "--campaign-manifest",
+        default=os.environ.get("LOLM_TRACK2B_MANIFEST", ""),
+        help="JSON campaign pin (server SHA, receipt key id, public key fingerprint)",
+    )
     args = ap.parse_args()
 
     tasks = build_live_qualification_tasks()
@@ -588,10 +594,24 @@ def main() -> int:
     elif args.live and transport == "lolm-code-sse":
         base = os.environ.get("LOLM_LIVE_BASE_URL", "")
         key = os.environ.get("LOLM_LIVE_API_KEY") or os.environ.get("QIRA_API_KEY") or ""
-        expected = (
-            os.environ.get("LOLM_EXPECTED_SERVER_SHA")
-            or "eb0412817429194f4fe85deb4d9f1de291076d16"
-        )
+        if args.campaign_manifest:
+            manifest = load_manifest(args.campaign_manifest)
+        else:
+            manifest = manifest_from_env()
+        if not manifest.expected_server_sha:
+            manifest.expected_server_sha = (
+                os.environ.get("LOLM_EXPECTED_SERVER_SHA") or ""
+            )
+        man_errs = manifest.validate()
+        # Local smoke may omit key pins when untrusted flag is set
+        if man_errs and not manifest.allow_untrusted_local_receipts:
+            print("campaign manifest invalid:", man_errs)
+            print(
+                "Remote campaigns require LOLM_EXPECTED_SERVER_SHA, "
+                "LOLM_EXPECTED_RECEIPT_KEY_ID, LOLM_EXPECTED_RECEIPT_PUBLIC_KEY_SHA256, "
+                "and LOLM_RECEIPT_VERIFY_KEYS (public only — never share signing secrets)."
+            )
+            return 2
         if not (base and key):
             print("lolm-code-sse requires LOLM_LIVE_BASE_URL and LOLM_LIVE_API_KEY (or QIRA_API_KEY)")
             print("LOLM_LIVE_MODEL is not required — server reports model_id")
@@ -604,12 +624,37 @@ def main() -> int:
                 "(or LOLM_ALLOW_PRODUCTION_2B=1 only for explicit non-qual experiments)."
             )
             return 2
+        # Refuse private signing keys on the runner (trust-boundary)
+        if os.environ.get("LOLM_RECEIPT_SIGNING_KEYS", "").strip():
+            if not manifest.allow_untrusted_local_receipts:
+                print(
+                    "Refusing LOLM_RECEIPT_SIGNING_KEYS on the benchmark runner. "
+                    "Use LOLM_RECEIPT_VERIFY_KEYS (public keys only). "
+                    "Set LOLM_ALLOW_UNTRUSTED_LOCAL_RECEIPTS=1 only for local smoke."
+                )
+                return 2
+        if (
+            not manifest.allow_untrusted_local_receipts
+            and not os.environ.get("LOLM_RECEIPT_VERIFY_KEYS", "").strip()
+            and not os.environ.get("LOLM_RECEIPT_VERIFY_KEYS_FILE", "").strip()
+        ):
+            print(
+                "Remote lolm-code-sse requires LOLM_RECEIPT_VERIFY_KEYS "
+                "(trusted public Ed25519 keys). Private signing keys stay on staging."
+            )
+            return 2
         secrets = [key]
         sse_adapter = LolmCodeSSEAgentAdapter(SSEAdapterConfig(
             base_url=base,
             api_key=key,
-            expected_server_sha=expected,
+            expected_server_sha=manifest.expected_server_sha,
             max_steps=args.max_steps,
+            require_trusted_signature=manifest.require_trusted_signature,
+            allow_untrusted_local_receipts=manifest.allow_untrusted_local_receipts,
+            expected_deployment_id=manifest.expected_deployment_id,
+            expected_receipt_key_id=manifest.expected_receipt_key_id,
+            expected_receipt_public_key_sha256=manifest.expected_receipt_public_key_sha256,
+            isolation_required=manifest.isolation_required,
         ))
 
     results: List[Dict[str, Any]] = []
@@ -693,6 +738,11 @@ def main() -> int:
         "transport": transport,
         "branch_sha": branch_sha,
         "expected_server_sha": os.environ.get("LOLM_EXPECTED_SERVER_SHA", ""),
+        "campaign_manifest": (
+            load_manifest(args.campaign_manifest).to_dict()
+            if args.campaign_manifest
+            else manifest_from_env().to_dict()
+        ) if args.live and transport == "lolm-code-sse" else None,
         "track2a_status": "passed",
         "track2b_status": "passed" if qualification_passed else "unproven",
         "aborted": aborted,
@@ -705,8 +755,10 @@ def main() -> int:
         "qualification_passed": qualification_passed,
         "note": (
             "Transports openai-chat and lolm-code-sse are distinct experiments. "
-            "Stub proves local harness only. SSE live requires SHA-pinned staging "
-            "with final_workspace. Adaptive routing disabled."
+            "Remote SSE requires trusted public verify keys only "
+            "(LOLM_RECEIPT_VERIFY_KEYS); private signing keys stay on staging. "
+            "Hash-only unknown-key acceptance requires "
+            "LOLM_ALLOW_UNTRUSTED_LOCAL_RECEIPTS=1. Adaptive routing disabled."
         ),
         "results": results,
         "adaptive_routing": "disabled",

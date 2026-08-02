@@ -27,6 +27,14 @@ class SSEAdapterConfig:
     idle_timeout_s: float = 180.0
     hard_timeout_s: float = 600.0
     connect_timeout_s: float = 30.0
+    # Remote competence campaigns must require cryptographic signature validity.
+    # Hash-only / unknown-key acceptance is local smoke only.
+    require_trusted_signature: bool = True
+    allow_untrusted_local_receipts: bool = False
+    expected_deployment_id: str = ""
+    expected_receipt_key_id: str = ""
+    expected_receipt_public_key_sha256: str = ""
+    isolation_required: str = ""  # e.g. "bwrap" for remote parity notes
 
 
 @dataclass
@@ -300,29 +308,73 @@ class LolmCodeSSEAgentAdapter:
             "receipt_signed": receipt_tree,
         }
 
-        # Require signed receipt integrity (hash + Ed25519)
+        # Require signed receipt integrity (hash + Ed25519 against trusted public keys)
         receipt_sig_ok = False
         receipt_hash_ok = False
         integrity_errs: List[str] = []
+        allow_untrusted = bool(self.config.allow_untrusted_local_receipts)
+        require_sig = bool(self.config.require_trusted_signature) and not allow_untrusted
+
         if saw_receipt and result.code_receipt:
             try:
-                from local_ui.receipt_sign import verify_code_receipt
-                vfy = verify_code_receipt(result.code_receipt)
+                from local_ui.receipt_sign import load_verify_keys, verify_code_receipt
+                # Remote/runner path: public keys only. Never load private signing keys here.
+                vk = load_verify_keys()
+                if allow_untrusted and not vk:
+                    # Local smoke: derive verify keys from process signing keys if present
+                    from local_ui.receipt_sign import verify_keys_from_signing
+                    try:
+                        vk = verify_keys_from_signing()
+                    except Exception:
+                        vk = {}
+                vfy = verify_code_receipt(result.code_receipt, verify_keys=vk)
                 receipt_hash_ok = bool(vfy.get("receipt_hash_match"))
                 sig = vfy.get("signature_valid")
+                reason = str(vfy.get("signature_reason") or "")
                 if sig is True:
                     receipt_sig_ok = True
-                elif sig is None and receipt_hash_ok and result.code_receipt.get("receipt_sha"):
-                    # Unknown public key but core hash binds fields
-                    receipt_sig_ok = True
+                elif sig is None:
+                    integrity_errs.append("receipt_unknown_signing_key")
+                    if allow_untrusted and receipt_hash_ok and result.code_receipt.get("receipt_sha"):
+                        # Explicit local smoke only — never for remote competence
+                        receipt_sig_ok = True
+                        integrity_errs = [
+                            e for e in integrity_errs if e != "receipt_unknown_signing_key"
+                        ]
+                        integrity_errs.append("local_untrusted_hash_only")
                 else:
                     integrity_errs.append("receipt_signature_invalid")
                 if not receipt_hash_ok:
                     integrity_errs.append("receipt_hash_mismatch")
+                # Pin expected key id / public key fingerprint when configured
+                kid = str(
+                    (result.code_receipt.get("signature") or {}).get("key_id")
+                    or result.code_receipt.get("signing_key")
+                    or ""
+                )
+                if self.config.expected_receipt_key_id:
+                    if kid != self.config.expected_receipt_key_id:
+                        integrity_errs.append("receipt_key_id_mismatch")
+                        receipt_sig_ok = False
+                if self.config.expected_receipt_public_key_sha256:
+                    fp = str(vfy.get("public_key_sha256") or "")
+                    if fp != self.config.expected_receipt_public_key_sha256:
+                        integrity_errs.append("receipt_public_key_mismatch")
+                        receipt_sig_ok = False
+                if require_sig and sig is not True:
+                    receipt_sig_ok = False
+                    if "receipt_unknown_signing_key" not in integrity_errs and sig is None:
+                        integrity_errs.append("receipt_unknown_signing_key")
+                    if "receipt_signature_invalid" not in integrity_errs and sig is False:
+                        integrity_errs.append("receipt_signature_invalid")
                 result.request_meta["receipt_verify"] = {
                     "receipt_hash_match": receipt_hash_ok,
                     "signature_valid": vfy.get("signature_valid"),
-                    "signature_reason": vfy.get("signature_reason"),
+                    "signature_reason": reason,
+                    "public_key_sha256": vfy.get("public_key_sha256"),
+                    "require_trusted_signature": require_sig,
+                    "allow_untrusted_local_receipts": allow_untrusted,
+                    "trusted_key_ids": vfy.get("trusted_key_ids"),
                 }
             except Exception as exc:
                 integrity_errs.append(f"receipt_verify_error:{type(exc).__name__}")
@@ -336,6 +388,11 @@ class LolmCodeSSEAgentAdapter:
         if receipt_tree and computed_hash and receipt_tree != computed_hash:
             integrity_errs.append("signed_receipt_tree_mismatch")
         integrity_errs.extend(fw_errs)
+        # local_untrusted_hash_only is a label, not a hard fail when flag is on
+        hard_errs = [
+            e for e in integrity_errs
+            if e != "local_untrusted_hash_only"
+        ]
 
         hash_ok = (
             bool(fw_declared)
@@ -344,7 +401,7 @@ class LolmCodeSSEAgentAdapter:
             and receipt_tree == computed_hash
             and receipt_hash_ok
             and receipt_sig_ok
-            and not integrity_errs
+            and not hard_errs
         )
         fw_errs = integrity_errs
 
@@ -374,6 +431,17 @@ class LolmCodeSSEAgentAdapter:
                 server_sha_ok = True
                 result.server_sha = blob.get("server_sha") or result.server_sha
 
+        if self.config.expected_deployment_id:
+            dep = (
+                result.deployment_id
+                or result.code_start.get("deployment_id")
+                or result.code_receipt.get("deployment_id")
+                or ""
+            )
+            if dep != self.config.expected_deployment_id:
+                hard_errs.append("deployment_id_mismatch")
+                hash_ok = False
+
         stream_complete = saw_done and saw_receipt and saw_fw and not timed_out
 
         cls, reasons = classify_run(
@@ -384,21 +452,27 @@ class LolmCodeSSEAgentAdapter:
             code_receipt=saw_receipt,
             final_workspace=saw_fw,
             server_sha_ok=server_sha_ok,
-            hash_agreement=hash_ok and not any(
-                e for e in fw_errs
-                if e not in ("signature_key_unknown_hash_only",)
-            ),
+            hash_agreement=hash_ok and not hard_errs,
             fixture_bound=fixture_bound,
             stream_complete=stream_complete,
             secret_leak=secret_leak,
             oracle_ok=None,  # filled by harness
             timed_out=timed_out,
         )
-        if fw_errs and cls == RunClass.ADMISSIBLE_PASS:
+        if hard_errs and cls not in (
+            RunClass.NOT_ADMITTED,
+            RunClass.TIMEOUT,
+            RunClass.INADMISSIBLE,
+        ):
             cls = RunClass.INADMISSIBLE
-            reasons = list(fw_errs)
+            reasons = list(hard_errs)
+        elif hard_errs and cls == RunClass.ADMISSIBLE_PASS:
+            cls = RunClass.INADMISSIBLE
+            reasons = list(hard_errs)
         result.run_class = cls.value
-        result.reasons = list(dict.fromkeys(list(reasons) + fw_errs))
+        result.reasons = list(dict.fromkeys(list(reasons) + hard_errs + [
+            e for e in fw_errs if e == "local_untrusted_hash_only"
+        ]))
         result.elapsed_s = round(time.time() - t0, 3)
         return self._redact_result(result)
 

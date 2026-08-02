@@ -240,12 +240,17 @@ def _start_server() -> Tuple[ThreadingHTTPServer, str]:
 
 
 def _adapter(base: str, **kw: Any) -> LolmCodeSSEAgentAdapter:
+    # Mock suite uses process-local ephemeral signing; explicit local-smoke flag.
+    allow = kw.pop("allow_untrusted_local_receipts", True)
+    require = kw.pop("require_trusted_signature", not allow)
     cfg = SSEAdapterConfig(
         base_url=base,
         api_key=API_KEY,
         expected_server_sha=EXPECTED_SHA,
         idle_timeout_s=float(kw.pop("idle_timeout_s", 1.2)),
         hard_timeout_s=float(kw.pop("hard_timeout_s", 8.0)),
+        allow_untrusted_local_receipts=allow,
+        require_trusted_signature=require,
         **kw,
     )
     return LolmCodeSSEAgentAdapter(cfg)

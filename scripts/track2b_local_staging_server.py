@@ -20,10 +20,11 @@ Chat backend:
   * default: weak stub (admission/infrastructure proof; competence expected fail)
   * LOLM_STAGING_CHAT=openai + OPENAI_* for real model turns through product path
 
-Receipt integrity:
-  Set LOLM_RECEIPT_SIGNING_KEYS / LOLM_RECEIPT_ACTIVE_KID in *both* server and
-  client processes so the Track 2B adapter can verify Ed25519 seals. Ephemeral
-  per-process keys make signatures unverifiable across processes.
+Receipt integrity (local smoke only):
+  Server holds LOLM_RECEIPT_SIGNING_KEYS (private).
+  Runner holds LOLM_RECEIPT_VERIFY_KEYS (public only).
+  For pure local smoke without key pin files, the runner may set
+  LOLM_ALLOW_UNTRUSTED_LOCAL_RECEIPTS=1 — never for remote competence campaigns.
 """
 
 from __future__ import annotations
