@@ -45,13 +45,14 @@ jobs:
               raise SystemExit(f"expected exactly one web-grounded start marker, got {text.count(start_marker)}")
           start = text.index(start_marker)
           end = text.index(end_marker, start)
-          replacement = '''        if grounded and profile != "social":
-              system, user = build_grounded_finalizer_messages(
-                  command=command,
-                  evidence_block=self._evidence_block("SOURCES", evidence),
-                  web_grounded=web_grounded,
-              )
-          '''
+          replacement = (
+              '        if grounded and profile != "social":\n'
+              '            system, user = build_grounded_finalizer_messages(\n'
+              '                command=command,\n'
+              '                evidence_block=self._evidence_block("SOURCES", evidence),\n'
+              '                web_grounded=web_grounded,\n'
+              '            )\n'
+          )
           text = text[:start] + replacement + text[end:]
           path.write_text(text, encoding="utf-8")
           PY
