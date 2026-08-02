@@ -20,7 +20,7 @@ KID="track2b-staging-2026-08-${SHORT}"
 ssh "$HOST" "sudo mkdir -p '$APP' && sudo chown ubuntu:ubuntu '$APP'"
 
 # Generate secrets ON the host so private material never lands in local shell history.
-ssh "$HOST" "python3 - <<'PY'
+ssh "$HOST" "/opt/apps/lolm/.venv/bin/python - <<'PY'
 import secrets, json, os, hashlib, base64
 from pathlib import Path
 app = Path('${APP}')
