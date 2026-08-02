@@ -355,9 +355,15 @@ def register_code_routes(app: Any, root: str,
                          usage_fn: Optional[Callable[..., Dict[str, Any]]] = None,
                          nfet_state_fn: Optional[Callable[[], Any]] = None) -> None:
     import os as _os_mod
-    # Staging Track 2B: raise rate limit when isolated staging key is configured
+    # Staging Track 2B: raise rate limit when isolated staging key is configured.
+    # LOLM_STAGING_RATE_PER_MIN overrides the floor (default 60 for real-model campaigns).
     if (_os_mod.environ.get("LOLM_STAGING_API_KEY") or "").strip():
-        runs_per_min = max(int(runs_per_min or 6), 30)
+        try:
+            staging_floor = int((_os_mod.environ.get("LOLM_STAGING_RATE_PER_MIN") or "60").strip() or "60")
+        except ValueError:
+            staging_floor = 60
+        staging_floor = max(30, min(staging_floor, 600))
+        runs_per_min = max(int(runs_per_min or 6), staging_floor)
     rate: Dict[str, List[float]] = {}
 
     def _ip(req: Request) -> str:

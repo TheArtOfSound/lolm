@@ -63,10 +63,13 @@ Environment=LOLM_SERVER_SHA=${SHA}
 Environment=LOLM_DEPLOYMENT_ID=${DEPLOY_ID}
 Environment=LOLM_ENVIRONMENT=track2b-staging
 Environment=LOLM_BUILD_TIME=${BUILD_TIME}
-Environment=LOLM_MODEL_ID=claude-opus-4-20250514
-Environment=LOLM_MODEL_PROVIDER=anthropic
-Environment=LOLM_BRAIN=claude
-Environment=DEMO_REASONER=claude
+Environment=LOLM_MODEL_ID=${STAGING_MODEL_ID:-llama-3.3-70b-versatile}
+Environment=LOLM_MODEL_PROVIDER=${STAGING_MODEL_PROVIDER:-groq}
+Environment=LOLM_BRAIN=${STAGING_BRAIN:-cloud}
+Environment=DEMO_REASONER=${STAGING_BRAIN:-cloud}
+Environment=GROQ_MODEL=${STAGING_MODEL_ID:-llama-3.3-70b-versatile}
+Environment=LOLM_STAGING_RATE_PER_MIN=${STAGING_RATE_PER_MIN:-120}
+Environment=LOLM_TRACK2B_STRICT_CHAT=1
 ExecStart=${APP}/.venv/bin/python local_ui/server_public_demo.py
 Restart=on-failure
 RestartSec=5
@@ -81,6 +84,49 @@ EOF
 
 # Ensure staging env exists (secrets provisioned separately)
 ssh "$HOST" "test -f '$APP/.staging.env' || { echo 'missing $APP/.staging.env — run provision_secrets.sh first'; exit 1; }"
+
+# Provider deps: anthropic optional; always ensure present for Claude path.
+# Staging shares /opt/apps/lolm/.venv (uv-managed) — install via uv, not pip.
+ssh "$HOST" 'export PATH="$HOME/.local/bin:$PATH"
+  if command -v uv >/dev/null; then
+    uv pip install --python /opt/apps/lolm/.venv/bin/python "anthropic>=0.40.0" >/tmp/track2b-uv-anthropic.log 2>&1 || true
+  fi
+  /opt/apps/lolm/.venv/bin/python -c "import anthropic; print(anthropic.__version__)" 2>/dev/null || echo "anthropic not installed (ok if using groq/direct)"
+'
+
+# Sync approved provider keys from production demo env into staging secrets
+# without printing values. Prefer GROQ (validated working) over invalid Anthropic.
+ssh "$HOST" "python3 - <<'PY'
+from pathlib import Path
+demo = Path('/opt/apps/lolm/.demo.env')
+stg = Path('${APP}/.staging.env')
+if not demo.is_file() or not stg.is_file():
+    raise SystemExit(0)
+def parse(p):
+    out = {}
+    for line in p.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        k, v = line.split('=', 1)
+        out[k.strip()] = v.strip().strip('\"').strip(\"'\")
+    return out
+d, s = parse(demo), parse(stg)
+# Copy only known provider credential names if staging lacks a working set
+for k in ('GROQ_API_KEY', 'OPENROUTER_API_KEY', 'GEMINI_API_KEY'):
+    if d.get(k) and not s.get(k):
+        s[k] = d[k]
+# Track 2B fixed-model campaign currently pins groq — do not force broken Anthropic.
+# Keep ANTHROPIC only if already present; operator may rotate later.
+# Ensure rate/brain identity helpers are non-secret defaults in env file when missing.
+s.setdefault('LOLM_STAGING_RATE_PER_MIN', '${STAGING_RATE_PER_MIN:-120}')
+# Drop empty keys
+lines = [f'{k}={v}' for k, v in sorted(s.items()) if v]
+stg.write_text('\\n'.join(lines) + '\\n')
+print('staging.env provider keys synced (names only):',
+      sorted(k for k in s if k.endswith('_KEY') or k.endswith('_SECRET')))
+PY"
+
 ssh "$HOST" "sudo systemctl daemon-reload && sudo systemctl enable '${SVC}' && sudo systemctl restart '${SVC}'"
 
 # Nginx location for /api/track2b/ → staging backend /api/demo/

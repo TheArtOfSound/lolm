@@ -22,7 +22,7 @@ import threading
 import time
 from pathlib import Path
 
-from typing import Dict                          # noqa: E402  (module-level for FastAPI/pydantic
+from typing import Dict, Optional                 # noqa: E402  (module-level for FastAPI/pydantic
 from fastapi import Request                       # noqa: E402   to resolve string annotations under
 from fastapi.responses import JSONResponse        # noqa: E402   `from __future__ import annotations`)
 
@@ -70,10 +70,16 @@ FRONTIER = WorkersAIReasonerLoop(state_fn=lambda: STATE)
 # (Named GEN to avoid the CloudBrain memory `BRAIN` below — they are different things:
 #  GEN generates text; BRAIN is shared persistent memory.)
 from local_ui.local_brain import LocalServerReasonerLoop, BestBrain, sovereign
-from local_ui.claude_reasoner import ClaudeReasonerLoop
+from local_ui.claude_reasoner import ClaudeReasonerLoop, DEFAULT_CLAUDE_MODEL
 from local_ui.direct_providers import DirectProviderLoop
 LOCAL = LocalServerReasonerLoop(state_fn=lambda: STATE)
-CLAUDE = ClaudeReasonerLoop(state_fn=lambda: STATE)   # claude-opus-4-8 — the frontier voice
+# Pin Claude model from campaign/staging identity when set (Track 2B fixed-model).
+_CLAUDE_MODEL = (
+    os.environ.get("LOLM_CLAUDE_MODEL")
+    or os.environ.get("LOLM_MODEL_ID")
+    or DEFAULT_CLAUDE_MODEL
+).strip()
+CLAUDE = ClaudeReasonerLoop(state_fn=lambda: STATE, model=_CLAUDE_MODEL)
 # DIRECT BYOK: the user's OWN Groq/Cerebras/OpenAI/Together/OpenRouter key,
 # called straight from the origin — full power with zero gateway dependency.
 DIRECT = DirectProviderLoop(state_fn=lambda: STATE)
@@ -336,7 +342,12 @@ def _operator_chat(messages, max_new_tokens=640, purpose="answer"):
     purpose="utility" is the cost tier for background/mechanical turns (life ticks
     every 20 min, memory extraction, planner JSON) — it SKIPS the user's paid
     Claude key and uses local/cascade, unless LOLM_BRAIN=claude pins it. Quality-
-    bearing turns (code, visual builds, the strict verifier) stay purpose="answer"."""
+    bearing turns (code, visual builds, the strict verifier) stay purpose="answer".
+
+    Track 2B staging (and any LOLM_BRAIN=claude pin) must NOT silently fall through
+    to the unloaded in-process local model: that produced false "No model loaded"
+    agent failures while claiming a remote frontier model_id on receipts.
+    """
     msgs = [ChatMessage(role=m["role"], content=m["content"]) for m in messages]
     kwargs = dict(messages=msgs, max_new_tokens=max_new_tokens, temperature=0.3,
                   top_p=0.9, use_graft=False)
@@ -355,16 +366,34 @@ def _operator_chat(messages, max_new_tokens=640, purpose="answer"):
     utility = (purpose == "utility"
                and os.environ.get("LOLM_BRAIN", "").lower() != "claude")
     brain = GEN.fallback if (utility and GEN._claude_on()) else GEN
+    strict_remote = (
+        os.environ.get("LOLM_ENVIRONMENT", "").strip() == "track2b-staging"
+        or os.environ.get("LOLM_BRAIN", "").lower().strip() == "claude"
+        or os.environ.get("LOLM_TRACK2B_STRICT_CHAT", "").strip() in ("1", "true", "yes")
+    )
+    last_err: Optional[BaseException] = None
     # Prefer the best brain (local sovereign model first, else cloud); fall back to
     # the tiny in-process model on any runtime failure (quota/502/timeout) so the
     # operator keeps planning instead of dying — the same resilience the agent loop has.
+    # Exception: Track 2B staging / pinned Claude — surface the real remote failure.
     if brain.available():
         try:
             t = _drive(brain)
             if t.strip():
                 return t
-        except Exception:
-            pass
+            last_err = RuntimeError("frontier brain returned empty text")
+        except Exception as exc:
+            last_err = exc
+            if not strict_remote:
+                pass
+            else:
+                raise RuntimeError(f"model failed: {exc}") from exc
+    if strict_remote:
+        detail = f": {last_err}" if last_err else ""
+        raise RuntimeError(
+            "model failed: no remote frontier response available for Track 2B "
+            f"staging (local in-process fallback disabled){detail}"
+        )
     return _drive(generation_loop)
 
 
