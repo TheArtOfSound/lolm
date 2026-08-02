@@ -70,6 +70,7 @@ from lolm.reliability.retrieval_bankruptcy import RetrievalBankruptcy
 from lolm.reliability.confidence import ConfidenceBundle, action_certainty_label
 from lolm.reliability.runtime_manifest import RuntimeManifest, build_runtime_manifest
 from lolm.reliability.progress_budget import EvidenceProgressBudget
+from lolm.reliability.evidence import coerce_exit_code, html_verdict_ok, hash_tree
 
 __all__ = [
     "CompiledContract",
@@ -104,4 +105,7 @@ __all__ = [
     "RuntimeManifest",
     "build_runtime_manifest",
     "EvidenceProgressBudget",
+    "coerce_exit_code",
+    "html_verdict_ok",
+    "hash_tree",
 ]

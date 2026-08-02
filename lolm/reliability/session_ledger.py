@@ -50,6 +50,24 @@ def default_ledger_path() -> Path:
     return Path(base)
 
 
+def sanitize_session_id(raw: str) -> str:
+    """Opaque filesystem-safe session id — no path traversal.
+
+    Accepts only [A-Za-z0-9_-]; anything else is hashed to sess_<sha16>.
+    """
+    s = (raw or "").strip()
+    if not s:
+        return f"sess_{uuid.uuid4().hex[:12]}"
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", s) and ".." not in s and "/" not in s and "\\" not in s:
+        # Still reject path-like stems
+        if s in (".", "..") or s.startswith("."):
+            pass
+        else:
+            return s
+    import hashlib
+    return "sess_" + hashlib.sha256(s.encode("utf-8")).hexdigest()[:16]
+
+
 @dataclass
 class SessionPointers:
     session_id: str
@@ -69,6 +87,14 @@ class SessionPointers:
     owner: str = ""
     updated_ts: float = 0.0
     history: List[Dict[str, Any]] = field(default_factory=list)
+    # Genuine resume transport (not just task text)
+    resume_token: str = ""
+    workspace_snapshot: Dict[str, str] = field(default_factory=dict)  # path -> content
+    reliability_snapshot: Dict[str, Any] = field(default_factory=dict)
+    failure_ledger: Dict[str, Any] = field(default_factory=dict)
+    contract_snapshot: Dict[str, Any] = field(default_factory=dict)
+    checkpoint_payload: Dict[str, Any] = field(default_factory=dict)
+    event_cursor: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -91,16 +117,29 @@ class SessionIntentLedger:
         conversation_id: str = "",
     ) -> None:
         self.root = Path(root) if root else default_ledger_path()
+        self.root = self.root.resolve()
         self.root.mkdir(parents=True, exist_ok=True)
-        sid = (session_id or "").strip() or f"sess_{uuid.uuid4().hex[:12]}"
+        sid = sanitize_session_id(session_id)
         self.pointers = SessionPointers(
             session_id=sid,
             owner=owner,
             conversation_id=conversation_id,
             updated_ts=time.time(),
         )
-        self._path = self.root / f"{sid}.json"
+        self._path = self._safe_path(sid)
         self.load()
+
+    def _safe_path(self, sid: str) -> Path:
+        """Ensure ledger file stays under root (no traversal)."""
+        sid = sanitize_session_id(sid)
+        path = (self.root / f"{sid}.json").resolve()
+        if self.root not in path.parents and path.parent != self.root:
+            # Should never happen after sanitize; force hash name
+            sid = sanitize_session_id("unsafe:" + sid)
+            path = (self.root / f"{sid}.json").resolve()
+        if self.root not in path.parents and path.parent != self.root:
+            raise ValueError("session path escapes ledger root")
+        return path
 
     @property
     def session_id(self) -> str:
@@ -142,6 +181,13 @@ class SessionIntentLedger:
         artifact_ids: Optional[Sequence[str]] = None,
         checkpoint_id: str = "",
         failed: bool = False,
+        workspace_snapshot: Optional[Dict[str, str]] = None,
+        reliability_snapshot: Optional[Dict[str, Any]] = None,
+        failure_ledger: Optional[Dict[str, Any]] = None,
+        contract_snapshot: Optional[Dict[str, Any]] = None,
+        checkpoint_payload: Optional[Dict[str, Any]] = None,
+        event_cursor: int = 0,
+        resume_token: str = "",
     ) -> None:
         self.pointers.last_code_run_id = run_id
         self.pointers.last_run_task = task
@@ -155,12 +201,61 @@ class SessionIntentLedger:
             self.pointers.artifact_ids = self.pointers.artifact_ids[-20:]
         if checkpoint_id:
             self.pointers.last_checkpoint_id = checkpoint_id
+        # Resume transport package
+        if workspace_snapshot is not None:
+            # Cap size to keep ledger portable
+            capped: Dict[str, str] = {}
+            total = 0
+            for p, c in list(workspace_snapshot.items())[:40]:
+                body = c if isinstance(c, str) else str(c)
+                if total + len(body) > 1_500_000:
+                    break
+                capped[p] = body
+                total += len(body)
+            self.pointers.workspace_snapshot = capped
+        if reliability_snapshot is not None:
+            self.pointers.reliability_snapshot = dict(reliability_snapshot)
+        if failure_ledger is not None:
+            self.pointers.failure_ledger = dict(failure_ledger)
+        if contract_snapshot is not None:
+            self.pointers.contract_snapshot = dict(contract_snapshot)
+        if checkpoint_payload is not None:
+            self.pointers.checkpoint_payload = dict(checkpoint_payload)
+        self.pointers.event_cursor = int(event_cursor or 0)
+        if resume_token:
+            self.pointers.resume_token = resume_token
+        elif run_id and checkpoint_id:
+            self.pointers.resume_token = f"resume:{run_id}:{checkpoint_id}"
         self.pointers.history.append({
             "kind": "code_run", "run_id": run_id, "task": task[:300],
             "status": status, "ts": time.time(),
+            "resume_token": self.pointers.resume_token,
+            "checkpoint_id": checkpoint_id,
+            "has_workspace": bool(self.pointers.workspace_snapshot),
         })
         self.pointers.history = self.pointers.history[-50:]
         self.save()
+
+    def resume_package(self) -> Optional[Dict[str, Any]]:
+        """Full resume transport — empty if no checkpoint/workspace bound."""
+        p = self.pointers
+        if not (p.resume_token or p.last_checkpoint_id or p.workspace_snapshot):
+            return None
+        return {
+            "resume_token": p.resume_token,
+            "run_id": p.last_code_run_id,
+            "task": p.last_run_task,
+            "status": p.last_run_status,
+            "checkpoint_id": p.last_checkpoint_id,
+            "workspace_snapshot": dict(p.workspace_snapshot),
+            "reliability_snapshot": dict(p.reliability_snapshot),
+            "failure_ledger": dict(p.failure_ledger),
+            "contract_snapshot": dict(p.contract_snapshot),
+            "checkpoint_payload": dict(p.checkpoint_payload),
+            "event_cursor": p.event_cursor,
+            "session_id": p.session_id,
+            "conversation_id": p.conversation_id,
+        }
 
     def record_options(self, options: Sequence[str], question: str = "") -> None:
         self.pointers.option_set = list(options)
@@ -187,12 +282,15 @@ class SessionIntentLedger:
         if _RETRY_CUES.match(t):
             rid = self.pointers.last_failed_run_id or self.pointers.last_code_run_id
             if rid:
+                pkg = self.resume_package()
                 return {
                     "action": "retry",
                     "run_id": rid,
                     "task": self.pointers.last_run_task,
                     "checkpoint_id": self.pointers.last_checkpoint_id,
                     "status": self.pointers.last_run_status,
+                    "resume_token": self.pointers.resume_token,
+                    "resume_package": pkg,
                     "confirm_prompt": (
                         f"Retry run {rid} ({self.pointers.last_run_status}) "
                         f"task={self.pointers.last_run_task[:80]!r}? "
@@ -213,12 +311,18 @@ class SessionIntentLedger:
 
         if _CONTINUE_CUES.match(t):
             rid = self.pointers.last_code_run_id
-            if rid and self.pointers.last_run_status == "terminated":
+            pkg = self.resume_package()
+            if rid and (
+                self.pointers.last_run_status == "terminated"
+                or (pkg and pkg.get("workspace_snapshot"))
+            ):
                 return {
                     "action": "resume",
                     "run_id": rid,
                     "checkpoint_id": self.pointers.last_checkpoint_id,
                     "task": self.pointers.last_run_task,
+                    "resume_token": self.pointers.resume_token,
+                    "resume_package": pkg,
                 }
             if self.pointers.open_question:
                 return {

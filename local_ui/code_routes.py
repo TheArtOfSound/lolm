@@ -159,10 +159,19 @@ class CodeTask(BaseModel):
     max_steps: int = 26
     # Optional prior chat turns so coding continues the conversation (switch-from-Claude UX)
     history: Optional[List[Dict[str, str]]] = None
+    # Multi-session continuity + genuine resume transport (workspace/checkpoint)
+    conversation_id: str = ""
+    session_id: str = ""
+    owner: str = ""
+    context_reset: bool = False
+    resume_package: Optional[Dict[str, Any]] = None
+    resume_token: str = ""
 
 
 class VisualTask(BaseModel):
     task: str
+    conversation_id: str = ""
+    session_id: str = ""
 
 
 def _sse(event: str, data: Dict[str, Any]) -> str:
@@ -499,7 +508,12 @@ def register_code_routes(app: Any, root: str,
         agent = CodeAgent(sb, _chat_with_history,
                           max_steps=min(max(req.max_steps, 1), step_cap), isolated=True,
                           gen_many_fn=gen_many_fn,
-                          nfet_state_fn=nfet_state_fn)
+                          nfet_state_fn=nfet_state_fn,
+                          conversation_id=getattr(req, "conversation_id", "") or "",
+                          session_id=getattr(req, "session_id", "") or "",
+                          owner=getattr(req, "owner", "") or "",
+                          context_reset=bool(getattr(req, "context_reset", False)),
+                          resume_package=getattr(req, "resume_package", None) or None)
 
         def gen():
             try:

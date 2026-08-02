@@ -1024,7 +1024,8 @@ class CodeAgent:
                  conversation_id: str = "",
                  session_id: str = "",
                  owner: str = "",
-                 context_reset: bool = False):
+                 context_reset: bool = False,
+                 resume_package: Optional[Dict[str, Any]] = None):
         self.sb = sandbox
         self.chat = chat_fn
         self.max_steps = max_steps
@@ -1039,6 +1040,8 @@ class CodeAgent:
         self.session_id = (session_id or "").strip()
         self.owner = (owner or "").strip()
         self.context_reset = bool(context_reset)
+        # Genuine resume transport (workspace + checkpoint + failure ledger)
+        self.resume_package = dict(resume_package or {}) if resume_package else None
         # Best-of-N on the opening turn, plus up to two repair re-races when the
         # loop is stuck. Each candidate is RUN in a throwaway sandbox and scored
         # against the TASK contract — not vibes.
@@ -1748,8 +1751,51 @@ class CodeAgent:
         except Exception as exc:
             yield {"event": "agent_note", "data": {
                 "text": f"artifact manifest unavailable: {str(exc)[:100]}"}}
+        # Session ledger BEFORE seal — do not mutate sealed receipt afterward.
+        session_event: Optional[Dict[str, Any]] = None
+        if self.reliability is not None and self.reliability.session is not None:
+            try:
+                ws: Dict[str, str] = {}
+                for p in self._files_written:
+                    try:
+                        body = self.sb.read_file(p)
+                        if body is not None:
+                            ws[p] = body if isinstance(body, str) else body.decode(
+                                "utf-8", errors="replace"
+                            )
+                    except Exception:
+                        pass
+                best = self.reliability.checkpoints.best()
+                ckpt_payload = best.to_dict(include_contents=True) if best else {}
+                run_id = str(getattr(self.sb, "id", "") or "")
+                # Provisional status; refined after receipt fields known
+                prov_status = "incomplete"
+                self.reliability.session.record_code_run(
+                    run_id=run_id,
+                    task=task,
+                    status=prov_status,
+                    artifact_ids=list(self._files_written),
+                    checkpoint_id=(
+                        self.reliability.checkpoints.head_id
+                        or (best.checkpoint_id if best else "")
+                    ),
+                    failed=True,
+                    workspace_snapshot=ws,
+                    reliability_snapshot=self.reliability.receipt_blob(),
+                    failure_ledger=self.reliability.failures.to_dict(),
+                    contract_snapshot=self.reliability.contract.to_dict(),
+                    checkpoint_payload=ckpt_payload,
+                    event_cursor=len(self.actions),
+                )
+                session_event = {
+                    "session_id": self.reliability.session.session_id,
+                    "resume_package": self.reliability.session.resume_package(),
+                }
+            except Exception:
+                session_event = None
+
         receipt = self.build_receipt(task, syntax=syntax, manifest=manifest, **kw)
-        # Session intent ledger — bind run for `lolm retry` / `lolm last`
+        # Update ledger status from sealed receipt (local file only; not re-hashed)
         if self.reliability is not None and self.reliability.session is not None:
             try:
                 status = "shipped" if receipt.get("ok") else (
@@ -1757,18 +1803,19 @@ class CodeAgent:
                     ("stuck" if kw.get("stuck") else
                      ("terminated" if kw.get("error") else "incomplete"))
                 )
-                self.reliability.session.record_code_run(
-                    run_id=str(receipt.get("run_id") or getattr(self.sb, "id", "")),
-                    task=task,
-                    status=status,
-                    artifact_ids=list(self._files_written),
-                    checkpoint_id=(
-                        self.reliability.checkpoints.head_id
-                        or (self.reliability.checkpoints.best().checkpoint_id
-                            if self.reliability.checkpoints.best() else "")
-                    ),
-                    failed=not bool(receipt.get("ok")),
+                self.reliability.session.pointers.last_run_status = status
+                self.reliability.session.pointers.last_code_run_id = str(
+                    receipt.get("run_id") or self.reliability.session.pointers.last_code_run_id
                 )
+                if not receipt.get("ok"):
+                    self.reliability.session.pointers.last_failed_run_id = (
+                        self.reliability.session.pointers.last_code_run_id
+                    )
+                self.reliability.session.save()
+                if session_event and session_event.get("resume_package"):
+                    session_event["resume_package"]["status"] = status
+                    session_event["resume_package"]["run_id"] = receipt.get("run_id")
+                    session_event["status"] = status
             except Exception:
                 pass
         # Learn durable techniques from this run (success boosts; failure soft-penalizes).
@@ -1802,6 +1849,10 @@ class CodeAgent:
             yield {"event": "artifact_manifest", "data": manifest}
             data["artifact_id"] = manifest.get("artifact_id")
             data["artifact_files"] = [f.get("path") for f in manifest.get("files") or []]
+        # Session transport as its own event — never mutates sealed receipt
+        if session_event:
+            yield {"event": "session_ledger", "data": session_event}
+            data["session_id"] = session_event.get("session_id")
         yield {"event": "code_done", "data": data}
         yield {"event": "code_receipt", "data": receipt}
 
@@ -1964,6 +2015,27 @@ class CodeAgent:
                 owner=self.owner,
                 graft_state="graft" if self.nfet is not None else "synthetic",
             )
+            # Genuine resume: restore workspace + checkpoint + failure ledger
+            if self.resume_package:
+                try:
+                    rnotes = self.reliability.apply_resume_package(
+                        self.resume_package, self.sb,
+                    )
+                    self._files_written = list(dict.fromkeys(
+                        list(self._files_written)
+                        + list(rnotes.get("restored_files") or [])
+                    ))
+                    yield {"event": "agent_note", "data": {
+                        "text": (
+                            f"resumed from token "
+                            f"{(self.resume_package.get('resume_token') or '')[:40]} "
+                            f"files={rnotes.get('restored_files')}"
+                        ),
+                        "resume": rnotes,
+                    }}
+                except Exception as exc:
+                    yield {"event": "agent_note", "data": {
+                        "text": f"resume package apply failed: {exc}"[:140]}}
             if self.reliability.contract.contradictory:
                 yield {"event": "agent_note", "data": {
                     "text": "contract compiler: CONTRADICTORY criteria — "
@@ -2590,25 +2662,34 @@ class CodeAgent:
                                 if html_paths:
                                     try:
                                         from local_ui.code_routes import _verify_html
+                                        from lolm.reliability.evidence import (
+                                            html_verdict_ok,
+                                            normalize_verifier_output,
+                                        )
                                         html_body = self.sb.read_file(html_paths[0]) or ""
                                         verdict = _verify_html(html_body)
-                                        ok_v = bool(verdict.get("ok") or verdict.get("passed"))
+                                        ok_v, why_v = html_verdict_ok(verdict)
+                                        vnorm = normalize_verifier_output("html.render", verdict)
                                         yield {"event": "agent_note", "data": {
                                             "text": (
                                                 f"html.render verifier on {html_paths[0]}: "
-                                                f"{'green' if ok_v else 'red'}"
+                                                f"{'green' if ok_v else 'red'} ({why_v})"
                                             ),
                                             "verdict": {
                                                 k: verdict.get(k)
-                                                for k in ("ok", "passed", "reasons", "static_lint")
+                                                for k in (
+                                                    "working", "renders", "animates",
+                                                    "responds", "reasons", "static_lint",
+                                                    "ok", "passed",
+                                                )
                                                 if k in verdict
                                             },
+                                            "normalized": vnorm,
                                         }}
                                         if ok_v:
                                             self._green_runs += 1
                                             produced_output = True
                                             ran_any = True
-                                            # Snapshot + maybe close
                                             contents = {}
                                             for p in self._files_written:
                                                 try:
@@ -2616,21 +2697,27 @@ class CodeAgent:
                                                 except Exception:
                                                     pass
                                             ck = self.reliability.snapshot_if_green(
-                                                contents, step=step, compile_ok=True, run_ok=True,
-                                                verifier_outputs={"html.render": {"ok": True}},
+                                                contents, step=step,
+                                                verifier_outputs={"html.render": vnorm},
                                             )
                                             close_info = self.reliability.evaluate_and_maybe_close(
                                                 list(contents.keys()),
-                                                path_hashes={
-                                                    p: hashlib.sha256(
-                                                        (c if isinstance(c, str) else "").encode()
-                                                    ).hexdigest()
-                                                    for p, c in contents.items()
-                                                },
+                                                file_contents=contents,
                                                 validators_green=True,
+                                                verifier_outputs={"html.render": vnorm},
                                                 step=step,
                                                 checkpoint_id=ck.checkpoint_id if ck else "",
                                             )
+                                            # Evidence delta into progress budget
+                                            try:
+                                                self.reliability.record_delta(
+                                                    step, "html.render",
+                                                    coverage_before=0.0,
+                                                    coverage_after=1.0 if ok_v else 0.0,
+                                                    info_gain=1.0 if ok_v else 0.0,
+                                                )
+                                            except Exception:
+                                                pass
                                             if close_info.get("closure", {}).get("closed"):
                                                 yield {"event": "agent_note", "data": {
                                                     "text": "ACP: HTML deliverable closed deterministically",
@@ -2697,12 +2784,16 @@ class CodeAgent:
                 # Reliability: capability facts, SFL, LGTS, ACP, EGCA
                 if self.reliability is not None:
                     try:
+                        from lolm.reliability.evidence import (
+                            coerce_exit_code,
+                            hash_tree,
+                            is_trivial_command,
+                            pdf_bytes_valid,
+                        )
+                        # CRITICAL: never use `exit_code or 1` — 0 is success
+                        ec = coerce_exit_code(r)
                         obs = self.reliability.observe_run(
-                            cmd,
-                            exit_code=int(r.get("exit_code") or 1),
-                            stdout=r.get("stdout") or "",
-                            stderr=r.get("stderr") or "",
-                            step=step,
+                            cmd, result=r, step=step,
                         )
                         if obs.get("capability_fact"):
                             yield {"event": "agent_note", "data": {
@@ -2713,7 +2804,6 @@ class CodeAgent:
                                 ),
                                 "capability": obs["capability_fact"],
                             }}
-                        # Snapshot green trees
                         contents: Dict[str, str] = {}
                         for p in self._files_written:
                             try:
@@ -2724,60 +2814,137 @@ class CodeAgent:
                                     )
                             except Exception:
                                 pass
-                        # LGTS rollback on syntax regression after a green checkpoint
-                        if not ok and "SyntaxError" in ((r.get("stderr") or "") + (r.get("stdout") or "")):
-                            hashes = {
-                                p: hashlib.sha256(c.encode()).hexdigest()
-                                for p, c in contents.items()
+                        # Also discover extras on disk for exact-tree rollback
+                        try:
+                            for p in self.sb.list_files(limit=200):
+                                if p not in contents:
+                                    try:
+                                        contents[p] = self.sb.read_file(p) or ""
+                                    except Exception:
+                                        pass
+                        except Exception:
+                            pass
+
+                        cov_before = 0.0
+                        try:
+                            hard_n = max(len(self.reliability.contract.hard_clauses()), 1)
+                            cov_before = sum(
+                                1 for c in self.reliability.contract.hard_clauses()
+                                if c.status == "green"
+                            ) / hard_n
+                        except Exception:
+                            pass
+
+                        vos: Dict[str, Any] = {}
+                        py_files = [p for p in contents if (p or "").endswith(".py")]
+                        if py_files:
+                            vos["syntax.python"] = {
+                                "ok": ok and "SyntaxError" not in (
+                                    (r.get("stderr") or "") + (r.get("stdout") or "")
+                                ),
                             }
+                        trivial = is_trivial_command(cmd)
+                        vos["run"] = {
+                            "ok": bool(ok) and not trivial,
+                            "cmd": (cmd or "")[:120],
+                            "exit_code": ec,
+                            "trivial": trivial,
+                        }
+                        # PDF typed validator from actual bytes (no force-close)
+                        for p, body in contents.items():
+                            if (p or "").endswith(".pdf"):
+                                vos["pdf.exists"] = {
+                                    "ok": pdf_bytes_valid(body),
+                                    "valid_magic": pdf_bytes_valid(body),
+                                    "path": p,
+                                }
+
+                        if not ok:
                             restored = self.reliability.maybe_rollback_on_regression(
-                                self.sb, compile_ok=False, current_hashes=hashes,
+                                self.sb,
+                                compile_ok=False if "SyntaxError" in (
+                                    (r.get("stderr") or "") + (r.get("stdout") or "")
+                                ) else None,
+                                file_contents=contents,
+                                verifier_outputs=vos,
                             )
                             if restored is not None:
                                 yield {"event": "agent_note", "data": {
                                     "text": (
                                         f"LGTS rollback → checkpoint {restored.checkpoint_id} "
-                                        f"(rejected green→red regression)"
+                                        f"(exact tree restore; extras deleted)"
                                     ),
                                     "checkpoint_id": restored.checkpoint_id,
+                                    "reason": (restored.meta or {}).get("rollback_reason"),
                                 }}
                                 self._files_written = list(restored.file_contents.keys())
-                        elif ok:
+                                try:
+                                    self.reliability.record_delta(
+                                        step, "rollback",
+                                        coverage_before=cov_before,
+                                        coverage_after=cov_before,
+                                        info_gain=0.0,
+                                        error_novelty=1.0,
+                                    )
+                                except Exception:
+                                    pass
+                        elif ok and not trivial:
                             ck = self.reliability.snapshot_if_green(
-                                contents, step=step, compile_ok=True, run_ok=True,
-                                verifier_outputs={"run": {"ok": True, "cmd": cmd[:80]}},
+                                contents, step=step,
+                                compile_ok=bool(py_files),
+                                run_ok=True,
+                                run_command=cmd,
+                                verifier_outputs=vos,
                             )
                             if ck is not None:
                                 yield {"event": "agent_note", "data": {
                                     "text": f"last-known-green checkpoint {ck.checkpoint_id}",
                                     "checkpoint_id": ck.checkpoint_id,
                                 }}
-                            # PDF / exact deliverable closure
-                            pdf_ok = any(
-                                p.endswith(".pdf") for p in contents
-                            ) and ok and (
-                                "pdf" in (cmd or "").lower()
-                                or self.reliability.contract.primary_language == "pdf"
-                                or any(p.endswith(".pdf") for p in contents)
-                            )
-                            # Detect "PDF generated" style success
-                            out_blob = (r.get("stdout") or "") + (r.get("stderr") or "")
-                            if re.search(r"PDF generated|\.pdf\b", out_blob, re.I) and any(
-                                p.endswith(".pdf") for p in contents
+                            # Evidence progress always recorded
+                            cov_after = cov_before
+                            try:
+                                hard_n = max(len(self.reliability.contract.hard_clauses()), 1)
+                                cov_after = sum(
+                                    1 for c in self.reliability.contract.hard_clauses()
+                                    if c.status == "green"
+                                ) / hard_n
+                            except Exception:
+                                pass
+                            try:
+                                self.reliability.record_delta(
+                                    step, "run",
+                                    coverage_before=cov_before,
+                                    coverage_after=cov_after,
+                                    info_gain=max(0.0, cov_after - cov_before),
+                                    error_novelty=0.0,
+                                )
+                            except Exception:
+                                pass
+                            # Closure only for typed completion evidence (PDF magic,
+                            # HTML render, or exact-set with open_hard already 0).
+                            # Never auto-close bare python runs (preserves DONE gates).
+                            lang = self.reliability.contract.primary_language
+                            may_close = False
+                            if lang == "pdf" and any(
+                                (p or "").endswith(".pdf") and pdf_bytes_valid(contents[p])
+                                for p in contents
                             ):
-                                pdf_ok = True
-                            if pdf_ok or (
+                                may_close = True
+                            elif lang == "html" and isinstance(vos.get("html.render"), dict) \
+                                    and vos["html.render"].get("ok"):
+                                may_close = True
+                            elif (
                                 self.reliability.contract.exact_count is not None
-                                and ok
-                                and produced_output
+                                and self.reliability.contract.open_hard == 0
                             ):
+                                may_close = True
+                            if may_close:
                                 close_info = self.reliability.evaluate_and_maybe_close(
                                     list(contents.keys()),
-                                    path_hashes={
-                                        p: hashlib.sha256(c.encode()).hexdigest()
-                                        for p, c in contents.items()
-                                    },
+                                    file_contents=contents,
                                     validators_green=True,
+                                    verifier_outputs=vos,
                                     step=step,
                                     checkpoint_id=(
                                         ck.checkpoint_id if ck is not None else ""
@@ -2785,28 +2952,21 @@ class CodeAgent:
                                 )
                                 if close_info.get("closure", {}).get("closed"):
                                     yield {"event": "agent_note", "data": {
-                                        "text": "ACP: deliverable closed — no further model turns",
+                                        "text": "ACP: deliverable closed — independent hashes verified",
                                         "closure": close_info,
                                     }}
-                                    if self.reliability.session is not None:
-                                        try:
-                                            self.reliability.session.record_code_run(
-                                                run_id=str(getattr(self.sb, "id", "")),
-                                                task=task,
-                                                status="shipped",
-                                                artifact_ids=list(contents.keys()),
-                                                checkpoint_id=close_info.get("closure", {}).get(
-                                                    "checkpoint_id", ""
-                                                ),
-                                            )
-                                        except Exception:
-                                            pass
                                     yield from self._finish(
                                         task,
                                         summary="closed deterministically after verified deliverable",
                                         ran=True, produced_output=True, steps=step,
                                     )
                                     return
+                        elif ok and trivial:
+                            yield {"event": "agent_note", "data": {
+                                "text": (
+                                    f"trivial command `{cmd[:40]}` is not green evidence "
+                                    "(LGTS requires typed validators)"
+                                )}}
                     except Exception as exc:
                         yield {"event": "agent_note", "data": {
                             "text": f"reliability observe failed: {exc}"[:120]}}

@@ -67,3 +67,22 @@ Maps to Appendix D scenarios D-01…D-10 plus structural gates (typing, SFL merg
 - Hosted Evaluation Plane is **in-process queue scaffolding** until authenticated campaign endpoints ship on the public service.
 - Full 10k gauntlets from §9 are release gates, not this PR's CI suite.
 - Model quality is unchanged; controller evidence binding is the target.
+
+
+## Invariant hardening (post independent review)
+
+Addressed before re-review:
+
+1. Closure hashes actual file bytes; claimed hashes must match; invalid PDF magic fails closed.
+2. PDF force-override removed entirely.
+3. Exit code 0 preserved (`coerce_exit_code` — never `x or 1`).
+4. HTML verifier accepts `working`/`renders` schema from code_routes.
+5. LGTS green requires typed meaningful validators (not `cat`).
+6. Regression detects contract/verifier/semantic drops, not only compile.
+7. Exact-tree restore deletes extras (`sandbox.delete_file`).
+8. Session IDs sanitized/hashed against path traversal.
+9. Resume package transports workspace + checkpoint + failure ledger.
+10. CLI persists hosted `session_ledger` events into `~/.lolm/sessions`.
+11. Evidence progress budget fed from the live loop.
+
+Independent tests: `tests/test_reliability_invariants.py`.

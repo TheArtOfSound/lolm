@@ -154,6 +154,29 @@ class Sandbox:
                 break
         return out
 
+    def delete_file(self, rel: str) -> Dict[str, Any]:
+        """Remove a file inside the sandbox (used by LGTS exact-tree rollback)."""
+        p = self._safe(rel)
+        existed = p.exists() and p.is_file()
+        before = ""
+        if existed:
+            try:
+                before = p.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                before = ""
+            p.unlink()
+        rec = {
+            "id": _id("fc"),
+            "path": rel,
+            "deleted": bool(existed),
+            "before_hash": _sha(before) if before else "",
+            "reason": "delete",
+            "created": _now(),
+        }
+        self.changes.append(rec)
+        self._record("file_delete", rec)
+        return rec
+
     # ── command execution ──────────────────────────────────────────────────--
     def run(self, command: str, timeout: int = 120,
             isolated: Optional[bool] = None) -> Dict[str, Any]:

@@ -76,35 +76,36 @@ def test_d02_green_rollback_byte_for_byte():
         green_hard=1,
         open_hard=0,
         step=1,
+        verifier_outputs={"html.render": {"ok": True, "working": True}},
+        primary_language="html",
+        require_meaningful=True,
     )
     assert ck is not None
-    # Regression
-    bad = {"index.html": "def broken(:\n"}
-    store.snapshot(
-        file_contents=bad,
-        contract_coverage=0.0,
-        green_hard=0,
-        open_hard=1,
-        step=2,
-    )  # should reject as non-dominating if head is green — force path:
-    regressed, best = store.has_regressed(
-        {p: "x" for p in bad},
+    regressed, best, why = store.has_regressed(
+        {p: "x" for p in green},
         compile_ok=False,
     )
     assert regressed is True
     assert best is not None
     assert best.file_contents["index.html"] == green["index.html"]
-    # materialize into a fake sandbox
+
     class SB:
         def __init__(self):
-            self.files = {}
+            self.files = dict(green)
+            self.files["helper.py"] = "x=1\n"
         def write_file(self, path, content, reason=""):
             self.files[path] = content
             return {"diff": ""}
+        def list_files(self, limit=500):
+            return list(self.files.keys())
+        def delete_file(self, path):
+            self.files.pop(path, None)
+            return {"deleted": True}
     sb = SB()
-    restored = store.materialize_to_sandbox(sb)
+    restored = store.materialize_to_sandbox(sb, current_paths=sb.list_files())
     assert restored is not None
     assert sb.files["index.html"] == green["index.html"]
+    assert "helper.py" not in sb.files
 
 
 # ── D-03 Exact one file ──────────────────────────────────────────────────────
@@ -123,13 +124,15 @@ def test_d03_exact_one_file_rejects_helper():
 
 def test_d04_closure_blocks_model_turns():
     acp = ClosureProtocol()
+    body = "%PDF-1.4\n" + ("x" * 80)
     ev = evaluate_closure(
+        file_contents={"output.pdf": body},
         contract_ok=True,
         exact_manifest_ok=True,
         validators_green=True,
         open_hard=0,
         deliverable_paths=["output.pdf"],
-        path_hashes={"output.pdf": "abc"},
+        primary_language="pdf",
     )
     assert ev.ready
     res = acp.try_close(ev, checkpoint_id="ckpt_1", step=1)
@@ -431,15 +434,31 @@ def test_run_reliability_state_blocks_xdg_after_failure():
 def test_pdf_closure_path():
     rs = RunReliabilityState.open("generate a short pdf report as output.pdf")
     assert rs.contract.primary_language == "pdf"
-    rs.note_write("output.pdf", "%PDF-1.4 fake", step=1)
+    body = "%PDF-1.4\n" + ("content " * 20)
+    rs.note_write("output.pdf", body, step=1)
     info = rs.evaluate_and_maybe_close(
         ["output.pdf"],
-        path_hashes={"output.pdf": "deadbeef"},
+        file_contents={"output.pdf": body},
+        validators_green=True,
+        verifier_outputs={
+            "pdf.exists": {"ok": True, "valid_magic": True},
+        },
+        step=1,
+    )
+    assert info["closure"]["closed"] is True, info
+    assert rs.closure.allow_model_turn() is False
+
+
+def test_pdf_closure_rejects_fake_hash_without_bytes():
+    rs = RunReliabilityState.open("generate a short pdf report as output.pdf")
+    info = rs.evaluate_and_maybe_close(
+        ["output.pdf"],
+        file_contents=None,
+        claimed_hashes={"output.pdf": "deadbeef" * 8},
         validators_green=True,
         step=1,
     )
-    assert info["closure"]["closed"] is True
-    assert rs.closure.allow_model_turn() is False
+    assert info["closure"]["closed"] is False
 
 
 def test_arbiter_rollback_precedence():
