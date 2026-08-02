@@ -56,17 +56,46 @@ def _run(cmd: List[str], cwd: Optional[Path] = None) -> Tuple[int, str]:
     return p.returncode, out.strip()
 
 
-def check_workspace(expected_sha: str) -> List[Dict[str, Any]]:
+def check_workspace(
+    expected_sha: str,
+    *,
+    allow_descendant_of: str = "",
+) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
 
     code, head = _run(["git", "rev-parse", "HEAD"])
-    ok = code == 0 and head == expected_sha
-    rows.append({
-        "check": "checked_out_sha",
-        "ok": ok,
-        "expected": expected_sha,
-        "actual": head if code == 0 else f"git_error:{head[:80]}",
-    })
+    if code != 0:
+        rows.append({
+            "check": "checked_out_sha",
+            "ok": False,
+            "expected": expected_sha,
+            "actual": f"git_error:{head[:80]}",
+        })
+    elif head == expected_sha:
+        rows.append({
+            "check": "checked_out_sha",
+            "ok": True,
+            "expected": expected_sha,
+            "actual": head,
+        })
+    elif allow_descendant_of:
+        # Validation-branch tip may add only campaign tooling after the merge.
+        rc, _ = _run(["git", "merge-base", "--is-ancestor", allow_descendant_of, "HEAD"])
+        ok = rc == 0
+        rows.append({
+            "check": "checked_out_sha",
+            "ok": ok,
+            "expected": f"exact {expected_sha} OR descendant of {allow_descendant_of}",
+            "actual": head,
+            "note": "product deploy still pins server SHA separately",
+        })
+    else:
+        rows.append({
+            "check": "checked_out_sha",
+            "ok": False,
+            "expected": expected_sha,
+            "actual": head,
+        })
 
     code, porcelain = _run(["git", "status", "--porcelain"])
     clean = code == 0 and porcelain == ""
@@ -74,6 +103,7 @@ def check_workspace(expected_sha: str) -> List[Dict[str, Any]]:
         "check": "working_tree_clean",
         "ok": clean,
         "actual": "clean" if clean else porcelain[:500],
+        "note": "write preflight reports outside the repo (e.g. /tmp) to keep the tree clean",
     })
 
     # Contamination: untracked or present paths that bias repo maps / fixtures
@@ -321,21 +351,30 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Track 2B remote campaign preflight")
     ap.add_argument(
         "--expected-sha",
-        default=os.environ.get("LOLM_EXPECTED_SERVER_SHA") or DEFAULT_VALIDATION_SHA,
+        default=os.environ.get("LOLM_CAMPAIGN_CHECKOUT_SHA") or DEFAULT_VALIDATION_SHA,
+        help="required checkout SHA (or use --allow-descendant-of merge SHA)",
+    )
+    ap.add_argument(
+        "--allow-descendant-of",
+        default=os.environ.get("LOLM_VALIDATION_BASELINE_SHA") or DEFAULT_VALIDATION_SHA,
+        help="accept validation-branch tips that are descendants of this merge SHA",
     )
     ap.add_argument("--workspace-only", action="store_true")
     ap.add_argument("--full", action="store_true", help="workspace + env + staging identity")
     ap.add_argument(
         "--out",
         default="",
-        help="optional JSON report path",
+        help="optional JSON report path (prefer /tmp/... so the worktree stays clean)",
     )
     args = ap.parse_args()
     if not args.workspace_only and not args.full:
         args.workspace_only = True
 
     results: List[Dict[str, Any]] = []
-    results.extend(check_workspace(args.expected_sha))
+    results.extend(check_workspace(
+        args.expected_sha,
+        allow_descendant_of=args.allow_descendant_of or "",
+    ))
 
     if args.full:
         results.extend(check_remote_env())
