@@ -43,6 +43,7 @@ from lolm.repo_context import (
     build_repository_map,
     rank_repository_context,
 )
+from lolm.mutation_gateway import MutationGateway
 from lolm.task_profiler import profile_task
 
 

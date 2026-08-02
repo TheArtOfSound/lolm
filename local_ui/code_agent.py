@@ -1080,6 +1080,85 @@ class CodeAgent:
             self._executor = None
         # Grand Audit reliability state (contract/capability/arbiter/checkpoints/…)
         self.reliability = None
+        # Track 2: mandatory repository mutation gateway (read-before-edit + CAS)
+        self.mutations = None  # MutationGateway | None
+
+    def _ensure_mutation_gateway(self, task: str) -> Any:
+        """Create or refresh the mutation gateway bound to the active sandbox."""
+        if self.mutations is not None:
+            return self.mutations
+        try:
+            from lolm.mutation_gateway import MutationGateway
+            primary = ""
+            required: List[str] = []
+            exact = None
+            forbidden: List[str] = []
+            if self.reliability is not None:
+                primary = self.reliability.contract.primary_language or ""
+                required = list(self.reliability.contract.required_paths or [])
+                exact = self.reliability.contract.exact_count
+                forbidden = list(self.reliability.contract.forbidden_extensions or [])
+            self.mutations = MutationGateway(
+                self.sb,
+                task=task,
+                primary_language=primary,
+                required_paths=required,
+                exact_count=exact,
+                forbidden_extensions=forbidden,
+            )
+            return self.mutations
+        except Exception:
+            self.mutations = None
+            return None
+
+    def _gateway_write(
+        self,
+        path: str,
+        content: str,
+        *,
+        reason: str = "",
+        creating: Optional[bool] = None,
+        old_fragment: str = "",
+        step: int = 0,
+    ) -> Dict[str, Any]:
+        """Write via mutation gateway when available; never blind-edit existing files."""
+        gw = self.mutations
+        if gw is None:
+            # Fallback only for scratch/scoring sandboxes without a gateway
+            return self.sb.write_file(path, content, reason=reason or "unguarded")
+        gw.step = step
+        # Existing files must be read first
+        exists = False
+        try:
+            cur = self.sb.read_file(path)
+            exists = cur is not None
+        except Exception:
+            exists = False
+        if exists and creating is not True:
+            try:
+                gw.read(path, scope="full", step=step)
+            except Exception as exc:
+                raise PermissionError(f"read-before-edit failed for {path}: {exc}") from exc
+        rec = gw.write(
+            path,
+            content,
+            creating=creating if creating is not None else (not exists),
+            selection_reason=reason or "code_agent_write",
+            step=step,
+            old_fragment=old_fragment,
+        )
+        if rec.state in ("rejected", "rolled_back") or rec.rejection_reason:
+            raise PermissionError(
+                rec.rejection_reason or f"mutation rejected: {rec.state}"
+            )
+        return {
+            "path": path,
+            "diff": "",
+            "bytes": len(content or ""),
+            "mutation_id": rec.mutation_id,
+            "post_sha256": rec.post_apply_sha256,
+            "compare_and_swap_passed": rec.compare_and_swap_passed,
+        }
 
     def _score_candidate(self, raw: str, task: str) -> Dict[str, Any]:
         """Run one candidate opening turn in a scratch sandbox and score it.
@@ -1676,6 +1755,15 @@ class CodeAgent:
                     }
             except Exception as exc:
                 core["reliability"] = {"error": str(exc)[:120]}
+        # Track 2: mutation gateway receipt evidence
+        if self.mutations is not None:
+            try:
+                core.update(self.mutations.receipt_blob())
+                if not self.mutations.assert_no_blind_existing_edits():
+                    core["ok"] = False
+                    core["mutation_integrity"] = "blind_or_stale_edit_detected"
+            except Exception as exc:
+                core["mutation_gateway"] = {"error": str(exc)[:120]}
         core["verdict"] = (
             "shipped" if core["ok"] else
             ("broken" if not core["syntax_ok"] else
@@ -2139,6 +2227,26 @@ class CodeAgent:
                     ),
                     "contract_id": self.reliability.contract.contract_id,
                 }}
+            # Track 2: mutation gateway + repository selection
+            try:
+                gw = self._ensure_mutation_gateway(task)
+                if gw is not None:
+                    gw.refresh_map(step=0)
+                    picks = gw.select_targets(task)
+                    if picks:
+                        yield {"event": "agent_note", "data": {
+                            "text": (
+                                "repo selection: "
+                                + ", ".join(
+                                    f"{p['path']}({','.join(p['reason'][:2])})"
+                                    for p in picks[:5]
+                                )
+                            ),
+                            "selection": picks[:8],
+                        }}
+            except Exception as exc:
+                yield {"event": "agent_note", "data": {
+                    "text": f"mutation gateway init: {exc}"[:120]}}
             # Feasibility preflight — never burn budget on impossible browser open
             if _loop_guard is not None:
                 try:
@@ -2593,14 +2701,27 @@ class CodeAgent:
 
             for path in turn.get("reads") or []:
                 try:
-                    content = self.sb.read_file(path)
+                    gw = self._ensure_mutation_gateway(task)
+                    if gw is not None:
+                        content, auth = gw.read(path, scope="full", step=step)
+                        yield {"event": "agent_note", "data": {
+                            "text": (
+                                f"read {path} ({auth.size} bytes) "
+                                f"sha={auth.sha256[:12]} rev={auth.revision}"
+                            ),
+                            "path": path,
+                            "preview": (content or "")[:400],
+                            "read_authorization": auth.to_dict(),
+                        }}
+                    else:
+                        content = self.sb.read_file(path)
+                        yield {"event": "agent_note", "data": {
+                            "text": f"read {path} ({len(content or '')} bytes)",
+                            "path": path, "preview": (content or "")[:400]}}
                     self.actions.append({
                         "kind": "read_file", "path": path,
                         "bytes": len(content or ""), "content": content or "",
                     })
-                    yield {"event": "agent_note", "data": {
-                        "text": f"read {path} ({len(content or '')} bytes)",
-                        "path": path, "preview": (content or "")[:400]}}
                     did = True
                 except Exception as exc:
                     self.actions.append({
@@ -2612,7 +2733,11 @@ class CodeAgent:
 
             for path, old, new in turn.get("edits") or []:
                 try:
-                    cur = self.sb.read_file(path)
+                    gw = self._ensure_mutation_gateway(task)
+                    if gw is not None:
+                        cur, _auth = gw.read(path, scope="full", step=step)
+                    else:
+                        cur = self.sb.read_file(path)
                 except Exception as exc:
                     self.actions.append({"kind": "edit_file", "path": path, "ok": False,
                                          "note": f"read failed: {exc}"})
@@ -2621,9 +2746,6 @@ class CodeAgent:
                     did = True
                     continue
                 if old not in cur:
-                    # Nothing changed. Steer at the workspace block instead of leaving a
-                    # content-free "not found" — that was a dead end whose only escape
-                    # was a blind full rewrite.
                     self.actions.append({
                         "kind": "edit_file", "path": path, "ok": False,
                         "note": "old text did NOT match byte-for-byte, so NOTHING changed. "
@@ -2644,25 +2766,38 @@ class CodeAgent:
                         "text": f"edit {path} — old text matches {cur.count(old)} times; make it unique"}}
                     did = True
                     continue
-                updated = cur.replace(old, new, 1)
                 try:
-                    fc = self.sb.write_file(path, updated, reason="edit")
+                    if self.mutations is not None:
+                        from lolm.mutation_gateway import MutationOp
+                        # Re-read already recorded; CAS edit with fragment
+                        fc = self._gateway_write(
+                            path, new, reason="edit", creating=False,
+                            old_fragment=old, step=step,
+                        )
+                        # _gateway_write with old_fragment uses EDIT op via write()
+                        # which uses FULL_REWRITE path with old_fragment - fix write to pass EDIT
+                    else:
+                        updated = cur.replace(old, new, 1)
+                        fc = self.sb.write_file(path, updated, reason="edit")
                     self.actions.append({"kind": "edit_file", "path": path, "ok": True,
-                                         "note": f"{len(old)}→{len(new)} chars"})
+                                         "note": f"{len(old)}→{len(new)} chars",
+                                         "mutation_id": fc.get("mutation_id")})
                     if path not in self._files_written:
                         self._files_written.append(path)
                     written_path = path
                     yield {"event": "file_changed", "data": {"path": path,
-                           "diff": (fc.get("diff") or "")[:_DIFF_CAP], "bytes": len(updated),
-                           "edit": True}}
+                           "diff": (fc.get("diff") or "")[:_DIFF_CAP],
+                           "bytes": len(new) if self.mutations else len(cur.replace(old, new, 1)),
+                           "edit": True,
+                           "mutation_id": fc.get("mutation_id")}}
                     did = True
                     if (path or "").endswith(".py"):
-                        # mark for preflight after edits (shared with write path)
                         turn.setdefault("_py_touch", []).append(path)
                 except Exception as exc:
                     self.actions.append({"kind": "edit_file", "path": path, "ok": False,
-                                         "note": str(exc)[:120]})
-                    yield {"event": "agent_note", "data": {"text": f"edit write failed: {exc}"[:160]}}
+                                         "note": str(exc)[:160]})
+                    yield {"event": "agent_note", "data": {
+                        "text": f"edit write rejected: {exc}"[:200]}}
                     did = True
 
             file_list = turn.get("files") or (
@@ -2714,8 +2849,25 @@ class CodeAgent:
                         yield {"event": "agent_note", "data": {
                             "text": f"closure protocol blocked write to `{path}`"}}
                         continue
-                    fc = self.sb.write_file(path, content, reason="")
-                    self.actions.append({"kind": "write_file", "path": path, "bytes": len(content)})
+                    self._ensure_mutation_gateway(task)
+                    try:
+                        fc = self._gateway_write(
+                            path, content, reason="file_write", step=step,
+                        )
+                    except PermissionError as exc:
+                        yield {"event": "agent_note", "data": {
+                            "text": f"mutation rejected for `{path}`: {exc}"[:200]}}
+                        self._format_nudge = (
+                            (self._format_nudge or "")
+                            + f"\n\nMUTATION REJECTED for `{path}`: {exc}\n"
+                            "READ the file first (READ: path), then EDIT or rewrite."
+                        )
+                        continue
+                    self.actions.append({
+                        "kind": "write_file", "path": path, "bytes": len(content),
+                        "mutation_id": fc.get("mutation_id"),
+                        "post_sha256": fc.get("post_sha256"),
+                    })
                     if path not in self._files_written:
                         self._files_written.append(path)
                     if self.reliability is not None:
@@ -2723,8 +2875,13 @@ class CodeAgent:
                             self.reliability.note_write(path, content, step=step)
                         except Exception:
                             pass
-                    yield {"event": "file_changed", "data": {"path": path,
-                           "diff": (fc.get("diff") or "")[:_DIFF_CAP], "bytes": len(content)}}
+                    yield {"event": "file_changed", "data": {
+                        "path": path,
+                        "diff": (fc.get("diff") or "")[:_DIFF_CAP],
+                        "bytes": len(content),
+                        "mutation_id": fc.get("mutation_id"),
+                        "compare_and_swap_passed": fc.get("compare_and_swap_passed"),
+                    }}
                     did = True
                     # Pre-flight syntax gate — ONLY for genuine Python
                     if (path or "").endswith(".py"):
@@ -2764,7 +2921,17 @@ class CodeAgent:
                                     cur = ""
                                 if cur and _content_has_protocol_bleed(cur):
                                     fixed = _sanitize_file_content(cur)
-                                    self.sb.write_file(path, fixed, reason="auto-strip protocol")
+                                    try:
+                                        if self.mutations is not None:
+                                            self.mutations.read(path, scope="full", step=step)
+                                        self._gateway_write(
+                                            path, fixed, reason="auto-strip protocol",
+                                            creating=False, step=step,
+                                        )
+                                    except Exception as exc:
+                                        yield {"event": "agent_note", "data": {
+                                            "text": f"auto-strip mutation rejected: {exc}"[:140]}}
+                                        continue
                                     vr2 = self.sb.run(vcmd, timeout=min(10, self.run_timeout),
                                                       isolated=self.isolated)
                                     self.actions.append({"kind": "run", "command": vcmd,
@@ -3860,7 +4027,23 @@ class CodeAgent:
                                             continue
                                         content = _sanitize_file_content(content)
                                         try:
-                                            self.sb.write_file(path, content, reason="repair-race")
+                                            self._ensure_mutation_gateway(task)
+                                            try:
+                                                exists = False
+                                                try:
+                                                    exists = self.sb.read_file(path) is not None
+                                                except Exception:
+                                                    exists = False
+                                                if exists and self.mutations is not None:
+                                                    self.mutations.read(path, scope="full", step=step)
+                                                self._gateway_write(
+                                                    path, content, reason="repair-race",
+                                                    creating=not exists, step=step,
+                                                )
+                                            except PermissionError as exc:
+                                                yield {"event": "agent_note", "data": {
+                                                    "text": f"repair-race mutation rejected: {exc}"[:160]}}
+                                                continue
                                             if path not in self._files_written:
                                                 self._files_written.append(path)
                                             yield {"event": "file_changed", "data": {
