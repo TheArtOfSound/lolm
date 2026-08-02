@@ -649,10 +649,14 @@ def billing_config(request: Request):
             "authority": "usage_limits.TIERS"}
 
 
-@app.get("/api/public/product-config")
+@app.get("/api/demo/product-config")
+@app.get("/api/public/product-config")  # alias; only /api/demo/* is nginx-proxied publicly
 def public_product_config(request: Request):
     """Safe public product + plan snapshot (no secrets). Prefer static
-    /product-config.json for CDN; this endpoint overlays live tier enforcement."""
+    /product-config.json for CDN; this endpoint overlays live tier enforcement.
+
+    Public path: GET /api/demo/product-config (nginx only forwards /api/demo/).
+    """
     status = usage_limits.usage_status(request)
     return {
         "version": 1,
@@ -680,17 +684,19 @@ def public_product_config(request: Request):
             "unlimited": bool(status.get("unlimited")),
         },
         "cta": {"primary": "Open app", "href": "/app.html"},
+        "static_config": "/product-config.json",
     }
 
 
-@app.get("/health")
+@app.get("/api/demo/health")
 def public_health():
-    """Simple liveness for monitors and uptime checks (distinct from model ready)."""
+    """Simple liveness under the proxied /api/demo/ prefix (distinct from model ready)."""
     return {
         "ok": True,
         "service": "lolm-demo",
         "ts": int(time.time()),
         "status_url": "/api/demo/status",
+        "website": "https://lolm.imagineqira.com/",
     }
 
 

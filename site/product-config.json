@@ -57,7 +57,7 @@
       "available": false,
       "note": "One-time top-up packs are not live yet. Upgrade Plus/Pro or self-host for more capacity."
     },
-    "authority": "local_ui/usage_limits.py TIERS + GET /api/demo/billing/config"
+    "authority": "local_ui/usage_limits.py TIERS + GET /api/demo/billing/config + GET /api/demo/product-config"
   },
   "navigation": {
     "primary": [
