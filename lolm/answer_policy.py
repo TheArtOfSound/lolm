@@ -79,3 +79,17 @@ def build_grounded_finalizer_messages(
         "Produce the final answer now."
     )
     return system, user
+
+
+def build_repair_system_message(*, web_grounded: bool) -> str:
+    """System message for the single bounded factuality repair attempt."""
+    base, _ = build_grounded_finalizer_messages(
+        command="(repair)",
+        evidence_block="",
+        web_grounded=web_grounded,
+    )
+    return (
+        base
+        + "\n\nThis is a REPAIR pass. You must fix only the rejected claims listed "
+        "by the validator. Do not introduce new unsupported claims."
+    )

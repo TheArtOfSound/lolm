@@ -32,6 +32,12 @@ from typing import Any, Callable, Dict, Generator, Iterator, List, Optional
 from pydantic import BaseModel
 
 from lolm.answer_policy import build_grounded_finalizer_messages
+from lolm.grounded_qa import (
+    build_repair_user_prompt,
+    evaluate_answer_factuality,
+    finalize_after_repair,
+    should_bypass_claim_enforcement,
+)
 
 from lolm.nfet_policy import (
     CONTROL_BRANCH,
@@ -781,9 +787,18 @@ WORKING DRAFT:
             system = (system + " CONTINUITY below is durable thread context from earlier turns "
                       "in this workspace; resolve pronouns and short replies against it.")
             user = f"CONTINUITY (prior thread + identity):\n{cont[:1400]}\n\n" + user
+
+        # ── Grounded factual path: buffer → claim ledger → optional one repair ──
+        # Do NOT stream the draft until the ledger accepts it (or abstains).
+        enforce = (
+            grounded
+            and profile not in ("social", "dialog")
+            and not should_bypass_claim_enforcement(command, profile)
+        )
+        stream_channel = None if enforce else "final"
         result = yield from self._collect_stream(
             [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)],
-            req, tokens=req.final_tokens, channel="final", telemeter=False,
+            req, tokens=req.final_tokens, channel=stream_channel, telemeter=False,
         )
         # Backstop: strip any internal control marker or prompt scaffolding the model
         # echoed into the FINAL answer (a small local model sometimes parrots
@@ -799,6 +814,101 @@ WORKING DRAFT:
                 result.text = trimmed
                 result.raw["response"] = trimmed
                 result.raw["truncation_trimmed"] = True
+
+        if not enforce:
+            return result
+
+        # Provider hard-failure: never bypass validation with empty confident text
+        if not (result.text or "").strip():
+            abstain = (
+                "That's not in your sources."
+                if grounded and not web_grounded
+                else "I could not verify that from the available current evidence."
+            )
+            result.text = abstain
+            result.raw["response"] = abstain
+            result.raw["factuality"] = {
+                "mode": "web_grounded" if web_grounded else "source_constrained",
+                "final_verdict": "abstain",
+                "ship": True,
+                "repair_attempted": False,
+                "repair_succeeded": False,
+                "unsupported_claim_rate": 0.0,
+                "provider_empty": True,
+                "note": "Empty model output cannot bypass claim validation.",
+            }
+            # Stream only the abstention
+            for tok in abstain:
+                yield {"event": "token", "data": {"token": tok, "channel": "final"}}
+            return result
+
+        decision = evaluate_answer_factuality(
+            command=command,
+            answer_text=result.text,
+            evidence_rows=evidence,
+            web_grounded=web_grounded,
+            source_constrained=grounded and not web_grounded,
+            profile_name=profile,
+        )
+
+        if decision.final_verdict == "needs_repair" and decision.rejected_claims:
+            yield {"event": "phase", "data": {
+                "phase": "factuality_repair",
+                "note": f"{len(decision.rejected_claims)} claim(s) rejected — one repair attempt",
+                "rejected": [e.to_dict() for e in decision.rejected_claims[:8]],
+            }}
+            evidence_block = self._evidence_block(
+                "EVIDENCE" if web_grounded else "SOURCES", evidence,
+            )
+            repair_user = build_repair_user_prompt(
+                command=command,
+                evidence_block=evidence_block,
+                rejected=decision.rejected_claims,
+                web_grounded=web_grounded,
+            )
+            repair_system, _ = build_grounded_finalizer_messages(
+                command=command,
+                evidence_block=evidence_block,
+                web_grounded=web_grounded,
+            )
+            try:
+                repair_seg = yield from self._collect_stream(
+                    [
+                        ChatMessage(role="system", content=repair_system),
+                        ChatMessage(role="user", content=repair_user),
+                    ],
+                    req,
+                    tokens=min(req.final_tokens, 1600),
+                    channel=None,  # silent — do not stream unvalidated repair
+                    telemeter=False,
+                )
+                repaired = strip_scaffold_echo(
+                    _CONTROL_ARTIFACT_RE.sub("", repair_seg.text)
+                ).strip()
+            except Exception as exc:
+                # Provider failure during repair → abstain (no bypass)
+                repaired = ""
+                result.raw["factuality_repair_error"] = str(exc)[:200]
+
+            decision = finalize_after_repair(
+                command=command,
+                repaired_text=repaired or "",
+                original_decision=decision,
+                evidence_rows=evidence,
+                web_grounded=web_grounded,
+                source_constrained=grounded and not web_grounded,
+                profile_name=profile,
+            )
+
+        # Commit validated text only
+        result.text = decision.text
+        result.raw["response"] = decision.text
+        result.raw.update(decision.receipt_blob())
+        # Stream the accepted final answer (never the rejected draft)
+        if stream_channel is None:
+            for tok in (decision.text or ""):
+                yield {"event": "token", "data": {"token": tok, "channel": "final"}}
+        yield {"event": "factuality", "data": decision.receipt_blob().get("factuality") or {}}
         return result
 
     def _math_correct(self, command: str, answer: str,
@@ -1276,9 +1386,21 @@ WORKING DRAFT:
         if grounded:
             al = answer_text.lower()
             n_src = sum(1 for e in evidence if e.get("kind") == "source")
-            if web_grounded:
-                # Advisory web grounding never refuses — it answers from knowledge +
-                # evidence and cites what it used.
+            # Prefer claim-ledger receipt when the finalizer enforced it
+            fact = (final.raw or {}).get("factuality") if final is not None else None
+            if isinstance(fact, dict) and fact.get("final_verdict"):
+                grounded_result = {
+                    "mode": fact.get("mode") or ("web_grounded" if web_grounded else "byo_sources"),
+                    "sources_count": n_src,
+                    "citations": al.count("[s"),
+                    "refused": fact.get("final_verdict") == "abstain",
+                    "answered": bool(answer_text) and fact.get("final_verdict") != "abstain",
+                    "answered_from_sources": (
+                        bool(answer_text) and fact.get("final_verdict") in ("ship", "mixed_ship")
+                    ),
+                    "factuality": fact,
+                }
+            elif web_grounded:
                 cited = al.count("[s")
                 grounded_result = {"mode": "web_grounded", "sources_count": n_src,
                                    "citations": cited, "refused": False,
