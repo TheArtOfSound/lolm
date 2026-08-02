@@ -25,14 +25,16 @@ test -z "$(git status --porcelain)"
 ## Preflight (required before the 30-task run)
 
 ```bash
+# Prefer writing reports outside the clone so the worktree stays clean.
 python3 scripts/track2b_remote_preflight.py --workspace-only \
-  --expected-sha f1bd33f920cb552f281c6d829633ee2ef7feda34
+  --allow-descendant-of f1bd33f920cb552f281c6d829633ee2ef7feda34 \
+  --out /tmp/track2b-preflight-workspace.json
 
 # After staging is up:
 export LOLM_LIVE_TRANSPORT=lolm-code-sse
 export LOLM_LIVE_BASE_URL="https://<sha-pinned-staging>"
 export LOLM_LIVE_API_KEY="<env-only>"
-export LOLM_EXPECTED_SERVER_SHA="<deployed-sha>"
+export LOLM_EXPECTED_SERVER_SHA="<deployed-sha>"   # product code on server
 export LOLM_EXPECTED_DEPLOYMENT_ID="<staging-deployment-id>"
 export LOLM_RECEIPT_VERIFY_KEYS="<kid>:<public-key>"
 export LOLM_EXPECTED_RECEIPT_KEY_ID="<kid>"
@@ -43,13 +45,14 @@ export LOLM_BWRAP_CONFIRMED=1
 # Never set LOLM_ALLOW_UNTRUSTED_LOCAL_RECEIPTS for remote campaigns
 
 python3 scripts/track2b_remote_preflight.py --full \
-  --out bench/results/track2b-preflight.json
+  --allow-descendant-of f1bd33f920cb552f281c6d829633ee2ef7feda34 \
+  --out /tmp/track2b-preflight-full.json
 ```
 
 All of these must pass:
 
 ```text
-Checked-out SHA = f1bd33f920cb552f281c6d829633ee2ef7feda34  (or newer validation tip)
+Checked-out SHA = f1bd33f… or a clean descendant (validation tooling only)
 Working tree = clean
 Server-reported SHA = deployed validation SHA
 Deployment ID = expected staging deployment
