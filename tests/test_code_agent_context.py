@@ -213,16 +213,14 @@ def test_missing_targets_reports_only_absent_paths(tmp_path):
 # ── never report DONE over code that does not compile ────────────────────────
 
 def test_broken_final_tree_is_reported_as_broken_not_shipped(tmp_path):
-    # The write-time preflight can be left behind when the step budget runs out
-    # mid-repair. The loop used to hand back a tree with a SyntaxError in it and
-    # still call it shipped — the one failure a receipts product cannot afford.
+    # Without a prior green checkpoint, a SyntaxError final tree must never ship.
+    # (When a green checkpoint exists, LGTS restores it — see test below.)
     sb = Sandbox(tmp_path)
     seq = iter([
-        "FILE: solution.py\n```\nprint('hi')\n```\nRUN: python3 solution.py",
         "FILE: solution.py\n```\ndef broken(:\n```\nRUN: python3 solution.py",
         "DONE: shipped it",
     ])
-    agent = CodeAgent(sb, lambda m: next(seq), isolated=None)
+    agent = CodeAgent(sb, lambda m: next(seq), isolated=None, max_steps=4)
     events = list(agent.run("Create solution.py"))
     rec = [e["data"] for e in events if e["event"] == "code_receipt"][0]
     assert rec["syntax_ok"] is False, rec.get("syntax_error")
@@ -236,6 +234,27 @@ def test_broken_final_tree_is_reported_as_broken_not_shipped(tmp_path):
     assert verified["signature_valid"] is True
     # Broken is an honest, authentic receipt but not a successful delivery.
     assert verified["integrity"]["verified"] is False
+
+
+def test_green_to_red_restores_last_known_green(tmp_path):
+    """F-04 / D-02: green→red regression restores the checkpoint byte-for-byte."""
+    sb = Sandbox(tmp_path)
+    seq = iter([
+        "FILE: solution.py\n```\nprint('hi')\n```\nRUN: python3 solution.py",
+        "FILE: solution.py\n```\ndef broken(:\n```\nRUN: python3 solution.py",
+        "DONE: shipped it",
+    ])
+    agent = CodeAgent(sb, lambda m: next(seq), isolated=None, max_steps=6)
+    events = list(agent.run("Create solution.py"))
+    notes = " ".join(
+        e["data"].get("text", "") for e in events if e["event"] == "agent_note"
+    )
+    assert "last-known-green" in notes or "LGTS" in notes or "rollback" in notes.lower(), notes
+    # Delivered tree must be the green content, not the broken rewrite
+    body = sb.read_file("solution.py") or ""
+    assert "print" in body and "broken" not in body
+    rec = [e["data"] for e in events if e["event"] == "code_receipt"][0]
+    assert rec["syntax_ok"] is True, rec.get("syntax_error")
 
 
 def test_compiling_code_still_reports_shipped(tmp_path):
