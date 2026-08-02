@@ -8,17 +8,14 @@
 <link rel="canonical" href="https://lolm.imagineqira.com/research.html">
 <style>
   :root{
-    --bg:#ffffff; --ink:#0a0c10; --dim:#41474f; --faint:#7a828c; --line:#e7e9ee;
-    --panel:#f7f8fa; --panel2:#fbfcfd; --accent:#f43f5e; --good:#16a34a; --warn:#d97706;
-    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
-    --high:#16a34a; --med:#0ea5e9; --low:#9aa1ab;
+    /* theme tokens: lolm-ds.css */
+    --high:#2ed9a3; --med:#5b9cff; --low:#6b7686;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
   a{color:var(--accent);text-decoration:none}
   .wrap{max-width:1020px;margin:0 auto;padding:0 22px}
-  header{border-bottom:1px solid var(--line);position:sticky;top:0;background:rgba(255,255,255,.86);backdrop-filter:blur(8px);z-index:10}
+  header{border-bottom:1px solid var(--line);position:sticky;top:0;background:color-mix(in srgb, var(--panel) 86%, transparent);backdrop-filter:blur(8px);z-index:10}
   nav{display:flex;align-items:center;gap:18px;height:58px;font-size:14px}
   nav .brand{font-weight:700;letter-spacing:-.02em}
   nav .brand span{color:var(--accent)}
@@ -37,14 +34,14 @@
   .btn{background:var(--ink);color:#fff;border:none;border-radius:11px;padding:0 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--sans)}
   .btn:disabled{opacity:.5;cursor:default}
   .btn.sm{padding:5px 12px;font-size:12.5px;border-radius:8px}
-  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
   .chips{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0}
   .chip{font-family:var(--mono);font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:4px 11px;color:var(--dim);cursor:pointer}
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-top:12px;display:none}
   .panel.on{display:block}
   .verdict{font-size:14px;font-weight:600;border-radius:10px;padding:11px 14px;margin-bottom:12px}
   .verdict.good{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0}
-  .verdict.warn{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+  .verdict.warn{background:var(--panel2)beb;color:#b45309;border:1px solid #fde68a}
   .verdict.flat{background:var(--panel2);color:var(--dim);border:1px solid var(--line)}
   .ans{font-size:15.5px;color:var(--ink);margin:4px 0 14px;white-space:pre-wrap}
   .grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
@@ -67,7 +64,7 @@
   .dot.ok{background:var(--good)}.dot.idle{background:var(--low)}.dot.partial{background:var(--warn)}
   .mem{padding:10px 0;border-top:1px solid var(--line);font-size:13.5px}
   .mem .c{color:var(--ink)} .mem .s{font-size:12px;color:var(--faint);word-break:break-all}
-  .hi{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:9px 13px;font-size:13px;color:#9a3412;margin-top:8px}
+  .hi{background:var(--panel2)7ed;border:1px solid #fed7aa;border-radius:10px;padding:9px 13px;font-size:13px;color:#9a3412;margin-top:8px}
   .muted{color:var(--faint);font-size:13px}
   .foot{border-top:1px solid var(--line);margin-top:40px;padding:22px 0;color:var(--faint);font-size:12.5px}
   @media(max-width:560px){.wrap{padding:0 16px}.hero{padding:40px 0 8px}}

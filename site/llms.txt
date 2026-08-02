@@ -1,32 +1,65 @@
-# LOLM — Latent Order Language Model (Qira LLC)
+# LOLM — agent that does not lose the plot (Qira LLC)
 
-> Persistent AI agent workspace with auditable receipts. Measures uncertainty and acts on it (retrieve / verify / branch / finalize). Patent pending.
+> An agent that does not lose the plot.
+> LOLM keeps explicit task state, sandboxed execution, verification, and receipts.
+> Install: npm install -g lolm-cli · App: https://lolm.imagineqira.com/app.html
+> Product claim: persistent task-state control — not “smarter than every frontier agent.”
+> Patent pending.
 
-## Primary product
-- Workspace: https://lolm.imagineqira.com/
-- Free try (no account): https://lolm.imagineqira.com/try.html
-- Why switch from Claude Code / Codex: https://lolm.imagineqira.com/why-switch.html
-- Live receipts ledger: https://lolm.imagineqira.com/receipts.html
+## Product surfaces
+- Home: https://lolm.imagineqira.com/
+- Developers / integrate: https://lolm.imagineqira.com/developers.html
+- Install: https://lolm.imagineqira.com/install.html
+- Web app: https://lolm.imagineqira.com/app.html
 - Pricing: https://lolm.imagineqira.com/pricing.html
-- Science / architecture: https://lolm.imagineqira.com/about.html
-- Live research: https://lolm.imagineqira.com/research.html
-- Operator autonomy: https://lolm.imagineqira.com/operator.html
+- API catalog (JSON): https://lolm.imagineqira.com/api/demo/integrate
+- OpenAPI lite: https://lolm.imagineqira.com/api/demo/integrate/openapi.json
+- Compare hub (SEO): https://lolm.imagineqira.com/compare/
+- vs Claude Code: https://lolm.imagineqira.com/compare/claude-code.html
+- vs Cursor: https://lolm.imagineqira.com/compare/cursor.html
+- vs Codex: https://lolm.imagineqira.com/compare/codex.html
+- vs GitHub Copilot: https://lolm.imagineqira.com/compare/github-copilot.html
+- vs Devin: https://lolm.imagineqira.com/compare/devin.html
+- vs ChatGPT: https://lolm.imagineqira.com/compare/chatgpt.html
+- Docs: https://lolm.imagineqira.com/docs.html
+- Receipts: https://lolm.imagineqira.com/receipts.html
 
-## What it is
-LOLM is a hybrid Transformer–SSM language model stack plus an NFET control loop that measures logit entropy, hidden drift, gate balance, and regime entropy to decide when to retrieve evidence, verify, branch, or finalize. The commercial surface is a browser workspace: chat, memory, web search, sandboxed code, visual apps, and per-run receipts.
+## Billing (hosted) — daily quotas, NOT tokens
+Canonical config: https://lolm.imagineqira.com/product-config.json
+Live enforcement: GET /api/demo/billing/config and /api/demo/billing/usage
+Reset UTC midnight. No credit wallet. Self-host unlimited.
 
-## Pricing (USD / month)
-- Free: $0 — 10 runs/day, 3 visual builds/day
-- Plus: $7.99 — 300 runs/day, 30 builds/day
-- Pro: $19.99 — 2000 runs/day, 200 builds/day
-Checkout: Stripe hosted. Local/sovereign installs are unlimited.
+| Plan | USD/mo | Runs/day | Visual builds/day |
+|------|--------|----------|-------------------|
+| Free | 0      | 10       | 3                 |
+| Plus | 7.99   | 300      | 30                |
+| Pro  | 19.99  | 2000     | 200               |
+| Self-host | 0 | unlimited | unlimited    |
+
+- **run** = one hosted agent task (not an LLM token)
+- **visual** = one browser-verified HTML/app build
+- CLI + web share public-API quotas
+- Stripe Checkout prices are set server-side from the same plan table
+- One-time top-up packs are not live yet
+
+## What LOLM is
+Structured latent task state z_t = {G,P,W,A,U,F,C}; policy π(z); multi-session resume;
+sandbox write→run→fix; sealed receipts; Oort/Flows tactics.
+
+## What we do not claim
+Beating Claude Code / Codex / Cursor / Devin on every multi-hour job or public coding benchmark.
+
+## Install
+```bash
+npm install -g lolm-cli
+lolm status
+lolm code "write fizzbuzz to 20" --save ./out
+```
 
 ## Developers
-- npm: lolm-nfet-client — https://www.npmjs.com/package/lolm-nfet-client (code_receipt + listCodeReceipts)
-- Code receipt ledger API: https://lolm.imagineqira.com/api/demo/code/receipts
-- Code health: https://lolm.imagineqira.com/api/demo/code/health
+- npm lolm-cli · lolm-nfet-client
 - GitHub: https://github.com/TheArtOfSound/LOLM
 - Contact: bryanleonard237@gmail.com
 
 ## Company
-Qira LLC (Imagine Qira) — research-driven AI systems. Related product: QEV (portable evidence dossiers).
+Qira LLC (Imagine Qira)

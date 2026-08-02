@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install LOLM — CLI, web app, self-host</title>
+<meta name="description" content="Install LOLM in one command (npm), open the same web workspace, or self-host unlimited. CLI commands: code, build, ask, receipts, status.">
+<meta property="og:title" content="Install LOLM">
+<meta property="og:description" content="npm install -g lolm-cli · npx lolm-cli · open the web app · self-host the same UI.">
+<meta property="og:url" content="https://lolm.imagineqira.com/install.html">
+<meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
+<link rel="canonical" href="https://lolm.imagineqira.com/install.html">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#07080b">
+<link rel="stylesheet" href="/lolm-ds.css">
+<script src="/lolm-ds.js" defer></script>
+<style>
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  a{color:var(--accent2);text-decoration:none} a:hover{color:var(--ink)}
+  .shell{max-width:760px;margin:0 auto;padding:0 20px 72px}
+  .top{display:flex;align-items:center;gap:14px;height:54px;border-bottom:1px solid var(--line);margin:0 -20px 28px;padding:0 20px}
+  .mark{font-weight:750;color:var(--ink)} .mark em{font-style:normal;background:var(--lolm-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .top nav{display:flex;gap:14px;flex:1;font-size:13.5px}
+  .top nav a{color:var(--dim)} .top nav a:hover{color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;border-radius:10px;padding:9px 14px;font:inherit;font-weight:650;font-size:13.5px;text-decoration:none;border:1px solid var(--line-2);background:var(--panel2);color:var(--ink)}
+  .btn-primary{background:var(--lolm-grad);border:0;color:#fff}
+  h1{font-size:clamp(28px,4.5vw,38px);letter-spacing:-.03em;margin:0 0 10px;color:var(--t-hi)}
+  .lede{color:var(--dim);font-size:16px;margin:0 0 28px;max-width:36em}
+  h2{font-size:13px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:36px 0 12px;font-weight:600}
+  .box{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:16px 18px;margin:0 0 14px}
+  .box h3{margin:0 0 6px;font-size:15.5px;color:var(--t-hi)}
+  .box p{margin:0 0 10px;color:var(--dim);font-size:14px}
+  pre.cmd, .cmd{font-family:var(--mono);font-size:13px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow:auto;color:var(--good);margin:0 0 10px;white-space:pre-wrap;word-break:break-word}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0 16px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--faint);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+  td code{font-family:var(--mono);font-size:12.5px;color:var(--good)}
+  .note{font-size:13.5px;color:var(--dim);border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:12px 14px;margin:16px 0}
+  .note b{color:var(--ink)}
+  .row{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+  ul{margin:0 0 10px;padding-left:1.15em;color:var(--dim);font-size:14px}
+  li{margin:5px 0}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <a class="mark" href="/">LO<em>LM</em></a>
+    <nav>
+      <a href="/developers.html">Developers</a>
+      <a href="/install.html">Install</a>
+      <a href="/pricing.html">Pricing</a>
+      <a href="/docs.html">Docs</a>
+      <a href="/app.html">App</a>
+    </nav>
+    <a class="btn btn-primary" href="/app.html">Open app</a>
+  </header>
+
+  <h1>Install LOLM</h1>
+  <p class="lede">
+    Three ways to use the same product: one-line CLI, browser workspace, or self-host.
+    After install, the UI and the agent loop match what you see on the hosted site.
+  </p>
+
+  <h2 id="cli">1 · CLI (fastest)</h2>
+  <div class="box">
+    <h3>Requirements</h3>
+    <p>Node.js 20 or newer. No API key needed for the free hosted tier.</p>
+    <pre class="cmd">npm install -g lolm-cli</pre>
+    <p><b style="color:var(--ink)">That command only installs.</b> npm will print something like <code style="font-family:var(--mono);font-size:12px">added 2 packages</code> and return you to the prompt — that means it worked. Then run the agent:</p>
+    <pre class="cmd">lolm status
+lolm code "write fizzbuzz to 20 in solution.py and run it" --save ./out
+lolm build "a snake game" -o snake.html</pre>
+    <p>Or one-shot without a global install:</p>
+    <pre class="cmd">npx lolm-cli code "write fizzbuzz to 20 in solution.py and run it" --save ./out</pre>
+    <div class="row">
+      <a class="btn btn-primary" href="https://www.npmjs.com/package/lolm-cli" target="_blank" rel="noopener">npm package</a>
+      <a class="btn" href="/pricing.html">Usage limits</a>
+    </div>
+  </div>
+
+  <div class="box">
+    <h3>Commands</h3>
+    <table>
+      <tr><th>Command</th><th>What it does</th></tr>
+      <tr><td><code>lolm code "…"</code></td><td>Agentic coding loop in a jail. <code>--save ./dir</code> writes files.</td></tr>
+      <tr><td><code>lolm build "…"</code></td><td>Self-contained HTML/app. <code>-o file.html</code>.</td></tr>
+      <tr><td><code>lolm ask "…"</code></td><td>Stream an answer with control decisions.</td></tr>
+      <tr><td><code>lolm receipts</code></td><td>Recent sealed receipts from the public ledger.</td></tr>
+      <tr><td><code>lolm status</code></td><td>API health + your daily run/visual remaining.</td></tr>
+      <tr><td><code>lolm memory …</code></td><td>List / add / forget durable facts.</td></tr>
+    </table>
+    <p>Point at your own box:</p>
+    <pre class="cmd">lolm code "…" --base http://127.0.0.1:7866</pre>
+    <p>Or set <code style="font-family:var(--mono);font-size:12.5px;color:var(--good)">LOLM_BASE_URL</code>.</p>
+  </div>
+
+  <h2 id="web">2 · Web app (same UI)</h2>
+  <div class="box">
+    <h3>Hosted workspace</h3>
+    <p>
+      Open the full product in the browser — chats, projects, memory, code jail,
+      visual builder, inspector, receipts. No install required. Free daily quota.
+    </p>
+    <div class="row">
+      <a class="btn btn-primary" href="/app.html">Open app →</a>
+      <a class="btn" href="/try.html">Quick demo</a>
+    </div>
+  </div>
+  <div class="note">
+    <b>Same product surface:</b> the files under <code style="font-family:var(--mono);font-size:12px">/app.html</code>
+    are the workspace UI. Self-host serves that same static UI from your process —
+    not a different “lite” mode.
+  </div>
+
+  <h2 id="self-host">3 · Self-host (unlimited)</h2>
+  <div class="box">
+    <h3>Local / sovereign</h3>
+    <p>Run on your machine. Daily hosted limits do not apply. Bring your own keys when you want frontier models.</p>
+    <pre class="cmd">git clone https://github.com/TheArtOfSound/LOLM.git
+cd LOLM
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-agent.txt
+# serve demo + static site (see README / Makefile for your env)
+make nfet-smoke   # offline smoke when configured</pre>
+    <ul>
+      <li>Serve <code>site/</code> as static (includes <code>app.html</code> workspace).</li>
+      <li>API: public demo server (<code>local_ui/server_public_demo.py</code>).</li>
+      <li>Point CLI: <code>lolm status --base http://127.0.0.1:&lt;port&gt;</code></li>
+    </ul>
+    <div class="row">
+      <a class="btn" href="https://github.com/TheArtOfSound/LOLM" target="_blank" rel="noopener">GitHub repo</a>
+      <a class="btn" href="/docs.html">Docs hub</a>
+    </div>
+  </div>
+
+  <h2>How usage works on hosted cloud</h2>
+  <div class="note">
+    <b>Not token billing.</b> Free (10 runs/day) · Plus <b>$7.99</b> (120) · Pro <b>$19.99</b> (500).
+    Daily visual builds counted separately. Caps keep hosting sustainable.
+    CLI and web share public-API quotas. Self-host = unlimited.
+    Details: <a href="/pricing.html">Pricing</a> · <a href="/compare/">Compare competitors</a>.
+  </div>
+
+  <div class="row" style="margin-top:28px">
+    <a class="btn btn-primary" href="/app.html">Open app</a>
+    <a class="btn" href="/pricing.html">Pricing</a>
+    <a class="btn" href="/">Home</a>
+  </div>
+</div>
+</body>
+</html>

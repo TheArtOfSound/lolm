@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOLM Docs — install, architecture, receipts, research</title>
+<meta name="description" content="Documentation hub for LOLM: install, pricing, architecture, task-state control, receipts, research, operator, and CLI.">
+<link rel="canonical" href="https://lolm.imagineqira.com/docs.html">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#07080b">
+<link rel="stylesheet" href="/lolm-ds.css">
+<script src="/lolm-ds.js" defer></script>
+<style>
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  a{color:var(--accent2);text-decoration:none} a:hover{color:var(--ink)}
+  .shell{max-width:900px;margin:0 auto;padding:0 20px 72px}
+  .top{display:flex;align-items:center;gap:14px;height:54px;border-bottom:1px solid var(--line);margin:0 -20px 28px;padding:0 20px}
+  .mark{font-weight:750;color:var(--ink)} .mark em{font-style:normal;background:var(--lolm-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .top nav{display:flex;gap:14px;flex:1;font-size:13.5px}
+  .top nav a{color:var(--dim)}
+  .btn{display:inline-flex;border-radius:10px;padding:9px 14px;font:inherit;font-weight:650;font-size:13.5px;text-decoration:none;background:var(--lolm-grad);color:#fff}
+  h1{font-size:clamp(28px,4vw,36px);letter-spacing:-.03em;margin:0 0 8px;color:var(--t-hi)}
+  .lede{color:var(--dim);margin:0 0 28px;max-width:36em}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:700px){.grid{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:16px 18px}
+  .card .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+  .card h3{margin:0 0 6px;font-size:15.5px;color:var(--t-hi)}
+  .card p{margin:0;font-size:13.5px;color:var(--dim);line-height:1.5}
+  .card a.more{display:inline-block;margin-top:10px;font-size:13px;font-weight:600}
+  h2{font-size:13px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:36px 0 12px}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <a class="mark" href="/">LO<em>LM</em></a>
+    <nav>
+      <a href="/install.html">Install</a>
+      <a href="/pricing.html">Pricing</a>
+      <a href="/docs.html">Docs</a>
+      <a href="/app.html">App</a>
+    </nav>
+    <a class="btn" href="/app.html">Open app</a>
+  </header>
+
+  <h1>Docs</h1>
+  <p class="lede">Everything that used to live as scattered pages — grouped for humans. Product first, research secondary.</p>
+
+  <h2>Start here</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="tag">Developers</div>
+      <h3>Integrate anywhere</h3>
+      <p>HTTP + SSE API, npm client, CLI, curl/Python — the focus path for platforms.</p>
+      <a class="more" href="/developers.html">Developers →</a>
+    </div>
+    <div class="card">
+      <div class="tag">Product</div>
+      <h3>Install</h3>
+      <p>CLI one-liner, web app, self-host. Same UI after install.</p>
+      <a class="more" href="/install.html">Open install →</a>
+    </div>
+    <div class="card">
+      <div class="tag">Product</div>
+      <h3>Pricing &amp; usage</h3>
+      <p>Free · Plus $7.99 · Pro $19.99. Daily runs/visuals — sustainable caps, not token wallets.</p>
+      <a class="more" href="/pricing.html">Open pricing →</a>
+    </div>
+    <div class="card">
+      <div class="tag">SEO · sales</div>
+      <h3>Compare competitors</h3>
+      <p>Detailed guides vs Claude Code, Cursor, Codex, Copilot, Devin, ChatGPT.</p>
+      <a class="more" href="/compare/">Compare hub →</a>
+    </div>
+    <div class="card">
+      <div class="tag">Product</div>
+      <h3>Workspace app</h3>
+      <p>Full UI: code jail, visual builder, memory, receipts, task state.</p>
+      <a class="more" href="/app.html">Open app →</a>
+    </div>
+    <div class="card">
+      <div class="tag">Product</div>
+      <h3>Quick demo</h3>
+      <p>No-account public demo of control + receipts.</p>
+      <a class="more" href="/try.html">Open demo →</a>
+    </div>
+  </div>
+
+  <h2>Architecture &amp; trust</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="tag">Core claim</div>
+      <h3>How it works</h3>
+      <p>Task state z_t, π(z), sandbox, NFET as infrastructure — honest scope.</p>
+      <a class="more" href="/about.html">Architecture →</a>
+    </div>
+    <div class="card">
+      <div class="tag">Compare</div>
+      <h3>Why switch</h3>
+      <p>What LOLM is for vs typical context-driven agents. No fake win-rate claims.</p>
+      <a class="more" href="/why-switch.html">Why switch →</a>
+    </div>
+    <div class="card">
+      <div class="tag">Audit</div>
+      <h3>Live receipts</h3>
+      <p>Hash-chained public ledger of code and visual runs.</p>
+      <a class="more" href="/receipts.html">Receipts →</a>
+    </div>
+    <div class="card">
+      <div class="tag">Agents</div>
+      <h3>llms.txt</h3>
+      <p>Machine-readable product summary for agents and crawlers.</p>
+      <a class="more" href="/llms.txt">llms.txt →</a>
+    </div>
+  </div>
+
+  <h2>Labs (optional)</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="tag">Lab</div>
+      <h3>Research jobs</h3>
+      <p>Live web research with source-backed memory.</p>
+      <a class="more" href="/research.html">Research →</a>
+    </div>
+    <div class="card">
+      <div class="tag">Lab</div>
+      <h3>Operator</h3>
+      <p>Autonomy loop surface for continuous operation.</p>
+      <a class="more" href="/operator.html">Operator →</a>
+    </div>
+    <div class="card">
+      <div class="tag">Lab</div>
+      <h3>HF daily learning</h3>
+      <p>Hugging Face dataset flywheel dashboard.</p>
+      <a class="more" href="/hf.html">HF learning →</a>
+    </div>
+    <div class="card">
+      <div class="tag">Ecosystem</div>
+      <h3>Oort · Flows</h3>
+      <p>Library + guided playbooks powering LOLM tactics (740+ steps).</p>
+      <a class="more" href="https://oortstack.com" target="_blank" rel="noopener">Oort →</a>
+      · <a class="more" href="https://flows.oortstack.com" target="_blank" rel="noopener">Flows →</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>

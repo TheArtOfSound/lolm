@@ -21,6 +21,6 @@
   },
   "vars": {
     "ORIGIN": "https://lolm.imagineqira.com",
-    "LINES": "demo:0.6B server,demo4b:4B lab line"
+    "LINES": "demo:Hosted product API,demo4b:Lab line (optional)"
   }
 }

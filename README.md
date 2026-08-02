@@ -1,6 +1,22 @@
-# LOLM — Latent Order Language Model
+# LOLM — an agent that does not lose the plot
 
-**Live:** [lolm.imagineqira.com](https://lolm.imagineqira.com) — research page with a live agent demo · [/try.html](https://lolm.imagineqira.com/try.html) — the no-jargon version anyone can use.
+**Product (live):** [lolm.imagineqira.com](https://lolm.imagineqira.com) · [Open app](https://lolm.imagineqira.com/app.html) · [Install CLI](https://lolm.imagineqira.com/install.html) · [Pricing](https://lolm.imagineqira.com/pricing.html) · [Demo](https://lolm.imagineqira.com/try.html)
+
+LOLM is Qira’s agent workspace: explicit task state, sandboxed execution, evidence-gated completion, and sealed receipts. Install with npm or open the web app — same product surface.
+
+```bash
+npm install -g lolm-cli   # Node 20+
+lolm status
+lolm code "fizzbuzz to 20" --save ./out
+```
+
+**Hosted plans** (server-enforced daily quotas — not a token wallet): Free 10 runs/day · Plus $7.99 / 300 · Pro $19.99 / 2,000. Canonical public config: [`site/product-config.json`](site/product-config.json) and live `GET /api/demo/billing/config`.
+
+**Product hierarchy:** Qira (company) → LOLM (product) → LOLM agent (user-facing) → NFET (control/telemetry subsystem) → Latent Order Language Model (research architecture). Research details live on architecture pages and below.
+
+---
+
+## Research architecture (Latent Order Language Model)
 
 A hybrid Transformer-SSM architecture that separates surface token prediction from latent state tracking. At 1.57B parameters on H200, LOLM achieves **33.2 PPL** versus **39.1** for a matched decoder-only baseline at step ~24K — a **15% improvement** (training ongoing). Cross-hardware validation on Google TPU v4 confirms LOLM converges **up to 43% faster** than a parameter-matched baseline during early training.
 
