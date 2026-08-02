@@ -56,7 +56,37 @@ Trust aborts = 0
 qualification_passed = true (20/20)
 ```
 
+## Out-of-band disposition (trust classes)
+
+| Surface | Trust class | Policy |
+|---------|-------------|--------|
+| CodeAgent FILE/EDIT | `code_agent_gateway` | RBE + CAS + gateway receipts |
+| Operator write/edit | `privileged_operator` | Capability surface + privileged receipt + pre/post tree hash |
+| Sandbox HTTP API write | `privileged_http_sandbox` | Bearer token + privileged receipt (not CodeAgent) |
+| Public demo sandbox write | `privileged_http_sandbox` | Isolated demo; privileged receipt; `public_demo` flag |
+| LGTS materialize | `recovery_lgts` | Typed `restore_checkpoint` transaction; **no** edit auth grant |
+| Resume package apply | `recovery_resume` | Typed recovery transaction; **no** edit auth grant |
+| Gauntlet seed | `gauntlet_seed` | Fixture only |
+
+Recovery privileges cannot be reused for subsequent ordinary edits
+(`grants_edit_authorization: false` on all recovery transactions).
+
+Implementation: `lolm/privileged_mutation.py`.
+
 ## Track 3 boundary
 
-- Passive telemetry may start **after** Phase A pass (label from verifier/repo evidence only).
-- **Do not** enable adaptive/learned routing until Phase B (≥120 organic runs) passes, Track 1 has real-traffic factuality outcomes, and failed/stuck/rolled-back outcomes are retained.
+- **Passive shadow telemetry: ON** (`lolm/shadow_telemetry.py`, wired via
+  `AgentCapabilityCore.prepare_request` + CodeAgent/NFET outcome recording).
+- Shadow may recommend planner/executor/verifier; **must not** alter live
+  selection (`ADAPTIVE_ROUTING_ENABLED = False`).
+- Adaptive routing stays blocked until Track 1 real-traffic factuality,
+  Track 2B live-model gauntlet, per-bucket ≥30 observations, and shadow
+  outperformance gates pass.
+- Failed/stuck/rolled-back/timed-out/abstained outcomes are retained.
+
+## Track 2 split
+
+| Layer | Status |
+|-------|--------|
+| Track 2A mutation integrity (scripted organic A+B) | **Passed** at `84a4bc5` |
+| Track 2B open-ended live-model competence | **Unproven** — harness: `scripts/repo_gauntlet_live_model_phase_a.py` |

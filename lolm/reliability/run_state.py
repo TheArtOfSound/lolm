@@ -413,8 +413,19 @@ class RunReliabilityState:
         }
 
     def apply_resume_package(self, package: Dict[str, Any], sandbox: Any) -> Dict[str, Any]:
-        """Restore workspace + reliability state from a genuine resume transport."""
-        notes: Dict[str, Any] = {"restored_files": []}
+        """Restore workspace + reliability state as a typed recovery transaction.
+
+        Recovery privileges do not grant ordinary edit authorization.
+        """
+        from lolm.privileged_mutation import (
+            MutationTrustClass,
+            build_recovery_transaction,
+            read_sandbox_tree,
+            tree_manifest,
+        )
+        notes: Dict[str, Any] = {"restored_files": [], "grants_edit_authorization": False}
+        before = read_sandbox_tree(sandbox)
+        pre_hash = tree_manifest(before)["tree_hash"]
         ws = (package or {}).get("workspace_snapshot") or {}
         for path, content in ws.items():
             try:
@@ -423,6 +434,21 @@ class RunReliabilityState:
                 self.note_write(path, content if isinstance(content, str) else str(content))
             except Exception as exc:
                 notes.setdefault("errors", []).append(f"{path}: {exc}")
+        after = read_sandbox_tree(sandbox)
+        ckpt_id = str(
+            ((package or {}).get("checkpoint_payload") or {}).get("checkpoint_id")
+            or (package or {}).get("resume_id")
+            or "resume"
+        )
+        tx = build_recovery_transaction(
+            sandbox,
+            checkpoint_id=ckpt_id,
+            expected_pre_tree_hash=pre_hash,
+            before_files=before,
+            after_files=after,
+            trust_class=MutationTrustClass.RECOVERY_RESUME,
+        )
+        notes["recovery_transaction"] = tx.to_dict()
         ckpt = (package or {}).get("checkpoint_payload") or {}
         if ckpt.get("file_contents"):
             try:

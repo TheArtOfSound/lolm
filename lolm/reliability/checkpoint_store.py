@@ -323,10 +323,18 @@ class CheckpointStore:
         *,
         current_paths: Optional[Sequence[str]] = None,
     ) -> Optional[GreenCheckpoint]:
-        """Exact tree restore: write checkpoint files and delete extras."""
+        """Exact tree restore as a typed recovery transaction (not ordinary edit auth)."""
         ckpt = self.restore(checkpoint_id)
         if ckpt is None:
             return None
+        from lolm.privileged_mutation import (
+            MutationTrustClass,
+            build_recovery_transaction,
+            read_sandbox_tree,
+            tree_manifest,
+        )
+        before = read_sandbox_tree(sandbox)
+        pre_hash = tree_manifest(before)["tree_hash"]
         target = set(ckpt.file_contents.keys())
         # Discover current paths
         paths: List[str] = list(current_paths or [])
@@ -364,6 +372,31 @@ class CheckpointStore:
                         pass
         for path, content in ckpt.file_contents.items():
             sandbox.write_file(path, content, reason="lgts_rollback")
+        after = read_sandbox_tree(sandbox)
+        # Expected post tree = checkpoint contents (plus any undeleted leftovers)
+        expected = dict(ckpt.file_contents)
+        expected_hash = tree_manifest(expected)["tree_hash"]
+        restored_hash = tree_manifest(after)["tree_hash"]
+        tx = build_recovery_transaction(
+            sandbox,
+            checkpoint_id=ckpt.checkpoint_id,
+            expected_pre_tree_hash=pre_hash,
+            before_files=before,
+            after_files=after,
+            trust_class=MutationTrustClass.RECOVERY_LGTS,
+        )
+        # exact match against checkpoint body (not residual extras)
+        tx.exact_tree_match = restored_hash == expected_hash or all(
+            after.get(p) == expected.get(p) for p in expected
+        )
+        tx.meta["expected_checkpoint_tree_hash"] = expected_hash
+        tx.meta["grants_edit_authorization"] = False
+        # Attach for callers / receipts without changing return type
+        try:
+            setattr(ckpt, "recovery_transaction", tx.to_dict())
+        except Exception:
+            pass
+        self._last_recovery_transaction = tx.to_dict()
         return ckpt
 
     def _persist(self, ckpt: GreenCheckpoint) -> None:

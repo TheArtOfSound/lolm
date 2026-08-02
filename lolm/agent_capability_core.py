@@ -44,6 +44,13 @@ from lolm.repo_context import (
     rank_repository_context,
 )
 from lolm.mutation_gateway import MutationGateway
+from lolm.shadow_telemetry import (
+    ActualOutcome,
+    ShadowRecord,
+    ShadowRouter,
+    adaptive_routing_active,
+    get_shadow_router,
+)
 from lolm.task_profiler import profile_task
 
 
@@ -52,11 +59,18 @@ class RequestDecision:
     profile: TaskProfile
     route: RoutePlan
     grounding: GroundingPolicy
+    shadow: Optional[ShadowRecord] = None
+    shadow_route: Optional[RoutePlan] = None
 
     def to_dict(self) -> dict:
         return {
             "profile": self.route.to_dict()["profile"],
             "route": self.route.to_dict(),
+            "shadow_route": self.shadow_route.to_dict() if self.shadow_route else None,
+            "shadow_record": self.shadow.to_dict() if self.shadow else None,
+            "adaptive_routing_applied": False if not adaptive_routing_active() else (
+                bool(self.shadow and self.shadow.adaptive_routing_applied)
+            ),
             "grounding": {
                 "mode": self.grounding.mode.value,
                 "require_claim_ledger": self.grounding.require_claim_ledger,
@@ -140,9 +154,11 @@ class AgentCapabilityCore:
         *,
         registry: Optional[Sequence[ModelCapability]] = None,
         telemetry: Optional[CapabilityTelemetry] = None,
+        shadow: Optional[ShadowRouter] = None,
     ) -> None:
         self.registry = tuple(registry or default_registry())
         self.telemetry = telemetry or CapabilityTelemetry()
+        self.shadow = shadow or get_shadow_router()
 
     def prepare_request(
         self,
@@ -153,33 +169,116 @@ class AgentCapabilityCore:
         source_constrained: bool = False,
         available_models: Optional[Iterable[str]] = None,
         performance: Optional[Mapping[Tuple[str, str], ModelPerformance]] = None,
+        run_id: str = "",
+        persist_shadow: bool = True,
     ) -> RequestDecision:
         profile = profile_task(
             text,
             has_repository=has_repository,
             supplied_sources=supplied_sources,
         )
-        route = route_models(
+        # Shadow recommendation may use measured performance (counterfactual only).
+        shadow_route = route_models(
             profile,
             registry=self.registry,
             performance=performance,
             available_models=available_models,
         )
+        # Live baseline: registry priors only while adaptive routing is disabled.
+        # When adaptive routing is enabled (future), live may follow shadow_route.
+        if adaptive_routing_active():
+            route = shadow_route
+            adaptive_applied = True
+        else:
+            route = route_models(
+                profile,
+                registry=self.registry,
+                performance=None,
+                available_models=available_models,
+            )
+            adaptive_applied = False
+
+        shadow_rec = self.shadow.open_observation(
+            profile,
+            performance=performance,
+            available_models=list(available_models) if available_models is not None else None,
+            run_id=run_id,
+            task_text_hash=str(abs(hash(text or "")))[:16],
+            meta={"adaptive_applied": adaptive_applied},
+        )
+        # Open observation is not completed until record_outcome(); still persist open
+        # so passive mode has request-start counters even if outcome never arrives.
+        if persist_shadow:
+            try:
+                self.shadow._append(shadow_rec)
+            except Exception:
+                pass
+
         evidence_policy = grounding_policy(
             profile,
             supplied_sources=supplied_sources,
             source_constrained=source_constrained,
         )
-        decision = RequestDecision(profile, route, evidence_policy)
+        decision = RequestDecision(
+            profile, route, evidence_policy,
+            shadow=shadow_rec, shadow_route=shadow_route,
+        )
         self.telemetry.record(
             "request_profiled",
             kind=profile.kind.value,
             language=profile.language,
             bucket=profile.bucket,
             route=route.to_dict()["assignments"],
+            shadow_route=shadow_route.to_dict()["assignments"],
+            adaptive_routing_applied=adaptive_applied,
             grounding_mode=evidence_policy.mode.value,
         )
+        self.telemetry.record(
+            "shadow_router_observation",
+            record_id=shadow_rec.record_id,
+            task_bucket=shadow_rec.task_bucket,
+            baseline_selection=shadow_rec.baseline_selection,
+            shadow_router_selection=shadow_rec.shadow_router_selection,
+            router_scores=shadow_rec.router_scores,
+            adaptive_routing_applied=False,
+        )
         return decision
+
+    def record_run_outcome(
+        self,
+        decision: RequestDecision,
+        *,
+        verdict: str,
+        false_ship: bool = False,
+        rollback_required: bool = False,
+        unsupported_claims: int = 0,
+        latency_ms: float = 0.0,
+        cost_usd: float = 0.0,
+        terminal: str = "",
+        notes: str = "",
+    ) -> Optional[ShadowRecord]:
+        """Complete passive shadow observation with actual verifier/repo evidence."""
+        if not decision.shadow:
+            return None
+        outcome = ActualOutcome(
+            verdict=verdict,
+            false_ship=false_ship,
+            rollback_required=rollback_required,
+            unsupported_claims=unsupported_claims,
+            latency_ms=latency_ms,
+            cost_usd=cost_usd,
+            terminal=terminal or verdict,
+            notes=notes,
+        )
+        completed = self.shadow.complete_observation(decision.shadow, outcome)
+        self.telemetry.record(
+            "shadow_router_outcome",
+            record_id=completed.record_id,
+            task_bucket=completed.task_bucket,
+            actual_outcome=completed.actual_outcome,
+            adaptive_routing_applied=False,
+        )
+        return completed
 
     def prepare_command(
         self,

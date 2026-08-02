@@ -2039,6 +2039,42 @@ class CodeAgent:
             data["session_id"] = session_event.get("session_id")
         yield {"event": "code_done", "data": data}
         yield {"event": "code_receipt", "data": receipt}
+        # Complete Track 3 passive shadow observation from receipt evidence.
+        try:
+            if self._shadow_decision is not None and self._cap_core is not None:
+                ok = bool(receipt.get("ok"))
+                false_ship = bool(receipt.get("ok")) and receipt.get("syntax_ok") is False
+                rollback = bool(
+                    (receipt.get("mutation_gateway") or {}).get("rollbacks")
+                    or any(
+                        "restored" in str(n).lower()
+                        for n in (data.get("summary") or "",)
+                    )
+                )
+                latency_ms = max(0.0, (time.time() - float(self._shadow_t0 or 0)) * 1000.0)
+                terminal = (
+                    "verified_complete" if ok and not false_ship
+                    else ("false_ship" if false_ship else "failed")
+                )
+                self._cap_core.record_run_outcome(
+                    self._shadow_decision,
+                    verdict=terminal,
+                    false_ship=false_ship,
+                    rollback_required=rollback,
+                    latency_ms=latency_ms,
+                    terminal=terminal,
+                    notes=(data.get("summary") or "")[:200],
+                )
+                receipt["shadow_telemetry"] = {
+                    "record_id": (
+                        self._shadow_decision.shadow.record_id
+                        if self._shadow_decision.shadow else ""
+                    ),
+                    "adaptive_routing_applied": False,
+                    "task_bucket": self._shadow_decision.profile.bucket,
+                }
+        except Exception:
+            pass
 
     def _artifact_manifest(self, *, max_file_bytes: int = 96_000,
                            max_total_bytes: int = 400_000) -> Dict[str, Any]:
@@ -2126,6 +2162,34 @@ class CodeAgent:
 
     def run(self, task: str) -> Iterator[Dict[str, Any]]:
         yield {"event": "code_start", "data": {"task": task, "sandbox": self.sb.id}}
+        # Track 3 passive shadow: recommend a route, never apply adaptive selection.
+        self._shadow_decision = None
+        self._shadow_t0 = time.time()
+        self._cap_core = None
+        try:
+            from lolm.agent_capability_core import AgentCapabilityCore
+            self._cap_core = AgentCapabilityCore()
+            self._shadow_decision = self._cap_core.prepare_request(
+                task or "",
+                has_repository=True,
+                run_id=str(getattr(self.sb, "id", "") or "")[:16],
+            )
+            sh = self._shadow_decision.shadow
+            yield {"event": "agent_note", "data": {
+                "text": (
+                    "shadow router (passive): "
+                    f"bucket={self._shadow_decision.profile.bucket} "
+                    f"baseline={sh.baseline_selection if sh else {}} "
+                    f"shadow={sh.shadow_router_selection if sh else {}} "
+                    "adaptive=OFF"
+                ),
+                "shadow_record_id": sh.record_id if sh else "",
+                "adaptive_routing_applied": False,
+            }}
+        except Exception as exc:
+            self._shadow_decision = None
+            yield {"event": "agent_note", "data": {
+                "text": f"shadow telemetry unavailable: {exc}"[:120]}}
         # Load or create persistent task state z_t — multi-session by conversation.
         try:
             from lolm.control.task_state import load_or_init, save_task_state

@@ -904,6 +904,48 @@ WORKING DRAFT:
         result.text = decision.text
         result.raw["response"] = decision.text
         result.raw.update(decision.receipt_blob())
+        # Track 3 passive shadow for factual runs (never changes model selection).
+        try:
+            from lolm.agent_capability_core import AgentCapabilityCore
+            core = AgentCapabilityCore()
+            dec = core.prepare_request(
+                command or "",
+                supplied_sources=grounded,
+                source_constrained=grounded and not web_grounded,
+                run_id=str(getattr(req, "request_id", "") or "")[:16],
+            )
+            fact = decision.receipt_blob().get("factuality") or {}
+            unsupported = int(
+                fact.get("unsupported_required_claims")
+                or fact.get("unsupported_claims")
+                or 0
+            )
+            shipped = bool(getattr(decision, "ok", True))
+            false_ship = shipped and unsupported > 0
+            terminal = (
+                "verified_complete" if shipped and not false_ship
+                else ("false_ship" if false_ship else "failed")
+            )
+            if not shipped and fact.get("abstained"):
+                terminal = "abstained"
+            core.record_run_outcome(
+                dec,
+                verdict=terminal,
+                false_ship=false_ship,
+                unsupported_claims=unsupported,
+                terminal=terminal,
+            )
+            result.raw["shadow_telemetry"] = {
+                "record_id": dec.shadow.record_id if dec.shadow else "",
+                "task_bucket": dec.profile.bucket,
+                "baseline_selection": dec.shadow.baseline_selection if dec.shadow else {},
+                "shadow_router_selection": (
+                    dec.shadow.shadow_router_selection if dec.shadow else {}
+                ),
+                "adaptive_routing_applied": False,
+            }
+        except Exception as exc:
+            result.raw["shadow_telemetry_error"] = str(exc)[:120]
         # Stream the accepted final answer (never the rejected draft)
         if stream_channel is None:
             for tok in (decision.text or ""):

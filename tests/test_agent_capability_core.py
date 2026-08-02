@@ -37,7 +37,11 @@ def test_prepare_request_combines_profile_route_and_grounding():
     assert decision.profile.requires_retrieval is True
     assert decision.route.model_for(AgentRole.EXECUTOR) is not None
     assert decision.grounding.require_citations is True
-    assert core.telemetry.events[-1]["event"] == "request_profiled"
+    events = [e["event"] for e in core.telemetry.events]
+    assert "request_profiled" in events
+    assert "shadow_router_observation" in events
+    assert decision.shadow is not None
+    assert decision.to_dict()["adaptive_routing_applied"] is False
 
 
 def test_prepare_command_blocks_snake_failure_before_shell():
