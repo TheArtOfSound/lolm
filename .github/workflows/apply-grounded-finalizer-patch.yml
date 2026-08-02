@@ -1,17 +1,19 @@
 name: apply-grounded-finalizer-patch
 
 on:
-  push:
-    branches:
-      - veyre/agent-capability-upgrade-v1
+  pull_request:
     paths:
       - ".github/workflows/apply-grounded-finalizer-patch.yml"
+      - "lolm/answer_policy.py"
+      - "tests/test_answer_policy.py"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   patch-and-verify:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
