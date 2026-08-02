@@ -41,6 +41,58 @@ def _identity(**extra: Any) -> Dict[str, Any]:
     return base
 
 
+def _signed_receipt(
+    tree_hash: str,
+    *,
+    file_count: int = 1,
+    total_bytes: int = 10,
+    complete: bool = True,
+    ok: bool = True,
+    mutate_after_seal: bool = False,
+    **extra: Any,
+) -> Dict[str, Any]:
+    """Build an Ed25519-sealed mock receipt with workspace binding in the core."""
+    from local_ui.receipt_sign import sign_code_receipt
+
+    core = {
+        "schema": "lolm.code.receipt.v2",
+        "run_id": "run_mock_1",
+        "kind": "code_agent",
+        "task": "mock",
+        "ok": ok,
+        "syntax_ok": True,
+        "verdict": "shipped" if ok else "incomplete",
+        "tree_hash": tree_hash,
+        "workspace_tree_hash": tree_hash,
+        "server_sha": EXPECTED_SHA,
+        "model_id": "mock-model",
+        "provider": "mock",
+        "deployment_id": "mock-deploy-1",
+        "verification": {
+            "syntax_ok": True,
+            "execution_ok": True,
+            "contract_ok": True,
+            "artifact_manifest_ok": True,
+            "artifact_manifest_sha256": "a" * 64,
+            "workspace_tree_sha256": tree_hash,
+            "workspace_file_count": file_count,
+            "workspace_total_bytes": total_bytes,
+            "final_workspace_complete": complete,
+        },
+    }
+    core.update(extra)
+    sealed = sign_code_receipt(core)
+    if mutate_after_seal:
+        # Simulate the regression: bolt tree hash on after signing
+        sealed = dict(sealed)
+        sealed["tree_hash"] = "f" * 64
+        sealed["workspace_tree_hash"] = "f" * 64
+        sealed.setdefault("verification", {})
+        sealed["verification"] = dict(sealed["verification"])
+        sealed["verification"]["workspace_tree_sha256"] = "f" * 64
+    return sealed
+
+
 class _MockState:
     mode: str = "valid"
     last_body: Optional[Dict[str, Any]] = None
@@ -93,25 +145,29 @@ class MockHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
         mode = STATE.mode
+        total_bytes = sum(len(v.encode()) for v in files.values())
         if mode == "valid":
+            rec = _signed_receipt(th, file_count=len(files), total_bytes=total_bytes)
             self.wfile.write(_sse("code_start", {**_identity(), "task": body.get("task"), "fixture_hash": fhash}))
             self.wfile.write(_sse("final_workspace", {**fw, **_identity()}))
             self.wfile.write(_sse("code_done", {**_identity(), "ok": True, "tree_hash": th}))
-            self.wfile.write(_sse("code_receipt", {**_identity(), "ok": True, "tree_hash": th, "workspace_tree_hash": th}))
+            self.wfile.write(_sse("code_receipt", rec))
         elif mode == "missing_done":
+            rec = _signed_receipt(th, file_count=len(files), total_bytes=total_bytes)
             self.wfile.write(_sse("code_start", {**_identity(), "fixture_hash": fhash}))
             self.wfile.write(_sse("final_workspace", {**fw, **_identity()}))
-            self.wfile.write(_sse("code_receipt", {**_identity(), "tree_hash": th}))
+            self.wfile.write(_sse("code_receipt", rec))
         elif mode == "missing_receipt":
             self.wfile.write(_sse("code_start", {**_identity(), "fixture_hash": fhash}))
             self.wfile.write(_sse("final_workspace", {**fw, **_identity()}))
             self.wfile.write(_sse("code_done", {**_identity(), "tree_hash": th}))
         elif mode == "wrong_sha":
             bad = {**_identity(), "server_sha": "deadbeef" * 5}
+            rec = _signed_receipt(th, file_count=len(files), total_bytes=total_bytes, server_sha=bad["server_sha"])
             self.wfile.write(_sse("code_start", {**bad, "fixture_hash": fhash}))
             self.wfile.write(_sse("final_workspace", {**fw, **bad}))
             self.wfile.write(_sse("code_done", {**bad, "tree_hash": th}))
-            self.wfile.write(_sse("code_receipt", {**bad, "tree_hash": th}))
+            self.wfile.write(_sse("code_receipt", rec))
         elif mode == "idle_timeout":
             # Emit code_start and keep the connection open so the adapter's
             # queue-side idle timeout fires (not peer-close).
@@ -123,29 +179,42 @@ class MockHandler(BaseHTTPRequestHandler):
                 pass
             time.sleep(60.0)
         elif mode == "hash_mismatch_fw":
+            # FW claims wrong tree hash vs reconstructable contents
             self.wfile.write(_sse("code_start", {**_identity(), "fixture_hash": fhash}))
             bad_fw = dict(fw)
             bad_fw["tree_hash"] = "0" * 64
+            rec = _signed_receipt("0" * 64, file_count=len(files), total_bytes=total_bytes)
             self.wfile.write(_sse("final_workspace", {**bad_fw, **_identity()}))
-            self.wfile.write(_sse("code_done", {**_identity(), "tree_hash": bad_fw["tree_hash"]}))
-            self.wfile.write(_sse("code_receipt", {**_identity(), "tree_hash": bad_fw["tree_hash"]}))
+            self.wfile.write(_sse("code_done", {**_identity(), "tree_hash": "0" * 64}))
+            self.wfile.write(_sse("code_receipt", rec))
         elif mode == "receipt_tree_mismatch":
+            # Signed receipt binds wrong tree vs final_workspace
+            rec = _signed_receipt("1" * 64, file_count=len(files), total_bytes=total_bytes)
             self.wfile.write(_sse("code_start", {**_identity(), "fixture_hash": fhash}))
             self.wfile.write(_sse("final_workspace", {**fw, **_identity()}))
             self.wfile.write(_sse("code_done", {**_identity(), "tree_hash": th}))
-            self.wfile.write(_sse("code_receipt", {**_identity(), "tree_hash": "1" * 64}))
+            self.wfile.write(_sse("code_receipt", rec))
+        elif mode == "post_seal_mutation":
+            # Regression: seal then mutate tree hash fields
+            rec = _signed_receipt(
+                th, file_count=len(files), total_bytes=total_bytes, mutate_after_seal=True,
+            )
+            self.wfile.write(_sse("code_start", {**_identity(), "fixture_hash": fhash}))
+            self.wfile.write(_sse("final_workspace", {**fw, **_identity()}))
+            self.wfile.write(_sse("code_done", {**_identity(), "tree_hash": th}))
+            self.wfile.write(_sse("code_receipt", rec))
         elif mode == "leak_key":
+            rec = _signed_receipt(th, file_count=len(files), total_bytes=total_bytes)
             self.wfile.write(_sse("code_start", {**_identity(), "fixture_hash": fhash, "debug": API_KEY}))
             self.wfile.write(_sse("final_workspace", {**fw, **_identity()}))
             self.wfile.write(_sse("code_done", {**_identity(), "tree_hash": th}))
-            self.wfile.write(_sse("code_receipt", {**_identity(), "tree_hash": th}))
+            self.wfile.write(_sse("code_receipt", rec))
         elif mode == "split_frames":
-            # Split SSE frames across writes
+            rec = _signed_receipt(th, file_count=len(files), total_bytes=total_bytes)
             start = _sse("code_start", {**_identity(), "fixture_hash": fhash})
             self.wfile.write(start[:12])
             self.wfile.flush()
             self.wfile.write(start[12:])
-            # multiline data field
             multi = (
                 "event: final_workspace\n"
                 f"data: {json.dumps({**fw, **_identity()})}\n"
@@ -156,7 +225,7 @@ class MockHandler(BaseHTTPRequestHandler):
             self.wfile.flush()
             self.wfile.write(multi[mid:])
             self.wfile.write(_sse("code_done", {**_identity(), "tree_hash": th}))
-            self.wfile.write(_sse("code_receipt", {**_identity(), "tree_hash": th}))
+            self.wfile.write(_sse("code_receipt", rec))
         else:
             self.wfile.write(_sse("error", {"error": f"unknown mode {mode}"}))
 
@@ -416,3 +485,80 @@ def test_fixture_package_from_seed_only():
     assert pkg["workspace_snapshot"] == SEED
     assert pkg["fixture_hash"] == fixture_hash(SEED)
     assert pkg["resume_token"].startswith("benchmark:L01:")
+
+
+def test_16_post_seal_tree_hash_mutation_is_inadmissible():
+    """Any post-seal tree-hash change must fail receipt_hash_match / adapter gate."""
+    from local_ui.receipt_sign import verify_code_receipt
+
+    th = tree_hash(SEED)
+    sealed = _signed_receipt(th, file_count=2, total_bytes=20)
+    assert verify_code_receipt(sealed)["receipt_hash_match"] is True
+    mutated = dict(sealed)
+    mutated["tree_hash"] = "f" * 64
+    mutated["workspace_tree_hash"] = "f" * 64
+    assert verify_code_receipt(mutated)["receipt_hash_match"] is False
+
+    STATE.mode = "post_seal_mutation"
+    srv, base = _start_server()
+    try:
+        r = _adapter(base).run_task("L01", "fix", SEED)
+        assert r.run_class == RunClass.INADMISSIBLE.value
+        assert any(
+            "receipt_hash" in x or "signature" in x or "mismatch" in x
+            for x in r.reasons
+        )
+    finally:
+        srv.shutdown()
+
+
+def test_17_signed_tree_hash_matches_reconstructed_bytes():
+    """Happy path: signed verification.workspace_tree_sha256 == reconstructed tree."""
+    STATE.mode = "valid"
+    srv, base = _start_server()
+    try:
+        ad = _adapter(base)
+        r = ad.run_task("L01", "fix", SEED)
+        r = ad.apply_oracle(r, True)
+        assert r.run_class == RunClass.ADMISSIBLE_PASS.value
+        th = r.tree_hashes
+        assert th["receipt_signed"]
+        assert th["receipt_signed"] == th["reconstructed"]
+        assert th["final_workspace_declared"] == th["reconstructed"]
+        ver = (r.code_receipt.get("verification") or {})
+        assert ver.get("workspace_tree_sha256") == th["reconstructed"]
+        from local_ui.receipt_sign import verify_code_receipt
+        assert verify_code_receipt(r.code_receipt)["receipt_hash_match"] is True
+        assert verify_code_receipt(r.code_receipt)["signature_valid"] is True
+    finally:
+        srv.shutdown()
+
+
+def test_18_code_agent_seals_workspace_before_emit():
+    """Product CodeAgent: workspace tree hash is inside the signed receipt core."""
+    import tempfile
+    from pathlib import Path
+    from local_ui.code_agent import CodeAgent
+    from local_ui.sandbox import Sandbox
+    from local_ui.receipt_sign import verify_code_receipt
+
+    sb = Sandbox(Path(tempfile.mkdtemp()))
+    seq = iter([
+        "FILE: solution.py\n```\nprint('hi')\n```\nRUN: python3 solution.py\n",
+        "DONE: done\n",
+    ])
+    agent = CodeAgent(sb, lambda m: next(seq), isolated=None, max_steps=4, nfet=False)
+    events = list(agent.run("Create solution.py that prints hi"))
+    rec = [e["data"] for e in events if e["event"] == "code_receipt"][0]
+    fw = [e["data"] for e in events if e["event"] == "final_workspace"]
+    assert fw, "final_workspace must be emitted"
+    v = verify_code_receipt(rec)
+    assert v["receipt_hash_match"] is True, v
+    assert v["signature_valid"] is True, v
+    tree = (rec.get("verification") or {}).get("workspace_tree_sha256") or rec.get("tree_hash")
+    assert tree
+    assert tree == fw[0].get("tree_hash")
+    # Mutating after the fact must break the seal
+    broken = dict(rec)
+    broken["tree_hash"] = "0" * 64
+    assert verify_code_receipt(broken)["receipt_hash_match"] is False

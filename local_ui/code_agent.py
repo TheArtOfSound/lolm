@@ -1628,8 +1628,13 @@ class CodeAgent:
                       stuck: bool = False, budget_hit: bool = False,
                       error: str = "",
                       syntax: Optional[Dict[str, Any]] = None,
-                      manifest: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Auditable trail of the coding loop — the switch reason vs black-box agents."""
+                      manifest: Optional[Dict[str, Any]] = None,
+                      final_workspace: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Auditable trail of the coding loop — the switch reason vs black-box agents.
+
+        ``final_workspace`` must be fully built before this call so workspace tree
+        hashes are inside the signed verification core (no post-seal mutations).
+        """
         trail: List[Dict[str, Any]] = []
         green_runs = 0
         failed_runs = 0
@@ -1784,6 +1789,21 @@ class CodeAgent:
                ("missing_output" if not expected_ok else
                 ("ran" if ran else "incomplete")))))
         )
+        fw = dict(final_workspace or {})
+        tree_sha = str(fw.get("tree_hash") or "")
+        file_count = len(fw.get("paths") or fw.get("files") or [])
+        total_bytes = 0
+        for body in (fw.get("files") or {}).values():
+            try:
+                total_bytes += len((body or "").encode("utf-8", errors="replace"))
+            except Exception:
+                pass
+        # Also count omitted binary metadata sizes when present
+        for omit in (fw.get("omitted") or []):
+            try:
+                total_bytes += int(omit.get("size") or 0)
+            except Exception:
+                pass
         core["verification"] = {
             "syntax_ok": core["syntax_ok"] is True,
             "execution_ok": bool(ran and produced_output and green_runs > 0),
@@ -1791,8 +1811,26 @@ class CodeAgent:
                                 and artifact_manifest_ok),
             "artifact_manifest_ok": artifact_manifest_ok,
             "artifact_manifest_sha256": str((manifest or {}).get("manifest_sha256") or ""),
+            # Track 2B: workspace binding is part of the signed core
+            "workspace_tree_sha256": tree_sha,
+            "workspace_file_count": file_count,
+            "workspace_total_bytes": total_bytes,
+            "final_workspace_complete": bool(fw.get("complete")) if fw else False,
         }
+        if tree_sha:
+            # Top-level aliases also sealed (adapter may read either path)
+            core["tree_hash"] = tree_sha
+            core["workspace_tree_hash"] = tree_sha
+        # Deployment identity is sealed when present (staging SHA-pin admission)
+        try:
+            identity = self._deployment_identity()
+            for k, v in identity.items():
+                if v:
+                    core[k] = v
+        except Exception:
+            pass
         # Seal the complete verdict and verification core with Ed25519.
+        # NEVER mutate the returned object after this point.
         try:
             from local_ui.receipt_sign import sign_code_receipt
             core = sign_code_receipt(core)
@@ -1978,23 +2016,22 @@ class CodeAgent:
             except Exception:
                 session_event = None
 
-        # Final workspace tree hash is part of the sealed receipt when available.
+        # Build authoritative final workspace BEFORE sealing the receipt so the
+        # tree hash is inside the signed verification core (no post-seal mutation).
         final_workspace_blob: Dict[str, Any] = {}
         try:
             final_workspace_blob = self._build_final_workspace_event(
                 run_id=str(getattr(self.sb, "id", "") or ""),
             )
-            kw = dict(kw)
-            # stashed for build_receipt via kw; also set after if core supports it
         except Exception:
             final_workspace_blob = {}
-        receipt = self.build_receipt(task, syntax=syntax, manifest=manifest, **kw)
-        if final_workspace_blob.get("tree_hash"):
-            # Post-seal evidence fields for Track 2B (final_workspace event is authoritative).
-            # Do not re-sign; harness compares final_workspace.tree_hash with this echo.
-            receipt = dict(receipt)
-            receipt["tree_hash"] = final_workspace_blob["tree_hash"]
-            receipt["workspace_tree_hash"] = final_workspace_blob["tree_hash"]
+        receipt = self.build_receipt(
+            task,
+            syntax=syntax,
+            manifest=manifest,
+            final_workspace=final_workspace_blob or None,
+            **kw,
+        )
         # Update ledger status from sealed receipt (local file only; not re-hashed)
         if self.reliability is not None and self.reliability.session is not None:
             try:
@@ -2053,22 +2090,35 @@ class CodeAgent:
         if session_event:
             yield {"event": "session_ledger", "data": session_event}
             data["session_id"] = session_event.get("session_id")
-        # Track 2B: authoritative final workspace BEFORE sandbox destruction.
-        identity = self._deployment_identity()
+        # Track 2B: stream final_workspace then sealed receipt. Receipt is immutable.
+        identity = {
+            k: receipt.get(k) or v
+            for k, v in self._deployment_identity().items()
+        }
         if final_workspace_blob:
             fw = dict(final_workspace_blob)
             fw["run_id"] = str(receipt.get("run_id") or fw.get("run_id") or "")
-            fw.update(identity)
+            # Identity on the event envelope only — receipt already sealed with it
+            for k, v in identity.items():
+                if v and not fw.get(k):
+                    fw[k] = v
             yield {"event": "final_workspace", "data": fw}
-            data["tree_hash"] = fw.get("tree_hash")
+            data["tree_hash"] = (
+                receipt.get("tree_hash")
+                or (receipt.get("verification") or {}).get("workspace_tree_sha256")
+                or fw.get("tree_hash")
+            )
         else:
             yield {"event": "agent_note", "data": {
                 "text": "final_workspace unavailable"}}
-        data.update(identity)
-        if isinstance(receipt, dict):
-            receipt = dict(receipt)
-            receipt.update(identity)
+        for k, v in identity.items():
+            if v:
+                data[k] = v
+        data["tree_hash"] = data.get("tree_hash") or receipt.get("tree_hash") or (
+            (receipt.get("verification") or {}).get("workspace_tree_sha256")
+        )
         yield {"event": "code_done", "data": data}
+        # Emit the sealed receipt exactly as signed — no field injection after seal.
         yield {"event": "code_receipt", "data": receipt}
         # Complete Track 3 passive shadow observation from receipt evidence.
         try:
@@ -2096,14 +2146,17 @@ class CodeAgent:
                     terminal=terminal,
                     notes=(data.get("summary") or "")[:200],
                 )
-                receipt["shadow_telemetry"] = {
+                # Shadow telemetry is NOT part of the sealed receipt core.
+                # Attach only to the already-emitted code_done envelope is impossible
+                # here; surface as a separate event so we never post-mutate the seal.
+                yield {"event": "shadow_telemetry", "data": {
                     "record_id": (
                         self._shadow_decision.shadow.record_id
                         if self._shadow_decision.shadow else ""
                     ),
                     "adaptive_routing_applied": False,
                     "task_bucket": self._shadow_decision.profile.bucket,
-                }
+                }}
         except Exception:
             pass
 
@@ -2208,17 +2261,32 @@ class CodeAgent:
         }
 
     def _build_final_workspace_event(self, *, run_id: str = "") -> Dict[str, Any]:
-        """Full text tree for independent oracle reconstruction."""
+        """Full text tree for independent oracle reconstruction.
+
+        Excludes sandbox pollution from Python/HOME caches (Library/, __pycache__,
+        .cache, etc.) so the sealed tree hash is about product artifacts only.
+        """
         from lolm.track2b.workspace import build_final_workspace
         files: Dict[str, str] = {}
         binary_meta: Dict[str, Dict[str, Any]] = {}
+        skip_parts = {
+            "__pycache__", ".git", "node_modules", "Library", ".cache",
+            ".npm", ".local", ".config", "Caches",
+        }
         try:
             paths = list(self.sb.list_files(limit=500))
         except Exception:
             paths = list(self._files_written or [])
-        for path in paths:
+        # Prefer intentional product paths, then remaining non-cache paths
+        ordered = list(dict.fromkeys(list(self._files_written or []) + paths))
+        for path in ordered:
             p = (path or "").strip().replace("\\", "/")
             if not p or p.startswith("/") or ".." in p.split("/"):
+                continue
+            parts = set(p.split("/"))
+            if parts & skip_parts:
+                continue
+            if p.endswith((".pyc", ".pyo", ".so")):
                 continue
             try:
                 raw = self.sb.read_file(p)

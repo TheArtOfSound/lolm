@@ -20,6 +20,8 @@ _EPHEMERAL: Optional[Dict[str, SigningKey]] = None
 _POST_SEAL = {
     "receipt_sha", "signature", "signing_key",
     "ledger_sha", "prev_ledger_sha", "ledger_ts", "source", "demo", "selftest",
+    # Telemetry attached after seal must never enter the signed core
+    "shadow_telemetry",
 }
 
 

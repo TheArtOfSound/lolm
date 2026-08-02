@@ -18,7 +18,12 @@ Then:
 
 Chat backend:
   * default: weak stub (admission/infrastructure proof; competence expected fail)
-  * LOLM_STAGING_CHAT=openai + LOLM_LIVE_* for real model turns through product path
+  * LOLM_STAGING_CHAT=openai + OPENAI_* for real model turns through product path
+
+Receipt integrity:
+  Set LOLM_RECEIPT_SIGNING_KEYS / LOLM_RECEIPT_ACTIVE_KID in *both* server and
+  client processes so the Track 2B adapter can verify Ed25519 seals. Ephemeral
+  per-process keys make signatures unverifiable across processes.
 """
 
 from __future__ import annotations
@@ -152,14 +157,21 @@ class StagingHandler(BaseHTTPRequestHandler):
             for ev in agent.run(task):
                 name = ev.get("event") or "message"
                 data = dict(ev.get("data") or {})
-                # Identity always present on critical events
-                if name in ("code_start", "code_done", "code_receipt", "final_workspace"):
-                    data.setdefault("server_sha", sha)
-                    data.setdefault("model_id", os.environ.get("LOLM_MODEL_ID", ""))
-                    data.setdefault("provider", os.environ.get("LOLM_MODEL_PROVIDER", ""))
-                    data.setdefault("deployment_id", os.environ.get("LOLM_DEPLOYMENT_ID", ""))
-                    if resume and resume.get("fixture_hash"):
-                        data.setdefault("fixture_hash", resume.get("fixture_hash"))
+                # Envelope identity only for non-sealed events. Never mutate
+                # code_receipt after Ed25519 seal (breaks receipt_hash_match).
+                if name in ("code_start", "code_done", "final_workspace"):
+                    for k, envk in (
+                        ("server_sha", None),
+                        ("model_id", "LOLM_MODEL_ID"),
+                        ("provider", "LOLM_MODEL_PROVIDER"),
+                        ("deployment_id", "LOLM_DEPLOYMENT_ID"),
+                    ):
+                        v = sha if k == "server_sha" else os.environ.get(envk or "", "")
+                        if v and not data.get(k):
+                            data[k] = v
+                    if resume and resume.get("fixture_hash") and not data.get("fixture_hash"):
+                        data["fixture_hash"] = resume.get("fixture_hash")
+                # code_receipt: stream sealed core exactly as signed
                 self.wfile.write(_sse(name, data))
                 try:
                     self.wfile.flush()

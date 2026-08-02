@@ -283,29 +283,70 @@ class LolmCodeSSEAgentAdapter:
             except Exception:
                 pass
 
-        # Reconstruct + hash agreement
+        # Reconstruct + cryptographic receipt binding
         tree, computed_hash, fw_errs = reconstruct_tree(result.final_workspace)
         result.reconstructed_tree = tree
-        receipt_hash = (
-            (result.code_receipt.get("tree_hash")
-             or result.code_receipt.get("workspace_tree_hash")
-             or (result.code_receipt.get("mutation_gateway") or {}).get("tree_hash")
-             or "")
+        ver = result.code_receipt.get("verification") or {}
+        receipt_tree = str(
+            ver.get("workspace_tree_sha256")
+            or result.code_receipt.get("tree_hash")
+            or result.code_receipt.get("workspace_tree_hash")
+            or ""
         )
-        fw_declared = result.final_workspace.get("tree_hash") or ""
+        fw_declared = str(result.final_workspace.get("tree_hash") or "")
         result.tree_hashes = {
             "final_workspace_declared": fw_declared,
             "reconstructed": computed_hash,
-            "receipt": str(receipt_hash or ""),
+            "receipt_signed": receipt_tree,
         }
-        hash_ok = bool(fw_declared) and fw_declared == computed_hash
-        if receipt_hash:
-            hash_ok = hash_ok and str(receipt_hash) == computed_hash
+
+        # Require signed receipt integrity (hash + Ed25519)
+        receipt_sig_ok = False
+        receipt_hash_ok = False
+        integrity_errs: List[str] = []
+        if saw_receipt and result.code_receipt:
+            try:
+                from local_ui.receipt_sign import verify_code_receipt
+                vfy = verify_code_receipt(result.code_receipt)
+                receipt_hash_ok = bool(vfy.get("receipt_hash_match"))
+                sig = vfy.get("signature_valid")
+                if sig is True:
+                    receipt_sig_ok = True
+                elif sig is None and receipt_hash_ok and result.code_receipt.get("receipt_sha"):
+                    # Unknown public key but core hash binds fields
+                    receipt_sig_ok = True
+                else:
+                    integrity_errs.append("receipt_signature_invalid")
+                if not receipt_hash_ok:
+                    integrity_errs.append("receipt_hash_mismatch")
+                result.request_meta["receipt_verify"] = {
+                    "receipt_hash_match": receipt_hash_ok,
+                    "signature_valid": vfy.get("signature_valid"),
+                    "signature_reason": vfy.get("signature_reason"),
+                }
+            except Exception as exc:
+                integrity_errs.append(f"receipt_verify_error:{type(exc).__name__}")
         else:
-            # receipt may omit tree_hash on older servers — require final_workspace only
-            # but staging mandate says all three must agree; missing receipt hash = fail
-            hash_ok = False
-            fw_errs.append("receipt_tree_hash_absent")
+            integrity_errs.append("code_receipt_absent")
+
+        if not receipt_tree:
+            integrity_errs.append("receipt_tree_hash_absent")
+        if fw_declared and computed_hash and fw_declared != computed_hash:
+            integrity_errs.append("final_workspace_reconstruct_mismatch")
+        if receipt_tree and computed_hash and receipt_tree != computed_hash:
+            integrity_errs.append("signed_receipt_tree_mismatch")
+        integrity_errs.extend(fw_errs)
+
+        hash_ok = (
+            bool(fw_declared)
+            and bool(receipt_tree)
+            and fw_declared == computed_hash
+            and receipt_tree == computed_hash
+            and receipt_hash_ok
+            and receipt_sig_ok
+            and not integrity_errs
+        )
+        fw_errs = integrity_errs
 
         secret_leak = ";secret_in_stream" in (result.error or "")
         # Post-redact check: redacted artifacts must not retain the raw key
@@ -343,7 +384,10 @@ class LolmCodeSSEAgentAdapter:
             code_receipt=saw_receipt,
             final_workspace=saw_fw,
             server_sha_ok=server_sha_ok,
-            hash_agreement=hash_ok and not fw_errs,
+            hash_agreement=hash_ok and not any(
+                e for e in fw_errs
+                if e not in ("signature_key_unknown_hash_only",)
+            ),
             fixture_bound=fixture_bound,
             stream_complete=stream_complete,
             secret_leak=secret_leak,

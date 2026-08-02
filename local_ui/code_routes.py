@@ -535,25 +535,32 @@ def register_code_routes(app: Any, root: str,
                     )})
                 for ev in agent.run(task):
                     data = dict(ev.get("data") or {})
-                    # Ensure deployment identity on critical events (do not strip agent fields)
-                    if ev.get("event") in ("code_start", "code_done", "code_receipt", "final_workspace"):
+                    name = ev.get("event") or ""
+                    # Envelope identity only for non-sealed events. code_receipt is
+                    # already Ed25519-sealed — never inject fields after the seal.
+                    if name in ("code_start", "code_done", "final_workspace"):
                         for k, v in identity.items():
                             if v and not data.get(k):
                                 data[k] = v
-                    if ev.get("event") == "code_receipt":
+                    if name == "code_receipt":
                         try:
-                            sealed = code_receipt_ledger.append(data,
-                                                                source="api.demo.code.run")
-                            if isinstance(sealed, dict):
-                                for k, v in identity.items():
-                                    if v and not sealed.get(k):
-                                        sealed[k] = v
-                            yield _sse("code_receipt", sealed if isinstance(sealed, dict) else data)
+                            # Append the sealed core as-is; ledger may add only
+                            # post-seal chain fields (ledger_sha, prev, source…).
+                            sealed = code_receipt_ledger.append(
+                                data, source="api.demo.code.run",
+                            )
+                            yield _sse(
+                                "code_receipt",
+                                sealed if isinstance(sealed, dict) else data,
+                            )
                             continue
                         except Exception as lexc:
                             note = {"text": f"receipt ledger write skipped: {lexc}"[:160]}
                             yield _sse("agent_note", note)
-                    yield _sse(ev["event"], data)
+                            # Still stream the original sealed receipt
+                            yield _sse("code_receipt", data)
+                            continue
+                    yield _sse(name, data)
             except Exception as exc:
                 # Never echo secrets in error streams
                 msg = str(exc)[:200]
