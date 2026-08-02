@@ -7,12 +7,15 @@ Structural controls for realistic multi-step failures (Snake forensics):
   - Branch must change strategy (not alias verify)
   - Repeated semantic root causes force early stop
   - Feasibility of acceptance tests is resolved at start
+  - Model-proposed commands must pass deterministic shell/language preflight
 """
 
 from __future__ import annotations
 
 import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+from lolm.command_preflight import ShellDialect, inspect_command
 
 _HTML_MARKERS = re.compile(
     r"<!DOCTYPE\s+html|<html[\s>]|<head[\s>]|<body[\s>]|<canvas[\s>]|"
@@ -108,6 +111,36 @@ def redirect_html_misroute(
     return path, content, None
 
 
+def _preflight_reason(command: str, *, primary_language: str,
+                      files_written: Sequence[str]) -> Tuple[bool, str]:
+    """Apply the shared deterministic command contract to model output.
+
+    The coding sandbox executes through POSIX ``/bin/sh``. A language model may
+    propose a command, but it may not decide that human prose, Bash-only syntax,
+    a desktop opener, or a cross-language invocation is executable.
+    """
+    result = inspect_command(
+        command,
+        shell=ShellDialect.POSIX_SH,
+        primary_language=primary_language,
+        known_files=list(files_written),
+    )
+    if result.accepted:
+        return False, ""
+    issue = next((item for item in result.issues if item.fatal), None)
+    if issue is None:
+        return True, (
+            f"command preflight rejected `{command[:80]}` "
+            f"({result.primary_failure.value}; fingerprint={result.fingerprint})"
+        )
+    suggestion = f" {issue.suggestion}" if issue.suggestion else ""
+    return True, (
+        f"command preflight [{issue.failure_class.value}/{issue.code}] rejected "
+        f"`{command[:80]}`: {issue.message}{suggestion} "
+        f"(fingerprint={result.fingerprint})"
+    )
+
+
 def command_blocked_by_language(
     command: str,
     *,
@@ -115,10 +148,20 @@ def command_blocked_by_language(
     files_written: Sequence[str],
     file_contents: Optional[Dict[str, str]] = None,
 ) -> Tuple[bool, str]:
-    """Block py_compile / python runs that target HTML misroutes."""
+    """Block malformed, incompatible, and cross-language model commands."""
     cmd = (command or "").strip()
     if not cmd:
         return False, ""
+
+    blocked, reason = _preflight_reason(
+        cmd,
+        primary_language=primary_language,
+        files_written=files_written,
+    )
+    if blocked:
+        return True, reason
+
+    # Preserve content-aware checks that the generic preflight cannot perform.
     if primary_language == "html":
         if _DESKTOP_OPEN.match(cmd):
             return True, (
