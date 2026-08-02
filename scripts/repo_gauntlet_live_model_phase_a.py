@@ -496,17 +496,45 @@ def run_sse_task(
     secrets: List[str],
 ) -> Dict[str, Any]:
     """Remote product CodeAgent path; independent oracle on reconstructed tree."""
-    result = adapter.run_task(task.id, task.description, task.seed_files)
+    import time as _time
+
+    # Transient empty SSE (HTTP 200, no code_start) is infrastructure flake —
+    # retry a few times before classifying not_admitted. Do not invent success.
+    attempts = max(1, int(os.environ.get("LOLM_SSE_EMPTY_RETRIES", "3") or "3"))
+    result = None
+    empty_retries = 0
+    for attempt in range(attempts):
+        result = adapter.run_task(task.id, task.description, task.seed_files)
+        empty_stream = (
+            result.http_status == 200
+            and not result.code_start
+            and result.run_class in (
+                RunClass.NOT_ADMITTED.value,
+                RunClass.INADMISSIBLE.value,
+                "",
+                None,
+            )
+            and not (result.error or "").strip()
+        )
+        if not empty_stream:
+            break
+        empty_retries += 1
+        if attempt + 1 < attempts:
+            _time.sleep(min(2.0 * (attempt + 1), 8.0))
+    assert result is not None
     oracle_ok = False
     notes: List[str] = []
+    if empty_retries:
+        notes.append(f"sse_empty_retries={empty_retries}")
     if result.run_class in (RunClass.ADMITTED.value, RunClass.ADMISSIBLE_PASS.value, RunClass.AGENT_FAILURE.value):
-        oracle_ok, notes = _evaluate(
+        oracle_ok, oracle_notes = _evaluate(
             task,
             result.reconstructed_tree,
             dict(task.seed_files),
             result.code_receipt,
             [],
         )
+        notes = oracle_notes + notes
         result = adapter.apply_oracle(result, oracle_ok, notes)
 
     row = result.to_dict()
@@ -531,6 +559,7 @@ def run_sse_task(
         "violations": list(result.reasons),
         "notes": notes,
         "tree_after": result.tree_hashes.get("reconstructed") or "",
+        "sse_empty_retries": empty_retries,
     })
     return redact_secrets(row, secrets)
 

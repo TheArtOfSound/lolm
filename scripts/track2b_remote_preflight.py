@@ -150,6 +150,21 @@ def check_workspace(
         "note": "Remote --full forbids SIGNING_KEYS entirely",
     })
 
+    # Receipt verification requires PyNaCl on the runner (public-key path).
+    try:
+        from nacl.signing import VerifyKey  # noqa: F401
+        nacl_ok = True
+        nacl_actual = "importable"
+    except Exception as exc:
+        nacl_ok = False
+        nacl_actual = f"missing:{type(exc).__name__}:{exc}"
+    rows.append({
+        "check": "runner_pynacl_available",
+        "ok": nacl_ok,
+        "actual": nacl_actual,
+        "note": "pip install pynacl (or use a runner venv) before remote campaigns",
+    })
+
     return rows
 
 

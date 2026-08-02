@@ -238,7 +238,8 @@ class LolmCodeSSEAgentAdapter:
                 if saw_any_event:
                     wait = min(self.config.idle_timeout_s, remaining)
                 else:
-                    wait = min(max(self.config.idle_timeout_s, 5.0), 30.0, remaining)
+                    # First-byte window: staging + remote model cold start can exceed 30s.
+                    wait = min(max(self.config.idle_timeout_s, 5.0), 90.0, remaining)
                 if saw_any_event and (now - last_byte_at > self.config.idle_timeout_s):
                     timed_out = True
                     break

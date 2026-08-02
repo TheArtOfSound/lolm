@@ -63,11 +63,14 @@ Environment=LOLM_SERVER_SHA=${SHA}
 Environment=LOLM_DEPLOYMENT_ID=${DEPLOY_ID}
 Environment=LOLM_ENVIRONMENT=track2b-staging
 Environment=LOLM_BUILD_TIME=${BUILD_TIME}
-Environment=LOLM_MODEL_ID=${STAGING_MODEL_ID:-llama-3.3-70b-versatile}
-Environment=LOLM_MODEL_PROVIDER=${STAGING_MODEL_PROVIDER:-groq}
-Environment=LOLM_BRAIN=${STAGING_BRAIN:-cloud}
-Environment=DEMO_REASONER=${STAGING_BRAIN:-cloud}
-Environment=GROQ_MODEL=${STAGING_MODEL_ID:-llama-3.3-70b-versatile}
+# Fixed-model defaults: Workers AI (approved production gateway). Override via
+# STAGING_MODEL_ID / STAGING_MODEL_PROVIDER / STAGING_BRAIN when a valid
+# Anthropic/Groq key is provisioned for an alternate pin.
+Environment=LOLM_MODEL_ID=${STAGING_MODEL_ID:-@cf/meta/llama-3.3-70b-instruct-fp8-fast}
+Environment=LOLM_MODEL_PROVIDER=${STAGING_MODEL_PROVIDER:-workers_ai}
+Environment=LOLM_BRAIN=${STAGING_BRAIN:-workers}
+Environment=DEMO_REASONER=${STAGING_DEMO_REASONER:-workers_ai}
+Environment=WORKERS_AI_MODEL=${STAGING_MODEL_ID:-@cf/meta/llama-3.3-70b-instruct-fp8-fast}
 Environment=LOLM_STAGING_RATE_PER_MIN=${STAGING_RATE_PER_MIN:-120}
 Environment=LOLM_TRACK2B_STRICT_CHAT=1
 ExecStart=${APP}/.venv/bin/python local_ui/server_public_demo.py
@@ -95,9 +98,11 @@ ssh "$HOST" 'export PATH="$HOME/.local/bin:$PATH"
 '
 
 # Sync approved provider keys from production demo env into staging secrets
-# without printing values. Prefer GROQ (validated working) over invalid Anthropic.
+# without printing values. Default fixed model is Workers AI (same gateway as
+# production demo). Optional GROQ is copied only when STAGING_INCLUDE_GROQ=1.
 ssh "$HOST" "python3 - <<'PY'
 from pathlib import Path
+import os
 demo = Path('/opt/apps/lolm/.demo.env')
 stg = Path('${APP}/.staging.env')
 if not demo.is_file() or not stg.is_file():
@@ -112,19 +117,24 @@ def parse(p):
         out[k.strip()] = v.strip().strip('\"').strip(\"'\")
     return out
 d, s = parse(demo), parse(stg)
-# Copy only known provider credential names if staging lacks a working set
-for k in ('GROQ_API_KEY', 'OPENROUTER_API_KEY', 'GEMINI_API_KEY'):
-    if d.get(k) and not s.get(k):
+# Workers AI is the approved fixed-model path for Track 2B on this host.
+for k in ('WORKERS_AI_URL', 'WORKERS_AI_SECRET', 'WORKERS_AI_MODEL'):
+    if d.get(k):
         s[k] = d[k]
-# Track 2B fixed-model campaign currently pins groq — do not force broken Anthropic.
-# Keep ANTHROPIC only if already present; operator may rotate later.
-# Ensure rate/brain identity helpers are non-secret defaults in env file when missing.
+if not s.get('WORKERS_AI_MODEL'):
+    s['WORKERS_AI_MODEL'] = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
+# Optional secondary providers only when explicitly requested (avoids cascade).
+if os.environ.get('STAGING_INCLUDE_GROQ') == '1' and d.get('GROQ_API_KEY'):
+    s['GROQ_API_KEY'] = d['GROQ_API_KEY']
+# Do not auto-copy broken/paid-out keys that cause multi-model ambiguity.
+for k in ('ANTHROPIC_API_KEY', 'OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'COHERE_API_KEY'):
+    # leave already-operator-set values; do not inject from demo
+    pass
 s.setdefault('LOLM_STAGING_RATE_PER_MIN', '${STAGING_RATE_PER_MIN:-120}')
-# Drop empty keys
 lines = [f'{k}={v}' for k, v in sorted(s.items()) if v]
 stg.write_text('\\n'.join(lines) + '\\n')
 print('staging.env provider keys synced (names only):',
-      sorted(k for k in s if k.endswith('_KEY') or k.endswith('_SECRET')))
+      sorted(k for k in s if k.endswith('_KEY') or k.endswith('_SECRET') or k.endswith('_URL') or k.endswith('_MODEL')))
 PY"
 
 ssh "$HOST" "sudo systemctl daemon-reload && sudo systemctl enable '${SVC}' && sudo systemctl restart '${SVC}'"

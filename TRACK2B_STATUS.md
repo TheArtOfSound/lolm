@@ -4,49 +4,42 @@ Last updated: 2026-08-02 (operator continuation)
 
 ## Current phase
 
-Fix real-model path (invalid Anthropic + missing SDK → switch to approved Groq fixed model), redeploy SHA-pinned staging, re-run preflight + 30-task qualification from task 1.
+30-task real-model qualification (Workers AI fixed model) — restarting after transient empty-SSE abort at L10.
 
-## Root cause of 0/30 competence (campaign SHA 743d375)
+## Frozen campaign identity
 
-1. Staging venv lacked `anthropic` package → Claude path always failed.
-2. Staging `ANTHROPIC_API_KEY` returns **401 invalid x-api-key**.
-3. `_operator_chat` swallowed remote errors and fell through to unloaded local `generation_loop` → agent_failure `"No model loaded. Click Load model first."` with valid receipts.
-4. Burst concurrency hit rate limit (L30 429).
+| Field | Value |
+|-------|-------|
+| Server SHA | `f15e5804b85134edb0b1e91f214627ce1998da54` |
+| Deployment ID | `track2b-staging-f15e5804b851-20260802T065526Z` |
+| Model | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` |
+| Provider | `workers_ai` |
+| Isolation | bwrap |
+| Adaptive routing | OFF |
+| Receipt kid | `track2b-staging-2026-08-743d37513368` |
+| Public base | `https://lolm.imagineqira.com/api/track2b/*` |
 
-## Fix in progress
+## Partial evidence (aborted run, preserved)
 
-- Install anthropic (for optional Claude path).
-- Pin fixed real model to **Groq `llama-3.3-70b-versatile`** using existing approved `GROQ_API_KEY` from production demo env.
-- Strict chat on Track 2B staging (no silent local fallthrough).
-- Staging rate floor default 120/min when staging API key set.
-- Deploy script syncs provider keys without printing secrets.
+`/tmp/track2b-evidence/repo-gauntlet-live-a-30-workers.json` (10 tasks):
 
-## SHAs
+- L01–L06, L08: **admissible_pass** (trust+competence)
+- L07, L09: **agent_failure** (trust pass; wrong file edited)
+- L10: **not_admitted** empty SSE (infrastructure flake; L10 retry alone admitted as agent_failure)
 
-| Item | Value |
-|------|-------|
-| PR #15 merge baseline | `f1bd33f920cb552f281c6d829633ee2ef7feda34` |
-| Prior campaign freeze (invalid model path) | `743d375133687b8ad68cda3f685bdc145412904c` |
-| Validation branch tip | see git after push |
+## Prior invalidated campaign
 
-## Branch
+SHA `743d375` — 0/30 competence — model path broken (missing anthropic + invalid Anthropic key → "No model loaded"). Not competence evidence.
 
-`veyre/track2b-remote-validation`
+## Fixes landed
 
-## Campaigns
+- Strict chat on staging (no silent local fallthrough)
+- Staging rate floor / deploy Workers AI pin
+- Runner PyNaCl required (preflight check)
+- SSE empty-stream retries + longer first-byte wait
 
-| Campaign | Status |
-|----------|--------|
-| Workspace preflight | PASS (clean clone) |
-| Prior 30-task @ 743d375 | COMPLETE — competence **0/30** (model path broken; trust 29/29 admitted; L30 rate-limit) — **invalidated for competence claims** |
-| Staging redeploy + full preflight | in progress |
-| 30-task real-model (new SHA) | pending redeploy |
-| ≥150 | blocked until 30-task qualification passes |
+## Gates
 
-## Safety
-
-- Adaptive routing: **OFF**
 - Production release: **blocked**
-- Private signing keys: server only
-- Runner: public verify keys only
-- No silent alteration of fixtures/scoring
+- Adaptive routing: **OFF**
+- ≥150: only if 30-task qualification_passed
