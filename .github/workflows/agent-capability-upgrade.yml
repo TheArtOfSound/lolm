@@ -4,13 +4,16 @@ on:
   pull_request:
     paths:
       - "local_ui/code_loop_guard.py"
+      - "local_ui/nfet_agent.py"
       - "lolm/agent_capability_core.py"
+      - "lolm/answer_policy.py"
       - "lolm/command_preflight.py"
       - "lolm/capability_router.py"
       - "lolm/grounded_qa.py"
       - "lolm/repo_context.py"
       - "lolm/task_profiler.py"
       - "tests/test_agent_capability_core.py"
+      - "tests/test_answer_policy.py"
       - "tests/test_command_preflight.py"
       - "tests/test_capability_router.py"
       - "tests/test_grounded_qa.py"
@@ -42,10 +45,13 @@ jobs:
       - name: Validate benchmark manifest
         shell: bash
         run: python -m json.tool evals/agent_capability_manifest.json > /dev/null
+      - name: Verify live integration syntax
+        run: python -m py_compile local_ui/nfet_agent.py local_ui/code_loop_guard.py
       - name: Run deterministic agent tests
         run: >-
           python -m pytest -q
           tests/test_agent_capability_core.py
+          tests/test_answer_policy.py
           tests/test_command_preflight.py
           tests/test_capability_router.py
           tests/test_grounded_qa.py
