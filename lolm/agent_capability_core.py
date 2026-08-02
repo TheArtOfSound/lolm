@@ -19,7 +19,6 @@ from lolm.capability_router import (
     RoutePlan,
     TaskProfile,
     default_registry,
-    profile_task,
     route_models,
 )
 from lolm.command_preflight import (
@@ -44,6 +43,7 @@ from lolm.repo_context import (
     build_repository_map,
     rank_repository_context,
 )
+from lolm.task_profiler import profile_task
 
 
 @dataclass(frozen=True)
