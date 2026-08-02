@@ -1,0 +1,228 @@
+{
+  "schema_version": "1.0",
+  "purpose": "Measure command, question-answering, and coding capability before routing or release promotion.",
+  "policy": {
+    "production_routing_uses_measured_results": true,
+    "same_model_self_verification_is_penalized": true,
+    "deterministic_evidence_dominates_model_confidence": true,
+    "organic_runs_required": true,
+    "record_cli_and_server_sha": true
+  },
+  "suites": [
+    {
+      "id": "command-conformance",
+      "source": "lolm-native",
+      "minimum_cases": 500,
+      "buckets": [
+        "posix-sh",
+        "bash-vs-sh",
+        "powershell",
+        "cmd",
+        "quoting",
+        "pipes-and-redirection",
+        "missing-executable",
+        "natural-language-command",
+        "headless-capability",
+        "cross-language-execution"
+      ],
+      "metrics": [
+        "preflight_recall",
+        "preflight_false_positive_rate",
+        "shell_dialect_error_rate",
+        "raw_natural_language_execution_rate",
+        "cross_language_execution_rate"
+      ],
+      "promotion": {
+        "raw_natural_language_execution_rate_max": 0.0,
+        "cross_language_execution_rate_max": 0.0,
+        "shell_dialect_error_rate_max": 0.005,
+        "preflight_false_positive_rate_max": 0.02
+      }
+    },
+    {
+      "id": "browser-artifacts",
+      "source": "lolm-native",
+      "minimum_cases": 150,
+      "buckets": [
+        "single-file-html",
+        "canvas-game",
+        "dom-app",
+        "css-layout",
+        "javascript-syntax",
+        "runtime-console-errors",
+        "interaction-smoke"
+      ],
+      "metrics": [
+        "artifact_shape_pass_rate",
+        "javascript_parse_pass_rate",
+        "render_pass_rate",
+        "interaction_smoke_pass_rate",
+        "python_misroute_rate",
+        "desktop_open_attempt_rate"
+      ],
+      "promotion": {
+        "python_misroute_rate_max": 0.0,
+        "desktop_open_attempt_rate_max": 0.0,
+        "render_pass_rate_min": 0.9,
+        "interaction_smoke_pass_rate_min": 0.8
+      }
+    },
+    {
+      "id": "function-code",
+      "sources": [
+        "openai/openai_humaneval",
+        "google-research-datasets/mbpp"
+      ],
+      "metrics": [
+        "pass_at_1",
+        "pass_at_3",
+        "format_error_rate",
+        "repair_success_rate",
+        "false_ship_rate"
+      ],
+      "promotion": {
+        "false_ship_rate_max": 0.0,
+        "format_error_rate_max": 0.01,
+        "relative_pass_at_1_improvement_min": 0.1
+      }
+    },
+    {
+      "id": "repository-repair",
+      "sources": [
+        "SWE-bench/SWE-bench_Verified",
+        "princeton-nlp/SWE-bench"
+      ],
+      "training_sources": [
+        "SWE-bench/SWE-smith",
+        "language-specific SWE-smith successors"
+      ],
+      "metrics": [
+        "resolved_rate",
+        "test_regression_rate",
+        "read_before_edit_rate",
+        "relevant_file_recall",
+        "steps_to_first_meaningful_evidence",
+        "failure_fingerprint_change_rate",
+        "false_ship_rate"
+      ],
+      "promotion": {
+        "false_ship_rate_max": 0.0,
+        "test_regression_rate_max": 0.01,
+        "read_before_edit_rate_min": 0.95,
+        "failure_fingerprint_change_rate_min": 0.8
+      }
+    },
+    {
+      "id": "structured-tool-use",
+      "sources": [
+        "NousResearch/hermes-function-calling-v1"
+      ],
+      "metrics": [
+        "schema_valid_rate",
+        "tool_selection_accuracy",
+        "argument_exact_match",
+        "unsafe_action_rate",
+        "unnecessary_tool_rate"
+      ],
+      "promotion": {
+        "schema_valid_rate_min": 0.99,
+        "unsafe_action_rate_max": 0.0,
+        "tool_selection_accuracy_min": 0.9
+      }
+    },
+    {
+      "id": "grounded-qa",
+      "source": "lolm-native-plus-public-evidence",
+      "minimum_cases": 500,
+      "buckets": [
+        "stable-factual",
+        "current-factual",
+        "source-constrained",
+        "conflicting-sources",
+        "insufficient-evidence",
+        "multi-hop",
+        "technical-documentation"
+      ],
+      "retrieval_candidates": [
+        "BAAI/bge-m3",
+        "BAAI/bge-reranker-v2-m3"
+      ],
+      "metrics": [
+        "answer_exactness",
+        "citation_entailment_rate",
+        "citation_coverage",
+        "unsupported_claim_rate",
+        "freshness_route_accuracy",
+        "appropriate_abstention_rate"
+      ],
+      "promotion": {
+        "unsupported_claim_rate_max": 0.02,
+        "citation_entailment_rate_min": 0.95,
+        "citation_coverage_min": 0.9,
+        "freshness_route_accuracy_min": 0.98
+      }
+    },
+    {
+      "id": "conversation-continuity",
+      "source": "lolm-native",
+      "minimum_cases": 300,
+      "buckets": [
+        "affirmation",
+        "negation",
+        "option-selection",
+        "anaphora",
+        "short-follow-up",
+        "correction",
+        "topic-resumption"
+      ],
+      "metrics": [
+        "intent_accuracy",
+        "context_resolution_accuracy",
+        "unnecessary_web_rate",
+        "topic_reset_rate"
+      ],
+      "promotion": {
+        "intent_accuracy_min": 0.95,
+        "context_resolution_accuracy_min": 0.93,
+        "topic_reset_rate_max": 0.02
+      }
+    },
+    {
+      "id": "organic-release-gauntlet",
+      "source": "packaged-cli-against-sha-pinned-staging",
+      "minimum_runs": 200,
+      "buckets": [
+        "single-file-app",
+        "multi-file-app",
+        "repo-repair",
+        "shell-debugging",
+        "current-question",
+        "source-grounded-question",
+        "document-generation"
+      ],
+      "metrics": [
+        "ship_rate",
+        "honest_stuck_rate",
+        "false_ship_rate",
+        "terminal_receipt_rate",
+        "cli_server_sha_match_rate",
+        "median_steps",
+        "p95_latency"
+      ],
+      "promotion": {
+        "false_ship_rate_max": 0.0,
+        "terminal_receipt_rate_min": 1.0,
+        "cli_server_sha_match_rate_min": 1.0
+      }
+    }
+  ],
+  "candidate_models": [
+    "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+    "Qwen/Qwen3-Coder-480B-A35B-Instruct",
+    "mistralai/Devstral-Small-2507",
+    "moonshotai/Kimi-K2-Instruct",
+    "zai-org/GLM-4.5",
+    "openai/gpt-oss-120b",
+    "ibm-granite/granite-3.3-8b-instruct"
+  ]
+}

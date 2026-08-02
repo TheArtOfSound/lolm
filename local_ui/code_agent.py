@@ -1080,6 +1080,90 @@ class CodeAgent:
             self._executor = None
         # Grand Audit reliability state (contract/capability/arbiter/checkpoints/…)
         self.reliability = None
+        # Track 2: mandatory repository mutation gateway (read-before-edit + CAS)
+        self.mutations = None  # MutationGateway | None
+
+    def _ensure_mutation_gateway(self, task: str) -> Any:
+        """Create or refresh the mutation gateway bound to the active sandbox."""
+        if self.mutations is not None:
+            return self.mutations
+        try:
+            from lolm.mutation_gateway import MutationGateway
+            primary = ""
+            required: List[str] = []
+            exact = None
+            forbidden: List[str] = []
+            if self.reliability is not None:
+                primary = self.reliability.contract.primary_language or ""
+                required = list(self.reliability.contract.required_paths or [])
+                exact = self.reliability.contract.exact_count
+                forbidden = list(self.reliability.contract.forbidden_extensions or [])
+            self.mutations = MutationGateway(
+                self.sb,
+                task=task,
+                primary_language=primary,
+                required_paths=required,
+                exact_count=exact,
+                forbidden_extensions=forbidden,
+            )
+            return self.mutations
+        except Exception:
+            self.mutations = None
+            return None
+
+    def _gateway_write(
+        self,
+        path: str,
+        content: str,
+        *,
+        reason: str = "",
+        creating: Optional[bool] = None,
+        old_fragment: str = "",
+        step: int = 0,
+        task: str = "",
+    ) -> Dict[str, Any]:
+        """Write via mutation gateway only — never blind-edit the active repository."""
+        gw = self.mutations or self._ensure_mutation_gateway(task or "")
+        if gw is None:
+            raise PermissionError(
+                "mutation gateway unavailable — active repository writes are blocked"
+            )
+        gw.step = step
+        # Existing files require a prior explicit READ in this run (no auto-read).
+        # Auto-reading here would defeat the read-before-edit contract.
+        exists = False
+        try:
+            cur = self.sb.read_file(path)
+            exists = cur is not None
+        except Exception:
+            exists = False
+        if exists and creating is not True:
+            if path not in gw._reads and path not in gw.guard._read_hashes:
+                raise PermissionError(
+                    f"read_required_before_edit: READ `{path}` before mutating it"
+                )
+        rec = gw.write(
+            path,
+            content,
+            creating=creating if creating is not None else (not exists),
+            selection_reason=reason or "code_agent_write",
+            step=step,
+            old_fragment=old_fragment,
+        )
+        if rec.state in ("rejected", "rolled_back") or rec.rejection_reason:
+            raise PermissionError(
+                rec.rejection_reason or f"mutation rejected: {rec.state}"
+            )
+        return {
+            "path": path,
+            "diff": "",
+            "bytes": len(content or ""),
+            "mutation_id": rec.mutation_id,
+            "post_sha256": rec.post_apply_sha256,
+            "compare_and_swap_passed": rec.compare_and_swap_passed,
+            "read_sha256": rec.read_sha256,
+            "pre_apply_sha256": rec.pre_apply_sha256,
+        }
 
     def _score_candidate(self, raw: str, task: str) -> Dict[str, Any]:
         """Run one candidate opening turn in a scratch sandbox and score it.
@@ -1284,7 +1368,14 @@ class CodeAgent:
             return None
         probe_path = "_lolm_contract_probe.py"
         try:
-            sb.write_file(probe_path, script, reason="contract-probe")
+            # Active repository: always gateway. Scratch sandboxes may write directly.
+            if sb is self.sb:
+                self._gateway_write(
+                    probe_path, script, reason="contract-probe",
+                    creating=True, task=task,
+                )
+            else:
+                sb.write_file(probe_path, script, reason="contract-probe")
         except Exception as exc:
             return {"ok": False, "err": f"write probe failed: {exc}"[:200],
                     "command": f"python3 {probe_path}", "result": {}}
@@ -1537,8 +1628,13 @@ class CodeAgent:
                       stuck: bool = False, budget_hit: bool = False,
                       error: str = "",
                       syntax: Optional[Dict[str, Any]] = None,
-                      manifest: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Auditable trail of the coding loop — the switch reason vs black-box agents."""
+                      manifest: Optional[Dict[str, Any]] = None,
+                      final_workspace: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Auditable trail of the coding loop — the switch reason vs black-box agents.
+
+        ``final_workspace`` must be fully built before this call so workspace tree
+        hashes are inside the signed verification core (no post-seal mutations).
+        """
         trail: List[Dict[str, Any]] = []
         green_runs = 0
         failed_runs = 0
@@ -1676,6 +1772,15 @@ class CodeAgent:
                     }
             except Exception as exc:
                 core["reliability"] = {"error": str(exc)[:120]}
+        # Track 2: mutation gateway receipt evidence
+        if self.mutations is not None:
+            try:
+                core.update(self.mutations.receipt_blob())
+                if not self.mutations.assert_no_blind_existing_edits():
+                    core["ok"] = False
+                    core["mutation_integrity"] = "blind_or_stale_edit_detected"
+            except Exception as exc:
+                core["mutation_gateway"] = {"error": str(exc)[:120]}
         core["verdict"] = (
             "shipped" if core["ok"] else
             ("broken" if not core["syntax_ok"] else
@@ -1684,6 +1789,21 @@ class CodeAgent:
                ("missing_output" if not expected_ok else
                 ("ran" if ran else "incomplete")))))
         )
+        fw = dict(final_workspace or {})
+        tree_sha = str(fw.get("tree_hash") or "")
+        file_count = len(fw.get("paths") or fw.get("files") or [])
+        total_bytes = 0
+        for body in (fw.get("files") or {}).values():
+            try:
+                total_bytes += len((body or "").encode("utf-8", errors="replace"))
+            except Exception:
+                pass
+        # Also count omitted binary metadata sizes when present
+        for omit in (fw.get("omitted") or []):
+            try:
+                total_bytes += int(omit.get("size") or 0)
+            except Exception:
+                pass
         core["verification"] = {
             "syntax_ok": core["syntax_ok"] is True,
             "execution_ok": bool(ran and produced_output and green_runs > 0),
@@ -1691,8 +1811,26 @@ class CodeAgent:
                                 and artifact_manifest_ok),
             "artifact_manifest_ok": artifact_manifest_ok,
             "artifact_manifest_sha256": str((manifest or {}).get("manifest_sha256") or ""),
+            # Track 2B: workspace binding is part of the signed core
+            "workspace_tree_sha256": tree_sha,
+            "workspace_file_count": file_count,
+            "workspace_total_bytes": total_bytes,
+            "final_workspace_complete": bool(fw.get("complete")) if fw else False,
         }
+        if tree_sha:
+            # Top-level aliases also sealed (adapter may read either path)
+            core["tree_hash"] = tree_sha
+            core["workspace_tree_hash"] = tree_sha
+        # Deployment identity is sealed when present (staging SHA-pin admission)
+        try:
+            identity = self._deployment_identity()
+            for k, v in identity.items():
+                if v:
+                    core[k] = v
+        except Exception:
+            pass
         # Seal the complete verdict and verification core with Ed25519.
+        # NEVER mutate the returned object after this point.
         try:
             from local_ui.receipt_sign import sign_code_receipt
             core = sign_code_receipt(core)
@@ -1878,7 +2016,22 @@ class CodeAgent:
             except Exception:
                 session_event = None
 
-        receipt = self.build_receipt(task, syntax=syntax, manifest=manifest, **kw)
+        # Build authoritative final workspace BEFORE sealing the receipt so the
+        # tree hash is inside the signed verification core (no post-seal mutation).
+        final_workspace_blob: Dict[str, Any] = {}
+        try:
+            final_workspace_blob = self._build_final_workspace_event(
+                run_id=str(getattr(self.sb, "id", "") or ""),
+            )
+        except Exception:
+            final_workspace_blob = {}
+        receipt = self.build_receipt(
+            task,
+            syntax=syntax,
+            manifest=manifest,
+            final_workspace=final_workspace_blob or None,
+            **kw,
+        )
         # Update ledger status from sealed receipt (local file only; not re-hashed)
         if self.reliability is not None and self.reliability.session is not None:
             try:
@@ -1937,8 +2090,75 @@ class CodeAgent:
         if session_event:
             yield {"event": "session_ledger", "data": session_event}
             data["session_id"] = session_event.get("session_id")
+        # Track 2B: stream final_workspace then sealed receipt. Receipt is immutable.
+        identity = {
+            k: receipt.get(k) or v
+            for k, v in self._deployment_identity().items()
+        }
+        if final_workspace_blob:
+            fw = dict(final_workspace_blob)
+            fw["run_id"] = str(receipt.get("run_id") or fw.get("run_id") or "")
+            # Identity on the event envelope only — receipt already sealed with it
+            for k, v in identity.items():
+                if v and not fw.get(k):
+                    fw[k] = v
+            yield {"event": "final_workspace", "data": fw}
+            data["tree_hash"] = (
+                receipt.get("tree_hash")
+                or (receipt.get("verification") or {}).get("workspace_tree_sha256")
+                or fw.get("tree_hash")
+            )
+        else:
+            yield {"event": "agent_note", "data": {
+                "text": "final_workspace unavailable"}}
+        for k, v in identity.items():
+            if v:
+                data[k] = v
+        data["tree_hash"] = data.get("tree_hash") or receipt.get("tree_hash") or (
+            (receipt.get("verification") or {}).get("workspace_tree_sha256")
+        )
         yield {"event": "code_done", "data": data}
+        # Emit the sealed receipt exactly as signed — no field injection after seal.
         yield {"event": "code_receipt", "data": receipt}
+        # Complete Track 3 passive shadow observation from receipt evidence.
+        try:
+            if self._shadow_decision is not None and self._cap_core is not None:
+                ok = bool(receipt.get("ok"))
+                false_ship = bool(receipt.get("ok")) and receipt.get("syntax_ok") is False
+                rollback = bool(
+                    (receipt.get("mutation_gateway") or {}).get("rollbacks")
+                    or any(
+                        "restored" in str(n).lower()
+                        for n in (data.get("summary") or "",)
+                    )
+                )
+                latency_ms = max(0.0, (time.time() - float(self._shadow_t0 or 0)) * 1000.0)
+                terminal = (
+                    "verified_complete" if ok and not false_ship
+                    else ("false_ship" if false_ship else "failed")
+                )
+                self._cap_core.record_run_outcome(
+                    self._shadow_decision,
+                    verdict=terminal,
+                    false_ship=false_ship,
+                    rollback_required=rollback,
+                    latency_ms=latency_ms,
+                    terminal=terminal,
+                    notes=(data.get("summary") or "")[:200],
+                )
+                # Shadow telemetry is NOT part of the sealed receipt core.
+                # Attach only to the already-emitted code_done envelope is impossible
+                # here; surface as a separate event so we never post-mutate the seal.
+                yield {"event": "shadow_telemetry", "data": {
+                    "record_id": (
+                        self._shadow_decision.shadow.record_id
+                        if self._shadow_decision.shadow else ""
+                    ),
+                    "adaptive_routing_applied": False,
+                    "task_bucket": self._shadow_decision.profile.bucket,
+                }}
+        except Exception:
+            pass
 
     def _artifact_manifest(self, *, max_file_bytes: int = 96_000,
                            max_total_bytes: int = 400_000) -> Dict[str, Any]:
@@ -2024,8 +2244,128 @@ class CodeAgent:
         ).encode()).hexdigest()
         return {**manifest_core, "files": files_out, "manifest_sha256": manifest_sha}
 
+    def _deployment_identity(self) -> Dict[str, Any]:
+        """SHA-pinned deployment fields for Track 2B admission (env-driven)."""
+        import os as _os
+        sha = (
+            _os.environ.get("LOLM_SERVER_SHA")
+            or _os.environ.get("LOLM_EXPECTED_SERVER_SHA")
+            or _os.environ.get("GIT_COMMIT")
+            or ""
+        ).strip()
+        return {
+            "server_sha": sha,
+            "model_id": (_os.environ.get("LOLM_MODEL_ID") or "").strip(),
+            "provider": (_os.environ.get("LOLM_MODEL_PROVIDER") or "").strip(),
+            "deployment_id": (_os.environ.get("LOLM_DEPLOYMENT_ID") or "").strip(),
+        }
+
+    def _build_final_workspace_event(self, *, run_id: str = "") -> Dict[str, Any]:
+        """Full text tree for independent oracle reconstruction.
+
+        Excludes sandbox pollution from Python/HOME caches (Library/, __pycache__,
+        .cache, etc.) so the sealed tree hash is about product artifacts only.
+        """
+        from lolm.track2b.workspace import build_final_workspace
+        files: Dict[str, str] = {}
+        binary_meta: Dict[str, Dict[str, Any]] = {}
+        skip_parts = {
+            "__pycache__", ".git", "node_modules", "Library", ".cache",
+            ".npm", ".local", ".config", "Caches",
+        }
+        try:
+            paths = list(self.sb.list_files(limit=500))
+        except Exception:
+            paths = list(self._files_written or [])
+        # Prefer intentional product paths, then remaining non-cache paths
+        ordered = list(dict.fromkeys(list(self._files_written or []) + paths))
+        for path in ordered:
+            p = (path or "").strip().replace("\\", "/")
+            if not p or p.startswith("/") or ".." in p.split("/"):
+                continue
+            parts = set(p.split("/"))
+            if parts & skip_parts:
+                continue
+            if p.endswith((".pyc", ".pyo", ".so")):
+                continue
+            try:
+                raw = self.sb.read_file(p)
+            except Exception:
+                continue
+            if raw is None:
+                continue
+            if isinstance(raw, bytes):
+                if b"\x00" in raw:
+                    import hashlib as _hl
+                    binary_meta[p] = {
+                        "reason": "binary",
+                        "size": len(raw),
+                        "sha256": _hl.sha256(raw).hexdigest(),
+                    }
+                    continue
+                try:
+                    text = raw.decode("utf-8")
+                except Exception:
+                    import hashlib as _hl
+                    binary_meta[p] = {
+                        "reason": "non_utf8",
+                        "size": len(raw),
+                        "sha256": _hl.sha256(raw).hexdigest(),
+                    }
+                    continue
+            else:
+                text = str(raw)
+                if "\x00" in text:
+                    import hashlib as _hl
+                    binary_meta[p] = {
+                        "reason": "binary_nul",
+                        "size": len(text.encode("utf-8", "replace")),
+                        "sha256": _hl.sha256(text.encode("utf-8", "replace")).hexdigest(),
+                    }
+                    continue
+            files[p] = text
+        return build_final_workspace(
+            files, binary_meta=binary_meta, run_id=run_id or str(getattr(self.sb, "id", "")),
+        )
+
     def run(self, task: str) -> Iterator[Dict[str, Any]]:
-        yield {"event": "code_start", "data": {"task": task, "sandbox": self.sb.id}}
+        start_data = {"task": task, "sandbox": self.sb.id}
+        start_data.update(self._deployment_identity())
+        # Echo fixture binding when resume package is a benchmark fixture
+        if self.resume_package:
+            fh = self.resume_package.get("fixture_hash")
+            if fh:
+                start_data["fixture_hash"] = fh
+            start_data["resume_token"] = str(self.resume_package.get("resume_token") or "")[:80]
+        yield {"event": "code_start", "data": start_data}
+        # Track 3 passive shadow: recommend a route, never apply adaptive selection.
+        self._shadow_decision = None
+        self._shadow_t0 = time.time()
+        self._cap_core = None
+        try:
+            from lolm.agent_capability_core import AgentCapabilityCore
+            self._cap_core = AgentCapabilityCore()
+            self._shadow_decision = self._cap_core.prepare_request(
+                task or "",
+                has_repository=True,
+                run_id=str(getattr(self.sb, "id", "") or "")[:16],
+            )
+            sh = self._shadow_decision.shadow
+            yield {"event": "agent_note", "data": {
+                "text": (
+                    "shadow router (passive): "
+                    f"bucket={self._shadow_decision.profile.bucket} "
+                    f"baseline={sh.baseline_selection if sh else {}} "
+                    f"shadow={sh.shadow_router_selection if sh else {}} "
+                    "adaptive=OFF"
+                ),
+                "shadow_record_id": sh.record_id if sh else "",
+                "adaptive_routing_applied": False,
+            }}
+        except Exception as exc:
+            self._shadow_decision = None
+            yield {"event": "agent_note", "data": {
+                "text": f"shadow telemetry unavailable: {exc}"[:120]}}
         # Load or create persistent task state z_t — multi-session by conversation.
         try:
             from lolm.control.task_state import load_or_init, save_task_state
@@ -2139,6 +2479,26 @@ class CodeAgent:
                     ),
                     "contract_id": self.reliability.contract.contract_id,
                 }}
+            # Track 2: mutation gateway + repository selection
+            try:
+                gw = self._ensure_mutation_gateway(task)
+                if gw is not None:
+                    gw.refresh_map(step=0)
+                    picks = gw.select_targets(task)
+                    if picks:
+                        yield {"event": "agent_note", "data": {
+                            "text": (
+                                "repo selection: "
+                                + ", ".join(
+                                    f"{p['path']}({','.join(p['reason'][:2])})"
+                                    for p in picks[:5]
+                                )
+                            ),
+                            "selection": picks[:8],
+                        }}
+            except Exception as exc:
+                yield {"event": "agent_note", "data": {
+                    "text": f"mutation gateway init: {exc}"[:120]}}
             # Feasibility preflight — never burn budget on impossible browser open
             if _loop_guard is not None:
                 try:
@@ -2593,14 +2953,27 @@ class CodeAgent:
 
             for path in turn.get("reads") or []:
                 try:
-                    content = self.sb.read_file(path)
+                    gw = self._ensure_mutation_gateway(task)
+                    if gw is not None:
+                        content, auth = gw.read(path, scope="full", step=step)
+                        yield {"event": "agent_note", "data": {
+                            "text": (
+                                f"read {path} ({auth.size} bytes) "
+                                f"sha={auth.sha256[:12]} rev={auth.revision}"
+                            ),
+                            "path": path,
+                            "preview": (content or "")[:400],
+                            "read_authorization": auth.to_dict(),
+                        }}
+                    else:
+                        content = self.sb.read_file(path)
+                        yield {"event": "agent_note", "data": {
+                            "text": f"read {path} ({len(content or '')} bytes)",
+                            "path": path, "preview": (content or "")[:400]}}
                     self.actions.append({
                         "kind": "read_file", "path": path,
                         "bytes": len(content or ""), "content": content or "",
                     })
-                    yield {"event": "agent_note", "data": {
-                        "text": f"read {path} ({len(content or '')} bytes)",
-                        "path": path, "preview": (content or "")[:400]}}
                     did = True
                 except Exception as exc:
                     self.actions.append({
@@ -2612,7 +2985,11 @@ class CodeAgent:
 
             for path, old, new in turn.get("edits") or []:
                 try:
-                    cur = self.sb.read_file(path)
+                    gw = self._ensure_mutation_gateway(task)
+                    if gw is not None:
+                        cur, _auth = gw.read(path, scope="full", step=step)
+                    else:
+                        cur = self.sb.read_file(path)
                 except Exception as exc:
                     self.actions.append({"kind": "edit_file", "path": path, "ok": False,
                                          "note": f"read failed: {exc}"})
@@ -2621,9 +2998,6 @@ class CodeAgent:
                     did = True
                     continue
                 if old not in cur:
-                    # Nothing changed. Steer at the workspace block instead of leaving a
-                    # content-free "not found" — that was a dead end whose only escape
-                    # was a blind full rewrite.
                     self.actions.append({
                         "kind": "edit_file", "path": path, "ok": False,
                         "note": "old text did NOT match byte-for-byte, so NOTHING changed. "
@@ -2644,25 +3018,33 @@ class CodeAgent:
                         "text": f"edit {path} — old text matches {cur.count(old)} times; make it unique"}}
                     did = True
                     continue
-                updated = cur.replace(old, new, 1)
                 try:
-                    fc = self.sb.write_file(path, updated, reason="edit")
+                    # Active repository edits always go through the mutation gateway
+                    fc = self._gateway_write(
+                        path, new, reason="edit", creating=False,
+                        old_fragment=old, step=step, task=task,
+                    )
+                    updated = cur.replace(old, new, 1)
                     self.actions.append({"kind": "edit_file", "path": path, "ok": True,
-                                         "note": f"{len(old)}→{len(new)} chars"})
+                                         "note": f"{len(old)}→{len(new)} chars",
+                                         "mutation_id": fc.get("mutation_id")})
                     if path not in self._files_written:
                         self._files_written.append(path)
                     written_path = path
                     yield {"event": "file_changed", "data": {"path": path,
-                           "diff": (fc.get("diff") or "")[:_DIFF_CAP], "bytes": len(updated),
-                           "edit": True}}
+                           "diff": (fc.get("diff") or "")[:_DIFF_CAP],
+                           "bytes": len(updated),
+                           "edit": True,
+                           "mutation_id": fc.get("mutation_id"),
+                           "compare_and_swap_passed": fc.get("compare_and_swap_passed")}}
                     did = True
                     if (path or "").endswith(".py"):
-                        # mark for preflight after edits (shared with write path)
                         turn.setdefault("_py_touch", []).append(path)
                 except Exception as exc:
                     self.actions.append({"kind": "edit_file", "path": path, "ok": False,
-                                         "note": str(exc)[:120]})
-                    yield {"event": "agent_note", "data": {"text": f"edit write failed: {exc}"[:160]}}
+                                         "note": str(exc)[:160]})
+                    yield {"event": "agent_note", "data": {
+                        "text": f"edit write rejected: {exc}"[:200]}}
                     did = True
 
             file_list = turn.get("files") or (
@@ -2714,8 +3096,25 @@ class CodeAgent:
                         yield {"event": "agent_note", "data": {
                             "text": f"closure protocol blocked write to `{path}`"}}
                         continue
-                    fc = self.sb.write_file(path, content, reason="")
-                    self.actions.append({"kind": "write_file", "path": path, "bytes": len(content)})
+                    self._ensure_mutation_gateway(task)
+                    try:
+                        fc = self._gateway_write(
+                            path, content, reason="file_write", step=step,
+                        )
+                    except PermissionError as exc:
+                        yield {"event": "agent_note", "data": {
+                            "text": f"mutation rejected for `{path}`: {exc}"[:200]}}
+                        self._format_nudge = (
+                            (self._format_nudge or "")
+                            + f"\n\nMUTATION REJECTED for `{path}`: {exc}\n"
+                            "READ the file first (READ: path), then EDIT or rewrite."
+                        )
+                        continue
+                    self.actions.append({
+                        "kind": "write_file", "path": path, "bytes": len(content),
+                        "mutation_id": fc.get("mutation_id"),
+                        "post_sha256": fc.get("post_sha256"),
+                    })
                     if path not in self._files_written:
                         self._files_written.append(path)
                     if self.reliability is not None:
@@ -2723,8 +3122,13 @@ class CodeAgent:
                             self.reliability.note_write(path, content, step=step)
                         except Exception:
                             pass
-                    yield {"event": "file_changed", "data": {"path": path,
-                           "diff": (fc.get("diff") or "")[:_DIFF_CAP], "bytes": len(content)}}
+                    yield {"event": "file_changed", "data": {
+                        "path": path,
+                        "diff": (fc.get("diff") or "")[:_DIFF_CAP],
+                        "bytes": len(content),
+                        "mutation_id": fc.get("mutation_id"),
+                        "compare_and_swap_passed": fc.get("compare_and_swap_passed"),
+                    }}
                     did = True
                     # Pre-flight syntax gate — ONLY for genuine Python
                     if (path or "").endswith(".py"):
@@ -2764,7 +3168,22 @@ class CodeAgent:
                                     cur = ""
                                 if cur and _content_has_protocol_bleed(cur):
                                     fixed = _sanitize_file_content(cur)
-                                    self.sb.write_file(path, fixed, reason="auto-strip protocol")
+                                    try:
+                                        # Explicit read authorization for auto-sanitizer
+                                        if self.mutations is not None:
+                                            self.mutations.read(path, scope="full", step=step)
+                                        else:
+                                            self._ensure_mutation_gateway(task)
+                                            if self.mutations is not None:
+                                                self.mutations.read(path, scope="full", step=step)
+                                        self._gateway_write(
+                                            path, fixed, reason="auto-strip protocol",
+                                            creating=False, step=step, task=task,
+                                        )
+                                    except Exception as exc:
+                                        yield {"event": "agent_note", "data": {
+                                            "text": f"auto-strip mutation rejected: {exc}"[:140]}}
+                                        continue
                                     vr2 = self.sb.run(vcmd, timeout=min(10, self.run_timeout),
                                                       isolated=self.isolated)
                                     self.actions.append({"kind": "run", "command": vcmd,
@@ -3906,7 +4325,26 @@ class CodeAgent:
                                             continue
                                         content = _sanitize_file_content(content)
                                         try:
-                                            self.sb.write_file(path, content, reason="repair-race")
+                                            self._ensure_mutation_gateway(task)
+                                            try:
+                                                exists = False
+                                                try:
+                                                    exists = self.sb.read_file(path) is not None
+                                                except Exception:
+                                                    exists = False
+                                                # Repair-race promotion: read active tree first (fresh RBE)
+                                                if exists and self.mutations is not None:
+                                                    self.mutations.read(
+                                                        path, scope="full", step=step,
+                                                    )
+                                                self._gateway_write(
+                                                    path, content, reason="repair-race",
+                                                    creating=not exists, step=step, task=task,
+                                                )
+                                            except PermissionError as exc:
+                                                yield {"event": "agent_note", "data": {
+                                                    "text": f"repair-race mutation rejected: {exc}"[:160]}}
+                                                continue
                                             if path not in self._files_written:
                                                 self._files_written.append(path)
                                             yield {"event": "file_changed", "data": {

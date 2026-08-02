@@ -4,8 +4,14 @@ import os
 
 import pytest
 
-os.environ["LOLM_RECEIPT_SIGNING_KEYS"] = "qira-test-2026:0123456789abcdef0123456789abcdef"
-os.environ["LOLM_RECEIPT_ACTIVE_KID"] = "qira-test-2026"
+_TEST_SIGNING = "qira-test-2026:0123456789abcdef0123456789abcdef"
+
+
+@pytest.fixture(autouse=True)
+def _signing_env(monkeypatch):
+    monkeypatch.setenv("LOLM_RECEIPT_SIGNING_KEYS", _TEST_SIGNING)
+    monkeypatch.setenv("LOLM_RECEIPT_ACTIVE_KID", "qira-test-2026")
+    monkeypatch.delenv("LOLM_RECEIPT_VERIFY_KEYS", raising=False)
 
 
 def test_sign_and_verify_roundtrip():
