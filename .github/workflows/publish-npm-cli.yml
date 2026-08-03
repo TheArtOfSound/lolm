@@ -1,13 +1,17 @@
 name: publish-npm-cli
 
 # Publish clients/cli (the `lolm` command) with provenance, then smoke-test the
-# published binary in a clean project. Inert until NPM_TOKEN is set.
-#
-# Separate from publish-npm-{canary,stable}.yml because those target clients/js,
-# and the CLI has its own version line and its own smoke test (it has to actually
-# run as a binary, not just import).
+# published binary in a clean project. Fail-closed until NPM_TOKEN is set.
 
 on:
+  push:
+    branches:
+      - grok/grand-audit-remediation
+    paths:
+      - 'clients/cli/**'
+      - 'clients/js/**'
+      - 'package-lock.json'
+      - '.github/workflows/publish-npm-cli.yml'
   workflow_dispatch:
     inputs:
       version:
@@ -22,6 +26,10 @@ permissions:
   contents: read
   id-token: write                # npm provenance
 
+concurrency:
+  group: publish-npm-cli-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   cli:
     runs-on: ubuntu-latest
@@ -35,19 +43,27 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
       - name: Guard — require NPM_TOKEN
-        if: ${{ !inputs.dry_run }}
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
         run: '[ -n "${{ secrets.NPM_TOKEN }}" ] || { echo "NPM_TOKEN not set — refusing to publish"; exit 1; }'
       - name: Set version
-        if: ${{ inputs.version != '' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.version != '' }}
         run: npm version "${{ inputs.version }}" --no-git-tag-version
       - name: Install deps
         run: npm install --no-audit --no-fund
       - name: Test + inspect package contents
         run: |
-          node test/run.mjs
+          npm test
           npm pack --dry-run
+      - name: Refuse an already-published version
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        run: |
+          V="$(node -p "require('./package.json').version")"
+          if npm view "lolm-cli@$V" version >/dev/null 2>&1; then
+            echo "lolm-cli@$V already exists; refusing a mutable republish"
+            exit 1
+          fi
       - name: Publish (provenance)
-        if: ${{ !inputs.dry_run }}
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -64,7 +80,7 @@ jobs:
           echo "Publishing $V with dist-tag $TAG"
           npm publish --provenance --access public --tag "$TAG"
       - name: Smoke the published binary in a clean project
-        if: ${{ !inputs.dry_run }}
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
         run: |
           V="$(node -p "require('./package.json').version")"
           cd "$RUNNER_TEMP"
@@ -76,8 +92,15 @@ jobs:
             sleep 10
           done
           [ "$installed" -eq 1 ]
-          ./node_modules/.bin/lolm --version
+          ./node_modules/.bin/lolm --version | grep -qx "$V"
           ./node_modules/.bin/lolm --help | grep -q "USAGE"
-          # a real network call against the hosted API — proves the binary works
+          # local P0 checks must not call production
+          set +e
+          OUT="$(./node_modules/.bin/lolm code 'make a PDF proving I attend ASU and fill in the rest' 2>&1)"
+          RC=$?
+          set -e
+          [ "$RC" -eq 2 ]
+          printf '%s\n' "$OUT" | grep -qi "cannot fabricate official proof"
+          # a real network call against the hosted API proves the installed binary runs
           ./node_modules/.bin/lolm status
           echo "cli smoke OK"
