@@ -1,19 +1,9 @@
 name: deploy-production
 
 # Deploy to the production box + smoke/health/critical-route checks. Auto-rolls
-# back on a failed check. Fail-closed until DEPLOY_SSH_HOST + DEPLOY_KEY are set.
+# back on a failed check. Called by release-production after PR gates pass.
 
 on:
-  push:
-    branches:
-      - grok/grand-audit-remediation
-    paths:
-      - 'local_ui/**'
-      - 'lolm/**'
-      - 'site/**'
-      - 'sitecustomize.py'
-      - 'deploy/**'
-      - '.github/workflows/deploy-production.yml'
   workflow_dispatch:
   workflow_call:
 
@@ -31,8 +21,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Record immutable release identity
         run: |
-          echo "release_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-          git status --porcelain
+          echo "release_sha=$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
       - name: Guard — require deploy secrets
         run: '[ -n "${{ secrets.DEPLOY_SSH_HOST }}" ] && [ -n "${{ secrets.DEPLOY_KEY }}" ] || { echo "deploy secrets not set — refusing"; exit 1; }'
       - name: Set up SSH
@@ -45,7 +35,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           # DEPLOY_SSH_HOST is user@host; ssh-keyscan needs the bare host
           ssh-keyscan -H "${DEPLOY_SSH_HOST##*@}" >> ~/.ssh/known_hosts 2>/dev/null || true
-      - name: Deploy + health checks
+      - name: Deploy + health + real PDF delivery checks
         id: deploy
         env:
           DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
