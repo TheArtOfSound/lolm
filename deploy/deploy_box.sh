@@ -107,7 +107,7 @@ assert allow_finalize_from_state(st) is False
 observe_workspace_artifacts(st, ['main.py', 'output.pdf'])
 assert allow_finalize_from_state(st) is True
 assert policy_action(st)['block_finalize'] is False
-print('runtime patches + generated-artifact task state + contract medium OK')
+print('generated-artifact task state OK; contract medium OK')
 PY"
 
 echo "[deploy] clearing stale bytecode + restarting $SVC"
