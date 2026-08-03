@@ -36,11 +36,11 @@ def official_credential_fabrication(task: str) -> bool:
     ):
         return False
     proof = bool(re.search(
-        r"\b(proof|prove|proving|verification|verify|certificate|official letter|transcript)\b",
+        r"\b(proof|prove|proves|proved|proving|verification|verify|verifies|verified|certificate|official letter|transcript)\b",
         text,
     ))
     status = bool(re.search(
-        r"\b(attend|attendance|enroll|enrollment|student|graduate|graduated|employed|employment)\b",
+        r"\b(attend|attends|attended|attending|attendance|enroll|enrolls|enrolled|enrolling|enrollment|student|graduate|graduates|graduated|graduating|graduation|employ|employs|employed|employing|employment)\b",
         text,
     ))
     institution = bool(re.search(
