@@ -43,6 +43,23 @@ def test_task_state_persists_and_allows_finalize(monkeypatch, tmp_path: Path):
     assert allow_finalize_from_state(resumed)
 
 
+def test_pdf_task_does_not_treat_generator_source_as_the_deliverable(monkeypatch, tmp_path: Path):
+    monkeypatch.setenv("LOLM_TASK_STATE_DIR", str(tmp_path))
+    state = load_or_init("create output.pdf", session="pdf-source-only")
+    state = update_task_state(
+        state,
+        observation="generator ran but output.pdf is missing",
+        action="run",
+        result={"files": ["main.py"], "exit_ok": True, "produced_output": True},
+    )
+    artifact = next(c for c in state.C if c.id == "artifact")
+    assert artifact.met is False
+    assert allow_finalize_from_state(state) is False
+    decision = policy_action(state)
+    assert decision["action"] == "continue"
+    assert "artifact type" in decision["reason"]
+
+
 def test_task_state_repeated_failure_forces_branch(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("LOLM_TASK_STATE_DIR", str(tmp_path))
     state = load_or_init("fix parser", session="s2")
