@@ -26,7 +26,7 @@ concurrency:
 
 env:
   EXPECTED_TRIGGER_BRANCH: "veyr/p0-release-trigger"
-  EXPECTED_TRIGGER_SHA: "f62ead4f3cd5a723cfe2d1290fa9e3d8c4960d55"
+  EXPECTED_TRIGGER_SHA: "efa7445cc916d10d57a3451993619e7254fae921"
   RELEASE_SHA: "892f5d2802afdea73d8f381d5922553b00b99b9e"
   RELEASE_BRANCH: "grok/grand-audit-remediation"
   REPORT_ISSUE: "18"
@@ -36,7 +36,7 @@ jobs:
     if: >-
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.head_branch == 'veyr/p0-release-trigger' &&
-      github.event.workflow_run.head_sha == 'f62ead4f3cd5a723cfe2d1290fa9e3d8c4960d55' &&
+      github.event.workflow_run.head_sha == 'efa7445cc916d10d57a3451993619e7254fae921' &&
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
