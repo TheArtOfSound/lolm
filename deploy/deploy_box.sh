@@ -30,9 +30,22 @@ rsync -rc --delete --exclude '.venv' --exclude '__pycache__' --exclude 'runs' \
   lolm/ "$HOST:$APP/lolm/"
 rsync -rc --exclude '__pycache__' local_ui/ "$HOST:$APP/local_ui/"
 rsync -rc scripts/ "$HOST:$APP/scripts/"
+# Root runtime hooks are not contained in lolm/ or local_ui/. Keep this explicit
+# so a production fix cannot pass CI and then disappear during rsync.
+rsync -rc sitecustomize.py "$HOST:$APP/sitecustomize.py"
 
 echo "[deploy] syncing static site → $HOST:$WEB"
 rsync -rc --rsync-path="sudo rsync" site/ "$HOST:$WEB/"
+
+echo "[deploy] proving runtime imports and the exact-byte artifact patch"
+ssh "$HOST" "cd '$APP' && .venv/bin/python - <<'PY'
+from lolm.control.task_state import load_or_init, policy_action
+from local_ui.code_agent import CodeAgent
+assert getattr(CodeAgent, '_artifact_delivery_patch', False), 'artifact delivery patch not active'
+st = load_or_init('deployment import self-test', session='deploy-self-test', resume=False)
+assert policy_action(st)['block_finalize'] is True
+print('runtime patch + task state OK')
+PY"
 
 echo "[deploy] clearing stale bytecode + restarting $SVC"
 ssh "$HOST" "find $APP -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null; sudo systemctl restart $SVC; sleep 3; systemctl is-active $SVC"
@@ -56,6 +69,7 @@ check() { # name url expect
 echo "[deploy] smoke + health + critical routes"
 check "health"        "$BASE/api/demo/status"          200
 check "lolm_demo"     "$BASE/"                          200
+check "artifact_ui"   "$BASE/artifact-delivery-ui.js"  200
 check "receipt_route" "$BASE/api/demo/hf/dashboard"     200
 check "research"      "$BASE/api/demo/research/jobs"    200
 
