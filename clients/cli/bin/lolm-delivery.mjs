@@ -1,23 +1,28 @@
 #!/usr/bin/env node
 // Copyright (c) 2026 Qira LLC. All rights reserved.
-/** User-facing LOLM launcher with artifact delivery and local referent resolution. */
+/** User-facing LOLM launcher with verified delivery and deterministic continuity. */
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import process from "node:process";
 import {
-  artifactLocationQuestion,
   commandIndex,
   commandTask,
   isOfficialCredentialFabrication,
-  loadLastDelivery,
   makeDeliveryDirectory,
-  recordDelivery,
   requestedArtifactKind,
   requestedDestination,
   selectDeliveredArtifacts,
   walkFiles,
 } from "../lib/delivery.mjs";
+import {
+  findContinuityRecord,
+  listContinuityRecords,
+  markRecordOpened,
+  parseRunEvidence,
+  recordContinuity,
+  resolveContinuityQuestion,
+} from "../lib/continuity.mjs";
 
 const VERSION = "0.3.0-beta.2";
 const CORE_VERSION = "0.3.0-beta.1";
@@ -25,6 +30,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const coreCli = join(here, "lolm.mjs");
 const argv = process.argv.slice(2);
 const { command, task } = commandTask(argv);
+const jsonMode = argv.includes("--json");
 
 function printRefusal() {
   process.stderr.write(
@@ -34,28 +40,142 @@ function printRefusal() {
   );
 }
 
-async function showLastArtifact({ open = false } = {}) {
-  const last = await loadLastDelivery();
-  if (!last || !last.exists) {
-    process.stderr.write(
-      "No delivered local artifact was found. A previous run may have generated a file only inside its sandbox.\n",
-    );
+function artifactSelector(words) {
+  let kind = "";
+  let index = 1;
+  for (const word of words) {
+    if (/^\d+$/.test(word)) index = Math.max(1, Number(word));
+    else if (!["--json", "-j"].includes(word)) kind = word.toLowerCase();
+  }
+  return { kind, index };
+}
+
+function output(value, { error = false } = {}) {
+  const stream = error ? process.stderr : process.stdout;
+  if (jsonMode) {
+    stream.write(JSON.stringify(value, null, 2) + "\n");
+    return;
+  }
+  if (typeof value === "string") stream.write(value.endsWith("\n") ? value : `${value}\n`);
+  else stream.write(`${JSON.stringify(value)}\n`);
+}
+
+function openLocal(path) {
+  let executable = "xdg-open";
+  let args = [path];
+  if (process.platform === "darwin") executable = "open";
+  else if (process.platform === "win32") {
+    executable = "cmd";
+    args = ["/c", "start", "", path];
+  }
+  const child = spawn(executable, args, { stdio: "ignore", detached: true });
+  child.on("error", () => {});
+  child.unref();
+}
+
+function recordSummary(record, position = 1) {
+  const intact = (record.artifacts || []).filter((item) => item.exists && !item.changed);
+  const changed = (record.artifacts || []).filter((item) => item.changed);
+  const missing = (record.artifacts || []).filter((item) => !item.exists);
+  return {
+    index: position,
+    id: record.id,
+    ts: record.ts,
+    task: record.task,
+    kind: record.kind,
+    verdict: record.verdict,
+    receipt_sha: record.receipt_sha,
+    task_id: record.task_id,
+    sandbox_id: record.sandbox_id,
+    states: record.states,
+    intact: intact.map((item) => ({ path: item.path, size: item.size, sha256: item.sha256 })),
+    changed: changed.map((item) => ({ path: item.path, expected_sha256: item.sha256 })),
+    missing: missing.map((item) => item.path),
+  };
+}
+
+async function showArtifact({ action = "where", kind = "", index = 1 } = {}) {
+  if (action === "list") {
+    const records = await listContinuityRecords({ kind, limit: 50 });
+    if (!records.length) {
+      output(jsonMode ? { ok: false, error: "no_continuity_record" } : "No matching local continuity record was found.", { error: true });
+      return 1;
+    }
+    if (jsonMode) output({ ok: true, records: records.map((record, i) => recordSummary(record, i + 1)) });
+    else {
+      records.forEach((record, i) => {
+        const summary = recordSummary(record, i + 1);
+        const path = summary.intact[0]?.path || summary.changed[0]?.path || summary.missing[0] || "<no local path>";
+        process.stdout.write(`${i + 1}\t${record.kind}\t${record.verdict}\t${path}\n`);
+      });
+    }
+    return 0;
+  }
+
+  const record = await findContinuityRecord({ kind, index });
+  if (!record) {
+    output(jsonMode ? { ok: false, error: "no_continuity_record", kind, index } : "No matching local continuity record was found.", { error: true });
     return 1;
   }
-  for (const path of last.files) process.stdout.write(`${path}\n`);
-  if (open && last.files[0] && process.platform === "darwin") {
-    const child = spawn("open", [last.files[0]], { stdio: "ignore" });
-    child.unref();
+  const intact = record.artifacts.filter((item) => item.exists && !item.changed);
+  const changed = record.artifacts.filter((item) => item.changed);
+  const missing = record.artifacts.filter((item) => !item.exists);
+
+  if (action === "inspect") {
+    output(jsonMode ? { ok: intact.length > 0, record: recordSummary(record, index) } : JSON.stringify(recordSummary(record, index), null, 2));
+    return intact.length ? 0 : 1;
+  }
+  if (!intact.length) {
+    const message = changed.length
+      ? "The recorded local artifact exists, but its SHA-256 has changed since delivery."
+      : missing.length
+        ? "The recorded local artifact is missing."
+        : "No intact local artifact was found in the matching record.";
+    output(jsonMode ? { ok: false, error: changed.length ? "artifact_changed" : "artifact_missing", record: recordSummary(record, index) } : message, { error: true });
+    return 1;
+  }
+  if (jsonMode) output({ ok: true, action, record: recordSummary(record, index), paths: intact.map((item) => item.path) });
+  else for (const artifact of intact) process.stdout.write(`${artifact.path}\n`);
+  if (action === "open") {
+    openLocal(intact[0].path);
+    await markRecordOpened(record.id);
   }
   return 0;
+}
+
+async function renderContinuityResolution(resolution) {
+  if (!resolution?.handled) return null;
+  if (resolution.intent === "open" && resolution.ok && resolution.paths?.[0]) {
+    openLocal(resolution.paths[0]);
+    await markRecordOpened(resolution.record.id);
+  }
+  if (jsonMode) output(resolution);
+  else if (resolution.paths?.length) {
+    for (const path of resolution.paths) process.stdout.write(`${path}\n`);
+  } else if (resolution.artifacts) {
+    for (const artifact of resolution.artifacts) {
+      const state = !artifact.exists ? "missing" : artifact.changed ? "changed" : "intact";
+      process.stdout.write(`${state}\t${artifact.path}\n`);
+    }
+  } else if (resolution.value) output(resolution.value);
+  else output(resolution.message || (resolution.ok ? "Resolved from local continuity." : "Unable to resolve from local continuity."), { error: !resolution.ok });
+  return resolution.code;
 }
 
 async function runCore(args) {
   return await new Promise((resolve) => {
     const child = spawn(process.execPath, [coreCli, ...args], {
-      stdio: "inherit",
+      stdio: ["inherit", "pipe", "pipe"],
       env: process.env,
     });
+    let transcript = "";
+    const capture = (chunk, stream) => {
+      const text = String(chunk);
+      stream.write(text);
+      transcript = (transcript + text).slice(-512 * 1024);
+    };
+    child.stdout?.on("data", (chunk) => capture(chunk, process.stdout));
+    child.stderr?.on("data", (chunk) => capture(chunk, process.stderr));
     const forward = (signal) => {
       try { child.kill(signal); } catch { /* already exited */ }
     };
@@ -63,22 +183,23 @@ async function runCore(args) {
     process.once("SIGTERM", () => forward("SIGTERM"));
     child.once("error", (error) => {
       process.stderr.write(`LOLM failed to start: ${error.message}\n`);
-      resolve(1);
+      resolve({ code: 1, transcript });
     });
     child.once("exit", (code, signal) => {
-      if (signal) resolve(signal === "SIGINT" ? 130 : 1);
-      else resolve(Number.isInteger(code) ? code : 1);
+      if (signal) resolve({ code: signal === "SIGINT" ? 130 : 1, transcript });
+      else resolve({ code: Number.isInteger(code) ? code : 1, transcript });
     });
   });
 }
 
 function rewritePresentation(text) {
   let rendered = String(text || "").split(CORE_VERSION).join(VERSION);
-  if (!rendered.includes("artifact last|open")) {
+  if (!rendered.includes("artifact list|where|inspect|open")) {
     rendered = rendered.replace(
       "  receipts              Recent sealed code receipts.\n",
       "  receipts              Recent sealed code receipts.\n" +
-      "  artifact last|open    Show or open the last verified local artifact.\n",
+      "  artifact list|where|inspect|open [kind] [index]\n" +
+      "                        Resolve verified local artifacts without a model call.\n",
     );
   }
   if (!rendered.includes("--trace")) {
@@ -120,21 +241,25 @@ async function main() {
     process.stdout.write(`${VERSION}\n`);
     return 0;
   }
-  const presentationOnly = argv.length === 0 || command === "help" ||
-    argv.includes("--help") || argv.includes("-h");
+  const presentationOnly = argv.length === 0 || command === "help" || argv.includes("--help") || argv.includes("-h");
   if (presentationOnly) return await runCorePresentation(argv);
 
   if (command === "artifact") {
     const idx = commandIndex(argv);
-    const sub = argv[idx + 1] || "last";
-    if (["last", "where", "path", "list"].includes(sub)) return await showLastArtifact();
-    if (sub === "open") return await showLastArtifact({ open: true });
-    process.stderr.write("usage: lolm artifact [last|open]\n");
+    const sub = (argv[idx + 1] || "where").toLowerCase();
+    const { kind, index } = artifactSelector(argv.slice(idx + 2));
+    if (["last", "where", "path"].includes(sub)) return await showArtifact({ action: "where", kind, index });
+    if (sub === "list") return await showArtifact({ action: "list", kind, index });
+    if (sub === "inspect") return await showArtifact({ action: "inspect", kind, index });
+    if (sub === "open") return await showArtifact({ action: "open", kind, index });
+    process.stderr.write("usage: lolm artifact [list|where|inspect|open] [kind] [index] [--json]\n");
     return 2;
   }
 
-  if (command === "ask" && artifactLocationQuestion(task)) {
-    return await showLastArtifact();
+  if (command === "ask") {
+    const resolved = await resolveContinuityQuestion(task);
+    const localCode = await renderContinuityResolution(resolved);
+    if (localCode != null) return localCode;
   }
 
   if (["code", "build"].includes(command) && isOfficialCredentialFabrication(task)) {
@@ -159,14 +284,12 @@ async function main() {
     const traceIndex = next.indexOf("--trace");
     const trace = traceIndex >= 0;
     if (trace) next.splice(traceIndex, 1);
-    if (!trace && !next.includes("--quiet") && !next.includes("-q") && !next.includes("--json")) {
-      next.push("--quiet");
-    }
+    if (!trace && !next.includes("--quiet") && !next.includes("-q") && !next.includes("--json")) next.push("--quiet");
   }
 
-  const code = await runCore(next);
-  if (code !== 0) return code;
-  if (!kind || !deliveryDestination) return code;
+  const result = await runCore(next);
+  if (result.code !== 0) return result.code;
+  if (!kind || !deliveryDestination) return result.code;
 
   const files = await walkFiles(deliveryDestination);
   const delivered = selectDeliveredArtifacts(files, kind);
@@ -177,16 +300,20 @@ async function main() {
     );
     return 1;
   }
-  const saved = await recordDelivery({
+  const evidence = parseRunEvidence(result.transcript);
+  const saved = await recordContinuity({
     task,
     kind,
-    destination: automaticDestination
-      ? (requestedDestination(task) || deliveryDestination)
-      : deliveryDestination,
+    destination: automaticDestination ? (requestedDestination(task) || deliveryDestination) : deliveryDestination,
     files: delivered,
+    generated: true,
+    verified: evidence.verdict === "shipped",
+    exported: true,
+    delivered: true,
+    ...evidence,
   });
   process.stdout.write(`delivered ${saved.kind}\n`);
-  for (const file of saved.files) process.stdout.write(`saved     ${file}\n`);
+  for (const artifact of saved.artifacts.filter((item) => item.exists)) process.stdout.write(`saved     ${artifact.path}\n`);
   return 0;
 }
 
