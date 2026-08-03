@@ -73,7 +73,7 @@ rsync -rc --delete --rsync-path="sudo rsync" site/ "$HOST:$WEB/"
 echo "[deploy] pinning application root into the service venv"
 ssh "$HOST" "set -e; SITE=\$('$APP/.venv/bin/python' -c 'import site; print(site.getsitepackages()[0])'); printf '%s\n' '$APP' > \"\$SITE/lolm_app_root.pth\""
 
-echo "[deploy] proving runtime imports and artifact/task-state patches"
+echo "[deploy] proving runtime imports and artifact/task-state/contract patches"
 ssh "$HOST" "cd / && '$APP/.venv/bin/python' - <<'PY'
 from lolm.control.task_state import (
     allow_finalize_from_state,
@@ -82,10 +82,20 @@ from lolm.control.task_state import (
     policy_action,
     update_task_state,
 )
+from lolm.reliability.contract_compiler import compile_contract
 from local_ui.code_agent import CodeAgent
 assert getattr(CodeAgent, '_artifact_delivery_patch', False), 'artifact delivery patch not active'
 assert getattr(CodeAgent, '_credential_safety_patch', False), 'credential safety patch not active'
 assert getattr(CodeAgent, '_task_state_artifact_patch', False), 'task-state artifact bridge not active'
+contract = compile_contract(
+    'Create main.py that generates output.pdf visibly labeled '
+    'UNOFFICIAL LOLM P0 CLOSURE BROWSER TEST'
+)
+assert contract.primary_language == 'pdf'
+assert not any(
+    c.hardness == 'hard' and c.verifier == 'html.render'
+    for c in contract.clauses
+), 'non-HTML task gained an html.render requirement'
 st = load_or_init('create output.pdf', session='deploy-self-test', resume=False)
 st = update_task_state(
     st,
@@ -97,7 +107,7 @@ assert allow_finalize_from_state(st) is False
 observe_workspace_artifacts(st, ['main.py', 'output.pdf'])
 assert allow_finalize_from_state(st) is True
 assert policy_action(st)['block_finalize'] is False
-print('runtime patches + generated-artifact task state OK')
+print('runtime patches + generated-artifact task state + contract medium OK')
 PY"
 
 echo "[deploy] clearing stale bytecode + restarting $SVC"
