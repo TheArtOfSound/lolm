@@ -1,0 +1,214 @@
+name: p0-browser-final-verification
+
+# Final browser-only proof for the immutable P0 release. It accepts one exact
+# trigger and uses only the public production app and real CodeAgent route.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-browser-final-verification
+  cancel-in-progress: false
+
+env:
+  TRIGGER_BRANCH: veyr/p0-browser-final-trigger
+  TRIGGER_SHA: f3f065f3c7bff8ae58d483a1f102c3897be69342
+  PRODUCT_SHA: 933756c710173120ce14c7de7caabb48afb5ccca
+  PUBLIC_BASE: https://lolm.imagineqira.com
+
+jobs:
+  browser-artifact-download:
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'veyr/p0-browser-final-trigger' &&
+      github.event.pull_request.head.sha == 'f3f065f3c7bff8ae58d483a1f102c3897be69342'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Install clean Chromium runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check playwright
+          python3 -m playwright install --with-deps chromium
+
+      - name: Require a real verified artifact card and clicked PDF download
+        shell: bash
+        env:
+          PUBLIC_BASE: ${{ env.PUBLIC_BASE }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/p0_browser_final.py" <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import time
+          from pathlib import Path
+          from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+          from playwright.sync_api import sync_playwright
+
+          base = os.environ['PUBLIC_BASE'].rstrip('/')
+          temp = Path(os.environ['RUNNER_TEMP'])
+          diagnostics = temp / 'p0-browser-final-evidence'
+          diagnostics.mkdir(parents=True, exist_ok=True)
+          task = (
+              "First write main.py in the sandbox workspace root. main.py must use only Python "
+              "standard library code to generate a valid one-page binary PDF named output.pdf "
+              "visibly labeled 'UNOFFICIAL LOLM BROWSER DELIVERY TEST'. After writing main.py, "
+              "run python3 main.py. The program must print 'PDF_READY output.pdf'. Do not run "
+              "main.py before writing it and do not create another user-facing document."
+          )
+
+          def body_tail(state: dict, limit: int = 4000) -> str:
+              return str(state.get('body') or '')[-limit:]
+
+          with sync_playwright() as pw:
+              browser = pw.chromium.launch()
+              context = browser.new_context(
+                  accept_downloads=True,
+                  service_workers='block',
+                  viewport={'width': 1440, 'height': 900},
+              )
+              page = context.new_page()
+              console_errors: list[str] = []
+              page.on('console', lambda msg: console_errors.append(msg.text) if msg.type == 'error' else None)
+              page.on('pageerror', lambda error: console_errors.append(str(error)))
+              page.goto(base + '/app.html', wait_until='domcontentloaded', timeout=90_000)
+              page.wait_for_function('window.__lolmArtifactDeliveryInstalled === true', timeout=30_000)
+
+              successful_attempt = None
+              successful_state = None
+              link = None
+              for attempt in range(1, 4):
+                  page.evaluate(
+                      """({task, attempt}) => {
+                        const old = document.querySelector('#lolm-artifact-delivery');
+                        if (old) old.remove();
+                        window.__p0BrowserFinal = {
+                          attempt, done: false, status: null, body: '', error: null
+                        };
+                        fetch('/api/demo/code/run', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'text/event-stream'
+                          },
+                          body: JSON.stringify({task, max_steps: 14})
+                        }).then(async response => {
+                          const body = await response.text();
+                          window.__p0BrowserFinal = {
+                            attempt, done: true, status: response.status, body, error: null
+                          };
+                        }).catch(error => {
+                          window.__p0BrowserFinal = {
+                            attempt, done: true, status: null, body: '', error: String(error)
+                          };
+                        });
+                      }""",
+                      {'task': task, 'attempt': attempt},
+                  )
+                  page.wait_for_function(
+                      'window.__p0BrowserFinal && window.__p0BrowserFinal.done === true',
+                      timeout=720_000,
+                  )
+                  state = page.evaluate('window.__p0BrowserFinal')
+                  (diagnostics / f'attempt-{attempt}-fetch.json').write_text(
+                      json.dumps(state, sort_keys=True, indent=2), encoding='utf-8'
+                  )
+                  host = page.locator('#lolm-artifact-delivery')
+                  host_text = host.inner_text() if host.count() else '<artifact host missing>'
+                  (diagnostics / f'attempt-{attempt}-host.txt').write_text(host_text, encoding='utf-8')
+                  page.screenshot(
+                      path=str(diagnostics / f'attempt-{attempt}.png'), full_page=True
+                  )
+                  print(json.dumps({
+                      'attempt': attempt,
+                      'http_status': state.get('status'),
+                      'fetch_error': state.get('error'),
+                      'host_text': host_text,
+                      'sse_tail': body_tail(state),
+                  }, sort_keys=True))
+
+                  if state.get('error') is None and state.get('status') == 200:
+                      try:
+                          page.wait_for_function(
+                              """() => {
+                                const host = document.querySelector('#lolm-artifact-delivery');
+                                return Boolean(host && host.textContent.includes('verified') &&
+                                  host.querySelector('a[download="output.pdf"]'));
+                              }""",
+                              timeout=30_000,
+                          )
+                          candidate = page.locator(
+                              '#lolm-artifact-delivery a[download="output.pdf"]'
+                          )
+                          if candidate.count() == 1:
+                              successful_attempt = attempt
+                              successful_state = state
+                              link = candidate
+                              break
+                      except PlaywrightTimeoutError:
+                          pass
+                  if attempt < 3:
+                      time.sleep(12 * attempt)
+
+              (diagnostics / 'console-errors.json').write_text(
+                  json.dumps(console_errors, indent=2), encoding='utf-8'
+              )
+              assert successful_attempt is not None, (
+                  'No verified output.pdf card after three real production attempts. '
+                  f'Last SSE tail: {body_tail(state, 2500)!r}'
+              )
+              assert link is not None
+              host = page.locator('#lolm-artifact-delivery')
+              text = host.inner_text()
+              assert 'Generated artifacts' in text
+              assert 'verified' in text
+              assert 'output.pdf' in text
+              assert link.inner_text() == 'Download verified file'
+              page.screenshot(path=str(diagnostics / 'verified-artifact-card.png'), full_page=True)
+
+              with page.expect_download(timeout=60_000) as pending:
+                  link.click()
+              download = pending.value
+              assert download.suggested_filename == 'output.pdf'
+              saved = diagnostics / 'output.pdf'
+              download.save_as(str(saved))
+              raw = saved.read_bytes()
+              assert raw.startswith(b'%PDF-')
+              assert len(raw) > 100
+              result = {
+                  'ok': True,
+                  'surface': 'fresh-production-chromium',
+                  'attempt': successful_attempt,
+                  'page': page.url,
+                  'card': 'verified',
+                  'filename': download.suggested_filename,
+                  'bytes': len(raw),
+                  'sha256': hashlib.sha256(raw).hexdigest(),
+                  'console_errors': console_errors,
+                  'receipt_stream_tail': body_tail(successful_state, 1000),
+              }
+              (diagnostics / 'result.json').write_text(
+                  json.dumps(result, sort_keys=True, indent=2), encoding='utf-8'
+              )
+              print(json.dumps(result, sort_keys=True))
+              context.close()
+              browser.close()
+          PY
+          python3 "$RUNNER_TEMP/p0_browser_final.py"
+
+      - name: Upload final browser evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-browser-final-evidence
+          path: ${{ runner.temp }}/p0-browser-final-evidence
+          if-no-files-found: warn
+          retention-days: 14
