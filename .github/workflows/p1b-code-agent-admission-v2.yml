@@ -1,0 +1,63 @@
+name: p1b-code-agent-admission-v2
+
+on:
+  pull_request:
+    branches: [grok/grand-audit-remediation]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p1b-code-agent-admission-v2
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: >-
+      github.repository == 'TheArtOfSound/lolm' &&
+      github.event.pull_request.head.ref == 'veyr/p1b-command-tool-admission' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply and verify structured admission v2
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p1b_apply_code_agent_admission_v2.py
+          python3 -m pip install --disable-pip-version-check pytest pydantic
+          python3 -m pytest \
+            tests/test_command_preflight.py \
+            tests/test_command_admission.py \
+            tests/test_sandbox.py \
+            tests/test_code_agent_admission.py \
+            -q
+
+      - name: Commit product changes only
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'No patch required.'
+            exit 0
+          fi
+          git config user.name 'LOLM P1B Patch Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add \
+            local_ui/sandbox.py \
+            local_ui/code_agent.py \
+            tests/test_sandbox.py \
+            tests/test_code_agent_admission.py
+          test -z "$(git diff --cached --name-only | grep -Ev '^(local_ui/sandbox\.py|local_ui/code_agent\.py|tests/test_sandbox\.py|tests/test_code_agent_admission\.py)$' || true)"
+          git commit -m 'feat(p1b): admit structured CodeAgent tools before dispatch'
+          git push origin HEAD:veyr/p1b-command-tool-admission
