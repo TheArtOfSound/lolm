@@ -35,6 +35,25 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/p1a_apply_session_binding.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('clients/cli/bin/lolm-delivery.mjs')
+          text = path.read_text()
+          old = '    fully_verified: record.fully_verified,\n'
+          new = (
+              '    fully_verified: record.fully_verified ?? Boolean(\n'
+              '      record.states?.verified &&\n'
+              '      record.artifacts?.length > 0 &&\n'
+              '      intact.length === record.artifacts.length &&\n'
+              '      !changed.length &&\n'
+              '      !missing.length\n'
+              '    ),\n'
+          )
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'fully_verified enrichment: expected one match, got {count}')
+          path.write_text(text.replace(old, new, 1))
+          PY
           npm ci --ignore-scripts --no-audit --no-fund
           npm test --workspace lolm-cli
 
