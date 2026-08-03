@@ -46,7 +46,8 @@ test("sealed core receipt populates receipt, manifest, artifact ID, and exact ha
     `  verification: { artifact_manifest_sha256: ${JSON.stringify(manifestSha)} },`,
     `  files: ['output.pdf']`,
     `}, null, 2));`,
-    `process.stdout.write('verdict   shipped\\nreceipt   ${receiptSha}  hash ok\\ntask      task_receipt_binding\\n');`,
+    `if (args.includes('--json')) process.stdout.write(JSON.stringify({schema:'lolm.cli.result.v2',ok:true,exit_code:0,shipped:true,receipt:{verdict:'shipped',receipt_sha:${JSON.stringify(receiptSha)}}}) + String.fromCharCode(10));`,
+    `else process.stdout.write('verdict   shipped\\nreceipt   ${receiptSha}  hash ok\\ntask      task_receipt_binding\\n');`,
   ].join("\n"));
 
   const env = {
@@ -90,6 +91,45 @@ test("sealed core receipt populates receipt, manifest, artifact ID, and exact ha
   const ledger = JSON.parse(await readFile(ctx.ledger, "utf8"));
   assert.equal(ledger.records.length, 1);
   assert.equal(ledger.records[0].manifest_sha, manifestSha);
+});
+
+
+test("artifact code --json emits one composed document", async () => {
+  const ctx = await context("composed-json");
+  const receiptSha = "c".repeat(64);
+  const manifestSha = "d".repeat(64);
+  await writeFile(ctx.fakeCore, [
+    `import { mkdir, writeFile } from 'node:fs/promises';`,
+    `import { join } from 'node:path';`,
+    `const args = process.argv.slice(2);`,
+    `const value = (flag) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : ''; };`,
+    `const save = value('--save'); const receipt = value('--receipt');`,
+    `await mkdir(save, { recursive: true });`,
+    `const nl = String.fromCharCode(10);`,
+    `await writeFile(join(save, 'output.pdf'), Buffer.from('%PDF-1.4' + nl + 'json continuity' + nl + '%%EOF' + nl));`,
+    `await writeFile(receipt, JSON.stringify({verdict:'shipped',receipt_sha:${JSON.stringify(receiptSha)},verification:{artifact_manifest_sha256:${JSON.stringify(manifestSha)}},files:['output.pdf']}));`,
+    `process.stdout.write(JSON.stringify({schema:'lolm.cli.result.v2',ok:true,exit_code:0,shipped:true}) + nl);`,
+  ].join("\n"));
+  const env = {
+    ...process.env,
+    HOME: ctx.root,
+    USERPROFILE: ctx.root,
+    LOLM_CONTINUITY_LEDGER: ctx.ledger,
+    LOLM_SESSION_DIR: ctx.sessions,
+    LOLM_CORE_CLI: ctx.fakeCore,
+    NO_COLOR: "1",
+  };
+  const result = await run(process.execPath, [
+    BIN, "code", "Create a valid PDF report", "--json", "--base", "https://127.0.0.1.invalid",
+  ], { env, timeout: 30_000 });
+  assert.equal(result.stderr, "");
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.schema, "lolm.delivery.result.v2");
+  assert.equal(payload.ok, true);
+  assert.equal(payload.core.schema, "lolm.cli.result.v2");
+  assert.equal(payload.delivery.receipt_sha, receiptSha);
+  assert.equal(payload.delivery.manifest_sha, manifestSha);
+  assert.equal(payload.delivery.fully_verified, true);
 });
 
 test("JSON-mode local failures emit one stdout document and no stderr payload", async () => {

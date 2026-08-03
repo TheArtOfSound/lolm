@@ -22,6 +22,7 @@ import {
 const run = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 const BIN = join(here, "..", "bin", "lolm-delivery.mjs");
+const CORE_BIN = join(here, "..", "bin", "lolm.mjs");
 const MODULE_URL = pathToFileURL(join(here, "..", "lib", "continuity.mjs")).href;
 
 let passed = 0;
@@ -477,8 +478,54 @@ test("retry that and resume that translate locally into core session actions", a
   });
   assert.match(resume.stdout, /^resume shipped/m);
   const calls = (await readFile(argsPath, "utf8")).trim().split(/\r?\n/).map(JSON.parse);
-  assert.deepEqual(calls, [["--json", "retry"], ["--json", "resume"]]);
+  assert.deepEqual(calls, [
+    ["--json", "retry", "--yes", "--conversation", "sess_action"],
+    ["--json", "resume", "--yes", "--conversation", "sess_action"],
+  ]);
   assert.doesNotMatch(retry.stdout + retry.stderr + resume.stdout + resume.stderr, /ENOTFOUND|fetch failed/);
+});
+
+
+test("core last selects the exact session and retry flags parse", async () => {
+  const ctx = await isolated("core-session-selection");
+  await mkdir(ctx.sessions, { recursive: true });
+  await writeFile(join(ctx.sessions, "target.json"), JSON.stringify({
+    session_id: "sess_target",
+    last_code_run_id: "run_target",
+    last_run_task: "target task",
+    last_run_status: "terminated",
+    last_checkpoint_id: "ckpt_target",
+    workspace_snapshot: { "target.py": "print(1)" },
+    updated_ts: 1,
+  }));
+  await new Promise((done) => setTimeout(done, 20));
+  await writeFile(join(ctx.sessions, "decoy.json"), JSON.stringify({
+    session_id: "sess_decoy",
+    last_code_run_id: "run_decoy",
+    last_run_task: "decoy task",
+    last_run_status: "terminated",
+    last_checkpoint_id: "ckpt_decoy",
+    workspace_snapshot: { "decoy.py": "print(2)" },
+    updated_ts: 2,
+  }));
+  const selected = await run(process.execPath, [
+    CORE_BIN, "--json", "last", "--conversation", "sess_target",
+  ], { env: ctx.env, timeout: 15_000 });
+  const payload = JSON.parse(selected.stdout);
+  assert.equal(payload.session_id, "sess_target");
+  assert.equal(payload.last_code_run_id, "run_target");
+  let retryFailure;
+  try {
+    await run(process.execPath, [
+      CORE_BIN, "--json", "retry", "--yes", "--conversation", "missing_session",
+    ], { env: ctx.env, timeout: 15_000 });
+  } catch (error) {
+    retryFailure = error;
+  }
+  assert.ok(retryFailure);
+  assert.equal(retryFailure.code, 2);
+  assert.doesNotMatch(retryFailure.stderr || "", /unknown flag/i);
+  assert.equal(JSON.parse(retryFailure.stdout).action, "clarify");
 });
 
 test("artifact list, where, and inspect provide machine-readable local state", async () => {

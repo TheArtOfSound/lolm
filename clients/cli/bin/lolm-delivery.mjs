@@ -120,7 +120,13 @@ function recordSummary(record, position = 1) {
     checkpoint_id: record.checkpoint_id,
     resume_pointer: record.resume_pointer,
     states: record.states,
-    fully_verified: record.fully_verified,
+    fully_verified: record.fully_verified ?? Boolean(
+      record.states?.verified &&
+      record.artifacts?.length > 0 &&
+      intact.length === record.artifacts.length &&
+      !changed.length &&
+      !missing.length
+    ),
     intact: intact.map((item) => ({
       artifact_id: item.artifact_id,
       path: item.path,
@@ -268,7 +274,14 @@ function parseJsonOutput(text) {
 
 async function runContinuityAction(resolution) {
   const action = resolution.action;
-  const result = await runCore(["--json", action], { silent: true, env: actionEnvironment() });
+  const selector = resolution.record?.session_id || resolution.record?.run_id || resolution.value || "";
+  const coreArgs = ["--json", action, "--yes"];
+  if (selector) coreArgs.push("--conversation", selector);
+  for (const flag of ["--timeout", "--idle-timeout"]) {
+    const index = argv.indexOf(flag);
+    if (index >= 0 && argv[index + 1]) coreArgs.push(flag, argv[index + 1]);
+  }
+  const result = await runCore(coreArgs, { silent: true, env: actionEnvironment() });
   const payload = parseJsonOutput(result.stdout) || parseJsonOutput(result.stderr);
   if (jsonMode) {
     output({
@@ -430,19 +443,31 @@ async function main() {
     if (!trace && !next.includes("--quiet") && !next.includes("-q") && !next.includes("--json")) next.push("--quiet");
   }
 
-  const result = await runCore(next);
+  const composeDeliveryJson = Boolean(jsonMode && command === "code" && kind && deliveryDestination);
+  const result = await runCore(next, { silent: composeDeliveryJson });
   const sealedReceipt = await readReceipt(receiptPath);
   if (automaticReceiptDirectory) await rm(automaticReceiptDirectory, { recursive: true, force: true });
-  if (result.code !== 0) return result.code;
+  const corePayload = composeDeliveryJson
+    ? (parseJsonOutput(result.stdout) || parseJsonOutput(result.stderr))
+    : null;
+  if (result.code !== 0) {
+    if (composeDeliveryJson) {
+      output(corePayload || { schema: "lolm.delivery.result.v2", ok: false, exit_code: result.code, error: "core_failed" });
+    }
+    return result.code;
+  }
   if (!kind || !deliveryDestination) return result.code;
 
   const files = await walkFiles(deliveryDestination);
   const delivered = selectDeliveredArtifacts(files, kind);
   if (!delivered.length) {
-    process.stderr.write(
-      `LOLM did not deliver the requested ${kind || "artifact"}. ` +
-      `The run may have created only source code inside ${deliveryDestination}.\n`,
-    );
+    const message = `LOLM did not deliver the requested ${kind || "artifact"}. ` +
+      `The run may have created only source code inside ${deliveryDestination}.`;
+    if (composeDeliveryJson) {
+      output({ schema: "lolm.delivery.result.v2", ok: false, exit_code: 1, core: corePayload, error: "requested_artifact_missing", message });
+    } else {
+      process.stderr.write(`${message}\n`);
+    }
     return 1;
   }
   const transcriptEvidence = parseRunEvidence(result.transcript);
@@ -468,6 +493,16 @@ async function main() {
     session_pointer: sessionPointer,
     ...evidence,
   });
+  if (composeDeliveryJson) {
+    output({
+      schema: "lolm.delivery.result.v2",
+      ok: true,
+      exit_code: 0,
+      core: corePayload,
+      delivery: recordSummary(saved, 1),
+    });
+    return 0;
+  }
   process.stdout.write(`delivered ${saved.kind}\n`);
   for (const artifact of saved.artifacts.filter((item) => item.exists)) process.stdout.write(`saved     ${artifact.path}\n`);
   return 0;
