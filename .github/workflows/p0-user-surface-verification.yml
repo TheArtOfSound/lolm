@@ -1,0 +1,180 @@
+name: p0-user-surface-verification
+
+# Final user-facing P0 proof. This workflow uses only the public production site
+# and the public npm package from clean environments. It accepts one exact trigger.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-user-surface-verification
+  cancel-in-progress: false
+
+env:
+  TRIGGER_BRANCH: veyr/p0-user-surface-trigger
+  TRIGGER_SHA: 9dc221b0d390feb3e2f895fe9374906c8ddf62d9
+  PRODUCT_SHA: faa7fcc2b395266ef5ac78730a0ab449a2593d57
+  PUBLIC_BASE: https://lolm.imagineqira.com
+
+jobs:
+  macos-cli-desktop:
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'veyr/p0-user-surface-trigger' &&
+      github.event.pull_request.head.sha == '9dc221b0d390feb3e2f895fe9374906c8ddf62d9'
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - name: Install public CLI in a clean environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g lolm-cli@0.3.0-beta.2
+          test "$(lolm --version)" = '0.3.0-beta.2'
+
+      - name: Run a legitimate PDF request and require Desktop delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLEAN_HOME="$RUNNER_TEMP/lolm-clean-mac-home"
+          export HOME="$CLEAN_HOME"
+          export LOLM_DELIVERY_LEDGER="$CLEAN_HOME/.lolm/deliveries.json"
+          mkdir -p "$HOME/Desktop" "$HOME/Downloads" "$HOME/Documents"
+
+          lolm code "Create a valid one-page PDF visibly labeled UNOFFICIAL LOLM MAC DESKTOP DELIVERY TEST and put it on my Desktop." \
+            2>&1 | tee "$RUNNER_TEMP/lolm-mac-pdf.log"
+
+          PDF_COUNT="$(find "$HOME/Desktop" -type f -iname '*.pdf' -print | wc -l | tr -d ' ')"
+          test "$PDF_COUNT" -eq 1
+          PDF="$(find "$HOME/Desktop" -type f -iname '*.pdf' -print | sort | head -n 1)"
+          test -n "$PDF"
+          python3 - "$PDF" <<'PY'
+          import hashlib, json, pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          raw = path.read_bytes()
+          assert raw.startswith(b'%PDF-'), 'delivered file lacks PDF header'
+          print(json.dumps({
+              'ok': True,
+              'platform': 'macos',
+              'path': str(path),
+              'bytes': len(raw),
+              'sha256': hashlib.sha256(raw).hexdigest(),
+          }, sort_keys=True))
+          PY
+
+          WHERE="$(lolm ask 'where is the PDF?')"
+          LAST="$(lolm artifact last)"
+          printf '%s\n' "$WHERE" | grep -Fqx "$PDF"
+          printf '%s\n' "$LAST" | grep -Fqx "$PDF"
+          grep -Fq 'delivered pdf' "$RUNNER_TEMP/lolm-mac-pdf.log"
+          grep -Fq "saved     $PDF" "$RUNNER_TEMP/lolm-mac-pdf.log"
+
+  browser-artifact-download:
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'veyr/p0-user-surface-trigger' &&
+      github.event.pull_request.head.sha == '9dc221b0d390feb3e2f895fe9374906c8ddf62d9'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Install clean browser runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check playwright
+          python3 -m playwright install --with-deps chromium
+
+      - name: Verify production artifact card and downloaded PDF
+        shell: bash
+        env:
+          PUBLIC_BASE: ${{ env.PUBLIC_BASE }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/p0_browser_verify.py" <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+
+          base = os.environ['PUBLIC_BASE'].rstrip('/')
+          task = (
+              "Create output.pdf using only Python standard library code. The PDF must be a valid "
+              "one-page document visibly labeled 'UNOFFICIAL LOLM BROWSER DELIVERY TEST'. Write "
+              "the binary PDF to output.pdf, print 'PDF_READY output.pdf', and do not create any "
+              "other user-facing document."
+          )
+          download_dir = Path(os.environ['RUNNER_TEMP']) / 'p0-browser-downloads'
+          download_dir.mkdir(parents=True, exist_ok=True)
+          screenshot = Path(os.environ['RUNNER_TEMP']) / 'p0-artifact-card.png'
+
+          with sync_playwright() as pw:
+              browser = pw.chromium.launch()
+              context = browser.new_context(
+                  accept_downloads=True,
+                  service_workers='block',
+                  viewport={'width': 1440, 'height': 900},
+              )
+              page = context.new_page()
+              page.goto(base + '/app.html', wait_until='domcontentloaded', timeout=90_000)
+              page.wait_for_function('window.__lolmArtifactDeliveryInstalled === true', timeout=30_000)
+              page.evaluate(
+                  """(task) => {
+                    window.__p0BrowserFetch = fetch('/api/demo/code/run', {
+                      method: 'POST',
+                      headers: {'Content-Type': 'application/json', 'Accept': 'text/event-stream'},
+                      body: JSON.stringify({task, max_steps: 14})
+                    }).then(async response => {
+                      window.__p0BrowserStatus = response.status;
+                      window.__p0BrowserBody = await response.text();
+                    }).catch(error => { window.__p0BrowserError = String(error); });
+                  }""",
+                  task,
+              )
+
+              host = page.locator('#lolm-artifact-delivery')
+              host.wait_for(state='visible', timeout=600_000)
+              page.wait_for_function(
+                  """() => {
+                    const host = document.querySelector('#lolm-artifact-delivery');
+                    return host && host.textContent.includes('verified') &&
+                      host.querySelector('a[download="output.pdf"]');
+                  }""",
+                  timeout=600_000,
+              )
+              text = host.inner_text()
+              assert 'Generated artifacts' in text
+              assert 'verified' in text
+              assert 'output.pdf' in text
+              link = host.locator('a[download="output.pdf"]')
+              assert link.inner_text() == 'Download verified file'
+              page.screenshot(path=str(screenshot), full_page=True)
+
+              with page.expect_download(timeout=60_000) as pending:
+                  link.click()
+              download = pending.value
+              assert download.suggested_filename == 'output.pdf'
+              saved = download_dir / download.suggested_filename
+              download.save_as(str(saved))
+              raw = saved.read_bytes()
+              assert raw.startswith(b'%PDF-')
+              result = {
+                  'ok': True,
+                  'page': page.url,
+                  'card': 'verified',
+                  'filename': download.suggested_filename,
+                  'bytes': len(raw),
+                  'sha256': hashlib.sha256(raw).hexdigest(),
+                  'screenshot': str(screenshot),
+              }
+              print(json.dumps(result, sort_keys=True))
+              context.close()
+              browser.close()
+          PY
+          python3 "$RUNNER_TEMP/p0_browser_verify.py"
