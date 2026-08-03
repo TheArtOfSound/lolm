@@ -1,0 +1,58 @@
+name: p1a-session-binding-apply
+
+on:
+  pull_request:
+    branches: [grok/grand-audit-remediation]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: p1a-session-binding-apply
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: >-
+      github.repository == 'TheArtOfSound/lolm' &&
+      github.event.pull_request.head.ref == 'veyr/p1a-continuity-ledger' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply and verify reviewed corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/p1a_apply_session_binding.py
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test --workspace lolm-cli
+
+      - name: Commit product changes only
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'No patch required.'
+            exit 0
+          fi
+          git config user.name 'LOLM P1A Patch Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add \
+            clients/cli/bin/lolm.mjs \
+            clients/cli/bin/lolm-delivery.mjs \
+            clients/cli/test/continuity.mjs \
+            clients/cli/test/continuity_receipt.mjs
+          test -z "$(git diff --cached --name-only | grep -Ev '^(clients/cli/bin/lolm\.mjs|clients/cli/bin/lolm-delivery\.mjs|clients/cli/test/continuity\.mjs|clients/cli/test/continuity_receipt\.mjs)$' || true)"
+          git commit -m 'fix(cli): bind continuity actions to exact sessions'
+          git push origin HEAD:veyr/p1a-continuity-ledger
