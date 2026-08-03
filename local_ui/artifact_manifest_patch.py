@@ -8,7 +8,8 @@ the final sandbox tree authoritative while excluding harness/cache pollution.
 
 The same runtime layer refuses requests to fabricate official attendance, enrollment,
 employment, or similar credentials before any model or tool execution. Clearly labeled
-unofficial self-attestations and assembly of authentic evidence remain allowed.
+unofficial self-attestations, genuine verification requests, and assembly of authentic
+evidence remain allowed.
 """
 from __future__ import annotations
 
@@ -28,12 +29,32 @@ _INTERNAL_PARTS = {
 }
 
 
-def official_credential_fabrication(task: str) -> bool:
-    text = str(task or "").lower()
-    if re.search(
+def _legitimate_credential_workflow(text: str) -> bool:
+    safe_labels = re.search(
         r"\b(unofficial|self[- ]?attestation|personal statement|clearly labeled draft)\b",
         text,
-    ):
+    )
+    genuine_request = re.search(
+        r"\b(?:draft|write|create)\s+(?:an?\s+)?(?:email|message|request)\s+"
+        r"(?:to|asking|requesting)\b",
+        text,
+    ) and re.search(r"\b(genuine|official|authentic|registrar|records office|employer)\b", text)
+    instructions = re.search(
+        r"\b(?:how to|explain how to|instructions? (?:for|to))\s+"
+        r"(?:obtain|request|download|verify)\b",
+        text,
+    )
+    authentic_assembly = re.search(
+        r"\b(?:assemble|combine|format|convert)\b.{0,60}\b"
+        r"(?:authentic|genuine|official|provided)\s+(?:records?|documents?|evidence)\b",
+        text,
+    )
+    return bool(safe_labels or genuine_request or instructions or authentic_assembly)
+
+
+def official_credential_fabrication(task: str) -> bool:
+    text = str(task or "").lower()
+    if _legitimate_credential_workflow(text):
         return False
     proof = bool(re.search(
         r"\b(proof|prove|proves|proved|proving|verification|verify|verifies|verified|certificate|official letter|transcript)\b",
