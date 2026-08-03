@@ -77,4 +77,8 @@ if [ "$fail" -ne 0 ]; then
   echo "[deploy] FAILED health/smoke — see DeployGate; run deploy/rollback_box.sh"
   exit 1
 fi
-echo "[deploy] live at $BASE — all checks green"
+
+echo "[deploy] running real CodeAgent PDF delivery smoke"
+python3 scripts/smoke_pdf_delivery.py --base "$BASE" --attempts 3 --timeout 600
+
+echo "[deploy] live at $BASE — all checks and exact-byte PDF delivery green"
