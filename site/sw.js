@@ -12,13 +12,13 @@
  * but their failure degrades gracefully in the page, not here.
  */
 
-const CACHE = "lolm-v19-unification-2026-08-02";  // bump on any shell/asset change
+const CACHE = "lolm-v20-artifact-delivery-2026-08-02";  // bump on any shell/asset change
+// v20: generated artifacts render as downloadable cards; exact-byte PDF delivery.
 // v19: product/pricing unification — canonical product-config, correct plan
 // quotas, safer pricing page, honest model wording.
-// v18 prior: lolm-nfet shell.
 const SHELL = [
   "/", "/index.html", "/try.html", "/pricing.html", "/app.html",
-  "/og-card.png", "/lolm-ds.css", "/lolm-ds.js",
+  "/og-card.png", "/lolm-ds.css", "/lolm-ds.js", "/artifact-delivery-ui.js",
   "/product-config.json", "/product-config.js",
   "/manifest.webmanifest", "/replays/index.json",
 ];

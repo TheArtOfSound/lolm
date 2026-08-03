@@ -90,5 +90,5 @@ def test_pricing_page_does_not_use_admin_header_or_innerhtml_for_usage():
 
 def test_sw_cache_bumped_and_product_config_network_first():
     sw = (SITE / "sw.js").read_text(encoding="utf-8")
-    assert "lolm-v19" in sw
+    assert "lolm-v20-artifact-delivery" in sw
     assert "product-config.json" in sw

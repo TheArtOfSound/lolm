@@ -49,21 +49,34 @@
     }
   }
 
+  function loadWorkspaceArtifactDelivery() {
+    var p = location.pathname || "/";
+    if (!(p === "/" || /\/app\.html$/.test(p))) return;
+    if (document.querySelector('script[data-lolm-artifact-delivery]')) return;
+    var script = document.createElement("script");
+    script.src = "/artifact-delivery-ui.js";
+    script.defer = true;
+    script.dataset.lolmArtifactDelivery = "1";
+    document.head.appendChild(script);
+  }
+
   // Apply the stored choice before first paint where possible (this script is
   // loaded in <head>), so a light-theme user never sees a dark flash.
   var initial = stored();
   if (initial === "dark" || initial === "light") apply(initial, false);
 
   function mount() {
-    if (document.querySelector(".lolm-theme-toggle")) return;
-    var btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "lolm-theme-toggle";
-    btn.addEventListener("click", function () {
-      apply(effective() === "dark" ? "light" : "dark", true);
-    });
-    document.body.appendChild(btn);
-    apply(stored(), false);
+    if (!document.querySelector(".lolm-theme-toggle")) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "lolm-theme-toggle";
+      btn.addEventListener("click", function () {
+        apply(effective() === "dark" ? "light" : "dark", true);
+      });
+      document.body.appendChild(btn);
+      apply(stored(), false);
+    }
+    loadWorkspaceArtifactDelivery();
   }
 
   if (document.readyState === "loading") {

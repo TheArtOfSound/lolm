@@ -1,8 +1,9 @@
 # lolm-cli
 
-Hardened beta control console for the LOLM agent. Version `0.3.0-beta.1`
+Hardened beta control console for the LOLM agent. Version `0.3.0-beta.2`
 fails closed on incomplete streams and receipts, verifies signed artifacts before
-installing them, and bounds every network operation.
+installing them, delivers requested files to the local machine, and preserves the
+last delivered path for cross-command follow-ups.
 
 The beta is deliberately **not described as pipeline-safe**. That label remains
 blocked until the release workflow has passed on Linux, macOS, and Windows and
@@ -12,9 +13,44 @@ the packed CLI has passed its clean-install smoke test.
 npm install -g lolm-cli
 export LOLM_API_KEY=lolm_…
 lolm doctor
+
+# Artifact requests now choose a fresh verified local destination automatically.
+lolm code "create a PDF report and put it on my Desktop"
+lolm ask "where is the PDF?"
+lolm artifact open
+
+# Explicit destinations remain supported.
 lolm code "write fizzbuzz to 20 in solution.py and run it" --save ./out
 lolm receipt verify ./run.receipt.json
 ```
+
+## Artifact delivery
+
+When a `code` request explicitly asks for a PDF, document, spreadsheet,
+presentation, image, HTML file, or another user-facing artifact and no `--save`
+flag is supplied, the launcher creates a fresh destination under the requested
+Desktop, Downloads, or Documents folder. Downloads is the default when no local
+folder was named.
+
+The CLI reports delivery only after:
+
+1. the hosted run emits a complete artifact manifest;
+2. the signed receipt binds that manifest;
+3. every file body matches its declared byte count and SHA-256;
+4. installation commits atomically on the local machine; and
+5. at least one file matches the requested artifact type.
+
+Generated source code without the requested PDF/document is not reported as a
+delivered success. The last verified local path is stored in
+`~/.lolm/deliveries.json` with mode `0600`, enabling:
+
+- `lolm ask "where is the PDF?"`
+- `lolm artifact last`
+- `lolm artifact open` on macOS
+
+Official credential fabrication is blocked before any remote model or tool call.
+LOLM may create a clearly labeled unofficial self-attestation, draft a request
+for genuine verification, or assemble authentic evidence supplied by the user.
 
 ## Security contract
 
@@ -47,11 +83,15 @@ lolm receipt verify ./run.receipt.json
 - `lolm doctor`
 - `lolm code <task> [--save <new-dir>] [--receipt <file>]`
 - `lolm ask <question> [--fail-on red]`
+- `lolm artifact last|open`
 - `lolm build <task> [--out <new-file> | --stdout]`
 - `lolm receipt verify <file|sha-prefix>`
 - `lolm receipts`, `status`, `whoami`, `config`
 - `lolm inspect task --id <task_id> | --conversation <id>`
 - `lolm memory list|add|forget`
+
+Use `--trace` on a `code` command to retain the full controller and sandbox event
+stream. Default artifact runs use the quieter user-facing presentation.
 
 Unknown flags, missing values, non-integers, values outside their bounds, and
 unsafe base URLs exit `2` before a request is made. HTTP is accepted only for
@@ -77,8 +117,8 @@ canonical full SHA-256, and verifies Ed25519 locally. Unknown keys fail closed.
 
 - `0`: the command's complete success contract passed
 - `1`: remote failure, malformed/incomplete/contradictory evidence, failed gate,
-  invalid receipt, or verification failure
-- `2`: usage or argument error
+  invalid receipt, missing requested artifact, or verification failure
+- `2`: usage or argument error, including blocked credential fabrication
 - `124`: total or idle timeout
 - `130` / `143`: clean SIGINT / SIGTERM cancellation
 
