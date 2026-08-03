@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 Qira LLC. All rights reserved.
- * Live artifact delivery for the LOLM workspace.
+ * Live artifact delivery and safety feedback for the LOLM workspace.
  * Intercepts a tee of the code SSE stream without changing the app's own reader.
  */
 (function () {
@@ -8,7 +8,7 @@
   window.__lolmArtifactDeliveryInstalled = true;
 
   var originalFetch = window.fetch.bind(window);
-  var current = { manifest: null, receipt: null, urls: [] };
+  var current = { manifest: null, receipt: null, safety: null, urls: [] };
 
   function clearUrls() {
     current.urls.forEach(function (url) { try { URL.revokeObjectURL(url); } catch (_) {} });
@@ -73,11 +73,42 @@
     return el;
   }
 
+  function addClose(head, host) {
+    var close = document.createElement("button");
+    close.type = "button";
+    close.textContent = "×";
+    close.setAttribute("aria-label", "Close notification");
+    close.style.cssText = "border:0;background:transparent;font-size:22px;color:inherit";
+    close.addEventListener("click", function () { host.remove(); });
+    head.appendChild(close);
+  }
+
+  function renderSafety() {
+    if (!current.safety) return;
+    clearUrls();
+    var host = ensureHost();
+    host.replaceChildren();
+    host.style.borderColor = "#f59e0b";
+    var head = document.createElement("div");
+    head.style.cssText = "display:flex;align-items:center;gap:10px;margin-bottom:10px";
+    addText(head, "strong", "Request refused", "font-size:14px;flex:1");
+    addText(head, "span", "no tools ran", "font:11px ui-monospace,monospace;padding:3px 7px;border-radius:999px;background:#fef3c7;color:#92400e");
+    addClose(head, host);
+    host.appendChild(head);
+    addText(host, "p", String(current.safety.error || "This request cannot be completed."), "font-size:13px;line-height:1.55;margin:0");
+    addText(host, "p", "Allowed alternatives: a clearly labeled unofficial self-attestation, a draft request for genuine verification, or a document assembled from authentic evidence you provide.", "font-size:12px;line-height:1.5;margin:10px 0 0;opacity:.8");
+  }
+
   function render() {
+    if (current.safety) {
+      renderSafety();
+      return;
+    }
     if (!current.manifest) return;
     clearUrls();
     var host = ensureHost();
     host.replaceChildren();
+    host.style.borderColor = "var(--line,#d9dee7)";
     var receipt = current.receipt || {};
     var verification = receipt.verification || {};
     var bound = Boolean(
@@ -97,13 +128,7 @@
       "font:11px ui-monospace,monospace;padding:3px 7px;border-radius:999px;background:" +
         (bound ? "#dcfce7;color:#166534" : "#fef3c7;color:#92400e")
     );
-    var close = document.createElement("button");
-    close.type = "button";
-    close.textContent = "×";
-    close.setAttribute("aria-label", "Close artifact panel");
-    close.style.cssText = "border:0;background:transparent;font-size:22px;color:inherit";
-    close.addEventListener("click", function () { host.remove(); });
-    head.appendChild(close);
+    addClose(head, host);
     host.appendChild(head);
 
     var files = (current.manifest.files || []).filter(function (file) {
@@ -136,16 +161,20 @@
     });
 
     if (!bound && receipt.verdict) {
-      addText(host, "p", "LOLM generated files, but the signed receipt did not authorize a shipped/delivered claim.", "font-size:12px;line-height:1.45;color:#92400e;margin:10px 0 0");
+      addText(host, "p", "LOLM generated files, but the receipt did not authorize a shipped or delivered claim.", "font-size:12px;line-height:1.45;color:#92400e;margin:10px 0 0");
     }
   }
 
   function handleEvent(name, data) {
     if (name === "code_start") {
       clearUrls();
-      current = { manifest: null, receipt: null, urls: [] };
+      current = { manifest: null, receipt: null, safety: null, urls: [] };
       var old = document.getElementById("lolm-artifact-delivery");
       if (old) old.remove();
+    } else if (name === "error" && data && data.code === "OFFICIAL_CREDENTIAL_FABRICATION") {
+      current.safety = data;
+      renderSafety();
+      window.dispatchEvent(new CustomEvent("lolm:safety-refusal", { detail: data }));
     } else if (name === "artifact_manifest") {
       current.manifest = data;
       render();
