@@ -1,17 +1,22 @@
 name: publish-npm-cli
 
 # Publish clients/cli (the `lolm` command) with provenance, then smoke-test the
-# published binary in a clean project. Fail-closed until NPM_TOKEN is set.
+# published binary in a clean project. Called only after production deployment
+# succeeds, or manually for a dry run.
 
 on:
-  push:
-    branches:
-      - grok/grand-audit-remediation
-    paths:
-      - 'clients/cli/**'
-      - 'clients/js/**'
-      - 'package-lock.json'
-      - '.github/workflows/publish-npm-cli.yml'
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to publish (blank = whatever package.json says)'
+        required: false
+        type: string
+        default: ''
+      dry_run:
+        description: 'Pack and test only — do not publish'
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       version:
@@ -43,10 +48,10 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
       - name: Guard — require NPM_TOKEN
-        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        if: ${{ !inputs.dry_run }}
         run: '[ -n "${{ secrets.NPM_TOKEN }}" ] || { echo "NPM_TOKEN not set — refusing to publish"; exit 1; }'
       - name: Set version
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.version != '' }}
+        if: ${{ inputs.version != '' }}
         run: npm version "${{ inputs.version }}" --no-git-tag-version
       - name: Install deps
         run: npm install --no-audit --no-fund
@@ -55,7 +60,7 @@ jobs:
           npm test
           npm pack --dry-run
       - name: Refuse an already-published version
-        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        if: ${{ !inputs.dry_run }}
         run: |
           V="$(node -p "require('./package.json').version")"
           if npm view "lolm-cli@$V" version >/dev/null 2>&1; then
@@ -63,7 +68,7 @@ jobs:
             exit 1
           fi
       - name: Publish (provenance)
-        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        if: ${{ !inputs.dry_run }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -80,7 +85,7 @@ jobs:
           echo "Publishing $V with dist-tag $TAG"
           npm publish --provenance --access public --tag "$TAG"
       - name: Smoke the published binary in a clean project
-        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        if: ${{ !inputs.dry_run }}
         run: |
           V="$(node -p "require('./package.json').version")"
           cd "$RUNNER_TEMP"
@@ -101,6 +106,6 @@ jobs:
           set -e
           [ "$RC" -eq 2 ]
           printf '%s\n' "$OUT" | grep -qi "cannot fabricate official proof"
-          # a real network call against the hosted API proves the installed binary runs
+          # a real network call against the now-updated hosted API proves compatibility
           ./node_modules/.bin/lolm status
           echo "cli smoke OK"
