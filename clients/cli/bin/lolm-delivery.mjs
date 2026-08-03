@@ -18,6 +18,7 @@ import {
 import {
   findContinuityRecord,
   listContinuityRecords,
+  loadLatestSessionPointer,
   markRecordOpened,
   parseRunEvidence,
   recordContinuity,
@@ -27,7 +28,7 @@ import {
 const VERSION = "0.3.0-beta.2";
 const CORE_VERSION = "0.3.0-beta.1";
 const here = dirname(fileURLToPath(import.meta.url));
-const coreCli = join(here, "lolm.mjs");
+const coreCli = process.env.LOLM_CORE_CLI || join(here, "lolm.mjs");
 const argv = process.argv.slice(2);
 const { command, task } = commandTask(argv);
 const jsonMode = argv.includes("--json");
@@ -106,20 +107,33 @@ function recordSummary(record, position = 1) {
     task: record.task,
     kind: record.kind,
     verdict: record.verdict,
-    receipt_sha: record.receipt_sha,
+    session_id: record.session_id,
+    run_id: record.run_id,
     task_id: record.task_id,
     sandbox_id: record.sandbox_id,
+    receipt_sha: record.receipt_sha,
+    manifest_sha: record.manifest_sha,
+    artifact_ids: record.artifact_ids || [],
+    checkpoint_id: record.checkpoint_id,
+    resume_pointer: record.resume_pointer,
     states: record.states,
     fully_verified: record.fully_verified,
     intact: intact.map((item) => ({
+      artifact_id: item.artifact_id,
       path: item.path,
       size: item.size,
-      sha256: item.sha256,
+      sha256: item.expected_sha256 || item.sha256,
+      current_sha256: item.current_sha256,
       integrity: item.integrity,
       verified: item.verified,
     })),
-    changed: changed.map((item) => ({ path: item.path, expected_sha256: item.sha256 })),
-    missing: missing.map((item) => item.path),
+    changed: changed.map((item) => ({
+      artifact_id: item.artifact_id,
+      path: item.path,
+      expected_sha256: item.expected_sha256 || item.sha256,
+      current_sha256: item.current_sha256,
+    })),
+    missing: missing.map((item) => ({ artifact_id: item.artifact_id, path: item.path })),
   };
 }
 
@@ -134,7 +148,7 @@ async function showArtifact({ action = "where", kind = "", index = 1 } = {}) {
     else {
       records.forEach((record, i) => {
         const summary = recordSummary(record, i + 1);
-        const path = summary.intact[0]?.path || summary.changed[0]?.path || summary.missing[0] || "<no local path>";
+        const path = summary.intact[0]?.path || summary.changed[0]?.path || summary.missing[0]?.path || "<no local path>";
         process.stdout.write(`${i + 1}\t${record.kind}\t${record.verdict}\t${path}\n`);
       });
     }
@@ -158,7 +172,7 @@ async function showArtifact({ action = "where", kind = "", index = 1 } = {}) {
     const message = changed.length
       ? "The recorded local artifact exists, but its SHA-256 has changed since delivery."
       : missing.length
-        ? "The recorded local artifact is missing."
+        ? "The recorded local artifact is missing or unreadable."
         : "No intact local artifact was found in the matching record.";
     output(jsonMode ? { ok: false, error: changed.length ? "artifact_changed" : "artifact_missing", record: recordSummary(record, index) } : message, { error: true });
     return 1;
@@ -199,34 +213,92 @@ async function renderContinuityResolution(resolution) {
   return resolution.code;
 }
 
-async function runCore(args) {
+function childEnvironment(overrides = {}) {
+  return { ...process.env, ...overrides };
+}
+
+async function runCore(args, { silent = false, env = {} } = {}) {
   return await new Promise((resolvePromise) => {
     const child = spawn(process.execPath, [coreCli, ...args], {
       stdio: ["inherit", "pipe", "pipe"],
-      env: process.env,
+      env: childEnvironment(env),
     });
-    let transcript = "";
-    const capture = (chunk, stream) => {
+    let stdout = "";
+    let stderr = "";
+    const capture = (chunk, target) => {
       const text = String(chunk);
-      stream.write(text);
-      transcript = (transcript + text).slice(-512 * 1024);
+      if (target === "stdout") stdout = (stdout + text).slice(-512 * 1024);
+      else stderr = (stderr + text).slice(-512 * 1024);
+      if (!silent) (target === "stdout" ? process.stdout : process.stderr).write(text);
     };
-    child.stdout?.on("data", (chunk) => capture(chunk, process.stdout));
-    child.stderr?.on("data", (chunk) => capture(chunk, process.stderr));
+    child.stdout?.on("data", (chunk) => capture(chunk, "stdout"));
+    child.stderr?.on("data", (chunk) => capture(chunk, "stderr"));
     const forward = (signal) => {
       try { child.kill(signal); } catch { /* already exited */ }
     };
     process.once("SIGINT", () => forward("SIGINT"));
     process.once("SIGTERM", () => forward("SIGTERM"));
     child.once("error", (error) => {
-      process.stderr.write(`LOLM failed to start: ${error.message}\n`);
-      resolvePromise({ code: 1, transcript });
+      if (!silent) process.stderr.write(`LOLM failed to start: ${error.message}\n`);
+      resolvePromise({ code: 1, stdout, stderr: `${stderr}${error.message}\n`, transcript: `${stdout}${stderr}` });
     });
     child.once("exit", (code, signal) => {
-      if (signal) resolvePromise({ code: signal === "SIGINT" ? 130 : 1, transcript });
-      else resolvePromise({ code: Number.isInteger(code) ? code : 1, transcript });
+      const exitCode = signal ? (signal === "SIGINT" ? 130 : 1) : (Number.isInteger(code) ? code : 1);
+      resolvePromise({ code: exitCode, stdout, stderr, transcript: `${stdout}${stderr}` });
     });
   });
+}
+
+function actionEnvironment() {
+  const env = {};
+  const mapping = {
+    "--base": "LOLM_BASE_URL",
+    "--api-key": "LOLM_API_KEY",
+    "--license": "LOLM_LICENSE",
+  };
+  for (let index = 0; index < argv.length; index++) {
+    const key = mapping[argv[index]];
+    if (key && argv[index + 1]) env[key] = argv[index + 1];
+  }
+  return env;
+}
+
+function parseJsonOutput(text) {
+  const lines = String(text || "").trim().split(/\r?\n/).filter(Boolean).reverse();
+  for (const line of lines) {
+    try { return JSON.parse(line); } catch { /* keep searching */ }
+  }
+  return null;
+}
+
+async function runContinuityAction(resolution) {
+  const action = resolution.action;
+  const result = await runCore(["--json", action], {
+    silent: true,
+    env: actionEnvironment(),
+  });
+  const payload = parseJsonOutput(result.stdout) || parseJsonOutput(result.stderr);
+  if (jsonMode) {
+    output({
+      schema: "lolm.continuity.action.v1",
+      ok: result.code === 0,
+      action,
+      referent: resolution.value,
+      result: payload,
+      exit_code: result.code,
+    }, { error: result.code !== 0 });
+    return result.code;
+  }
+  if (result.code !== 0) {
+    const message = payload?.error?.message || payload?.message || result.stderr.trim() || `${action} failed`;
+    output(message, { error: true });
+    return result.code;
+  }
+  const verdict = payload?.receipt?.verdict || payload?.done?.verdict || payload?.result?.receipt?.verdict || "completed";
+  output(`${action} ${verdict}`);
+  const files = payload?.receipt?.files || payload?.done?.files || payload?.result?.receipt?.files || [];
+  if (Array.isArray(files) && files.length) output(`files ${files.join(", ")}`);
+  return 0;
 }
 
 function rewritePresentation(text) {
@@ -296,6 +368,9 @@ async function main() {
 
   if (command === "ask") {
     const resolved = await resolveContinuityQuestion(task);
+    if (resolved?.ok && ["retry", "resume"].includes(resolved.action)) {
+      return await runContinuityAction(resolved);
+    }
     const localCode = await renderContinuityResolution(resolved);
     if (localCode != null) return localCode;
   }
@@ -339,6 +414,11 @@ async function main() {
     return 1;
   }
   const evidence = parseRunEvidence(result.transcript);
+  let sessionPointer = null;
+  try {
+    sessionPointer = await loadLatestSessionPointer();
+    if (sessionPointer?.task && sessionPointer.task !== task) sessionPointer = null;
+  } catch { /* continuity remains truthful without a session pointer */ }
   const saved = await recordContinuity({
     task,
     kind,
@@ -348,6 +428,7 @@ async function main() {
     verified: evidence.verdict === "shipped",
     exported: true,
     delivered: true,
+    session_pointer: sessionPointer,
     ...evidence,
   });
   process.stdout.write(`delivered ${saved.kind}\n`);
