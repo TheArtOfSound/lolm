@@ -134,9 +134,9 @@ def normalize_host_delivery_task(task: str) -> str:
     target = _root_artifact_path(original)
     directive = (
         f"Create the requested user-facing artifact as `{target}` in the sandbox "
-        "workspace root. Do not create Desktop, Downloads, Documents, /Users, or "
-        "other host filesystem directories. The client will install the verified "
-        "artifact onto the user's device after the run ships."
+        "workspace root. Do not create host filesystem directories or absolute user "
+        "paths. The client will install the verified artifact onto the user's device "
+        "after the run ships."
     )
     return f"{cleaned}. {directive}" if cleaned else directive
 
