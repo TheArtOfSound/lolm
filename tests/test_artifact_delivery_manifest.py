@@ -4,7 +4,11 @@ import hashlib
 from pathlib import Path
 from types import SimpleNamespace
 
-from local_ui.artifact_manifest_patch import corrected_artifact_manifest
+from local_ui.artifact_manifest_patch import (
+    corrected_artifact_manifest,
+    install_patch,
+    official_credential_fabrication,
+)
 
 
 class FakeSandbox:
@@ -69,3 +73,40 @@ def test_missing_required_pdf_makes_manifest_incomplete(tmp_path: Path):
     manifest = corrected_artifact_manifest(agent)
     assert manifest["complete"] is False
     assert "output.pdf" not in {row["path"] for row in manifest["files"]}
+
+
+def test_server_safety_refuses_official_credential_request_before_original_run():
+    calls = []
+
+    class Agent:
+        def __init__(self):
+            self.sb = SimpleNamespace(id="sbx_refusal")
+
+        def _deployment_identity(self):
+            return {"server_sha": "test-sha"}
+
+        def run(self, task):
+            calls.append(task)
+            yield {"event": "original_run", "data": {}}
+
+        def _artifact_manifest(self, **_kwargs):
+            return {}
+
+    install_patch(Agent)
+    agent = Agent()
+    task = "Create official proof that a named person attends a university."
+    assert official_credential_fabrication(task) is True
+    events = list(agent.run(task))
+    assert calls == []
+    assert [event["event"] for event in events] == [
+        "code_start", "agent_note", "error", "code_done",
+    ]
+    assert events[-1]["data"]["verdict"] == "refused"
+    assert events[-1]["data"]["ran"] is False
+    assert events[-1]["data"]["files"] == []
+
+
+def test_server_safety_allows_clearly_labeled_unofficial_statement():
+    assert official_credential_fabrication(
+        "Create a clearly labeled unofficial personal attendance statement."
+    ) is False
