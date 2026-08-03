@@ -6,7 +6,8 @@ name: one-shot-p0-release
 # workflow lives on the default branch and listens only for a rerun of one exact,
 # already-green full-test-suite run. It then checks out one exact integration SHA,
 # deploys it with rollback protection, proves live PDF delivery, and only then
-# publishes the matching CLI prerelease. It cannot release any other commit.
+# publishes or verifies the matching CLI prerelease. It cannot release any other
+# commit. Progress and final disposition are posted to PR #18 for auditability.
 
 on:
   workflow_run:
@@ -16,6 +17,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  issues: write
 
 concurrency:
   group: one-shot-p0-release
@@ -25,6 +27,7 @@ env:
   EXPECTED_TRIGGER_RUN_ID: "30790557019"
   RELEASE_SHA: "892f5d2802afdea73d8f381d5922553b00b99b9e"
   RELEASE_BRANCH: "grok/grand-audit-remediation"
+  REPORT_ISSUE: "18"
 
 jobs:
   deploy:
@@ -35,6 +38,16 @@ jobs:
     outputs:
       release_sha: ${{ steps.identity.outputs.release_sha }}
     steps:
+      - name: Report release start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments" \
+            -f body="P0 release started for immutable SHA \`$RELEASE_SHA\`. Actions run: $RUN_URL"
+
       - name: Check out the immutable release commit
         uses: actions/checkout@v7
         with:
@@ -77,7 +90,33 @@ jobs:
           DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
           LOLM_RELEASE_SHA: ${{ env.RELEASE_SHA }}
         shell: bash
-        run: bash deploy/deploy_box.sh
+        run: |
+          set -o pipefail
+          bash deploy/deploy_box.sh | tee "$RUNNER_TEMP/p0-deploy.log"
+
+      - name: Report verified production deployment
+        if: ${{ steps.production_deploy.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          PDF_RESULT="$(python3 - "$RUNNER_TEMP/p0-deploy.log" <<'PY'
+          import json, sys
+          result = None
+          for line in open(sys.argv[1], encoding='utf-8', errors='replace'):
+              try:
+                  row = json.loads(line)
+              except Exception:
+                  continue
+              if row.get('ok') is True and row.get('pdf_sha256'):
+                  result = row
+          print(json.dumps(result, sort_keys=True) if result else 'PDF smoke passed; structured line unavailable')
+          PY
+          )"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments" \
+            -f body="Production backend and website verified for \`$RELEASE_SHA\`. Live PDF result: \`$PDF_RESULT\`. Actions run: $RUN_URL"
 
       - name: Roll back the paired app and website snapshot
         if: ${{ steps.production_deploy.outcome == 'failure' }}
@@ -113,10 +152,6 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Guard npm publication secret
-        shell: bash
-        run: 'test -n "${{ secrets.NPM_TOKEN }}" || { echo "NPM_TOKEN missing"; exit 1; }'
-
       - name: Install, test, and inspect package
         shell: bash
         run: |
@@ -126,17 +161,26 @@ jobs:
           npm pack --dry-run
           test "$(node -p "require('./package.json').version")" = "0.3.0-beta.2"
 
-      - name: Refuse mutable republish
+      - name: Check whether the immutable version already exists
+        id: registry
         shell: bash
         run: |
           set -euo pipefail
           V="$(node -p "require('./package.json').version")"
           if npm view "lolm-cli@$V" version >/dev/null 2>&1; then
-            echo "lolm-cli@$V already exists; refusing a mutable republish"
-            exit 1
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "lolm-cli@$V already exists; will verify it without republishing"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Guard npm publication secret
+        if: ${{ steps.registry.outputs.exists != 'true' }}
+        shell: bash
+        run: 'test -n "${{ secrets.NPM_TOKEN }}" || { echo "NPM_TOKEN missing"; exit 1; }'
+
       - name: Publish beta with provenance
+        if: ${{ steps.registry.outputs.exists != 'true' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         shell: bash
@@ -148,7 +192,7 @@ jobs:
           set -euo pipefail
           V="0.3.0-beta.2"
           cd "$RUNNER_TEMP"
-          mkdir cli-smoke && cd cli-smoke
+          mkdir -p cli-smoke && cd cli-smoke
           npm init -y >/dev/null
           installed=0
           for i in 1 2 3 4 5 6; do
@@ -166,3 +210,33 @@ jobs:
           printf '%s\n' "$OUT" | grep -qi "cannot fabricate official proof"
           ./node_modules/.bin/lolm status
           echo "published CLI smoke OK"
+
+      - name: Report verified CLI release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          STATE="published"
+          if [ "${{ steps.registry.outputs.exists }}" = "true" ]; then STATE="already published and independently re-verified"; fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments" \
+            -f body="\`lolm-cli@0.3.0-beta.2\` $STATE. Clean-install registry smoke passed against the verified production API. Actions run: $RUN_URL"
+
+  report-failure:
+    needs: [deploy, publish-cli]
+    if: >-
+      always() &&
+      (needs.deploy.result != 'success' ||
+       (needs.deploy.result == 'success' && needs.publish-cli.result != 'success'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report release failure
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments" \
+            -f body="P0 release did not complete. deploy=${{ needs.deploy.result }}, publish-cli=${{ needs.publish-cli.result }}. Inspect: $RUN_URL"
