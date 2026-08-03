@@ -2,12 +2,13 @@ name: one-shot-p0-release
 
 # One-shot bridge for P0 artifact delivery release.
 #
-# The GitHub connector merge token suppresses push-triggered workflows. This
-# workflow lives on the default branch and listens only for a rerun of one exact,
-# already-green full-test-suite run. It then checks out one exact integration SHA,
-# deploys it with rollback protection, proves live PDF delivery, and only then
-# publishes or verifies the matching CLI prerelease. It cannot release any other
-# commit. Progress and final disposition are posted to PR #18 for auditability.
+# Connector-created merges suppress push-triggered workflows, and rerunning a job
+# does not emit workflow_run. This default-branch workflow therefore listens for
+# the normal pull-request validation of one exact same-repository trigger commit.
+# It checks out one exact integration SHA, deploys it with rollback protection,
+# proves live PDF delivery, and only then publishes or verifies the matching CLI
+# prerelease. It cannot release another branch, trigger commit, or product commit.
+# Progress and final disposition are posted to PR #18 for auditability.
 
 on:
   workflow_run:
@@ -24,7 +25,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  EXPECTED_TRIGGER_RUN_ID: "30790557019"
+  EXPECTED_TRIGGER_BRANCH: "veyr/p0-release-trigger"
+  EXPECTED_TRIGGER_SHA: "f62ead4f3cd5a723cfe2d1290fa9e3d8c4960d55"
   RELEASE_SHA: "892f5d2802afdea73d8f381d5922553b00b99b9e"
   RELEASE_BRANCH: "grok/grand-audit-remediation"
   REPORT_ISSUE: "18"
@@ -32,7 +34,9 @@ env:
 jobs:
   deploy:
     if: >-
-      github.event.workflow_run.id == 30790557019 &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_branch == 'veyr/p0-release-trigger' &&
+      github.event.workflow_run.head_sha == 'f62ead4f3cd5a723cfe2d1290fa9e3d8c4960d55' &&
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
@@ -46,7 +50,7 @@ jobs:
           set -euo pipefail
           RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments" \
-            -f body="P0 release started for immutable SHA \`$RELEASE_SHA\`. Actions run: $RUN_URL"
+            -f body="P0 release started for immutable SHA \`$RELEASE_SHA\` after exact trigger \`$EXPECTED_TRIGGER_SHA\`. Actions run: $RUN_URL"
 
       - name: Check out the immutable release commit
         uses: actions/checkout@v7
