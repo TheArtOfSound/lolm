@@ -1,10 +1,15 @@
 # Copyright (c) 2026 Qira LLC. All rights reserved.
-"""P0 artifact delivery and server-side credential-safety corrections.
+"""P0 artifact delivery, host-delivery separation, and credential safety.
 
 CodeAgent historically manifested only paths written through FILE/EDIT. Files created
 by a verified program, such as output.pdf, existed in the sandbox but were omitted from
 the signed manifest and disappeared when the sandbox was destroyed. This patch makes
 the final sandbox tree authoritative while excluding harness/cache pollution.
+
+Host destinations such as "put it on my Desktop" belong to the local CLI, not the
+remote sandbox. They are separated from the execution task before contract compilation
+so the sandbox creates a root deliverable such as output.pdf and the client installs the
+verified bytes onto the host afterward.
 
 The same runtime layer refuses requests to fabricate official attendance, enrollment,
 employment, or similar credentials before any model or tool execution. Clearly labeled
@@ -37,6 +42,20 @@ _BINARY_EXTENSIONS = {
     ".mp3", ".wav", ".flac", ".ogg", ".m4a", ".mp4", ".mov", ".webm", ".avi",
     ".woff", ".woff2", ".ttf", ".otf", ".wasm", ".pyc", ".bin",
 }
+
+_HOST_DESTINATION_CLAUSE = re.compile(
+    r"""(?ix)
+    (?:\s*(?:,|and)?\s*)
+    (?:put|save|place|export|write|store|download)\s+
+    (?:(?:it|this|that|the)\s+)?
+    (?:(?:pdf|document|file|artifact|report|letter)\s+)?
+    (?:in\s+on|on|to|in|into|onto)\s+
+    (?:(?:my|the)\s+)?
+    (?:desktop|downloads?|documents?)
+    (?:\s+(?:folder|directory))?
+    [.!]?
+    """
+)
 
 
 def _legitimate_credential_workflow(text: str) -> bool:
@@ -79,6 +98,47 @@ def official_credential_fabrication(task: str) -> bool:
         text,
     ))
     return proof and status and institution
+
+
+def _root_artifact_path(task: str) -> str:
+    text = str(task or "").lower()
+    if re.search(r"\bpdf\b", text):
+        return "output.pdf"
+    if re.search(r"\b(docx|word document)\b", text):
+        return "output.docx"
+    if re.search(r"\b(xlsx|excel|spreadsheet)\b", text):
+        return "output.xlsx"
+    if re.search(r"\b(pptx|powerpoint|presentation|slides?)\b", text):
+        return "output.pptx"
+    if re.search(r"\b(html|web page|webpage)\b", text):
+        return "index.html"
+    if re.search(r"\b(png|image)\b", text):
+        return "output.png"
+    return "output.txt"
+
+
+def normalize_host_delivery_task(task: str) -> str:
+    """Remove a host destination from the sandbox task and bind a root artifact.
+
+    The original wording is preserved in code_start metadata by ``install_patch``.
+    Only explicit placement verbs aimed at Desktop/Downloads/Documents are changed,
+    so tasks about a desktop application or a project directory are unaffected.
+    """
+    original = str(task or "").strip()
+    if not original:
+        return original
+    cleaned, count = _HOST_DESTINATION_CLAUSE.subn(" ", original)
+    if count == 0:
+        return original
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,.;")
+    target = _root_artifact_path(original)
+    directive = (
+        f"Create the requested user-facing artifact as `{target}` in the sandbox "
+        "workspace root. Do not create host filesystem directories or absolute user "
+        "paths. The client will install the verified artifact onto the user's device "
+        "after the run ships."
+    )
+    return f"{cleaned}. {directive}" if cleaned else directive
 
 
 def _safe_names(agent: Any) -> List[str]:
@@ -258,9 +318,20 @@ def install_patch(code_agent_class: Any) -> None:
                 **identity,
             }}
             return
-        yield from original_run(self, task)
+
+        execution_task = normalize_host_delivery_task(task)
+        separated = execution_task != str(task or "").strip()
+        for event in original_run(self, execution_task):
+            if separated and event.get("event") == "code_start":
+                data = dict(event.get("data") or {})
+                data["task"] = task
+                data["execution_task"] = execution_task
+                data["host_delivery_separated"] = True
+                event = {**event, "data": data}
+            yield event
 
     code_agent_class._artifact_manifest = _artifact_manifest
     code_agent_class.run = _run
     code_agent_class._artifact_delivery_patch = True
     code_agent_class._credential_safety_patch = True
+    code_agent_class._host_delivery_boundary_patch = True

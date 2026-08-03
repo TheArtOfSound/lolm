@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from local_ui.artifact_manifest_patch import (
     corrected_artifact_manifest,
     install_patch,
+    normalize_host_delivery_task,
     official_credential_fabrication,
 )
 
@@ -108,6 +109,55 @@ def test_missing_required_pdf_makes_manifest_incomplete(tmp_path: Path):
     manifest = corrected_artifact_manifest(agent)
     assert manifest["complete"] is False
     assert "output.pdf" not in {row["path"] for row in manifest["files"]}
+
+
+def test_host_desktop_destination_is_removed_from_sandbox_execution_task():
+    original = (
+        "Create a valid one-page PDF visibly labeled UNOFFICIAL TEST "
+        "and put it on my Desktop."
+    )
+    normalized = normalize_host_delivery_task(original)
+    assert "my Desktop" not in normalized
+    assert "`output.pdf`" in normalized
+    assert "sandbox workspace root" in normalized
+    assert "UNOFFICIAL TEST" in normalized
+    assert "client will install" in normalized
+
+
+def test_typo_host_destination_is_also_separated():
+    normalized = normalize_host_delivery_task(
+        "Create a PDF and put in on my desktop"
+    )
+    assert "my desktop" not in normalized.lower()
+    assert "`output.pdf`" in normalized
+
+
+def test_desktop_application_task_is_not_rewritten():
+    task = "Create a desktop application that renders a local dashboard."
+    assert normalize_host_delivery_task(task) == task
+
+
+def test_runtime_patch_preserves_original_task_but_executes_root_artifact_task():
+    calls = []
+
+    class Agent:
+        def run(self, task):
+            calls.append(task)
+            yield {"event": "code_start", "data": {"task": task, "sandbox": "sbx"}}
+            yield {"event": "code_done", "data": {"ok": True}}
+
+        def _artifact_manifest(self, **_kwargs):
+            return {}
+
+    install_patch(Agent)
+    original = "Create a PDF and put it on my Desktop."
+    events = list(Agent().run(original))
+    assert len(calls) == 1
+    assert "Desktop" not in calls[0]
+    assert "`output.pdf`" in calls[0]
+    assert events[0]["data"]["task"] == original
+    assert events[0]["data"]["execution_task"] == calls[0]
+    assert events[0]["data"]["host_delivery_separated"] is True
 
 
 def test_server_safety_refuses_official_credential_request_before_original_run():
