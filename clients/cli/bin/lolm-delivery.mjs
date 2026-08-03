@@ -2,8 +2,10 @@
 // Copyright (c) 2026 Qira LLC. All rights reserved.
 /** User-facing LOLM launcher with verified delivery and deterministic continuity. */
 import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import process from "node:process";
 import {
   commandIndex,
@@ -32,6 +34,7 @@ const coreCli = process.env.LOLM_CORE_CLI || join(here, "lolm.mjs");
 const argv = process.argv.slice(2);
 const { command, task } = commandTask(argv);
 const jsonMode = argv.includes("--json");
+const SHA_RE = /^[a-f0-9]{64}$/i;
 
 function printRefusal() {
   process.stderr.write(
@@ -52,11 +55,11 @@ function artifactSelector(words) {
 }
 
 function output(value, { error = false } = {}) {
-  const stream = error ? process.stderr : process.stdout;
   if (jsonMode) {
-    stream.write(JSON.stringify(value, null, 2) + "\n");
+    process.stdout.write(JSON.stringify(value, null, 2) + "\n");
     return;
   }
+  const stream = error ? process.stderr : process.stdout;
   if (typeof value === "string") stream.write(value.endsWith("\n") ? value : `${value}\n`);
   else stream.write(`${JSON.stringify(value)}\n`);
 }
@@ -213,15 +216,11 @@ async function renderContinuityResolution(resolution) {
   return resolution.code;
 }
 
-function childEnvironment(overrides = {}) {
-  return { ...process.env, ...overrides };
-}
-
 async function runCore(args, { silent = false, env = {} } = {}) {
   return await new Promise((resolvePromise) => {
     const child = spawn(process.execPath, [coreCli, ...args], {
       stdio: ["inherit", "pipe", "pipe"],
-      env: childEnvironment(env),
+      env: { ...process.env, ...env },
     });
     let stdout = "";
     let stderr = "";
@@ -251,11 +250,7 @@ async function runCore(args, { silent = false, env = {} } = {}) {
 
 function actionEnvironment() {
   const env = {};
-  const mapping = {
-    "--base": "LOLM_BASE_URL",
-    "--api-key": "LOLM_API_KEY",
-    "--license": "LOLM_LICENSE",
-  };
+  const mapping = { "--base": "LOLM_BASE_URL", "--api-key": "LOLM_API_KEY", "--license": "LOLM_LICENSE" };
   for (let index = 0; index < argv.length; index++) {
     const key = mapping[argv[index]];
     if (key && argv[index + 1]) env[key] = argv[index + 1];
@@ -273,10 +268,7 @@ function parseJsonOutput(text) {
 
 async function runContinuityAction(resolution) {
   const action = resolution.action;
-  const result = await runCore(["--json", action], {
-    silent: true,
-    env: actionEnvironment(),
-  });
+  const result = await runCore(["--json", action], { silent: true, env: actionEnvironment() });
   const payload = parseJsonOutput(result.stdout) || parseJsonOutput(result.stderr);
   if (jsonMode) {
     output({
@@ -286,7 +278,7 @@ async function runContinuityAction(resolution) {
       referent: resolution.value,
       result: payload,
       exit_code: result.code,
-    }, { error: result.code !== 0 });
+    });
     return result.code;
   }
   if (result.code !== 0) {
@@ -346,6 +338,34 @@ async function runCorePresentation(args) {
   });
 }
 
+function receiptEvidence(receipt) {
+  const value = receipt?.receipt && !receipt.verdict ? receipt.receipt : receipt;
+  if (!value || typeof value !== "object") return {};
+  const receiptSha = SHA_RE.test(String(value.receipt_sha || "")) ? String(value.receipt_sha) : "";
+  const manifestCandidates = [
+    value?.verification?.artifact_manifest_sha256,
+    value?.artifact_manifest_sha256,
+    value?.artifact_manifest?.manifest_sha256,
+    value?.artifact_manifest?.sha256,
+  ];
+  const manifestSha = manifestCandidates.find((candidate) => SHA_RE.test(String(candidate || ""))) || "";
+  return {
+    receipt_sha: receiptSha,
+    manifest_sha: String(manifestSha || ""),
+    session_id: String(value.session_id || ""),
+    run_id: String(value.run_id || ""),
+    task_id: String(value?.task_state?.task_id || value.task_id || ""),
+    checkpoint_id: String(value?.last_known_green?.checkpoint_id || value.checkpoint_id || ""),
+    verdict: String(value.verdict || "").toLowerCase(),
+  };
+}
+
+async function readReceipt(path) {
+  if (!path) return null;
+  try { return JSON.parse(await readFile(resolve(path), "utf8")); }
+  catch { return null; }
+}
+
 async function main() {
   if (!command && (argv.includes("--version") || argv.includes("-V"))) {
     process.stdout.write(`${VERSION}\n`);
@@ -368,9 +388,7 @@ async function main() {
 
   if (command === "ask") {
     const resolved = await resolveContinuityQuestion(task);
-    if (resolved?.ok && ["retry", "resume"].includes(resolved.action)) {
-      return await runContinuityAction(resolved);
-    }
+    if (resolved?.ok && ["retry", "resume"].includes(resolved.action)) return await runContinuityAction(resolved);
     const localCode = await renderContinuityResolution(resolved);
     if (localCode != null) return localCode;
   }
@@ -383,6 +401,8 @@ async function main() {
   const next = [...argv];
   let deliveryDestination = "";
   let automaticDestination = false;
+  let automaticReceiptDirectory = "";
+  let receiptPath = "";
   let kind = "";
   if (command === "code") {
     kind = requestedArtifactKind(task);
@@ -394,6 +414,16 @@ async function main() {
       automaticDestination = true;
       next.push("--save", deliveryDestination);
     }
+    const receiptIndex = next.indexOf("--receipt");
+    if (receiptIndex >= 0 && next[receiptIndex + 1]) {
+      receiptPath = next[receiptIndex + 1];
+    } else if (kind) {
+      try {
+        automaticReceiptDirectory = await mkdtemp(join(tmpdir(), "lolm-continuity-receipt-"));
+        receiptPath = join(automaticReceiptDirectory, "receipt.json");
+        next.push("--receipt", receiptPath);
+      } catch { /* transcript evidence remains available */ }
+    }
     const traceIndex = next.indexOf("--trace");
     const trace = traceIndex >= 0;
     if (trace) next.splice(traceIndex, 1);
@@ -401,6 +431,8 @@ async function main() {
   }
 
   const result = await runCore(next);
+  const sealedReceipt = await readReceipt(receiptPath);
+  if (automaticReceiptDirectory) await rm(automaticReceiptDirectory, { recursive: true, force: true });
   if (result.code !== 0) return result.code;
   if (!kind || !deliveryDestination) return result.code;
 
@@ -413,7 +445,12 @@ async function main() {
     );
     return 1;
   }
-  const evidence = parseRunEvidence(result.transcript);
+  const transcriptEvidence = parseRunEvidence(result.transcript);
+  const sealedEvidence = receiptEvidence(sealedReceipt);
+  const evidence = {
+    ...transcriptEvidence,
+    ...Object.fromEntries(Object.entries(sealedEvidence).filter(([, value]) => value)),
+  };
   let sessionPointer = null;
   try {
     sessionPointer = await loadLatestSessionPointer();
@@ -425,7 +462,7 @@ async function main() {
     destination: automaticDestination ? (requestedDestination(task) || deliveryDestination) : deliveryDestination,
     files: delivered,
     generated: true,
-    verified: evidence.verdict === "shipped",
+    verified: evidence.verdict === "shipped" && SHA_RE.test(evidence.receipt_sha || ""),
     exported: true,
     delivered: true,
     session_pointer: sessionPointer,
