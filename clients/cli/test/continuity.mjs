@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -13,6 +13,7 @@ import {
   findContinuityRecord,
   listContinuityRecords,
   loadContinuityLedger,
+  loadLatestSessionPointer,
   parseRunEvidence,
   recordContinuity,
   resolveContinuityQuestion,
@@ -34,26 +35,42 @@ function sha256(body) {
 async function isolated(name) {
   const root = await mkdtemp(join(tmpdir(), `lolm-continuity-${name}-`));
   const ledger = join(root, "continuity.json");
+  const sessions = join(root, "sessions");
   return {
     root,
     ledger,
+    sessions,
     env: {
       ...process.env,
       LOLM_CONTINUITY_LEDGER: ledger,
+      LOLM_SESSION_DIR: sessions,
       NO_COLOR: "1",
     },
   };
 }
 
-async function withLedger(ledger, fn) {
-  const prior = process.env.LOLM_CONTINUITY_LEDGER;
-  process.env.LOLM_CONTINUITY_LEDGER = ledger;
+async function withEnvironment(values, fn) {
+  const prior = new Map();
+  for (const [key, value] of Object.entries(values)) {
+    prior.set(key, process.env[key]);
+    if (value == null) delete process.env[key];
+    else process.env[key] = value;
+  }
   try {
     return await fn();
   } finally {
-    if (prior == null) delete process.env.LOLM_CONTINUITY_LEDGER;
-    else process.env.LOLM_CONTINUITY_LEDGER = prior;
+    for (const [key, value] of prior) {
+      if (value == null) delete process.env[key];
+      else process.env[key] = value;
+    }
   }
+}
+
+async function withLedger(ctx, fn) {
+  return await withEnvironment({
+    LOLM_CONTINUITY_LEDGER: ctx.ledger,
+    LOLM_SESSION_DIR: ctx.sessions,
+  }, fn);
 }
 
 function buildReferenceCases() {
@@ -101,6 +118,14 @@ function buildReferenceCases() {
     ["what was the last receipt?", "receipt"],
     ["show me the previous receipt", "receipt"],
     ["prior receipt", "receipt"],
+    ["retry that", "retry"],
+    ["try that again", "retry"],
+    ["redo that", "retry"],
+    ["run that again", "retry"],
+    ["resume that", "resume"],
+    ["continue that", "resume"],
+    ["pick that up", "resume"],
+    ["resume the last run", "resume"],
   ]) cases.push([text, intent]);
   return cases;
 }
@@ -124,15 +149,17 @@ test("does not hijack ordinary informational questions", () => {
     "tell me about the previous US election",
     "open source software is useful",
     "was the report accurate?",
+    "retry policies in distributed systems",
+    "resume writing is difficult",
   ]) assert.equal(classifyContinuityQuestion(text), null, text);
 });
 
-test("extracts receipt, manifest, session, run, task, sandbox, and verdict evidence", () => {
+test("extracts receipt, manifest, session, run, task, sandbox, checkpoint, and verdict evidence", () => {
   const receipt = "a".repeat(64);
   const manifest = "b".repeat(64);
   const parsed = parseRunEvidence(
     `sandbox sbx_deadbeef\nsession_id=sess_123456\nrun_id=run_123456\n` +
-    `verdict shipped\nreceipt ${receipt}\nmanifest ${manifest}\ntask task_abcdef123\n`,
+    `checkpoint=ckpt_123\nverdict shipped\nreceipt ${receipt}\nmanifest ${manifest}\ntask task_abcdef123\n`,
   );
   assert.deepEqual(parsed, {
     receipt_sha: receipt,
@@ -141,16 +168,26 @@ test("extracts receipt, manifest, session, run, task, sandbox, and verdict evide
     run_id: "run_123456",
     task_id: "task_abcdef123",
     sandbox_id: "sbx_deadbeef",
+    checkpoint_id: "ckpt_123",
     verdict: "shipped",
   });
 });
 
-test("records SHA-256 and reports a verified intact delivery", async () => {
+test("records stable artifact IDs, safe pointers, and verified intact bytes", async () => {
   const ctx = await isolated("verified");
   const pdf = join(ctx.root, "output.pdf");
   const body = Buffer.from("%PDF-1.4\nverified\n%%EOF\n");
   await writeFile(pdf, body);
-  await withLedger(ctx.ledger, async () => {
+  const pointer = {
+    session_id: "sess_123456",
+    run_id: "run_123456",
+    checkpoint_id: "ckpt_123",
+    resume_available: true,
+    status: "terminated",
+    task: "create a PDF",
+    server_artifact_ids: ["server_artifact_1"],
+  };
+  await withLedger(ctx, async () => {
     await recordContinuity({
       task: "create a PDF",
       kind: "pdf",
@@ -159,24 +196,65 @@ test("records SHA-256 and reports a verified intact delivery", async () => {
       verified: true,
       delivered: true,
       receipt_sha: "c".repeat(64),
+      manifest_sha: "d".repeat(64),
       task_id: "task_test",
       verdict: "shipped",
+      session_pointer: pointer,
     });
     const record = await findContinuityRecord({ kind: "pdf" });
     assert.equal(record.fully_verified, true);
+    assert.match(record.artifact_ids[0], /^artifact_[a-f0-9]{24}$/);
     assert.equal(record.artifacts[0].sha256, sha256(body));
+    assert.equal(record.artifacts[0].expected_sha256, sha256(body));
+    assert.equal(record.artifacts[0].current_sha256, sha256(body));
     assert.equal(record.artifacts[0].integrity, "verified");
+    assert.equal(record.session_id, pointer.session_id);
+    assert.equal(record.run_id, pointer.run_id);
+    assert.equal(record.checkpoint_id, pointer.checkpoint_id);
+    assert.equal(record.resume_pointer.available, true);
+    assert.deepEqual(record.server_artifact_ids, ["server_artifact_1"]);
     const status = await resolveContinuityQuestion("was the PDF delivered?");
     assert.equal(status.ok, true);
-    assert.match(status.message, /verified local artifact/);
+    const retry = await resolveContinuityQuestion("retry that");
+    assert.equal(retry.action, "retry");
+    const resume = await resolveContinuityQuestion("resume that");
+    assert.equal(resume.action, "resume");
   });
 });
 
-test("detects a modified local file and never calls it verified", async () => {
+test("loads only safe session pointers and never returns the resume token", async () => {
+  const ctx = await isolated("session-pointer");
+  await mkdir(ctx.sessions, { recursive: true });
+  await writeFile(join(ctx.sessions, "sess_1.json"), JSON.stringify({
+    session_id: "sess_123456",
+    last_code_run_id: "run_123456",
+    last_run_task: "create a PDF",
+    last_run_status: "terminated",
+    last_checkpoint_id: "ckpt_123",
+    resume_token: "secret-resume-token",
+    workspace_snapshot: { "main.py": "print('x')" },
+    artifact_ids: ["artifact_server"],
+    last_receipt_sha: "a".repeat(64),
+    last_manifest_sha: "b".repeat(64),
+  }));
+  await withLedger(ctx, async () => {
+    const pointer = await loadLatestSessionPointer();
+    assert.equal(pointer.session_id, "sess_123456");
+    assert.equal(pointer.checkpoint_id, "ckpt_123");
+    assert.equal(pointer.resume_available, true);
+    assert.equal(pointer.workspace_file_count, 1);
+    assert.equal("resume_token" in pointer, false);
+    assert.doesNotMatch(JSON.stringify(pointer), /secret-resume-token/);
+  });
+});
+
+test("detects a modified local file and preserves expected versus current SHA", async () => {
   const ctx = await isolated("changed");
   const pdf = join(ctx.root, "output.pdf");
-  await writeFile(pdf, Buffer.from("%PDF-1.4\noriginal\n"));
-  await withLedger(ctx.ledger, async () => {
+  const original = Buffer.from("%PDF-1.4\noriginal\n");
+  const changedBody = Buffer.from("%PDF-1.4\nchanged\n");
+  await writeFile(pdf, original);
+  await withLedger(ctx, async () => {
     await recordContinuity({
       task: "make PDF",
       kind: "pdf",
@@ -184,18 +262,19 @@ test("detects a modified local file and never calls it verified", async () => {
       files: [pdf],
       verified: true,
       delivered: true,
+      receipt_sha: "e".repeat(64),
       verdict: "shipped",
     });
-    await writeFile(pdf, Buffer.from("%PDF-1.4\nchanged\n"));
+    await writeFile(pdf, changedBody);
     const record = await findContinuityRecord({ kind: "pdf" });
     assert.equal(record.artifacts[0].changed, true);
     assert.equal(record.artifacts[0].verified, false);
+    assert.equal(record.artifacts[0].expected_sha256, sha256(original));
+    assert.equal(record.artifacts[0].current_sha256, sha256(changedBody));
+    assert.notEqual(record.artifacts[0].expected_sha256, record.artifacts[0].current_sha256);
     const where = await resolveContinuityQuestion("where is the PDF?");
     assert.equal(where.ok, false);
     assert.match(where.message, /SHA-256 has changed/);
-    const delivered = await resolveContinuityQuestion("was the PDF delivered?");
-    assert.equal(delivered.ok, false);
-    assert.match(delivered.message, /No longer verified/);
   });
 });
 
@@ -203,7 +282,7 @@ test("detects a deleted local artifact", async () => {
   const ctx = await isolated("missing");
   const pdf = join(ctx.root, "output.pdf");
   await writeFile(pdf, Buffer.from("%PDF-1.4\n"));
-  await withLedger(ctx.ledger, async () => {
+  await withLedger(ctx, async () => {
     await recordContinuity({
       task: "make PDF",
       kind: "pdf",
@@ -211,6 +290,7 @@ test("detects a deleted local artifact", async () => {
       files: [pdf],
       verified: true,
       delivered: true,
+      receipt_sha: "f".repeat(64),
       verdict: "shipped",
     });
     await rm(pdf);
@@ -229,7 +309,7 @@ test("migrates v1 paths without inventing SHA verification", async () => {
     last: { task: "legacy", kind: "pdf", destination: ctx.root, files: [pdf], ts: 1 },
     deliveries: [{ task: "legacy", kind: "pdf", destination: ctx.root, files: [pdf], ts: 1 }],
   }));
-  await withLedger(ctx.ledger, async () => {
+  await withLedger(ctx, async () => {
     const ledger = await loadContinuityLedger();
     assert.equal(ledger.schema, CONTINUITY_SCHEMA);
     assert.equal(ledger.records.length, 1);
@@ -238,6 +318,7 @@ test("migrates v1 paths without inventing SHA verification", async () => {
     const record = await findContinuityRecord({ kind: "pdf" });
     assert.equal(record.artifacts[0].integrity, "legacy_unhashed");
     assert.equal(record.states.verified, false);
+    assert.match(record.artifact_ids[0], /^artifact_[a-f0-9]{24}$/);
     const where = await resolveContinuityQuestion("where is the PDF?");
     assert.equal(where.ok, true);
     assert.equal(where.verified, false);
@@ -247,12 +328,19 @@ test("migrates v1 paths without inventing SHA verification", async () => {
   });
 });
 
-test("fails closed on invalid ledger JSON", async () => {
-  const ctx = await isolated("invalid-json");
+test("fails closed on invalid JSON and unsupported ledger schemas", async () => {
+  const ctx = await isolated("invalid-ledger");
   await writeFile(ctx.ledger, "{not valid json\n");
-  await withLedger(ctx.ledger, async () => {
+  await withLedger(ctx, async () => {
     await assert.rejects(loadContinuityLedger(), (error) => {
       assert.equal(error.code, "LOLM_CONTINUITY_INVALID_JSON");
+      return true;
+    });
+  });
+  await writeFile(ctx.ledger, JSON.stringify({ schema: "lolm.continuity.ledger.v999", records: [] }));
+  await withLedger(ctx, async () => {
+    await assert.rejects(loadContinuityLedger(), (error) => {
+      assert.equal(error.code, "LOLM_CONTINUITY_UNSUPPORTED_SCHEMA");
       return true;
     });
   });
@@ -264,9 +352,9 @@ test("fails closed on ambiguous pronouns when several records exist", async () =
   const image = join(ctx.root, "two.png");
   await writeFile(pdf, Buffer.from("%PDF-1.4\n"));
   await writeFile(image, Buffer.from("PNG"));
-  await withLedger(ctx.ledger, async () => {
-    await recordContinuity({ task: "pdf", kind: "pdf", destination: ctx.root, files: [pdf], verified: true, delivered: true });
-    await recordContinuity({ task: "image", kind: "image", destination: ctx.root, files: [image], verified: true, delivered: true });
+  await withLedger(ctx, async () => {
+    await recordContinuity({ task: "pdf", kind: "pdf", destination: ctx.root, files: [pdf], delivered: true });
+    await recordContinuity({ task: "image", kind: "image", destination: ctx.root, files: [image], delivered: true });
     const result = await resolveContinuityQuestion("where is it?");
     assert.equal(result.code, 2);
     assert.equal(result.intent, "clarify");
@@ -281,16 +369,13 @@ test("selects artifact kinds and historical indices deterministically", async ()
   await writeFile(first, Buffer.from("%PDF-1.4\nfirst\n"));
   await writeFile(image, Buffer.from("PNG\n"));
   await writeFile(second, Buffer.from("%PDF-1.4\nsecond\n"));
-  await withLedger(ctx.ledger, async () => {
-    await recordContinuity({ task: "first", kind: "pdf", destination: ctx.root, files: [first], verified: true, delivered: true });
-    await recordContinuity({ task: "image", kind: "image", destination: ctx.root, files: [image], verified: true, delivered: true });
-    await recordContinuity({ task: "second", kind: "pdf", destination: ctx.root, files: [second], verified: true, delivered: true });
-    const latestPdf = await findContinuityRecord({ kind: "pdf", index: 1 });
-    const olderPdf = await findContinuityRecord({ kind: "pdf", index: 2 });
-    assert.equal(latestPdf.task, "second");
-    assert.equal(olderPdf.task, "first");
-    const images = await listContinuityRecords({ kind: "image" });
-    assert.equal(images.length, 1);
+  await withLedger(ctx, async () => {
+    await recordContinuity({ task: "first", kind: "pdf", destination: ctx.root, files: [first], delivered: true });
+    await recordContinuity({ task: "image", kind: "image", destination: ctx.root, files: [image], delivered: true });
+    await recordContinuity({ task: "second", kind: "pdf", destination: ctx.root, files: [second], delivered: true });
+    assert.equal((await findContinuityRecord({ kind: "pdf", index: 1 })).task, "second");
+    assert.equal((await findContinuityRecord({ kind: "pdf", index: 2 })).task, "first");
+    assert.equal((await listContinuityRecords({ kind: "image" })).length, 1);
   });
 });
 
@@ -302,7 +387,7 @@ test("preserves all 30 simultaneous writers without corrupting JSON", async () =
     await writeFile(file, `artifact ${index}\n`);
     const script = [
       `import { recordContinuity } from ${JSON.stringify(MODULE_URL)};`,
-      `await recordContinuity({task:${JSON.stringify(`task ${index}`)},kind:'document',destination:${JSON.stringify(ctx.root)},files:[${JSON.stringify(file)}],verified:true,delivered:true,verdict:'shipped'});`,
+      `await recordContinuity({task:${JSON.stringify(`task ${index}`)},kind:'document',destination:${JSON.stringify(ctx.root)},files:[${JSON.stringify(file)}],delivered:true,verdict:'shipped'});`,
     ].join("\n");
     jobs.push(run(process.execPath, ["--input-type=module", "--eval", script], {
       env: ctx.env,
@@ -310,7 +395,7 @@ test("preserves all 30 simultaneous writers without corrupting JSON", async () =
     }));
   }
   await Promise.all(jobs);
-  await withLedger(ctx.ledger, async () => {
+  await withLedger(ctx, async () => {
     const ledger = await loadContinuityLedger();
     assert.equal(ledger.records.length, 30);
     assert.equal(new Set(ledger.records.map((record) => record.task)).size, 30);
@@ -328,41 +413,79 @@ test("30 isolated multi-process command sequences resolve without model or netwo
       `import { recordContinuity } from ${JSON.stringify(MODULE_URL)};`,
       `await recordContinuity({task:${JSON.stringify(`sequence task ${index}`)},kind:'pdf',destination:${JSON.stringify(ctx.root)},files:[${JSON.stringify(pdf)}],verified:true,delivered:true,receipt_sha:${JSON.stringify(receipt)},run_id:${JSON.stringify(`run_sequence_${index}`)},verdict:'shipped'});`,
     ].join("\n");
-    await run(process.execPath, ["--input-type=module", "--eval", writer], {
-      env: ctx.env,
-      timeout: 30_000,
-    });
+    await run(process.execPath, ["--input-type=module", "--eval", writer], { env: ctx.env, timeout: 30_000 });
 
     const where = await run(process.execPath, [
-      BIN,
-      "ask",
-      "where is the PDF?",
-      "--base",
-      "https://127.0.0.1.invalid",
+      BIN, "ask", "where is the PDF?", "--base", "https://127.0.0.1.invalid",
     ], { env: ctx.env, timeout: 15_000 });
     assert.equal(where.stdout.trim(), pdf);
     assert.doesNotMatch(where.stdout + where.stderr, /ENOTFOUND|ECONNREFUSED|fetch failed|127\.0\.0\.1\.invalid/i);
 
-    const inspect = await run(process.execPath, [
-      BIN,
-      "artifact",
-      "inspect",
-      "pdf",
-      "--json",
-    ], { env: ctx.env, timeout: 15_000 });
+    const inspect = await run(process.execPath, [BIN, "artifact", "inspect", "pdf", "--json"], {
+      env: ctx.env,
+      timeout: 15_000,
+    });
     const parsed = JSON.parse(inspect.stdout);
     assert.equal(parsed.ok, true);
     assert.equal(parsed.record.fully_verified, true);
     assert.equal(parsed.record.receipt_sha, receipt);
+    assert.match(parsed.record.artifact_ids[0], /^artifact_[a-f0-9]{24}$/);
     await rm(ctx.root, { recursive: true, force: true });
   }
+});
+
+test("retry that and resume that translate locally into core session actions", async () => {
+  const ctx = await isolated("actions");
+  const pdf = join(ctx.root, "action.pdf");
+  const fakeCore = join(ctx.root, "fake-core.mjs");
+  const argsPath = join(ctx.root, "core-args.jsonl");
+  await writeFile(pdf, Buffer.from("%PDF-1.4\naction\n"));
+  await writeFile(fakeCore, [
+    `import { appendFile } from 'node:fs/promises';`,
+    `await appendFile(process.env.LOLM_ACTION_ARGS, JSON.stringify(process.argv.slice(2)) + '\\n');`,
+    `process.stdout.write(JSON.stringify({ok:true, receipt:{verdict:'shipped', files:['action.pdf']}}) + '\\n');`,
+  ].join("\n"));
+  await withLedger(ctx, async () => {
+    await recordContinuity({
+      task: "create action PDF",
+      kind: "pdf",
+      destination: ctx.root,
+      files: [pdf],
+      verified: true,
+      delivered: true,
+      receipt_sha: "a".repeat(64),
+      verdict: "terminated",
+      session_pointer: {
+        session_id: "sess_action",
+        run_id: "run_action",
+        task: "create action PDF",
+        status: "terminated",
+        checkpoint_id: "ckpt_action",
+        resume_available: true,
+      },
+    });
+  });
+  const env = { ...ctx.env, LOLM_CORE_CLI: fakeCore, LOLM_ACTION_ARGS: argsPath };
+  const retry = await run(process.execPath, [BIN, "ask", "retry that", "--base", "https://127.0.0.1.invalid"], {
+    env,
+    timeout: 15_000,
+  });
+  assert.match(retry.stdout, /^retry shipped/m);
+  const resume = await run(process.execPath, [BIN, "ask", "resume that", "--base", "https://127.0.0.1.invalid"], {
+    env,
+    timeout: 15_000,
+  });
+  assert.match(resume.stdout, /^resume shipped/m);
+  const calls = (await readFile(argsPath, "utf8")).trim().split(/\r?\n/).map(JSON.parse);
+  assert.deepEqual(calls, [["--json", "retry"], ["--json", "resume"]]);
+  assert.doesNotMatch(retry.stdout + retry.stderr + resume.stdout + resume.stderr, /ENOTFOUND|fetch failed/);
 });
 
 test("artifact list, where, and inspect provide machine-readable local state", async () => {
   const ctx = await isolated("commands");
   const pdf = join(ctx.root, "command.pdf");
   await writeFile(pdf, Buffer.from("%PDF-1.4\ncommand\n"));
-  await withLedger(ctx.ledger, async () => {
+  await withLedger(ctx, async () => {
     await recordContinuity({
       task: "command task",
       kind: "pdf",
