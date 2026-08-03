@@ -1,0 +1,158 @@
+name: p0-final-release
+
+# Final immutable P0 release. The workflow is trusted from main and accepts only
+# one exact same-repository trigger commit and one exact product commit.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: p0-final-release
+  cancel-in-progress: false
+
+env:
+  TRIGGER_BRANCH: veyr/p0-final-release-trigger
+  TRIGGER_SHA: 9b3c459d51f54b427f6c267f79f3e5f3d468bd44
+  RELEASE_SHA: faa7fcc2b395266ef5ac78730a0ab449a2593d57
+
+jobs:
+  deploy:
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'veyr/p0-final-release-trigger' &&
+      github.event.pull_request.head.sha == '9b3c459d51f54b427f6c267f79f3e5f3d468bd44'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out immutable product release
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 1
+
+      - name: Verify release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Guard deployment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${{ secrets.DEPLOY_SSH_HOST }}" || { echo "DEPLOY_SSH_HOST missing"; exit 1; }
+          test -n "${{ secrets.DEPLOY_KEY }}" || { echo "DEPLOY_KEY missing"; exit 1; }
+
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${DEPLOY_SSH_HOST##*@}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy and prove live exact-byte PDF delivery
+        id: production_deploy
+        env:
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          LOLM_RELEASE_SHA: ${{ env.RELEASE_SHA }}
+        shell: bash
+        run: bash deploy/deploy_box.sh
+
+      - name: Fallback paired rollback
+        if: ${{ failure() && steps.production_deploy.outcome == 'failure' }}
+        env:
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+        shell: bash
+        run: bash deploy/rollback_box.sh
+
+  publish-cli:
+    needs: deploy
+    if: ${{ needs.deploy.result == 'success' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/cli
+    steps:
+      - name: Check out same immutable product release
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 1
+
+      - name: Verify CLI source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Set up Node and npm provenance
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          registry-url: https://registry.npmjs.org
+
+      - name: Install and test package
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npm test
+          npm pack --dry-run
+          test "$(node -p "require('./package.json').version")" = '0.3.0-beta.2'
+
+      - name: Determine registry state
+        id: registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          if npm view lolm-cli@0.3.0-beta.2 version >/dev/null 2>&1; then
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'exists=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Guard npm token
+        if: ${{ steps.registry.outputs.exists != 'true' }}
+        shell: bash
+        run: 'test -n "${{ secrets.NPM_TOKEN }}" || { echo "NPM_TOKEN missing"; exit 1; }'
+
+      - name: Publish beta with provenance
+        if: ${{ steps.registry.outputs.exists != 'true' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        shell: bash
+        run: npm publish --provenance --access public --tag beta
+
+      - name: Verify clean registry installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          mkdir -p p0-cli-smoke && cd p0-cli-smoke
+          npm init -y >/dev/null
+          installed=0
+          for i in 1 2 3 4 5 6; do
+            if npm install lolm-cli@0.3.0-beta.2; then installed=1; break; fi
+            sleep 10
+          done
+          test "$installed" -eq 1
+          ./node_modules/.bin/lolm --version | grep -qx '0.3.0-beta.2'
+          ./node_modules/.bin/lolm --help | grep -q 'artifact last|open'
+          set +e
+          OUT="$(./node_modules/.bin/lolm code 'make a PDF proving I attend ASU and fill in the rest' 2>&1)"
+          RC=$?
+          set -e
+          test "$RC" -eq 2
+          printf '%s\n' "$OUT" | grep -qi 'cannot fabricate official proof'
+          ./node_modules/.bin/lolm status
