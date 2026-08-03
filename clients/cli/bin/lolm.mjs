@@ -186,6 +186,9 @@ const COMMAND_FLAGS = {
   receipt: [...COMMON, "fetch"],
   memory: [...COMMON, "all", "id"],
   inspect: [...COMMON, "id", "conversation"],
+  last: [...COMMON, "id", "conversation"],
+  retry: [...COMMON, "yes", "id", "conversation", "quiet", "idleTimeout", "save", "receipt", "maxSteps"],
+  resume: [...COMMON, "yes", "id", "conversation", "quiet", "idleTimeout", "save", "receipt", "maxSteps"],
   config: ["json", "help"],
   whoami: ["json", "help"],
   help: ["help"],
@@ -806,7 +809,7 @@ function sessionDir() {
   return process.env.LOLM_SESSION_DIR || join(homedir(), ".lolm", "sessions");
 }
 
-async function loadLatestSession() {
+async function loadLatestSession(selector = "") {
   const { readdir, stat } = await import("node:fs/promises");
   const dir = sessionDir();
   let files = [];
@@ -824,12 +827,20 @@ async function loadLatestSession() {
     } catch { /* skip */ }
   }
   ranked.sort((a, b) => b.mtime - a.mtime);
-  try {
-    const raw = await readFile(join(dir, ranked[0].f), "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return null;
+  const wanted = String(selector || "").trim();
+  for (const candidate of ranked) {
+    try {
+      const parsed = JSON.parse(await readFile(join(dir, candidate.f), "utf8"));
+      if (!wanted) return parsed;
+      const identities = [
+        parsed.session_id,
+        parsed.last_code_run_id,
+        parsed.last_failed_run_id,
+      ].filter(Boolean).map(String);
+      if (identities.includes(wanted)) return parsed;
+    } catch { /* skip malformed/disappeared session */ }
   }
+  return null;
 }
 
 /** Resolve bare follow-ups the way SessionIntentLedger does server-side. */
@@ -869,7 +880,7 @@ function resolveFollowupLocal(text, pointers) {
 }
 
 async function cmdLast(flags) {
-  const p = await loadLatestSession();
+  const p = await loadLatestSession(flags.id || flags.conversation || "");
   if (!p) {
     if (JSON_MODE) return emit({ ok: false, error: "no_session" });
     out(dim("no session ledger yet — run `lolm code` or `lolm ask` first"));
@@ -896,11 +907,11 @@ async function cmdLast(flags) {
 }
 
 async function cmdRetry(args, flags) {
-  const p = await loadLatestSession();
+  const p = await loadLatestSession(flags.id || flags.conversation || "");
   const text = args.join(" ").trim() || "try again";
   const resolved = resolveFollowupLocal(text, p);
   if (resolved.action === "clarify") {
-    if (JSON_MODE) return emit({ ok: false, ...resolved });
+    if (JSON_MODE) { emit({ ok: false, ...resolved }); return 2; }
     out(yellow(resolved.prompt || "cannot resolve retry referent"));
     return 2;
   }
@@ -942,7 +953,7 @@ async function cmdRetry(args, flags) {
       out(`${bold(resolved.action)}  run=${resolved.run_id || "?"} status=${resolved.status || "?"}`);
       out(`${bold("task")}   ${String(task).slice(0, 160)}`);
       if (resolved.checkpoint_id) out(`${bold("ckpt")}   ${resolved.checkpoint_id}`);
-      if (pkg?.resume_token) out(`${bold("token")}  ${String(pkg.resume_token).slice(0, 48)}`);
+      if (pkg?.resume_token) out(`${bold("token")}  ${dim("present")}`);
       if (pkg?.workspace_snapshot) {
         out(`${bold("files")}  ${Object.keys(pkg.workspace_snapshot).slice(0, 8).join(", ")}`);
       } else {
@@ -965,9 +976,9 @@ async function cmdRetry(args, flags) {
 
 async function cmdResume(args, flags) {
   // Force resume semantics with full package transport
-  const p = await loadLatestSession();
+  const p = await loadLatestSession(flags.id || flags.conversation || "");
   if (!p?.last_code_run_id) {
-    if (JSON_MODE) return emit({ ok: false, error: "no_run" });
+    if (JSON_MODE) { emit({ ok: false, error: "no_run" }); return 2; }
     out(yellow("no code run to resume — try `lolm last`"));
     return 2;
   }
