@@ -1,0 +1,340 @@
+name: p0-contract-closure
+
+# One exact same-repository marker deploys one exact product SHA, then proves
+# public npm Desktop delivery and the fresh-browser verified download path.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-contract-closure
+  cancel-in-progress: false
+
+env:
+  TRIGGER_BRANCH: veyr/p0-contract-closure-trigger
+  TRIGGER_SHA: c8f49bd4c2f47e6aa0b9c78b69b9761578aac486
+  RELEASE_SHA: daaf52d4544bf2ab47cd308b7ccb2e83d049a639
+  PUBLIC_BASE: https://lolm.imagineqira.com
+
+jobs:
+  deploy:
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'veyr/p0-contract-closure-trigger' &&
+      github.event.pull_request.head.sha == 'c8f49bd4c2f47e6aa0b9c78b69b9761578aac486'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out immutable product release
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 1
+
+      - name: Verify immutable release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Guard deployment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${{ secrets.DEPLOY_SSH_HOST }}" || { echo "DEPLOY_SSH_HOST missing"; exit 1; }
+          test -n "${{ secrets.DEPLOY_KEY }}" || { echo "DEPLOY_KEY missing"; exit 1; }
+
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${DEPLOY_SSH_HOST##*@}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy and prove live exact-byte PDF delivery
+        id: production_deploy
+        env:
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          LOLM_RELEASE_SHA: ${{ env.RELEASE_SHA }}
+        shell: bash
+        run: |
+          set -o pipefail
+          bash deploy/deploy_box.sh | tee "$RUNNER_TEMP/p0-contract-deploy.log"
+
+      - name: Fallback paired rollback
+        if: ${{ failure() && steps.production_deploy.outcome == 'failure' }}
+        env:
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+        shell: bash
+        run: bash deploy/rollback_box.sh
+
+      - name: Upload deployment evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-contract-deployment-evidence
+          path: ${{ runner.temp }}/p0-contract-deploy.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  macos-cli-desktop:
+    needs: deploy
+    if: ${{ needs.deploy.result == 'success' }}
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install public beta.2 from npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g lolm-cli@0.3.0-beta.2
+          test "$(lolm --version)" = '0.3.0-beta.2'
+
+      - name: Require verified automatic Desktop delivery and local continuity
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLEAN_HOME="$RUNNER_TEMP/lolm-p0-contract-mac-home"
+          export HOME="$CLEAN_HOME"
+          export LOLM_DELIVERY_LEDGER="$CLEAN_HOME/.lolm/deliveries.json"
+          mkdir -p "$HOME/Desktop" "$HOME/Downloads" "$HOME/Documents" "$RUNNER_TEMP/p0-contract-mac-logs"
+
+          SUCCESS=0
+          PDF=''
+          LOG=''
+          for ATTEMPT in 1 2 3; do
+            rm -rf "$HOME/Desktop"/* "$HOME/Downloads"/* "$HOME/Documents"/*
+            rm -f "$LOLM_DELIVERY_LEDGER"
+            LOG="$RUNNER_TEMP/p0-contract-mac-logs/attempt-$ATTEMPT.log"
+            set +e
+            lolm code "Create a valid one-page PDF visibly labeled UNOFFICIAL LOLM P0 CONTRACT MAC TEST and put it on my Desktop." 2>&1 | tee "$LOG"
+            RC=${PIPESTATUS[0]}
+            set -e
+            PDF_COUNT="$(find "$HOME/Desktop" -type f -iname '*.pdf' -print | wc -l | tr -d ' ')"
+            if [ "$RC" -eq 0 ] && [ "$PDF_COUNT" -eq 1 ]; then
+              PDF="$(find "$HOME/Desktop" -type f -iname '*.pdf' -print | sort | head -n 1)"
+              SUCCESS=1
+              break
+            fi
+            echo "attempt=$ATTEMPT rc=$RC desktop_pdf_count=$PDF_COUNT" >&2
+            sleep $((ATTEMPT * 8))
+          done
+
+          test "$SUCCESS" -eq 1
+          test -n "$PDF"
+          python3 - "$PDF" <<'PY'
+          import hashlib, json, pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          raw = path.read_bytes()
+          assert raw.startswith(b'%PDF-')
+          assert len(raw) > 100
+          print(json.dumps({
+              'ok': True,
+              'surface': 'public-npm-clean-macos',
+              'path': str(path),
+              'bytes': len(raw),
+              'sha256': hashlib.sha256(raw).hexdigest(),
+          }, sort_keys=True))
+          PY
+
+          WHERE="$(lolm ask 'where is the PDF?')"
+          LAST="$(lolm artifact last)"
+          printf '%s\n' "$WHERE" | grep -Fqx "$PDF"
+          printf '%s\n' "$LAST" | grep -Fqx "$PDF"
+          grep -Fq 'delivered pdf' "$LOG"
+          grep -Fq "saved     $PDF" "$LOG"
+          printf '%s\n' "$PDF" > "$RUNNER_TEMP/p0-contract-mac-path.txt"
+
+      - name: Upload macOS evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-contract-macos-evidence
+          path: |
+            ${{ runner.temp }}/p0-contract-mac-logs
+            ${{ runner.temp }}/p0-contract-mac-path.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  browser-artifact-download:
+    needs: macos-cli-desktop
+    if: ${{ needs.macos-cli-desktop.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Install clean Chromium runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check playwright
+          python3 -m playwright install --with-deps chromium
+
+      - name: Require production verified card and clicked PDF bytes
+        shell: bash
+        env:
+          PUBLIC_BASE: ${{ env.PUBLIC_BASE }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/p0_contract_browser.py" <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import time
+          from pathlib import Path
+          from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+          from playwright.sync_api import sync_playwright
+
+          base = os.environ['PUBLIC_BASE'].rstrip('/')
+          root = Path(os.environ['RUNNER_TEMP']) / 'p0-contract-browser-evidence'
+          root.mkdir(parents=True, exist_ok=True)
+          task = (
+              "First write main.py in the sandbox workspace root. main.py must use only Python "
+              "standard library code to generate a valid one-page binary PDF named output.pdf "
+              "visibly labeled UNOFFICIAL LOLM P0 CLOSURE BROWSER TEST. After writing main.py, "
+              "run python3 main.py. The program must print PDF_READY output.pdf. Do not run "
+              "main.py before writing it and do not create another user-facing document."
+          )
+
+          def tail(state: dict, limit: int = 3000) -> str:
+              return str(state.get('body') or '')[-limit:]
+
+          with sync_playwright() as pw:
+              browser = pw.chromium.launch()
+              context = browser.new_context(
+                  accept_downloads=True,
+                  service_workers='block',
+                  viewport={'width': 1440, 'height': 900},
+              )
+              page = context.new_page()
+              console_errors = []
+              page.on('console', lambda msg: console_errors.append(msg.text) if msg.type == 'error' else None)
+              page.on('pageerror', lambda error: console_errors.append(str(error)))
+              page.goto(base + '/app.html', wait_until='domcontentloaded', timeout=90_000)
+              page.wait_for_function('window.__lolmArtifactDeliveryInstalled === true', timeout=30_000)
+
+              winning_link = None
+              winning_state = None
+              winning_attempt = None
+              last_state = {}
+              for attempt in range(1, 4):
+                  page.evaluate(
+                      """({task, attempt}) => {
+                        const previous = document.querySelector('#lolm-artifact-delivery');
+                        if (previous) previous.remove();
+                        window.__p0Contract = {attempt, done: false, status: null, body: '', error: null};
+                        fetch('/api/demo/code/run', {
+                          method: 'POST',
+                          headers: {'Content-Type': 'application/json', 'Accept': 'text/event-stream'},
+                          body: JSON.stringify({task, max_steps: 14})
+                        }).then(async response => {
+                          const body = await response.text();
+                          window.__p0Contract = {attempt, done: true, status: response.status, body, error: null};
+                        }).catch(error => {
+                          window.__p0Contract = {attempt, done: true, status: null, body: '', error: String(error)};
+                        });
+                      }""",
+                      {'task': task, 'attempt': attempt},
+                  )
+                  page.wait_for_function(
+                      'window.__p0Contract && window.__p0Contract.done === true',
+                      timeout=720_000,
+                  )
+                  state = page.evaluate('window.__p0Contract')
+                  last_state = state
+                  host = page.locator('#lolm-artifact-delivery')
+                  host_text = host.inner_text() if host.count() else '<artifact host missing>'
+                  (root / f'attempt-{attempt}-fetch.json').write_text(
+                      json.dumps(state, sort_keys=True, indent=2), encoding='utf-8'
+                  )
+                  (root / f'attempt-{attempt}-host.txt').write_text(host_text, encoding='utf-8')
+                  page.screenshot(path=str(root / f'attempt-{attempt}.png'), full_page=True)
+                  print(json.dumps({
+                      'attempt': attempt,
+                      'http_status': state.get('status'),
+                      'fetch_error': state.get('error'),
+                      'host_text': host_text,
+                      'sse_tail': tail(state),
+                  }, sort_keys=True))
+
+                  if state.get('error') is None and state.get('status') == 200:
+                      try:
+                          page.wait_for_function(
+                              """() => {
+                                const host = document.querySelector('#lolm-artifact-delivery');
+                                return Boolean(host && host.textContent.includes('verified') &&
+                                  host.querySelector('a[download="output.pdf"]'));
+                              }""",
+                              timeout=30_000,
+                          )
+                          candidate = page.locator('#lolm-artifact-delivery a[download="output.pdf"]')
+                          if candidate.count() == 1:
+                              winning_link = candidate
+                              winning_state = state
+                              winning_attempt = attempt
+                              break
+                      except PlaywrightTimeoutError:
+                          pass
+                  if attempt < 3:
+                      time.sleep(attempt * 12)
+
+              (root / 'console-errors.json').write_text(json.dumps(console_errors, indent=2), encoding='utf-8')
+              assert winning_link is not None, (
+                  'No verified output.pdf card after three real production attempts. '
+                  f'Last SSE tail: {tail(last_state, 2500)!r}'
+              )
+              host = page.locator('#lolm-artifact-delivery')
+              text = host.inner_text()
+              assert 'Generated artifacts' in text
+              assert 'verified' in text
+              assert 'output.pdf' in text
+              assert winning_link.inner_text() == 'Download verified file'
+              page.screenshot(path=str(root / 'verified-artifact-card.png'), full_page=True)
+
+              with page.expect_download(timeout=60_000) as pending:
+                  winning_link.click()
+              download = pending.value
+              assert download.suggested_filename == 'output.pdf'
+              saved = root / 'output.pdf'
+              download.save_as(str(saved))
+              raw = saved.read_bytes()
+              assert raw.startswith(b'%PDF-')
+              assert len(raw) > 100
+              result = {
+                  'ok': True,
+                  'surface': 'fresh-production-chromium',
+                  'attempt': winning_attempt,
+                  'page': page.url,
+                  'card': 'verified',
+                  'filename': download.suggested_filename,
+                  'bytes': len(raw),
+                  'sha256': hashlib.sha256(raw).hexdigest(),
+                  'console_errors': console_errors,
+                  'receipt_stream_tail': tail(winning_state, 1200),
+              }
+              (root / 'result.json').write_text(json.dumps(result, sort_keys=True, indent=2), encoding='utf-8')
+              print(json.dumps(result, sort_keys=True))
+              context.close()
+              browser.close()
+          PY
+          python3 "$RUNNER_TEMP/p0_contract_browser.py"
+
+      - name: Upload browser evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-contract-browser-evidence
+          path: ${{ runner.temp }}/p0-contract-browser-evidence
+          if-no-files-found: warn
+          retention-days: 30
