@@ -1,19 +1,12 @@
 name: one-shot-p0-release
 
-# One-shot bridge for P0 artifact delivery release.
-#
-# Connector-created merges suppress push-triggered workflows, and rerunning a job
-# does not emit workflow_run. This default-branch workflow therefore listens for
-# the normal pull-request validation of one exact same-repository trigger commit.
-# It checks out one exact integration SHA, deploys it with rollback protection,
-# proves live PDF delivery, and only then publishes or verifies the matching CLI
-# prerelease. It cannot release another branch, trigger commit, or product commit.
-# Progress and final disposition are posted to PR #18 for auditability.
+# Exact, same-repository PR trigger for the immutable P0 release.
+# No other branch, trigger SHA, base branch, or product SHA is authorized.
 
 on:
-  workflow_run:
-    workflows: ["full-test-suite"]
-    types: [completed]
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
 
 permissions:
   contents: read
@@ -25,22 +18,18 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  EXPECTED_TRIGGER_BRANCH: "veyr/p0-release-trigger"
-  EXPECTED_TRIGGER_SHA: "efa7445cc916d10d57a3451993619e7254fae921"
+  EXPECTED_TRIGGER_BRANCH: "veyr/p0-direct-release-trigger"
+  EXPECTED_TRIGGER_SHA: "be564cbc67c6f9b7d9597f56dac08d8c2e565a71"
   RELEASE_SHA: "892f5d2802afdea73d8f381d5922553b00b99b9e"
-  RELEASE_BRANCH: "grok/grand-audit-remediation"
   REPORT_ISSUE: "18"
 
 jobs:
   deploy:
     if: >-
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.head_branch == 'veyr/p0-release-trigger' &&
-      github.event.workflow_run.head_sha == 'efa7445cc916d10d57a3451993619e7254fae921' &&
-      github.event.workflow_run.conclusion == 'success'
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'veyr/p0-direct-release-trigger' &&
+      github.event.pull_request.head.sha == 'be564cbc67c6f9b7d9597f56dac08d8c2e565a71'
     runs-on: ubuntu-latest
-    outputs:
-      release_sha: ${{ steps.identity.outputs.release_sha }}
     steps:
       - name: Report release start
         env:
@@ -50,26 +39,22 @@ jobs:
           set -euo pipefail
           RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments" \
-            -f body="P0 release started for immutable SHA \`$RELEASE_SHA\` after exact trigger \`$EXPECTED_TRIGGER_SHA\`. Actions run: $RUN_URL"
+            -f body="P0 release started for immutable product SHA \`$RELEASE_SHA\` after exact direct trigger \`$EXPECTED_TRIGGER_SHA\`. Actions run: $RUN_URL"
 
-      - name: Check out the immutable release commit
+      - name: Check out immutable product release
         uses: actions/checkout@v7
         with:
           ref: ${{ env.RELEASE_SHA }}
           fetch-depth: 1
 
       - name: Verify immutable release identity
-        id: identity
         shell: bash
         run: |
           set -euo pipefail
-          ACTUAL="$(git rev-parse HEAD)"
-          test "$ACTUAL" = "$RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
           test -z "$(git status --porcelain)"
-          echo "release_sha=$ACTUAL" >> "$GITHUB_OUTPUT"
-          echo "Releasing immutable SHA $ACTUAL"
 
-      - name: Guard required deployment secrets
+      - name: Guard deployment secrets
         shell: bash
         run: |
           set -euo pipefail
@@ -88,7 +73,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "${DEPLOY_SSH_HOST##*@}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Deploy backend and website, then prove live PDF delivery
+      - name: Deploy backend and website and prove live PDF delivery
         id: production_deploy
         env:
           DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
@@ -122,7 +107,7 @@ jobs:
           gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments" \
             -f body="Production backend and website verified for \`$RELEASE_SHA\`. Live PDF result: \`$PDF_RESULT\`. Actions run: $RUN_URL"
 
-      - name: Roll back the paired app and website snapshot
+      - name: Roll back paired app and website snapshot
         if: ${{ steps.production_deploy.outcome == 'failure' }}
         env:
           DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
@@ -137,7 +122,7 @@ jobs:
       run:
         working-directory: clients/cli
     steps:
-      - name: Check out the same immutable release commit
+      - name: Check out same immutable product release
         uses: actions/checkout@v7
         with:
           ref: ${{ env.RELEASE_SHA }}
@@ -156,7 +141,7 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Install, test, and inspect package
+      - name: Install test and inspect package
         shell: bash
         run: |
           set -euo pipefail
@@ -165,7 +150,7 @@ jobs:
           npm pack --dry-run
           test "$(node -p "require('./package.json').version")" = "0.3.0-beta.2"
 
-      - name: Check whether the immutable version already exists
+      - name: Check immutable registry version
         id: registry
         shell: bash
         run: |
@@ -173,7 +158,6 @@ jobs:
           V="$(node -p "require('./package.json').version")"
           if npm view "lolm-cli@$V" version >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "lolm-cli@$V already exists; will verify it without republishing"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
@@ -190,7 +174,7 @@ jobs:
         shell: bash
         run: npm publish --provenance --access public --tag beta
 
-      - name: Clean-install and smoke the registry package
+      - name: Clean-install and smoke registry package
         shell: bash
         run: |
           set -euo pipefail
@@ -213,7 +197,6 @@ jobs:
           test "$RC" -eq 2
           printf '%s\n' "$OUT" | grep -qi "cannot fabricate official proof"
           ./node_modules/.bin/lolm status
-          echo "published CLI smoke OK"
 
       - name: Report verified CLI release
         env:
