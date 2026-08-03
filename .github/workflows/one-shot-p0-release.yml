@@ -32,12 +32,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Report release start
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          echo "P0 release started for $RELEASE_SHA. $RUN_URL" >> "$GITHUB_STEP_SUMMARY"
           gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments" \
             -f body="P0 release started for immutable product SHA \`$RELEASE_SHA\` after exact direct trigger \`$EXPECTED_TRIGGER_SHA\`. Actions run: $RUN_URL"
 
@@ -85,6 +87,7 @@ jobs:
 
       - name: Report verified production deployment
         if: ${{ steps.production_deploy.outcome == 'success' }}
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -104,6 +107,7 @@ jobs:
           print(json.dumps(result, sort_keys=True) if result else 'PDF smoke passed; structured line unavailable')
           PY
           )"
+          echo "Production verified for $RELEASE_SHA. $PDF_RESULT" >> "$GITHUB_STEP_SUMMARY"
           gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments" \
             -f body="Production backend and website verified for \`$RELEASE_SHA\`. Live PDF result: \`$PDF_RESULT\`. Actions run: $RUN_URL"
 
@@ -199,6 +203,7 @@ jobs:
           ./node_modules/.bin/lolm status
 
       - name: Report verified CLI release
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -207,6 +212,7 @@ jobs:
           RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           STATE="published"
           if [ "${{ steps.registry.outputs.exists }}" = "true" ]; then STATE="already published and independently re-verified"; fi
+          echo "lolm-cli@0.3.0-beta.2 $STATE. $RUN_URL" >> "$GITHUB_STEP_SUMMARY"
           gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments" \
             -f body="\`lolm-cli@0.3.0-beta.2\` $STATE. Clean-install registry smoke passed against the verified production API. Actions run: $RUN_URL"
 
@@ -219,11 +225,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Report release failure
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          echo "P0 release incomplete. deploy=${{ needs.deploy.result }}, publish-cli=${{ needs.publish-cli.result }}. $RUN_URL" >> "$GITHUB_STEP_SUMMARY"
           gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$REPORT_ISSUE/comments" \
             -f body="P0 release did not complete. deploy=${{ needs.deploy.result }}, publish-cli=${{ needs.publish-cli.result }}. Inspect: $RUN_URL"
