@@ -1,6 +1,6 @@
 {
   "name": "lolm-cli",
-  "version": "0.3.0-beta.3",
+  "version": "0.3.0-beta.2",
   "description": "LOLM control console with fail-closed code shipping, verified local artifact delivery, deterministic cross-command continuity, and sealed receipts.",
   "type": "module",
   "bin": {
