@@ -12,8 +12,10 @@
  * but their failure degrades gracefully in the page, not here.
  */
 
-const CACHE = "lolm-nfet-v6";   // bump on any shell/asset change so returning
+const CACHE = "lolm-nfet-v7";   // bump on any shell/asset change so returning
                                 // visitors get the update (activate clears old)
+                                // v7: browser mints free API key so conversations
+                                //     persist per user (was stuck on X-Workspace-Owner).
                                 // v5: homepage demo video (media/ is served
                                 // network-first and never precached).
                                 // v4: design-system reskin (lolm-ds.css/js). A
