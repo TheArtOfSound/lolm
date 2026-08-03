@@ -112,13 +112,50 @@ def _path(task_id: str) -> Path:
     return _state_root() / f"{safe}.json"
 
 
+def _artifact_extensions(task: str) -> Optional[set[str]]:
+    """Return extensions that satisfy the task's explicitly requested medium.
+
+    ``None`` means the task is a normal repository/code task where any intentional
+    file change may satisfy the artifact criterion. An explicit medium requires a
+    matching deliverable, so ``main.py`` cannot satisfy a PDF or document request.
+    """
+    text = str(task or "").lower()
+    if re.search(r"\bpdf\b", text):
+        return {".pdf"}
+    if re.search(r"\b(docx|word document)\b", text):
+        return {".docx"}
+    if re.search(r"\b(spreadsheet|xlsx|excel)\b", text):
+        return {".xlsx", ".csv"}
+    if re.search(r"\b(slides?|powerpoint|pptx|presentation)\b", text):
+        return {".pptx"}
+    if re.search(r"\b(html|webpage|web page|website)\b", text):
+        return {".html", ".htm"}
+    if re.search(r"\b(image|png|jpe?g|svg)\b", text):
+        return {".png", ".jpg", ".jpeg", ".svg"}
+    if re.search(r"\b(document|report|letter|resume|invoice)\b", text):
+        return {".pdf", ".doc", ".docx", ".odt", ".rtf", ".txt", ".md"}
+    return None
+
+
+def _matching_artifacts(task: str, files: List[str]) -> List[str]:
+    expected = _artifact_extensions(task)
+    normalized = [str(path).replace("\\", "/") for path in files]
+    if expected is None:
+        return normalized
+    return [path for path in normalized if Path(path).suffix.lower() in expected]
+
+
 def _criteria(task: str) -> List[Criterion]:
-    t = (task or "").lower()
+    text = (task or "").lower()
+    expected = _artifact_extensions(task)
+    artifact_text = "requested deliverable or repository change exists"
+    if expected:
+        artifact_text = "requested artifact type exists: " + ", ".join(sorted(expected))
     rows = [
-        Criterion("artifact", "requested deliverable or repository change exists"),
+        Criterion("artifact", artifact_text),
         Criterion("execution", "an objective verification command completed successfully"),
     ]
-    if any(x in t for x in ("print", "output", "show", "generate", "create", "build", "pdf", "document")):
+    if any(x in text for x in ("print", "output", "show", "generate", "create", "build", "pdf", "document")):
         rows.append(Criterion("evidence", "observable output or artifact evidence was produced"))
     return rows
 
@@ -192,13 +229,14 @@ def update_task_state(
     state.step += 1
     state.updated_ts = int(time.time())
     files = [str(p) for p in result.get("files") or []]
+    matching = _matching_artifacts(state.objective, files)
     exit_ok = result.get("exit_ok") is True
     produced = result.get("produced_output") is True
-    if files:
+    if matching:
         c = next((x for x in state.C if x.id == "artifact"), None)
         if c:
             c.met = True
-            c.evidence = ", ".join(files[-8:])[:400]
+            c.evidence = ", ".join(matching[-8:])[:400]
         for p in state.P:
             if p.id in ("inspect", "act"):
                 p.status = "done"
@@ -230,6 +268,7 @@ def update_task_state(
         "exit_ok": exit_ok,
         "produced_output": produced,
         "files": files[-12:],
+        "matching_artifacts": matching[-12:],
         "ts": int(time.time()),
     })
     state.observations = state.observations[-100:]
@@ -272,6 +311,14 @@ def policy_action(state: TaskState) -> Dict[str, Any]:
             "reason": "a deliverable exists but objective verification is still missing",
             "block_finalize": True,
             "force_verify": True,
+            "force_branch": False,
+        }
+    if "artifact" in missing_ids:
+        return {
+            "action": "continue",
+            "reason": "the requested artifact type has not been produced yet",
+            "block_finalize": True,
+            "force_verify": False,
             "force_branch": False,
         }
     return {
