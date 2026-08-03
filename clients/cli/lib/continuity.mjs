@@ -23,6 +23,7 @@ const MAX_ARTIFACTS = 100;
 const LOCK_RETRIES = 300;
 const LOCK_STALE_MS = 30_000;
 const SHA_RE = /^[a-f0-9]{64}$/i;
+const LOCK_CONTENTION = new Set(["EEXIST", "EPERM", "EACCES"]);
 
 export function continuityLedgerPath() {
   return resolve(
@@ -92,14 +93,14 @@ async function withLock(fn) {
       await handle.writeFile(JSON.stringify({ pid: process.pid, ts: Date.now() }) + "\n");
       break;
     } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
+      if (!LOCK_CONTENTION.has(error?.code)) throw error;
       try {
         if (Date.now() - (await stat(lockPath)).mtimeMs > LOCK_STALE_MS) {
           await unlink(lockPath);
           continue;
         }
       } catch (lockError) {
-        if (lockError?.code !== "ENOENT") throw lockError;
+        if (lockError?.code !== "ENOENT" && !LOCK_CONTENTION.has(lockError?.code)) throw lockError;
       }
       await sleep(Math.min(100, attempt + 5));
     }
