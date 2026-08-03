@@ -20,6 +20,7 @@ import {
 } from "../lib/delivery.mjs";
 
 const VERSION = "0.3.0-beta.2";
+const CORE_VERSION = "0.3.0-beta.1";
 const here = dirname(fileURLToPath(import.meta.url));
 const coreCli = join(here, "lolm.mjs");
 const argv = process.argv.slice(2);
@@ -71,11 +72,39 @@ async function runCore(args) {
   });
 }
 
+async function runCorePresentation(args) {
+  return await new Promise((resolve) => {
+    const child = spawn(process.execPath, [coreCli, ...args], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, NO_COLOR: process.env.NO_COLOR || "1" },
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.once("error", (error) => {
+      process.stderr.write(`LOLM failed to start: ${error.message}\n`);
+      resolve(1);
+    });
+    child.once("exit", (code) => {
+      const rewrite = (text) => String(text || "").split(CORE_VERSION).join(VERSION);
+      if (stdout) process.stdout.write(rewrite(stdout));
+      if (stderr) process.stderr.write(rewrite(stderr));
+      resolve(Number.isInteger(code) ? code : 1);
+    });
+  });
+}
+
 async function main() {
   if (!command && (argv.includes("--version") || argv.includes("-V"))) {
     process.stdout.write(`${VERSION}\n`);
     return 0;
   }
+  const presentationOnly = argv.length === 0 || command === "help" ||
+    argv.includes("--help") || argv.includes("-h");
+  if (presentationOnly) return await runCorePresentation(argv);
 
   if (command === "artifact") {
     const idx = commandIndex(argv);
