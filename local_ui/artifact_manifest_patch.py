@@ -1,10 +1,14 @@
 # Copyright (c) 2026 Qira LLC. All rights reserved.
-"""P0 artifact-manifest correction for generated binary deliverables.
+"""P0 artifact delivery and server-side credential-safety corrections.
 
 CodeAgent historically manifested only paths written through FILE/EDIT. Files created
 by a verified program, such as output.pdf, existed in the sandbox but were omitted from
 the signed manifest and disappeared when the sandbox was destroyed. This patch makes
 the final sandbox tree authoritative while excluding harness/cache pollution.
+
+The same runtime layer refuses requests to fabricate official attendance, enrollment,
+employment, or similar credentials before any model or tool execution. Clearly labeled
+unofficial self-attestations and assembly of authentic evidence remain allowed.
 """
 from __future__ import annotations
 
@@ -22,6 +26,28 @@ _INTERNAL_NAMES = {
 _INTERNAL_PARTS = {
     "__pycache__", ".git", "node_modules", ".cache", "Library", "Caches",
 }
+
+
+def official_credential_fabrication(task: str) -> bool:
+    text = str(task or "").lower()
+    if re.search(
+        r"\b(unofficial|self[- ]?attestation|personal statement|clearly labeled draft)\b",
+        text,
+    ):
+        return False
+    proof = bool(re.search(
+        r"\b(proof|prove|proving|verification|verify|certificate|official letter|transcript)\b",
+        text,
+    ))
+    status = bool(re.search(
+        r"\b(attend|attendance|enroll|enrollment|student|graduate|graduated|employed|employment)\b",
+        text,
+    ))
+    institution = bool(re.search(
+        r"\b(asu|university|college|school|employer|company|government|bank)\b",
+        text,
+    ))
+    return proof and status and institution
 
 
 def _safe_names(agent: Any) -> List[str]:
@@ -148,6 +174,8 @@ def install_patch(code_agent_class: Any) -> None:
     if getattr(code_agent_class, "_artifact_delivery_patch", False):
         return
 
+    original_run = code_agent_class.run
+
     def _artifact_manifest(self: Any, *, max_file_bytes: int = 96_000,
                            max_total_bytes: int = 400_000) -> Dict[str, Any]:
         return corrected_artifact_manifest(
@@ -156,5 +184,47 @@ def install_patch(code_agent_class: Any) -> None:
             max_total_bytes=max_total_bytes,
         )
 
+    def _run(self: Any, task: str):
+        if official_credential_fabrication(task):
+            run_id = str(getattr(getattr(self, "sb", None), "id", "") or "refused")
+            identity: Dict[str, Any] = {}
+            try:
+                identity = dict(self._deployment_identity() or {})
+            except Exception:
+                identity = {}
+            yield {"event": "code_start", "data": {
+                "task": task,
+                "sandbox": run_id,
+                **identity,
+            }}
+            message = (
+                "LOLM cannot fabricate official proof of attendance, enrollment, "
+                "employment, or another credential. It can create a clearly labeled "
+                "unofficial self-attestation, draft a request for genuine verification, "
+                "or assemble authentic documents supplied by the user."
+            )
+            yield {"event": "agent_note", "data": {
+                "text": "request refused before model or tool execution",
+                "safety_code": "OFFICIAL_CREDENTIAL_FABRICATION",
+            }}
+            yield {"event": "error", "data": {
+                "error": message,
+                "code": "OFFICIAL_CREDENTIAL_FABRICATION",
+                "retryable": False,
+            }}
+            yield {"event": "code_done", "data": {
+                "run_id": run_id,
+                "ok": False,
+                "verdict": "refused",
+                "summary": message,
+                "files": [],
+                "ran": False,
+                **identity,
+            }}
+            return
+        yield from original_run(self, task)
+
     code_agent_class._artifact_manifest = _artifact_manifest
+    code_agent_class.run = _run
     code_agent_class._artifact_delivery_patch = True
+    code_agent_class._credential_safety_patch = True
