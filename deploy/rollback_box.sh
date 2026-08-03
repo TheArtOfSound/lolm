@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Qira LLC. All rights reserved.
-# Roll production back to the last-known-good application and static website,
-# restart the service, then re-check health.
+# Roll production back to the explicitly paired last-known-good application and
+# static website snapshot, restart the service, then re-check health.
 #
 # Required env: DEPLOY_SSH_HOST
 set -euo pipefail
@@ -11,16 +11,23 @@ APP="${DEPLOY_APP_DIR:-/opt/apps/lolm}"
 WEB="${DEPLOY_WEB_DIR:-/var/www/lolm-imagineqira}"
 SVC="${DEPLOY_SERVICE:-lolm-demo}"
 BASE="${PUBLIC_BASE:-https://lolm.imagineqira.com}"
+SNAPSHOT_MARKER="${APP}.rollback-snapshot"
 
-echo "[rollback] restoring last-known-good app + website on $HOST"
+echo "[rollback] restoring paired last-known-good app + website on $HOST"
 ssh "$HOST" "
   set -e
-  PREV_APP=\$(ls -dt ${APP}.bak.* 2>/dev/null | head -1 || true)
-  PREV_WEB=\$(ls -dt ${WEB}.bak.* 2>/dev/null | head -1 || true)
-  if [ -z \"\$PREV_APP\" ] || [ -z \"\$PREV_WEB\" ]; then
-    echo '[rollback] paired app/web backup missing — refusing partial rollback'
+  if [ ! -s '$SNAPSHOT_MARKER' ]; then
+    echo '[rollback] snapshot marker missing — refusing an unbound rollback'
     exit 1
   fi
+  TS=\$(sudo cat '$SNAPSHOT_MARKER' | tr -cd '0-9')
+  PREV_APP='${APP}.bak.'\$TS
+  PREV_WEB='${WEB}.bak.'\$TS
+  if [ -z \"\$TS\" ] || [ ! -d \"\$PREV_APP\" ] || [ ! -d \"\$PREV_WEB\" ]; then
+    echo '[rollback] paired app/web snapshot missing — refusing partial rollback'
+    exit 1
+  fi
+  echo '[rollback] snapshot id '\$TS
   echo '[rollback] restoring app '\$PREV_APP
   sudo rsync -rc --delete --exclude runs --exclude .venv \"\$PREV_APP/\" '$APP/'
   echo '[rollback] restoring website '\$PREV_WEB
