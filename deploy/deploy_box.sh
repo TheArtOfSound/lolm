@@ -37,8 +37,11 @@ rsync -rc sitecustomize.py "$HOST:$APP/sitecustomize.py"
 echo "[deploy] syncing static site → $HOST:$WEB"
 rsync -rc --rsync-path="sudo rsync" site/ "$HOST:$WEB/"
 
+echo "[deploy] pinning application root into the service venv"
+ssh "$HOST" "set -e; SITE=\$('$APP/.venv/bin/python' -c 'import site; print(site.getsitepackages()[0])'); printf '%s\n' '$APP' > \"\$SITE/lolm_app_root.pth\""
+
 echo "[deploy] proving runtime imports and the exact-byte artifact patch"
-ssh "$HOST" "cd '$APP' && .venv/bin/python - <<'PY'
+ssh "$HOST" "cd / && '$APP/.venv/bin/python' - <<'PY'
 from lolm.control.task_state import load_or_init, policy_action
 from local_ui.code_agent import CodeAgent
 assert getattr(CodeAgent, '_artifact_delivery_patch', False), 'artifact delivery patch not active'
