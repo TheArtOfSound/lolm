@@ -1,9 +1,19 @@
 name: deploy-production
 
 # Deploy to the production box + smoke/health/critical-route checks. Auto-rolls
-# back on a failed check. Inert until DEPLOY_SSH_HOST + DEPLOY_KEY secrets are set.
+# back on a failed check. Fail-closed until DEPLOY_SSH_HOST + DEPLOY_KEY are set.
 
 on:
+  push:
+    branches:
+      - grok/grand-audit-remediation
+    paths:
+      - 'local_ui/**'
+      - 'lolm/**'
+      - 'site/**'
+      - 'sitecustomize.py'
+      - 'deploy/**'
+      - '.github/workflows/deploy-production.yml'
   workflow_dispatch:
   workflow_call:
 
@@ -19,6 +29,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Record immutable release identity
+        run: |
+          echo "release_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          git status --porcelain
       - name: Guard — require deploy secrets
         run: '[ -n "${{ secrets.DEPLOY_SSH_HOST }}" ] && [ -n "${{ secrets.DEPLOY_KEY }}" ] || { echo "deploy secrets not set — refusing"; exit 1; }'
       - name: Set up SSH
@@ -35,6 +49,7 @@ jobs:
         id: deploy
         env:
           DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          LOLM_RELEASE_SHA: ${{ github.sha }}
         run: bash deploy/deploy_box.sh
       - name: Auto-rollback on failure
         if: failure()
