@@ -48,9 +48,10 @@ jobs:
           lolm code "Create a valid one-page PDF visibly labeled UNOFFICIAL LOLM MAC DESKTOP DELIVERY TEST and put it on my Desktop." \
             2>&1 | tee "$RUNNER_TEMP/lolm-mac-pdf.log"
 
-          mapfile -t PDFS < <(find "$HOME/Desktop" -type f -iname '*.pdf' -print | sort)
-          test "${#PDFS[@]}" -eq 1
-          PDF="${PDFS[0]}"
+          PDF_COUNT="$(find "$HOME/Desktop" -type f -iname '*.pdf' -print | wc -l | tr -d ' ')"
+          test "$PDF_COUNT" -eq 1
+          PDF="$(find "$HOME/Desktop" -type f -iname '*.pdf' -print | sort | head -n 1)"
+          test -n "$PDF"
           python3 - "$PDF" <<'PY'
           import hashlib, json, pathlib, sys
           path = pathlib.Path(sys.argv[1])
