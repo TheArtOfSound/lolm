@@ -38,12 +38,18 @@ test("recognizes PDF and document artifact requests", () => {
   assert.equal(requestedArtifactKind("fix parser.py"), "");
 });
 
-test("blocks fabricated official attendance proof but permits labeled self-attestation", () => {
+test("blocks fabricated official attendance proof but permits legitimate alternatives", () => {
   assert.equal(isOfficialCredentialFabrication(
     "make a pdf proving I attend ASU and fill in the rest",
   ), true);
   assert.equal(isOfficialCredentialFabrication(
     "make a clearly labeled unofficial self-attestation that I attend ASU",
+  ), false);
+  assert.equal(isOfficialCredentialFabrication(
+    "Draft an email to the ASU registrar asking for official enrollment verification",
+  ), false);
+  assert.equal(isOfficialCredentialFabrication(
+    "Explain how to obtain official proof of enrollment from a university",
   ), false);
 });
 
