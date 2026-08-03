@@ -19,6 +19,7 @@ import {
   walkFiles,
 } from "../lib/delivery.mjs";
 
+const VERSION = "0.3.0-beta.2";
 const here = dirname(fileURLToPath(import.meta.url));
 const coreCli = join(here, "lolm.mjs");
 const argv = process.argv.slice(2);
@@ -71,6 +72,11 @@ async function runCore(args) {
 }
 
 async function main() {
+  if (!command && (argv.includes("--version") || argv.includes("-V"))) {
+    process.stdout.write(`${VERSION}\n`);
+    return 0;
+  }
+
   if (command === "artifact") {
     const idx = commandIndex(argv);
     const sub = argv[idx + 1] || "last";
