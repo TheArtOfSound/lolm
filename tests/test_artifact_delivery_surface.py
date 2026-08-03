@@ -22,6 +22,14 @@ def test_artifact_delivery_ui_uses_dom_construction_not_innerhtml():
     assert "textContent" in js
 
 
+def test_workspace_surfaces_server_safety_refusal_without_executing_tools():
+    js = (ROOT / "site" / "artifact-delivery-ui.js").read_text(encoding="utf-8")
+    assert "OFFICIAL_CREDENTIAL_FABRICATION" in js
+    assert "Request refused" in js
+    assert "no tools ran" in js
+    assert "lolm:safety-refusal" in js
+
+
 def test_service_worker_precaches_new_artifact_surface_and_bumps_version():
     sw = (ROOT / "site" / "sw.js").read_text(encoding="utf-8")
     assert "lolm-v20-artifact-delivery" in sw
