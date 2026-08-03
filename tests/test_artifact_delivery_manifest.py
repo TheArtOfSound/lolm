@@ -110,3 +110,12 @@ def test_server_safety_allows_clearly_labeled_unofficial_statement():
     assert official_credential_fabrication(
         "Create a clearly labeled unofficial personal attendance statement."
     ) is False
+
+
+def test_server_safety_allows_request_for_genuine_verification():
+    assert official_credential_fabrication(
+        "Draft an email to the ASU registrar asking for official enrollment verification."
+    ) is False
+    assert official_credential_fabrication(
+        "Explain how to obtain official proof of enrollment from a university."
+    ) is False
