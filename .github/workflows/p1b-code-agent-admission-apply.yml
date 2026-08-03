@@ -48,6 +48,18 @@ jobs:
           )
           if text.count(old) != 1:
               raise SystemExit(f'import-anchor script correction expected one match, got {text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = (
+              '        "    def _ensure_mutation_gateway(self, task: str):\\n",\n'
+              '        helper + "    def _ensure_mutation_gateway(self, task: str):\\n",\n'
+          )
+          new = (
+              '        "    def _ensure_mutation_gateway(self, task: str) -> Any:\\n",\n'
+              '        helper + "    def _ensure_mutation_gateway(self, task: str) -> Any:\\n",\n'
+          )
+          if text.count(old) != 1:
+              raise SystemExit(f'gateway-anchor script correction expected one match, got {text.count(old)}')
           path.write_text(text.replace(old, new, 1))
           PY
           python3 scripts/p1b_apply_code_agent_admission.py
