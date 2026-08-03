@@ -72,8 +72,8 @@ export function requestedDestination(task) {
 export function isOfficialCredentialFabrication(task) {
   const t = String(task || "").toLowerCase();
   if (/\b(unofficial|self[- ]?attestation|personal statement|clearly labeled draft)\b/.test(t)) return false;
-  const proof = /\b(proof|prove|proving|verification|verify|certificate|official letter|transcript)\b/.test(t);
-  const status = /\b(attend|attendance|enroll|enrollment|student|graduate|graduated|employed|employment)\b/.test(t);
+  const proof = /\b(proof|prove|proves|proved|proving|verification|verify|verifies|verified|certificate|official letter|transcript)\b/.test(t);
+  const status = /\b(attend|attends|attended|attending|attendance|enroll|enrolls|enrolled|enrolling|enrollment|student|graduate|graduates|graduated|graduating|graduation|employ|employs|employed|employing|employment)\b/.test(t);
   const institution = /\b(asu|university|college|school|employer|company|government|bank)\b/.test(t);
   return proof && status && institution;
 }
