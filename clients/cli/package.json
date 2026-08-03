@@ -22,7 +22,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node test/run.mjs && node test/delivery.mjs && node test/continuity.mjs",
+    "test": "node test/run.mjs && node test/delivery.mjs && node test/continuity.mjs && node test/continuity_receipt.mjs",
     "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {
