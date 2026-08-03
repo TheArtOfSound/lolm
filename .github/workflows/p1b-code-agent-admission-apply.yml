@@ -67,7 +67,37 @@ jobs:
           new_comment = '# pure DONE → finish (gated on a real, output-producing run)'
           if text.count(old_comment) != 2:
               raise SystemExit(f'turn comment correction expected two matches, got {text.count(old_comment)}')
-          path.write_text(text.replace(old_comment, new_comment))
+          text = text.replace(old_comment, new_comment)
+
+          if text.count('lolm.code_receipt.v3') != 2:
+              raise SystemExit(f'receipt schema correction expected two matches, got {text.count("lolm.code_receipt.v3")}')
+          text = text.replace('lolm.code_receipt.v3', 'lolm.code.receipt.v2')
+
+          start_marker = (
+              "    text = replace_once(\n"
+              "        text,\n"
+              "        '            \\\"actions\\\": self._action_trail(),\\n            \\\"nfet\\\": nfet,'"
+          )
+          start = text.find(start_marker)
+          end_marker = '\n\n    # Bind the model-issued run decision'
+          end = text.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit(f'receipt evidence block not found: start={start} end={end}')
+          replacement = '''    text = replace_once(
+        text,
+        '            "trail": trail[-24:],\\n',
+        '            "trail": trail[-24:],\\n'
+        '            "admissions": admissions,\\n'
+        '            "admission_summary": {\\n'
+        '                "total": len(admissions),\\n'
+        '                "admitted": sum(1 for item in admissions if item.get("accepted")),\\n'
+        '                "rejected": sum(1 for item in admissions if not item.get("accepted")),\\n'
+        '                "fingerprints": [item.get("fingerprint") for item in admissions if item.get("fingerprint")],\\n'
+        '            },\\n',
+        "receipt admission evidence",
+    )'''
+          text = text[:start] + replacement + text[end:]
+          path.write_text(text)
           PY
           python3 scripts/p1b_apply_code_agent_admission.py
           python3 -m pip install --disable-pip-version-check pytest pydantic
