@@ -17,6 +17,7 @@ APP="${DEPLOY_APP_DIR:-/opt/apps/lolm}"
 WEB="${DEPLOY_WEB_DIR:-/var/www/lolm-imagineqira}"
 SVC="${DEPLOY_SERVICE:-lolm-demo}"
 BASE="${PUBLIC_BASE:-https://lolm.imagineqira.com}"
+SNAPSHOT_MARKER="${APP}.rollback-snapshot"
 cd "$(dirname "$0")/.."
 
 echo "[deploy] snapshotting current app + website for rollback (keeps newest 3)"
@@ -25,6 +26,8 @@ ssh "$HOST" "
   TS=\$(date +%Y%m%d%H%M%S)
   sudo rsync -a --exclude .venv --exclude runs --exclude __pycache__ '$APP/' \"${APP}.bak.\$TS/\"
   sudo rsync -a '$WEB/' \"${WEB}.bak.\$TS/\"
+  printf '%s\n' \"\$TS\" | sudo tee '$SNAPSHOT_MARKER' >/dev/null
+  echo '[deploy] snapshot id → '\$TS
   echo '[deploy] app backup → ${APP}.bak.'\$TS
   echo '[deploy] web backup → ${WEB}.bak.'\$TS
   ls -dt ${APP}.bak.* 2>/dev/null | tail -n +4 | xargs -r sudo rm -rf
