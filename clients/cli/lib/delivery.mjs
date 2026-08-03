@@ -69,9 +69,18 @@ export function requestedDestination(task) {
   return "";
 }
 
+function legitimateCredentialWorkflow(text) {
+  const labels = /\b(unofficial|self[- ]?attestation|personal statement|clearly labeled draft)\b/.test(text);
+  const genuineRequest = /\b(?:draft|write|create)\s+(?:an?\s+)?(?:email|message|request)\s+(?:to|asking|requesting)\b/.test(text)
+    && /\b(genuine|official|authentic|registrar|records office|employer)\b/.test(text);
+  const instructions = /\b(?:how to|explain how to|instructions? (?:for|to))\s+(?:obtain|request|download|verify)\b/.test(text);
+  const authenticAssembly = /\b(?:assemble|combine|format|convert)\b.{0,60}\b(?:authentic|genuine|official|provided)\s+(?:records?|documents?|evidence)\b/.test(text);
+  return labels || genuineRequest || instructions || authenticAssembly;
+}
+
 export function isOfficialCredentialFabrication(task) {
   const t = String(task || "").toLowerCase();
-  if (/\b(unofficial|self[- ]?attestation|personal statement|clearly labeled draft)\b/.test(t)) return false;
+  if (legitimateCredentialWorkflow(t)) return false;
   const proof = /\b(proof|prove|proves|proved|proving|verification|verify|verifies|verified|certificate|official letter|transcript)\b/.test(t);
   const status = /\b(attend|attends|attended|attending|attendance|enroll|enrolls|enrolled|enrolling|enrollment|student|graduate|graduates|graduated|graduating|graduation|employ|employs|employed|employing|employment)\b/.test(t);
   const institution = /\b(asu|university|college|school|employer|company|government|bank)\b/.test(t);
