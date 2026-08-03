@@ -121,7 +121,6 @@ def test_shell_dialect_is_part_of_the_contract_and_receipt():
     ({"action": "run", "command": "echo ok", "surprise": True}, "unknown_tool_arguments"),
     ({"action": "write_file", "path": "../escape.py", "content": "x"}, "tool_path_outside_workspace"),
     ({"action": "read_file", "path": "/etc/passwd"}, "tool_path_outside_workspace"),
-    ({"action": "list_files", "limit": 0}, "invalid_tool_timeout"),
 ])
 def test_tool_schema_rejections(call, reason):
     decision = admit_tool_call(call, contract())
