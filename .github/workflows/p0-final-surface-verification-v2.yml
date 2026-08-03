@@ -1,0 +1,271 @@
+name: p0-final-surface-verification-v2
+
+# Final public-user proof for the immutable host-delivery release. The workflow
+# uses only the public npm package and public production origin from clean hosts.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-final-surface-verification-v2
+  cancel-in-progress: false
+
+env:
+  TRIGGER_BRANCH: veyr/p0-final-surface-trigger-v2
+  TRIGGER_SHA: e00c985cf66808a3ca015b8b1eb3a70bb6e9d646
+  PRODUCT_SHA: 933756c710173120ce14c7de7caabb48afb5ccca
+  PUBLIC_BASE: https://lolm.imagineqira.com
+
+jobs:
+  macos-cli-desktop:
+    if: >-
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'veyr/p0-final-surface-trigger-v2' &&
+      github.event.pull_request.head.sha == 'e00c985cf66808a3ca015b8b1eb3a70bb6e9d646'
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install public beta.2 from npm
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install -g lolm-cli@0.3.0-beta.2
+          test "$(lolm --version)" = '0.3.0-beta.2'
+
+      - name: Require verified automatic Desktop delivery
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLEAN_HOME="$RUNNER_TEMP/lolm-p0-clean-macos-home"
+          export HOME="$CLEAN_HOME"
+          export LOLM_DELIVERY_LEDGER="$CLEAN_HOME/.lolm/deliveries.json"
+          mkdir -p "$HOME/Desktop" "$HOME/Downloads" "$HOME/Documents" "$RUNNER_TEMP/p0-mac-logs"
+
+          SUCCESS=0
+          PDF=''
+          for ATTEMPT in 1 2 3; do
+            rm -rf "$HOME/Desktop"/* "$HOME/Downloads"/* "$HOME/Documents"/*
+            rm -f "$LOLM_DELIVERY_LEDGER"
+            LOG="$RUNNER_TEMP/p0-mac-logs/attempt-$ATTEMPT.log"
+            set +e
+            lolm code "Create a valid one-page PDF visibly labeled UNOFFICIAL LOLM MAC DESKTOP DELIVERY TEST and put it on my Desktop." \
+              2>&1 | tee "$LOG"
+            RC=${PIPESTATUS[0]}
+            set -e
+
+            PDF_COUNT="$(find "$HOME/Desktop" -type f -iname '*.pdf' -print | wc -l | tr -d ' ')"
+            if [ "$RC" -eq 0 ] && [ "$PDF_COUNT" -eq 1 ]; then
+              PDF="$(find "$HOME/Desktop" -type f -iname '*.pdf' -print | sort | head -n 1)"
+              SUCCESS=1
+              break
+            fi
+            echo "attempt=$ATTEMPT rc=$RC desktop_pdf_count=$PDF_COUNT" >&2
+            sleep 8
+          done
+
+          test "$SUCCESS" -eq 1
+          test -n "$PDF"
+          python3 - "$PDF" <<'PY'
+          import hashlib, json, pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          raw = path.read_bytes()
+          assert raw.startswith(b'%PDF-'), 'delivered file lacks PDF header'
+          assert len(raw) > 100, 'delivered PDF is implausibly small'
+          print(json.dumps({
+              'ok': True,
+              'surface': 'public-npm-clean-macos',
+              'path': str(path),
+              'bytes': len(raw),
+              'sha256': hashlib.sha256(raw).hexdigest(),
+          }, sort_keys=True))
+          PY
+
+          WHERE="$(lolm ask 'where is the PDF?')"
+          LAST="$(lolm artifact last)"
+          printf '%s\n' "$WHERE" | grep -Fqx "$PDF"
+          printf '%s\n' "$LAST" | grep -Fqx "$PDF"
+          grep -Fq 'delivered pdf' "$LOG"
+          grep -Fq "saved     $PDF" "$LOG"
+          printf '%s\n' "$PDF" > "$RUNNER_TEMP/p0-mac-delivered-path.txt"
+
+      - name: Upload macOS delivery evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-macos-cli-delivery-evidence
+          path: |
+            ${{ runner.temp }}/p0-mac-logs
+            ${{ runner.temp }}/p0-mac-delivered-path.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+  browser-artifact-download:
+    needs: macos-cli-desktop
+    if: >-
+      needs.macos-cli-desktop.result == 'success' &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'veyr/p0-final-surface-trigger-v2' &&
+      github.event.pull_request.head.sha == 'e00c985cf66808a3ca015b8b1eb3a70bb6e9d646'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Install clean Chromium runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check playwright
+          python3 -m playwright install --with-deps chromium
+
+      - name: Require verified production artifact card and download
+        shell: bash
+        env:
+          PUBLIC_BASE: ${{ env.PUBLIC_BASE }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/p0_browser_verify_v2.py" <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+          from playwright.sync_api import sync_playwright
+
+          base = os.environ['PUBLIC_BASE'].rstrip('/')
+          temp = Path(os.environ['RUNNER_TEMP'])
+          diagnostics = temp / 'p0-browser-diagnostics'
+          diagnostics.mkdir(parents=True, exist_ok=True)
+          screenshot = diagnostics / 'artifact-card.png'
+          downloaded = diagnostics / 'output.pdf'
+          task = (
+              "Create output.pdf using only Python standard library code. The PDF must be a valid "
+              "one-page document visibly labeled UNOFFICIAL LOLM BROWSER DELIVERY TEST. Write "
+              "the binary PDF to output.pdf, print PDF_READY output.pdf, and do not create any "
+              "other user-facing document."
+          )
+
+          with sync_playwright() as pw:
+              browser = pw.chromium.launch()
+              context = browser.new_context(
+                  accept_downloads=True,
+                  service_workers='block',
+                  viewport={'width': 1440, 'height': 900},
+              )
+              page = context.new_page()
+              console_errors: list[str] = []
+              page.on('console', lambda msg: console_errors.append(msg.text) if msg.type == 'error' else None)
+              page.on('pageerror', lambda error: console_errors.append(str(error)))
+
+              page.goto(base + '/app.html', wait_until='domcontentloaded', timeout=90_000)
+              page.wait_for_function('window.__lolmArtifactDeliveryInstalled === true', timeout=30_000)
+              page.evaluate(
+                  """(task) => {
+                    window.__p0SurfaceState = {done: false, status: null, body: '', error: null};
+                    fetch('/api/demo/code/run', {
+                      method: 'POST',
+                      headers: {'Content-Type': 'application/json', 'Accept': 'text/event-stream'},
+                      body: JSON.stringify({task, max_steps: 14})
+                    }).then(async response => {
+                      const body = await response.text();
+                      window.__p0SurfaceState = {
+                        done: true,
+                        status: response.status,
+                        body,
+                        error: null
+                      };
+                    }).catch(error => {
+                      window.__p0SurfaceState = {
+                        done: true,
+                        status: null,
+                        body: '',
+                        error: String(error)
+                      };
+                    });
+                  }""",
+                  task,
+              )
+              page.wait_for_function(
+                  'window.__p0SurfaceState && window.__p0SurfaceState.done === true',
+                  timeout=720_000,
+              )
+              state = page.evaluate('window.__p0SurfaceState')
+              (diagnostics / 'fetch-state.json').write_text(
+                  json.dumps(state, sort_keys=True, indent=2), encoding='utf-8'
+              )
+              (diagnostics / 'console-errors.json').write_text(
+                  json.dumps(console_errors, indent=2), encoding='utf-8'
+              )
+              print(json.dumps({
+                  'http_status': state.get('status'),
+                  'fetch_error': state.get('error'),
+                  'sse_tail': str(state.get('body') or '')[-4000:],
+                  'console_errors': console_errors,
+              }, sort_keys=True))
+              assert state.get('error') is None, state.get('error')
+              assert state.get('status') == 200, state
+
+              host = page.locator('#lolm-artifact-delivery')
+              try:
+                  page.wait_for_function(
+                      """() => {
+                        const host = document.querySelector('#lolm-artifact-delivery');
+                        return Boolean(host && host.textContent.includes('verified') &&
+                          host.querySelector('a[download="output.pdf"]'));
+                      }""",
+                      timeout=45_000,
+                  )
+              except PlaywrightTimeoutError:
+                  host_text = host.inner_text() if host.count() else '<artifact host missing>'
+                  (diagnostics / 'artifact-host.txt').write_text(host_text, encoding='utf-8')
+                  page.screenshot(path=str(diagnostics / 'missing-card.png'), full_page=True)
+                  raise AssertionError(
+                      'SSE request completed but verified output.pdf card did not appear. '
+                      f'Host text: {host_text!r}; SSE tail: {str(state.get("body") or "")[-2000:]!r}'
+                  )
+
+              text = host.inner_text()
+              (diagnostics / 'artifact-host.txt').write_text(text, encoding='utf-8')
+              assert 'Generated artifacts' in text
+              assert 'verified' in text
+              assert 'output.pdf' in text
+              link = host.locator('a[download="output.pdf"]')
+              assert link.count() == 1
+              assert link.inner_text() == 'Download verified file'
+              page.screenshot(path=str(screenshot), full_page=True)
+
+              with page.expect_download(timeout=60_000) as pending:
+                  link.click()
+              download = pending.value
+              assert download.suggested_filename == 'output.pdf'
+              download.save_as(str(downloaded))
+              raw = downloaded.read_bytes()
+              assert raw.startswith(b'%PDF-')
+              assert len(raw) > 100
+              print(json.dumps({
+                  'ok': True,
+                  'surface': 'fresh-production-chromium',
+                  'page': page.url,
+                  'card': 'verified',
+                  'filename': download.suggested_filename,
+                  'bytes': len(raw),
+                  'sha256': hashlib.sha256(raw).hexdigest(),
+                  'console_errors': console_errors,
+              }, sort_keys=True))
+              context.close()
+              browser.close()
+          PY
+          python3 "$RUNNER_TEMP/p0_browser_verify_v2.py"
+
+      - name: Upload browser evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-browser-artifact-delivery-evidence
+          path: ${{ runner.temp }}/p0-browser-diagnostics
+          if-no-files-found: warn
+          retention-days: 14
