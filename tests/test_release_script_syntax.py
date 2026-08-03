@@ -27,3 +27,14 @@ def test_rollback_is_bound_to_paired_app_and_web_snapshot():
     assert "web backup" in deploy
     assert "restoring website" in rollback
     assert "refusing partial rollback" in rollback
+
+
+def test_deploy_script_arms_and_executes_automatic_rollback_after_snapshot():
+    deploy = (ROOT / "deploy" / "deploy_box.sh").read_text(encoding="utf-8")
+    assert "ROLLBACK_ARMED=0" in deploy
+    assert "rollback_on_error()" in deploy
+    assert "trap rollback_on_error ERR" in deploy
+    assert "ROLLBACK_ARMED=1" in deploy
+    assert 'bash deploy/rollback_box.sh' in deploy
+    assert "ROLLBACK_ARMED=0\ntrap - ERR" in deploy
+    assert deploy.index("ROLLBACK_ARMED=1") < deploy.index("syncing code")

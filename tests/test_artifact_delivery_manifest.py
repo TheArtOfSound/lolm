@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,6 +32,16 @@ class FakeSandbox:
         return path
 
 
+def _agent(root: Path, required=None):
+    return SimpleNamespace(
+        sb=FakeSandbox(root),
+        _files_written=["main.py"],
+        reliability=SimpleNamespace(
+            contract=SimpleNamespace(required_paths=list(required or ["output.pdf"])),
+        ),
+    )
+
+
 def test_generated_binary_pdf_is_embedded_exactly_and_added_to_receipt_files(tmp_path: Path):
     pdf = b"%PDF-1.4\n\x00\xffbinary\n%%EOF\n"
     (tmp_path / "main.py").write_text("open('output.pdf','wb').write(b'x')\n")
@@ -39,13 +50,7 @@ def test_generated_binary_pdf_is_embedded_exactly_and_added_to_receipt_files(tmp
     (tmp_path / "__pycache__").mkdir()
     (tmp_path / "__pycache__" / "main.pyc").write_bytes(b"cache")
 
-    agent = SimpleNamespace(
-        sb=FakeSandbox(tmp_path),
-        _files_written=["main.py"],
-        reliability=SimpleNamespace(
-            contract=SimpleNamespace(required_paths=["output.pdf"]),
-        ),
-    )
+    agent = _agent(tmp_path)
     manifest = corrected_artifact_manifest(
         agent,
         max_file_bytes=2_000_000,
@@ -56,19 +61,49 @@ def test_generated_binary_pdf_is_embedded_exactly_and_added_to_receipt_files(tmp
     rows = {row["path"]: row for row in manifest["files"]}
     assert set(rows) == {"main.py", "output.pdf"}
     assert rows["output.pdf"]["encoding"] == "base64"
+    assert base64.b64decode(rows["output.pdf"]["content_base64"], validate=True) == pdf
     assert rows["output.pdf"]["sha256"] == hashlib.sha256(pdf).hexdigest()
     assert rows["output.pdf"]["size"] == len(pdf)
 
 
+def test_ascii_only_pdf_is_still_transported_as_exact_binary(tmp_path: Path):
+    # A valid minimal PDF may contain only ASCII bytes. Decodability must not make a
+    # binary deliverable use the text field, because clients require exact-byte base64.
+    pdf = (
+        b"%PDF-1.4\n"
+        b"1 0 obj\n<< /Type /Catalog >>\nendobj\n"
+        b"trailer\n<< /Root 1 0 R >>\n%%EOF\n"
+    )
+    (tmp_path / "main.py").write_text("print('PDF_READY output.pdf')\n")
+    (tmp_path / "output.pdf").write_bytes(pdf)
+
+    manifest = corrected_artifact_manifest(
+        _agent(tmp_path),
+        max_file_bytes=2_000_000,
+        max_total_bytes=10_000_000,
+    )
+    row = {item["path"]: item for item in manifest["files"]}["output.pdf"]
+    assert row["encoding"] == "base64"
+    assert "content" not in row
+    assert base64.b64decode(row["content_base64"], validate=True) == pdf
+    assert row["sha256"] == hashlib.sha256(pdf).hexdigest()
+
+
+def test_utf8_source_file_remains_text(tmp_path: Path):
+    source = "print('hello')\n"
+    (tmp_path / "main.py").write_text(source)
+    # FakeSandbox lists output.pdf too, but it is absent. The main.py row remains useful
+    # even though the overall required-artifact manifest correctly stays incomplete.
+    manifest = corrected_artifact_manifest(_agent(tmp_path))
+    row = {item["path"]: item for item in manifest["files"]}["main.py"]
+    assert row["encoding"] == "utf-8"
+    assert row["content"] == source
+    assert "content_base64" not in row
+
+
 def test_missing_required_pdf_makes_manifest_incomplete(tmp_path: Path):
     (tmp_path / "main.py").write_text("print('claimed pdf')\n")
-    agent = SimpleNamespace(
-        sb=FakeSandbox(tmp_path),
-        _files_written=["main.py"],
-        reliability=SimpleNamespace(
-            contract=SimpleNamespace(required_paths=["output.pdf"]),
-        ),
-    )
+    agent = _agent(tmp_path)
     # Fake list names output.pdf but exact bytes are missing, so it cannot ship.
     manifest = corrected_artifact_manifest(agent)
     assert manifest["complete"] is False

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Qira LLC. All rights reserved.
 # Deploy LOLM to the production box, then prove it with smoke + health checks.
-# Exits non-zero on any failed check so the release workflow blocks + rolls back.
+# Exits non-zero on any failed check and restores the paired app/web snapshot.
 #
 # Required env:
 #   DEPLOY_SSH_HOST   ssh target (e.g. autohustle-aws)
@@ -18,7 +18,30 @@ WEB="${DEPLOY_WEB_DIR:-/var/www/lolm-imagineqira}"
 SVC="${DEPLOY_SERVICE:-lolm-demo}"
 BASE="${PUBLIC_BASE:-https://lolm.imagineqira.com}"
 SNAPSHOT_MARKER="${APP}.rollback-snapshot"
+ROLLBACK_ARMED=0
 cd "$(dirname "$0")/.."
+
+rollback_on_error() {
+  rc=$?
+  trap - ERR
+  set +e
+  if [ "$ROLLBACK_ARMED" -eq 1 ]; then
+    echo "[deploy] failure after snapshot; restoring paired app + website"
+    DEPLOY_SSH_HOST="$HOST" \
+    DEPLOY_APP_DIR="$APP" \
+    DEPLOY_WEB_DIR="$WEB" \
+    DEPLOY_SERVICE="$SVC" \
+      bash deploy/rollback_box.sh
+    rollback_rc=$?
+    if [ "$rollback_rc" -ne 0 ]; then
+      echo "[deploy] CRITICAL: automatic rollback failed with exit $rollback_rc"
+    fi
+  else
+    echo "[deploy] failure occurred before a new rollback snapshot was armed"
+  fi
+  exit "$rc"
+}
+trap rollback_on_error ERR
 
 echo "[deploy] snapshotting current app + website for rollback (keeps newest 3)"
 ssh "$HOST" "
@@ -33,6 +56,7 @@ ssh "$HOST" "
   ls -dt ${APP}.bak.* 2>/dev/null | tail -n +4 | xargs -r sudo rm -rf
   ls -dt ${WEB}.bak.* 2>/dev/null | tail -n +4 | xargs -r sudo rm -rf
 "
+ROLLBACK_ARMED=1
 
 echo "[deploy] syncing code → $HOST:$APP (checksum; box is not a git repo)"
 rsync -rc --delete --exclude '.venv' --exclude '__pycache__' --exclude 'runs' \
@@ -87,11 +111,13 @@ check "receipt_route" "$BASE/api/demo/hf/dashboard"     200
 check "research"      "$BASE/api/demo/research/jobs"    200
 
 if [ "$fail" -ne 0 ]; then
-  echo "[deploy] FAILED health/smoke — release workflow will roll back app + website"
+  echo "[deploy] FAILED health/smoke"
   exit 1
 fi
 
 echo "[deploy] running real CodeAgent PDF delivery smoke"
 python3 scripts/smoke_pdf_delivery.py --base "$BASE" --attempts 3 --timeout 600
 
+ROLLBACK_ARMED=0
+trap - ERR
 echo "[deploy] live at $BASE — all checks and exact-byte PDF delivery green"

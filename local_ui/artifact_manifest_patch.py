@@ -27,6 +27,16 @@ _INTERNAL_NAMES = {
 _INTERNAL_PARTS = {
     "__pycache__", ".git", "node_modules", ".cache", "Library", "Caches",
 }
+# Encoding is a property of the requested artifact type, not of whether its current
+# bytes happen to decode as UTF-8. A standards-only PDF can be entirely ASCII while
+# still requiring byte-preserving binary transport.
+_BINARY_EXTENSIONS = {
+    ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".bmp", ".tif", ".tiff",
+    ".zip", ".gz", ".bz2", ".xz", ".7z", ".tar", ".rar",
+    ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".odp",
+    ".mp3", ".wav", ".flac", ".ogg", ".m4a", ".mp4", ".mov", ".webm", ".avi",
+    ".woff", ".woff2", ".ttf", ".otf", ".wasm", ".pyc", ".bin",
+}
 
 
 def _legitimate_credential_workflow(text: str) -> bool:
@@ -148,13 +158,18 @@ def corrected_artifact_manifest(
         }
         bounded = len(body) <= max_file_bytes and total + len(body) <= max_total_bytes
         if bounded:
-            try:
-                text = body.decode("utf-8")
-                entry["content"] = text
-                entry["encoding"] = "utf-8"
-            except UnicodeDecodeError:
+            force_binary = Path(p).suffix.lower() in _BINARY_EXTENSIONS
+            if force_binary:
                 entry["content_base64"] = base64.b64encode(body).decode("ascii")
                 entry["encoding"] = "base64"
+            else:
+                try:
+                    text = body.decode("utf-8")
+                    entry["content"] = text
+                    entry["encoding"] = "utf-8"
+                except UnicodeDecodeError:
+                    entry["content_base64"] = base64.b64encode(body).decode("ascii")
+                    entry["encoding"] = "base64"
             total += len(body)
         else:
             entry["content_omitted"] = (
