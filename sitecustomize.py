@@ -14,8 +14,10 @@ if os.environ.get("LOLM_DISABLE_ARTIFACT_DELIVERY_PATCH", "").strip().lower() no
     try:
         from local_ui.code_agent import CodeAgent
         from local_ui.artifact_manifest_patch import install_patch as install_artifact_patch
+        from local_ui.contract_medium_patch import install_patch as install_contract_medium_patch
         from local_ui.task_state_artifact_patch import install_patch as install_task_state_patch
 
+        install_contract_medium_patch()
         install_artifact_patch(CodeAgent)
         install_task_state_patch(CodeAgent)
     except Exception:
