@@ -60,7 +60,7 @@ function output(value, { error = false } = {}) {
   else stream.write(`${JSON.stringify(value)}\n`);
 }
 
-function openLocal(path) {
+async function openLocal(path) {
   let executable = "xdg-open";
   let args = [path];
   if (process.platform === "darwin") executable = "open";
@@ -68,9 +68,31 @@ function openLocal(path) {
     executable = "cmd";
     args = ["/c", "start", "", path];
   }
-  const child = spawn(executable, args, { stdio: "ignore", detached: true });
-  child.on("error", () => {});
-  child.unref();
+  if (process.env.LOLM_TEST_OPEN_COMMAND) {
+    executable = process.execPath;
+    args = [process.env.LOLM_TEST_OPEN_COMMAND, path];
+  }
+  return await new Promise((resolvePromise) => {
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      resolvePromise(ok);
+    };
+    let child;
+    try {
+      child = spawn(executable, args, { stdio: "ignore", detached: true });
+    } catch {
+      finish(false);
+      return;
+    }
+    child.once("error", () => finish(false));
+    child.once("spawn", () => {
+      child.unref();
+      finish(true);
+    });
+    setTimeout(() => finish(false), 2000).unref();
+  });
 }
 
 function recordSummary(record, position = 1) {
@@ -88,7 +110,14 @@ function recordSummary(record, position = 1) {
     task_id: record.task_id,
     sandbox_id: record.sandbox_id,
     states: record.states,
-    intact: intact.map((item) => ({ path: item.path, size: item.size, sha256: item.sha256 })),
+    fully_verified: record.fully_verified,
+    intact: intact.map((item) => ({
+      path: item.path,
+      size: item.size,
+      sha256: item.sha256,
+      integrity: item.integrity,
+      verified: item.verified,
+    })),
     changed: changed.map((item) => ({ path: item.path, expected_sha256: item.sha256 })),
     missing: missing.map((item) => item.path),
   };
@@ -134,19 +163,27 @@ async function showArtifact({ action = "where", kind = "", index = 1 } = {}) {
     output(jsonMode ? { ok: false, error: changed.length ? "artifact_changed" : "artifact_missing", record: recordSummary(record, index) } : message, { error: true });
     return 1;
   }
-  if (jsonMode) output({ ok: true, action, record: recordSummary(record, index), paths: intact.map((item) => item.path) });
-  else for (const artifact of intact) process.stdout.write(`${artifact.path}\n`);
   if (action === "open") {
-    openLocal(intact[0].path);
+    const opened = await openLocal(intact[0].path);
+    if (!opened) {
+      output(jsonMode ? { ok: false, error: "host_opener_unavailable", path: intact[0].path } : `Could not open ${intact[0].path} with the host operating system.`, { error: true });
+      return 1;
+    }
     await markRecordOpened(record.id);
   }
+  if (jsonMode) output({ ok: true, action, record: recordSummary(record, index), paths: intact.map((item) => item.path) });
+  else for (const artifact of intact) process.stdout.write(`${artifact.path}\n`);
   return 0;
 }
 
 async function renderContinuityResolution(resolution) {
   if (!resolution?.handled) return null;
   if (resolution.intent === "open" && resolution.ok && resolution.paths?.[0]) {
-    openLocal(resolution.paths[0]);
+    const opened = await openLocal(resolution.paths[0]);
+    if (!opened) {
+      output(jsonMode ? { ...resolution, ok: false, code: 1, error: "host_opener_unavailable" } : `Could not open ${resolution.paths[0]} with the host operating system.`, { error: true });
+      return 1;
+    }
     await markRecordOpened(resolution.record.id);
   }
   if (jsonMode) output(resolution);
@@ -154,7 +191,7 @@ async function renderContinuityResolution(resolution) {
     for (const path of resolution.paths) process.stdout.write(`${path}\n`);
   } else if (resolution.artifacts) {
     for (const artifact of resolution.artifacts) {
-      const state = !artifact.exists ? "missing" : artifact.changed ? "changed" : "intact";
+      const state = !artifact.exists ? "missing" : artifact.changed ? "changed" : artifact.verified ? "verified" : "unverified";
       process.stdout.write(`${state}\t${artifact.path}\n`);
     }
   } else if (resolution.value) output(resolution.value);
@@ -163,7 +200,7 @@ async function renderContinuityResolution(resolution) {
 }
 
 async function runCore(args) {
-  return await new Promise((resolve) => {
+  return await new Promise((resolvePromise) => {
     const child = spawn(process.execPath, [coreCli, ...args], {
       stdio: ["inherit", "pipe", "pipe"],
       env: process.env,
@@ -183,11 +220,11 @@ async function runCore(args) {
     process.once("SIGTERM", () => forward("SIGTERM"));
     child.once("error", (error) => {
       process.stderr.write(`LOLM failed to start: ${error.message}\n`);
-      resolve({ code: 1, transcript });
+      resolvePromise({ code: 1, transcript });
     });
     child.once("exit", (code, signal) => {
-      if (signal) resolve({ code: signal === "SIGINT" ? 130 : 1, transcript });
-      else resolve({ code: Number.isInteger(code) ? code : 1, transcript });
+      if (signal) resolvePromise({ code: signal === "SIGINT" ? 130 : 1, transcript });
+      else resolvePromise({ code: Number.isInteger(code) ? code : 1, transcript });
     });
   });
 }
@@ -199,7 +236,8 @@ function rewritePresentation(text) {
       "  receipts              Recent sealed code receipts.\n",
       "  receipts              Recent sealed code receipts.\n" +
       "  artifact list|where|inspect|open [kind] [index]\n" +
-      "                        Resolve verified local artifacts without a model call.\n",
+      "                        Resolve verified local artifacts without a model call.\n" +
+      "  artifact last|open    Backward-compatible artifact shortcuts.\n",
     );
   }
   if (!rendered.includes("--trace")) {
@@ -213,7 +251,7 @@ function rewritePresentation(text) {
 }
 
 async function runCorePresentation(args) {
-  return await new Promise((resolve) => {
+  return await new Promise((resolvePromise) => {
     const child = spawn(process.execPath, [coreCli, ...args], {
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, NO_COLOR: process.env.NO_COLOR || "1" },
@@ -226,12 +264,12 @@ async function runCorePresentation(args) {
     child.stderr.on("data", (chunk) => { stderr += chunk; });
     child.once("error", (error) => {
       process.stderr.write(`LOLM failed to start: ${error.message}\n`);
-      resolve(1);
+      resolvePromise(1);
     });
     child.once("exit", (code) => {
       if (stdout) process.stdout.write(rewritePresentation(stdout));
       if (stderr) process.stderr.write(rewritePresentation(stderr));
-      resolve(Number.isInteger(code) ? code : 1);
+      resolvePromise(Number.isInteger(code) ? code : 1);
     });
   });
 }
