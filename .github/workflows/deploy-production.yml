@@ -1,7 +1,7 @@
 name: deploy-production
 
 # Deploy to the production box + smoke/health/critical-route checks. Auto-rolls
-# back on a failed check. Called by release-production after PR gates pass.
+# back on a failed deployment check. Called by release-production after PR gates pass.
 
 on:
   workflow_dispatch:
@@ -41,8 +41,8 @@ jobs:
           DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
           LOLM_RELEASE_SHA: ${{ github.sha }}
         run: bash deploy/deploy_box.sh
-      - name: Auto-rollback on failure
-        if: failure()
+      - name: Auto-rollback failed deployment
+        if: ${{ steps.deploy.outcome == 'failure' }}
         env:
           DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
         run: bash deploy/rollback_box.sh
