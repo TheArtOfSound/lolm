@@ -83,6 +83,16 @@ test("launcher reports the published beta.2 version", async () => {
   assert.equal(result.stderr, "");
 });
 
+test("launcher help exposes delivery and trace controls at beta.2", async () => {
+  const result = await run(process.execPath, [BIN, "--help"], {
+    env: { ...process.env, NO_COLOR: "1" },
+  });
+  assert.match(result.stdout, /0\.3\.0-beta\.2/);
+  assert.doesNotMatch(result.stdout + result.stderr, /0\.3\.0-beta\.1/);
+  assert.match(result.stdout, /artifact last\|open/);
+  assert.match(result.stdout, /--trace/);
+});
+
 test("launcher blocks credential fabrication before any remote request", async () => {
   await assert.rejects(
     run(process.execPath, [
