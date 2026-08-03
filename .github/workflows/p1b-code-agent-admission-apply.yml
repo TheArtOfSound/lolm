@@ -63,17 +63,11 @@ jobs:
               raise SystemExit(f'gateway-anchor script correction expected one match, got {text.count(old)}')
           text = text.replace(old, new, 1)
 
-          old = (
-              "        '            self._format_nudge = \\\"\\\"\\n\\n            # pure DONE → finish',\\n"
-              "        '            self._format_nudge = \\\"\\\"\\n' + admission_turn + '            # pure DONE → finish',\\n"
-          )
-          new = (
-              "        '            self._format_nudge = \\\"\\\"\\n\\n            # pure DONE → finish (gated on a real, output-producing run)',\\n"
-              "        '            self._format_nudge = \\\"\\\"\\n' + admission_turn + '            # pure DONE → finish (gated on a real, output-producing run)',\\n"
-          )
-          if text.count(old) != 1:
-              raise SystemExit(f'turn-anchor script correction expected one match, got {text.count(old)}')
-          path.write_text(text.replace(old, new, 1))
+          old_comment = '# pure DONE → finish'
+          new_comment = '# pure DONE → finish (gated on a real, output-producing run)'
+          if text.count(old_comment) != 2:
+              raise SystemExit(f'turn comment correction expected two matches, got {text.count(old_comment)}')
+          path.write_text(text.replace(old_comment, new_comment))
           PY
           python3 scripts/p1b_apply_code_agent_admission.py
           python3 -m pip install --disable-pip-version-check pytest pydantic
