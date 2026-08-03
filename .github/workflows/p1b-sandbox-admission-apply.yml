@@ -44,7 +44,8 @@ jobs:
               new = (
                   '_NATURAL_REQUEST = re.compile(\n'
                   '    r"^\\s*(?:please\\b|could\\s+you\\b|would\\s+you\\b|can\\s+you\\b|"\n'
-                  '    r"(?:Open|Create|Write|Make|Explain|Show|Tell|Fix|Verify)\\b)"\n'
+                  '    r"(?:open|create|write|make|explain|show|tell|fix|verify)\\b)",\n'
+                  '    re.IGNORECASE,\n'
                   ')\n'
                   + old
               )
