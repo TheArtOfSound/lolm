@@ -145,6 +145,43 @@ def _matching_artifacts(task: str, files: List[str]) -> List[str]:
     return [path for path in normalized if Path(path).suffix.lower() in expected]
 
 
+def observe_workspace_artifacts(state: TaskState, files: List[str]) -> List[str]:
+    """Bind real workspace paths to the artifact criterion without advancing a step.
+
+    This hook exists for files created by an executed program rather than through a
+    model FILE/EDIT action. The caller must supply paths discovered from the sandbox
+    filesystem. Stdout claims are deliberately insufficient. Criteria are monotonic:
+    once a matching artifact has been observed, a later partial file list cannot unset
+    it.
+    """
+    matching = _matching_artifacts(state.objective, [str(path) for path in files])
+    if not matching:
+        return []
+    criterion = next((row for row in state.C if row.id == "artifact"), None)
+    changed = bool(criterion is not None and not criterion.met)
+    if criterion is not None:
+        criterion.met = True
+        criterion.evidence = ", ".join(matching[-8:])[:400]
+    for step in state.P:
+        if step.id in ("inspect", "act"):
+            step.status = "done"
+    state.updated_ts = int(time.time())
+    state.observations.append({
+        "step": state.step,
+        "action": "workspace_artifact_observed",
+        "observation": "matching artifact discovered from sandbox filesystem",
+        "exit_ok": False,
+        "produced_output": False,
+        "files": [str(path) for path in files][-12:],
+        "matching_artifacts": matching[-12:],
+        "criterion_changed": changed,
+        "ts": int(time.time()),
+    })
+    state.observations = state.observations[-100:]
+    state.last_action = policy_action(state)["action"]
+    return matching
+
+
 def _criteria(task: str) -> List[Criterion]:
     text = (task or "").lower()
     expected = _artifact_extensions(task)
@@ -229,17 +266,9 @@ def update_task_state(
     state.step += 1
     state.updated_ts = int(time.time())
     files = [str(p) for p in result.get("files") or []]
-    matching = _matching_artifacts(state.objective, files)
+    matching = observe_workspace_artifacts(state, files)
     exit_ok = result.get("exit_ok") is True
     produced = result.get("produced_output") is True
-    if matching:
-        c = next((x for x in state.C if x.id == "artifact"), None)
-        if c:
-            c.met = True
-            c.evidence = ", ".join(matching[-8:])[:400]
-        for p in state.P:
-            if p.id in ("inspect", "act"):
-                p.status = "done"
     if exit_ok:
         c = next((x for x in state.C if x.id == "execution"), None)
         if c:

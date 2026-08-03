@@ -38,3 +38,12 @@ def test_deploy_script_arms_and_executes_automatic_rollback_after_snapshot():
     assert 'bash deploy/rollback_box.sh' in deploy
     assert "ROLLBACK_ARMED=0\ntrap - ERR" in deploy
     assert deploy.index("ROLLBACK_ARMED=1") < deploy.index("syncing code")
+
+
+def test_deploy_requires_generated_artifact_task_state_bridge():
+    deploy = (ROOT / "deploy" / "deploy_box.sh").read_text(encoding="utf-8")
+    assert "_task_state_artifact_patch" in deploy
+    assert "observe_workspace_artifacts" in deploy
+    assert "allow_finalize_from_state(st) is False" in deploy
+    assert "allow_finalize_from_state(st) is True" in deploy
+    assert "generated-artifact task state OK" in deploy
