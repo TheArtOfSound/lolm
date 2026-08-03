@@ -234,6 +234,11 @@ _PACKAGE_INSTALL = re.compile(
     r"apt(?:-get)?\s+install|brew\s+install)\b",
     re.IGNORECASE,
 )
+_NATURAL_REQUEST = re.compile(
+    r"^\s*(?:please\b|could\s+you\b|would\s+you\b|can\s+you\b|"
+    r"(?:open|create|write|make|explain|show|tell|fix|verify)\b)",
+    re.IGNORECASE,
+)
 _TRAVERSAL = re.compile(r"(?:^|[\s'\"=])\.\.(?:/|\\)")
 _SENSITIVE_ABSOLUTE = re.compile(
     r"(?:^|[\s'\"=])(?:/etc/|/root/|/home/(?![^/]+/(?:work|workspace)\b)|"
@@ -349,6 +354,13 @@ def admit_command(command: str, contract: Optional[ExecutionContract] = None) ->
             "invalid_timeout",
             "Command timeout must be an integer between 1 and 3600 seconds.",
             AdmissionOutcome.ENVIRONMENT_REJECTION,
+        ))
+
+    if _NATURAL_REQUEST.search(normalized):
+        issues.append(AdmissionIssue(
+            "natural_language_command",
+            "Natural-language instructions are not executable command payloads.",
+            AdmissionOutcome.COMMAND_POLICY_REJECTION,
         ))
 
     preflight = inspect_command(

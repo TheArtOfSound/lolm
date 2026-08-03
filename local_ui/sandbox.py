@@ -28,6 +28,13 @@ from difflib import unified_diff
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from lolm.command_admission import (
+    AdmissionOutcome,
+    ExecutionContract,
+    RiskClass,
+    admit_command,
+)
+
 
 def _id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
@@ -41,21 +48,6 @@ def _sha(text: str) -> str:
     return hashlib.sha256((text or "").encode("utf-8", "replace")).hexdigest()[:16]
 
 
-# Commands refused outright — destructive / exfiltration / privilege / host reach /
-# credential-file reads (the sandbox isn't a jail, so block reading the box's keys).
-_DENY = [
-    r"\brm\s+-rf\s+[/~]", r":\(\)\s*\{", r"\bsudo\b", r"\bshutdown\b", r"\breboot\b",
-    r"\bmkfs\b", r"\bdd\s+if=", r"\bchmod\s+-R?\s*777\s+/", r">\s*/dev/sd",
-    r"\bssh\b", r"\bscp\b", r"\bsftp\b", r"\bnc\s+-", r"\bncat\b", r"\btelnet\b",
-    r"curl[^|]*\|\s*(sh|bash)", r"wget[^|]*\|\s*(sh|bash)", r"\bcrontab\b",
-    r"/etc/(passwd|shadow|sudoers)", r"\bsystemctl\b", r"\bkillall\b",
-    r"\b(history|env|printenv)\b.*(secret|token|key|password)", r"\.\./\.\./\.\.",
-    # credential / secret file reads (defense-in-depth — no real FS jail)
-    r"\.ssh/", r"\bid_rsa\b", r"\bid_ed25519\b", r"\bid_ecdsa\b", r"authorized_keys",
-    r"\.aws/", r"\.npmrc\b", r"\.git-credentials\b", r"\.kube/", r"\.docker/config",
-    r"/proc/\d+/environ", r"\bwai\.env\b", r"OPERATOR_SECRET|SANDBOX_SECRET|NPM_TOKEN",
-]
-_DENY_RE = re.compile("|".join(_DENY), re.IGNORECASE)
 
 # Only clone from well-known public git hosts over https.
 _REPO_RE = re.compile(r"^https://(www\.)?(github\.com|gitlab\.com|bitbucket\.org|codeberg\.org)/"
@@ -179,31 +171,69 @@ class Sandbox:
 
     # ── command execution ──────────────────────────────────────────────────--
     def run(self, command: str, timeout: int = 120,
-            isolated: Optional[bool] = None) -> Dict[str, Any]:
+            isolated: Optional[bool] = None, *,
+            admission_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Run a command. isolated=True forces the bwrap namespace jail (no host FS /
         net / PIDs) and REFUSES if bwrap is missing — use it for public/untrusted
         callers. isolated=None uses the jail when available, else a plain subprocess
         (owner/loopback). isolated=False is the bare subprocess (loopback only)."""
         command = (command or "").strip()
         want_jail = _HAS_BWRAP if isolated is None else bool(isolated)
-        rec: Dict[str, Any] = {"id": _id("cmd"), "command": command,
-                               "cwd": "/work" if want_jail else str(self.dir),
-                               "isolated": want_jail, "started_at": _now()}
-        if not command:
-            rec.update(exit_code=None, stdout="", stderr="empty command",
-                       blocked=True, ended_at=_now())
+        context = dict(admission_context or {})
+        shell = context.get("shell") or ("cmd" if os.name == "nt" else "sh")
+        contract = ExecutionContract(
+            task=str(context.get("task") or ""),
+            source=str(context.get("source") or "sandbox.run"),
+            shell=shell,
+            platform=str(context.get("platform") or os.name),
+            cwd=str(context.get("cwd") or self.dir),
+            workspace_root=str(context.get("workspace_root") or self.dir),
+            primary_language=str(context.get("primary_language") or ""),
+            known_files=tuple(context.get("known_files") or self.list_files()),
+            expected_files=tuple(context.get("expected_files") or ()),
+            timeout_s=int(timeout),
+            verifier=str(context.get("verifier") or ""),
+            risk_class=context.get("risk_class") or RiskClass.PROCESS_EXECUTION,
+            isolated=want_jail,
+            allow_network=bool(context.get("allow_network", False)),
+            allow_package_install=bool(context.get("allow_package_install", False)),
+        )
+        decision = admit_command(command, contract)
+        rec: Dict[str, Any] = {
+            "id": _id("cmd"),
+            "command": command,
+            "cwd": "/work" if want_jail else str(self.dir),
+            "isolated": want_jail,
+            "started_at": _now(),
+            "admission": decision.to_dict(),
+            "admission_fingerprint": decision.fingerprint,
+            "outcome_class": decision.outcome.value,
+        }
+        if not decision.accepted:
+            codes = ",".join(decision.reason_codes) or "rejected"
+            message = next((issue.message for issue in decision.issues if issue.fatal),
+                           "command admission rejected the proposal")
+            rec.update(
+                exit_code=None,
+                stdout="",
+                stderr=f"blocked by command admission [{codes}]: {message}",
+                blocked=True,
+                ended_at=_now(),
+            )
+            self.commands.append(rec)
+            self._record("command", rec)
             return rec
         if isolated and not _HAS_BWRAP:
-            rec.update(exit_code=None, stdout="", blocked=True, ended_at=_now(),
-                       stderr="isolation required (bwrap) is not available — refusing to "
-                              "run un-jailed")
-            self.commands.append(rec); self._record("command", rec)
-            return rec
-        if _DENY_RE.search(command):
-            rec.update(exit_code=None, stdout="",
-                       stderr="blocked: destructive/exfiltration/privilege command refused",
-                       blocked=True, ended_at=_now())
-            self.commands.append(rec); self._record("command", rec)
+            rec.update(
+                exit_code=None,
+                stdout="",
+                blocked=True,
+                ended_at=_now(),
+                outcome_class="infrastructure_rejection",
+                stderr="isolation required (bwrap) is not available — refusing to run un-jailed",
+            )
+            self.commands.append(rec)
+            self._record("command", rec)
             return rec
         env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
                "HOME": str(self.dir), "LANG": "C.UTF-8",
@@ -234,7 +264,15 @@ class Sandbox:
         if not _REPO_RE.match((repo_url or "").strip()):
             raise SandboxError("only public github/gitlab/bitbucket/codeberg https URLs allowed")
         # Clone into a subdir so other sandbox files are unaffected.
-        return self.run(f"git clone --depth 1 {repo_url} repo", timeout=timeout)
+        return self.run(
+            f"git clone --depth 1 {repo_url} repo",
+            timeout=timeout,
+            admission_context={
+                "source": "sandbox.clone",
+                "allow_network": True,
+                "risk_class": RiskClass.NETWORK,
+            },
+        )
 
     def detect_project(self, sub: str = "") -> Dict[str, Any]:
         base = self._safe(sub) if sub else self.dir
