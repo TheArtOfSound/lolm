@@ -7,6 +7,7 @@ import {
   mkdir,
   open,
   readFile,
+  readdir,
   rename,
   stat,
   unlink,
@@ -21,6 +22,7 @@ const MAX_ARTIFACTS = 100;
 const LOCK_RETRIES = 300;
 const LOCK_STALE_MS = 30_000;
 const RECEIPT_RE = /^[a-f0-9]{64}$/i;
+const SHA_RE = /^[a-f0-9]{64}$/i;
 
 export function continuityLedgerPath() {
   return resolve(
@@ -28,6 +30,10 @@ export function continuityLedgerPath() {
     process.env.LOLM_DELIVERY_LEDGER ||
     join(homedir(), ".lolm", "continuity.json"),
   );
+}
+
+function sessionDirectory() {
+  return resolve(process.env.LOLM_SESSION_DIR || join(homedir(), ".lolm", "sessions"));
 }
 
 function clean(value, limit = 1000) {
@@ -54,6 +60,11 @@ function pathKind(path) {
   if ([".html", ".htm"].includes(ext)) return "html";
   if ([".zip", ".tar", ".gz", ".tgz"].includes(ext)) return "archive";
   return "artifact";
+}
+
+function stableArtifactId({ path, kind, sha256 }) {
+  const material = `${kindOf(kind)}\u0000${resolve(String(path))}\u0000${clean(sha256, 64).toLowerCase()}`;
+  return `artifact_${createHash("sha256").update(material).digest("hex").slice(0, 24)}`;
 }
 
 function sleep(ms) {
@@ -152,6 +163,51 @@ async function inspectFile(path) {
   }
 }
 
+export async function loadLatestSessionPointer() {
+  const directory = sessionDirectory();
+  let names = [];
+  try {
+    names = (await readdir(directory)).filter((name) => name.endsWith(".json"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  const candidates = [];
+  for (const name of names) {
+    const path = join(directory, name);
+    try {
+      const info = await stat(path);
+      if (info.isFile()) candidates.push({ path, mtime: info.mtimeMs });
+    } catch { /* file disappeared */ }
+  }
+  candidates.sort((a, b) => b.mtime - a.mtime);
+  if (!candidates.length) return null;
+  let raw;
+  try {
+    raw = JSON.parse(await readFile(candidates[0].path, "utf8"));
+  } catch {
+    return null;
+  }
+  const checkpointId = clean(raw.last_checkpoint_id, 160);
+  const workspaceCount = raw.workspace_snapshot && typeof raw.workspace_snapshot === "object"
+    ? Object.keys(raw.workspace_snapshot).length
+    : 0;
+  return {
+    session_id: clean(raw.session_id, 160),
+    run_id: clean(raw.last_code_run_id, 160),
+    task: clean(raw.last_run_task, 1000),
+    status: clean(raw.last_run_status, 40),
+    checkpoint_id: checkpointId,
+    resume_available: Boolean(checkpointId || workspaceCount > 0 || raw.resume_token),
+    workspace_file_count: workspaceCount,
+    receipt_sha: RECEIPT_RE.test(clean(raw.last_receipt_sha, 128)) ? clean(raw.last_receipt_sha, 128) : "",
+    manifest_sha: SHA_RE.test(clean(raw.last_manifest_sha, 128)) ? clean(raw.last_manifest_sha, 128) : "",
+    server_artifact_ids: Array.isArray(raw.artifact_ids)
+      ? raw.artifact_ids.slice(-20).map((value) => clean(value, 200))
+      : [],
+  };
+}
+
 function migrateV1(raw) {
   let deliveries = Array.isArray(raw?.deliveries) ? raw.deliveries : [];
   if (!deliveries.length && raw?.last) deliveries = [raw.last];
@@ -167,6 +223,9 @@ function migrateV1(raw) {
     sandbox_id: "",
     receipt_sha: "",
     manifest_sha: "",
+    artifact_ids: [],
+    checkpoint_id: "",
+    resume_pointer: null,
     verdict: "legacy_delivery",
     states: {
       generated: true,
@@ -183,10 +242,14 @@ function migrateV1(raw) {
       changed: false,
       size: null,
       sha256: "",
+      expected_sha256: "",
+      current_sha256: "",
+      artifact_id: stableArtifactId({ path, kind: entry?.kind, sha256: "" }),
       integrity: "legacy_unhashed",
     })),
     source_schema: "lolm.delivery.ledger.v1",
   }));
+  for (const record of records) record.artifact_ids = record.artifacts.map((item) => item.artifact_id);
   return {
     schema: CONTINUITY_SCHEMA,
     migrated_from: clean(raw?.schema || "lolm.delivery.ledger.v1", 100),
@@ -196,6 +259,7 @@ function migrateV1(raw) {
 }
 
 export function normalizeLedger(raw) {
+  if (raw == null) return { schema: CONTINUITY_SCHEMA, records: [], last_id: "", migrated_from: "" };
   if (raw?.schema === CONTINUITY_SCHEMA && Array.isArray(raw.records)) {
     return {
       schema: CONTINUITY_SCHEMA,
@@ -207,7 +271,9 @@ export function normalizeLedger(raw) {
   if (raw?.schema === "lolm.delivery.ledger.v1" || Array.isArray(raw?.deliveries) || raw?.last) {
     return migrateV1(raw);
   }
-  return { schema: CONTINUITY_SCHEMA, records: [], last_id: "", migrated_from: "" };
+  const error = new Error(`unsupported continuity ledger schema: ${clean(raw?.schema || "unknown", 100)}`);
+  error.code = "LOLM_CONTINUITY_UNSUPPORTED_SCHEMA";
+  throw error;
 }
 
 export async function loadContinuityLedger({ persistMigration = true } = {}) {
@@ -233,31 +299,44 @@ export function parseRunEvidence(transcript) {
     run_id: pick(/\brun(?:_id)?[\s:=]+([a-z0-9_.-]{6,160})\b/i),
     task_id: pick(/\btask\s+(task_[a-z0-9]+)\b/i),
     sandbox_id: pick(/\bsandbox\s+(sbx_[a-z0-9]+)\b/i),
-    verdict: pick(/\bverdict\s+(shipped|stuck|broken|refused|incomplete)\b/i).toLowerCase(),
+    checkpoint_id: pick(/\b(?:checkpoint|ckpt)[\s:=]+([a-z0-9_.-]{3,160})\b/i),
+    verdict: pick(/\bverdict\s+(shipped|stuck|broken|refused|incomplete|terminated)\b/i).toLowerCase(),
   };
 }
 
 export async function recordContinuity(entry) {
   const requestedKind = kindOf(entry.kind);
-  const receiptSha = clean(entry.receipt_sha, 128);
+  const session = entry.session_pointer && typeof entry.session_pointer === "object"
+    ? entry.session_pointer
+    : {};
+  const receiptSha = clean(entry.receipt_sha || session.receipt_sha, 128);
+  const manifestSha = clean(entry.manifest_sha || session.manifest_sha, 128);
   const inspected = [];
   for (const candidate of (entry.files || []).slice(0, MAX_ARTIFACTS)) {
     const evidence = await inspectFile(candidate);
+    const artifactKind = requestedKind === "artifact" ? evidence.kind : requestedKind;
     inspected.push({
       ...evidence,
-      kind: requestedKind === "artifact" ? evidence.kind : requestedKind,
+      kind: artifactKind,
+      artifact_id: stableArtifactId({ path: evidence.path, kind: artifactKind, sha256: evidence.sha256 || "" }),
     });
   }
   const allExist = inspected.length > 0 && inspected.every((item) => item.exists);
   const verified = entry.verified === true && allExist && RECEIPT_RE.test(receiptSha);
   const artifacts = inspected.map((item) => ({
     ...item,
+    expected_sha256: item.sha256 || "",
+    current_sha256: item.sha256 || "",
     integrity: !item.exists
       ? `unavailable_at_delivery:${item.reason || "unknown"}`
       : verified
         ? "verified_at_delivery"
         : "present_unverified_at_delivery",
   }));
+  const sessionId = clean(entry.session_id || session.session_id, 160);
+  const runId = clean(entry.run_id || session.run_id, 160);
+  const checkpointId = clean(entry.checkpoint_id || session.checkpoint_id, 160);
+  const resumeAvailable = Boolean(entry.resume_available ?? session.resume_available ?? checkpointId);
   const states = {
     generated: entry.generated !== false,
     verified,
@@ -268,16 +347,30 @@ export async function recordContinuity(entry) {
   const record = {
     id: clean(entry.id, 100) || `continuity-${randomUUID()}`,
     ts: Number(entry.ts || Date.now() / 1000),
-    task: clean(entry.task),
+    task: clean(entry.task || session.task),
     kind: requestedKind,
     destination: entry.destination ? resolve(String(entry.destination)) : "",
-    session_id: clean(entry.session_id, 160),
-    run_id: clean(entry.run_id, 160),
+    session_id: sessionId,
+    run_id: runId,
     task_id: clean(entry.task_id, 160),
     sandbox_id: clean(entry.sandbox_id, 160),
     receipt_sha: receiptSha,
-    manifest_sha: clean(entry.manifest_sha, 128),
-    verdict: clean(entry.verdict, 40) || (states.delivered ? "delivered" : "incomplete"),
+    manifest_sha: manifestSha,
+    artifact_ids: artifacts.map((item) => item.artifact_id),
+    server_artifact_ids: Array.isArray(session.server_artifact_ids)
+      ? session.server_artifact_ids.slice(-20).map((value) => clean(value, 200))
+      : [],
+    checkpoint_id: checkpointId,
+    resume_pointer: (sessionId || runId || checkpointId || resumeAvailable)
+      ? {
+          session_id: sessionId,
+          run_id: runId,
+          checkpoint_id: checkpointId,
+          available: resumeAvailable,
+          status: clean(entry.status || session.status || entry.verdict, 40),
+        }
+      : null,
+    verdict: clean(entry.verdict || session.status, 40) || (states.delivered ? "delivered" : "incomplete"),
     states,
     artifacts,
     source_schema: CONTINUITY_SCHEMA,
@@ -295,18 +388,21 @@ async function refreshRecord(record) {
   const receiptBound = RECEIPT_RE.test(clean(record?.receipt_sha, 128));
   for (const artifact of (record?.artifacts || []).slice(0, MAX_ARTIFACTS)) {
     const current = await inspectFile(artifact.path);
-    const expected = clean(artifact.sha256, 128);
-    const changed = Boolean(current.exists && expected && current.sha256 !== expected);
-    const verified = Boolean(
-      current.exists &&
-      expected &&
-      !changed &&
-      record?.states?.verified &&
-      receiptBound,
-    );
+    const expected = clean(artifact.expected_sha256 || artifact.sha256, 128);
+    const currentSha = clean(current.sha256, 128);
+    const changed = Boolean(current.exists && expected && currentSha !== expected);
+    const verified = Boolean(current.exists && expected && !changed && record?.states?.verified && receiptBound);
     artifacts.push({
       ...artifact,
       ...current,
+      sha256: expected || currentSha,
+      expected_sha256: expected,
+      current_sha256: currentSha,
+      artifact_id: clean(artifact.artifact_id, 100) || stableArtifactId({
+        path: current.path || artifact.path,
+        kind: artifact.kind || current.kind,
+        sha256: expected,
+      }),
       changed,
       verified,
       integrity: !current.exists
@@ -323,6 +419,7 @@ async function refreshRecord(record) {
   return {
     ...record,
     artifacts,
+    artifact_ids: artifacts.map((item) => item.artifact_id),
     files: artifacts.filter((item) => item.exists && !item.changed).map((item) => item.path),
     verified_files: artifacts.filter((item) => item.verified).map((item) => item.path),
     existing_files: artifacts.filter((item) => item.exists).map((item) => item.path),
@@ -362,11 +459,7 @@ export async function markRecordOpened(id) {
     const records = ledger.records.map((record) => {
       if (record.id !== id) return record;
       found = true;
-      return {
-        ...record,
-        states: { ...record.states, opened: true },
-        opened_ts: Date.now() / 1000,
-      };
+      return { ...record, states: { ...record.states, opened: true }, opened_ts: Date.now() / 1000 };
     });
     if (found) await atomicWrite(path, { ...ledger, records });
     return found;
@@ -394,9 +487,14 @@ export function classifyContinuityQuestion(text) {
   const locationCue = /\b(where|location|path|find|folder|directory)\b/.test(value);
   const deliveryVerb = /\b(deliver|delivered|save|saved|export|exported)\b/.test(value);
   const deliveryShape = /\b(did|was|were|actually|get|got)\b/.test(value);
-  const genericDelivery = /\bdid you actually (deliver|save|export)\b/.test(value);
 
-  if ((genericDelivery || ((explicit || pronounOnly) && deliveryVerb && deliveryShape)) && !locationCue) {
+  if (/^(retry that|try that again|redo that|run that again|retry the last run)[.!]?$/i.test(value)) {
+    return { intent: "retry", kind: "", ambiguous: false };
+  }
+  if (/^(resume that|continue that|pick that up|continue the last run|resume the last run)[.!]?$/i.test(value)) {
+    return { intent: "resume", kind: "", ambiguous: false };
+  }
+  if ((/\bdid you actually (deliver|save|export)\b/.test(value) || ((explicit || pronounOnly) && deliveryVerb && deliveryShape)) && !locationCue) {
     return { intent: "delivery", kind, ambiguous: pronounOnly };
   }
   if ((locationCue || /\b(saved|save|put)\b/.test(value)) && (explicit || pronounOnly)) {
@@ -437,13 +535,20 @@ export async function resolveContinuityQuestion(text) {
 
   const record = await findContinuityRecord({ kind: query.kind, index: 1 });
   if (!record) {
-    return {
-      handled: true,
-      ok: false,
-      code: 1,
-      intent: query.intent,
-      message: "No matching local continuity record was found.",
-    };
+    return { handled: true, ok: false, code: 1, intent: query.intent, message: "No matching local continuity record was found." };
+  }
+
+  if (query.intent === "retry") {
+    const referent = record.run_id || record.session_id || record.task_id || record.sandbox_id;
+    return referent && record.task
+      ? { handled: true, ok: true, code: 0, intent: "retry", action: "retry", record, value: referent }
+      : { handled: true, ok: false, code: 2, intent: "retry", record, message: "The last local record lacks a run pointer or task text to retry." };
+  }
+  if (query.intent === "resume") {
+    const available = Boolean(record.resume_pointer?.available || record.checkpoint_id);
+    return available && record.task
+      ? { handled: true, ok: true, code: 0, intent: "resume", action: "resume", record, value: record.checkpoint_id || record.run_id }
+      : { handled: true, ok: false, code: 2, intent: "resume", record, message: "The last local record has no checkpoint or workspace pointer to resume." };
   }
 
   const usable = record.artifacts.filter((item) => item.exists && !item.changed);
@@ -474,11 +579,9 @@ export async function resolveContinuityQuestion(text) {
       verified: verified.length === usable.length,
     };
   }
-
   if (query.intent === "created") {
     return { handled: true, ok: true, code: 0, intent: query.intent, record, artifacts: record.artifacts };
   }
-
   if (query.intent === "delivery") {
     const delivered = Boolean(
       record.states?.delivered &&
@@ -505,42 +608,28 @@ export async function resolveContinuityQuestion(text) {
               : "No. The recorded delivery is incomplete or unverified.",
     };
   }
-
   if (query.intent === "receipt") {
+    const valid = RECEIPT_RE.test(clean(record.receipt_sha, 128));
     return {
       handled: true,
-      ok: RECEIPT_RE.test(clean(record.receipt_sha, 128)),
-      code: RECEIPT_RE.test(clean(record.receipt_sha, 128)) ? 0 : 1,
+      ok: valid,
+      code: valid ? 0 : 1,
       intent: query.intent,
       record,
-      value: record.receipt_sha,
-      message: record.receipt_sha ? "" : "The local record has no receipt SHA.",
+      value: valid ? record.receipt_sha : "",
+      message: valid
+        ? ""
+        : record.receipt_sha
+          ? "The local record contains a malformed receipt SHA."
+          : "The local record has no receipt SHA.",
     };
   }
-
   if (query.intent === "run") {
-    const value = record.run_id || record.task_id || record.sandbox_id;
-    return {
-      handled: true,
-      ok: Boolean(value),
-      code: value ? 0 : 1,
-      intent: query.intent,
-      record,
-      value,
-      message: value ? "" : "The local record has no run identifier.",
-    };
+    const value = record.run_id || record.session_id || record.task_id || record.sandbox_id;
+    return { handled: true, ok: Boolean(value), code: value ? 0 : 1, intent: query.intent, record, value, message: value ? "" : "The local record has no run identifier." };
   }
-
   if (query.intent === "task") {
-    return {
-      handled: true,
-      ok: Boolean(record.task),
-      code: record.task ? 0 : 1,
-      intent: query.intent,
-      record,
-      value: record.task,
-      message: record.task ? "" : "The local record has no task text.",
-    };
+    return { handled: true, ok: Boolean(record.task), code: record.task ? 0 : 1, intent: query.intent, record, value: record.task, message: record.task ? "" : "The local record has no task text." };
   }
   return null;
 }
