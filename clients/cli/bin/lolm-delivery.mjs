@@ -72,6 +72,25 @@ async function runCore(args) {
   });
 }
 
+function rewritePresentation(text) {
+  let rendered = String(text || "").split(CORE_VERSION).join(VERSION);
+  if (!rendered.includes("artifact last|open")) {
+    rendered = rendered.replace(
+      "  receipts              Recent sealed code receipts.\n",
+      "  receipts              Recent sealed code receipts.\n" +
+      "  artifact last|open    Show or open the last verified local artifact.\n",
+    );
+  }
+  if (!rendered.includes("--trace")) {
+    rendered = rendered.replace(
+      "  --quiet, -q           less progress\n",
+      "  --quiet, -q           less progress\n" +
+      "  --trace               code: show the full controller and sandbox stream\n",
+    );
+  }
+  return rendered;
+}
+
 async function runCorePresentation(args) {
   return await new Promise((resolve) => {
     const child = spawn(process.execPath, [coreCli, ...args], {
@@ -89,9 +108,8 @@ async function runCorePresentation(args) {
       resolve(1);
     });
     child.once("exit", (code) => {
-      const rewrite = (text) => String(text || "").split(CORE_VERSION).join(VERSION);
-      if (stdout) process.stdout.write(rewrite(stdout));
-      if (stderr) process.stderr.write(rewrite(stderr));
+      if (stdout) process.stdout.write(rewritePresentation(stdout));
+      if (stderr) process.stderr.write(rewritePresentation(stderr));
       resolve(Number.isInteger(code) ? code : 1);
     });
   });
@@ -125,14 +143,18 @@ async function main() {
   }
 
   const next = [...argv];
-  let autoDestination = "";
+  let deliveryDestination = "";
+  let automaticDestination = false;
   let kind = "";
   if (command === "code") {
     kind = requestedArtifactKind(task);
-    const hasSave = next.includes("--save");
-    if (kind && !hasSave) {
-      autoDestination = makeDeliveryDirectory(task);
-      next.push("--save", autoDestination);
+    const saveIndex = next.indexOf("--save");
+    if (saveIndex >= 0 && next[saveIndex + 1]) {
+      deliveryDestination = next[saveIndex + 1];
+    } else if (kind) {
+      deliveryDestination = makeDeliveryDirectory(task);
+      automaticDestination = true;
+      next.push("--save", deliveryDestination);
     }
     const traceIndex = next.indexOf("--trace");
     const trace = traceIndex >= 0;
@@ -143,22 +165,24 @@ async function main() {
   }
 
   const code = await runCore(next);
-  if (!autoDestination) return code;
   if (code !== 0) return code;
+  if (!kind || !deliveryDestination) return code;
 
-  const files = await walkFiles(autoDestination);
+  const files = await walkFiles(deliveryDestination);
   const delivered = selectDeliveredArtifacts(files, kind);
   if (!delivered.length) {
     process.stderr.write(
       `LOLM did not deliver the requested ${kind || "artifact"}. ` +
-      `The run may have created only source code inside ${autoDestination}.\n`,
+      `The run may have created only source code inside ${deliveryDestination}.\n`,
     );
     return 1;
   }
   const saved = await recordDelivery({
     task,
     kind,
-    destination: requestedDestination(task) || autoDestination,
+    destination: automaticDestination
+      ? (requestedDestination(task) || deliveryDestination)
+      : deliveryDestination,
     files: delivered,
   });
   process.stdout.write(`delivered ${saved.kind}\n`);
