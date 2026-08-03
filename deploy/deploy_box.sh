@@ -73,15 +73,31 @@ rsync -rc --delete --rsync-path="sudo rsync" site/ "$HOST:$WEB/"
 echo "[deploy] pinning application root into the service venv"
 ssh "$HOST" "set -e; SITE=\$('$APP/.venv/bin/python' -c 'import site; print(site.getsitepackages()[0])'); printf '%s\n' '$APP' > \"\$SITE/lolm_app_root.pth\""
 
-echo "[deploy] proving runtime imports and the exact-byte artifact patch"
+echo "[deploy] proving runtime imports and artifact/task-state patches"
 ssh "$HOST" "cd / && '$APP/.venv/bin/python' - <<'PY'
-from lolm.control.task_state import load_or_init, policy_action
+from lolm.control.task_state import (
+    allow_finalize_from_state,
+    load_or_init,
+    observe_workspace_artifacts,
+    policy_action,
+    update_task_state,
+)
 from local_ui.code_agent import CodeAgent
 assert getattr(CodeAgent, '_artifact_delivery_patch', False), 'artifact delivery patch not active'
 assert getattr(CodeAgent, '_credential_safety_patch', False), 'credential safety patch not active'
-st = load_or_init('deployment import self-test', session='deploy-self-test', resume=False)
-assert policy_action(st)['block_finalize'] is True
-print('runtime patches + task state OK')
+assert getattr(CodeAgent, '_task_state_artifact_patch', False), 'task-state artifact bridge not active'
+st = load_or_init('create output.pdf', session='deploy-self-test', resume=False)
+st = update_task_state(
+    st,
+    observation='PDF_READY output.pdf',
+    action='run',
+    result={'files': ['main.py'], 'exit_ok': True, 'produced_output': True},
+)
+assert allow_finalize_from_state(st) is False
+observe_workspace_artifacts(st, ['main.py', 'output.pdf'])
+assert allow_finalize_from_state(st) is True
+assert policy_action(st)['block_finalize'] is False
+print('runtime patches + generated-artifact task state OK')
 PY"
 
 echo "[deploy] clearing stale bytecode + restarting $SVC"
