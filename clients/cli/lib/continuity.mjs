@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Qira LLC. All rights reserved.
 /** Deterministic cross-command continuity and local artifact integrity. */
 import { createHash, randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
 import {
-  access,
   mkdir,
   open,
   readFile,
@@ -10,12 +10,14 @@ import {
   stat,
   unlink,
   writeFile,
+  lstat,
 } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 
 export const CONTINUITY_SCHEMA = "lolm.continuity.ledger.v2";
 const MAX_RECORDS = 200;
+const MAX_ARTIFACTS_PER_RECORD = 100;
 const LOCK_RETRIES = 300;
 const LOCK_STALE_MS = 30_000;
 
@@ -33,10 +35,11 @@ function cleanText(value, limit = 1000) {
 
 function normalizedKind(value) {
   const kind = cleanText(value, 40).toLowerCase();
-  if (["doc", "document", "word"].includes(kind)) return "document";
-  if (["jpg", "jpeg", "png", "svg", "webp"].includes(kind)) return "image";
+  if (["doc", "document", "word", "report", "letter"].includes(kind)) return "document";
+  if (["jpg", "jpeg", "png", "svg", "webp", "picture"].includes(kind)) return "image";
   if (["xls", "excel", "spreadsheet", "csv"].includes(kind)) return "xlsx";
   if (["ppt", "powerpoint", "slides", "presentation"].includes(kind)) return "pptx";
+  if (["zip", "tar", "archive"].includes(kind)) return "archive";
   return kind || "artifact";
 }
 
@@ -58,8 +61,12 @@ function sleep(ms) {
 
 async function atomicWriteJson(path, value) {
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
-  await writeFile(temporary, JSON.stringify(value, null, 2) + "\n", { mode: 0o600 });
-  await rename(temporary, path);
+  try {
+    await writeFile(temporary, JSON.stringify(value, null, 2) + "\n", { mode: 0o600 });
+    await rename(temporary, path);
+  } finally {
+    try { await unlink(temporary); } catch { /* renamed or already absent */ }
+  }
 }
 
 async function withLedgerLock(fn) {
@@ -80,7 +87,9 @@ async function withLedgerLock(fn) {
           await unlink(lockPath);
           continue;
         }
-      } catch { /* lock disappeared */ }
+      } catch (lockError) {
+        if (lockError?.code !== "ENOENT") throw lockError;
+      }
       await sleep(Math.min(100, 5 + attempt));
     }
   }
@@ -94,34 +103,60 @@ async function withLedgerLock(fn) {
 }
 
 async function readRawLedger(path = continuityLedgerPath()) {
-  try { return JSON.parse(await readFile(path, "utf8")); }
-  catch { return null; }
+  let text;
+  try {
+    text = await readFile(path, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    const wrapped = new Error(`continuity ledger contains invalid JSON: ${path}`);
+    wrapped.code = "LOLM_CONTINUITY_INVALID_JSON";
+    wrapped.cause = error;
+    throw wrapped;
+  }
+}
+
+async function hashFile(path) {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest("hex");
 }
 
 async function fileEvidence(path) {
   const absolute = resolve(String(path));
   try {
-    await access(absolute);
-    const info = await stat(absolute);
-    if (!info.isFile()) return { path: absolute, exists: false, changed: false, reason: "not_file" };
-    const body = await readFile(absolute);
+    const linkInfo = await lstat(absolute);
+    if (linkInfo.isSymbolicLink()) {
+      return { path: absolute, exists: false, changed: false, reason: "symlink" };
+    }
+    if (!linkInfo.isFile()) {
+      return { path: absolute, exists: false, changed: false, reason: "not_file" };
+    }
     return {
       path: absolute,
       name: absolute.split(/[\\/]/).at(-1) || absolute,
       kind: inferKindFromPath(absolute),
       exists: true,
       changed: false,
-      size: body.length,
-      sha256: createHash("sha256").update(body).digest("hex"),
+      size: linkInfo.size,
+      sha256: await hashFile(absolute),
     };
-  } catch {
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      return { path: absolute, exists: false, changed: false, reason: "unreadable" };
+    }
     return { path: absolute, exists: false, changed: false, reason: "missing" };
   }
 }
 
 function migrateV1(raw) {
-  const deliveries = Array.isArray(raw?.deliveries) ? raw.deliveries : [];
-  const records = deliveries.map((entry) => ({
+  let deliveries = Array.isArray(raw?.deliveries) ? raw.deliveries : [];
+  if (!deliveries.length && raw?.last) deliveries = [raw.last];
+  const records = deliveries.slice(-MAX_RECORDS).map((entry) => ({
     id: `migrated-${randomUUID()}`,
     ts: Number(entry?.ts || 0),
     task: cleanText(entry?.task, 1000),
@@ -141,7 +176,7 @@ function migrateV1(raw) {
       delivered: true,
       opened: false,
     },
-    artifacts: (entry?.files || []).map((path) => ({
+    artifacts: (entry?.files || []).slice(0, MAX_ARTIFACTS_PER_RECORD).map((path) => ({
       path: resolve(String(path)),
       name: String(path).split(/[\\/]/).at(-1) || String(path),
       kind: normalizedKind(entry?.kind),
@@ -155,8 +190,8 @@ function migrateV1(raw) {
   }));
   return {
     schema: CONTINUITY_SCHEMA,
-    migrated_from: raw?.schema || "lolm.delivery.ledger.v1",
-    records: records.slice(-MAX_RECORDS),
+    migrated_from: cleanText(raw?.schema || "lolm.delivery.ledger.v1", 100),
+    records,
     last_id: records.at(-1)?.id || "",
   };
 }
@@ -170,7 +205,9 @@ export function normalizeLedger(raw) {
       migrated_from: cleanText(raw.migrated_from, 100),
     };
   }
-  if (raw?.schema === "lolm.delivery.ledger.v1" || Array.isArray(raw?.deliveries)) return migrateV1(raw);
+  if (raw?.schema === "lolm.delivery.ledger.v1" || Array.isArray(raw?.deliveries) || raw?.last) {
+    return migrateV1(raw);
+  }
   return { schema: CONTINUITY_SCHEMA, records: [], last_id: "", migrated_from: "" };
 }
 
@@ -182,7 +219,9 @@ export async function loadContinuityLedger({ persistMigration = true } = {}) {
     return await withLedgerLock(async (lockedPath) => {
       const currentRaw = await readRawLedger(lockedPath);
       const current = normalizeLedger(currentRaw);
-      if (currentRaw && currentRaw.schema !== CONTINUITY_SCHEMA) await atomicWriteJson(lockedPath, current);
+      if (currentRaw && currentRaw.schema !== CONTINUITY_SCHEMA) {
+        await atomicWriteJson(lockedPath, current);
+      }
       return current;
     });
   }
@@ -206,20 +245,20 @@ export function parseRunEvidence(transcript) {
 export async function recordContinuity(entry) {
   const requestedKind = normalizedKind(entry.kind);
   const artifacts = [];
-  for (const candidate of entry.files || []) {
+  for (const candidate of (entry.files || []).slice(0, MAX_ARTIFACTS_PER_RECORD)) {
     const evidence = await fileEvidence(candidate);
     artifacts.push({
       ...evidence,
       kind: requestedKind === "artifact" ? evidence.kind : requestedKind,
-      integrity: evidence.exists ? "verified_at_delivery" : "missing_at_delivery",
+      integrity: evidence.exists ? "verified_at_delivery" : `unavailable_at_delivery:${evidence.reason || "unknown"}`,
     });
   }
-  const verified = entry.verified === true && artifacts.some((item) => item.exists);
+  const allExist = artifacts.length > 0 && artifacts.every((item) => item.exists);
   const states = {
     generated: entry.generated !== false,
-    verified,
-    exported: entry.exported !== false && artifacts.some((item) => item.exists),
-    delivered: entry.delivered !== false && artifacts.some((item) => item.exists),
+    verified: entry.verified === true && allExist,
+    exported: entry.exported !== false && allExist,
+    delivered: entry.delivered !== false && allExist,
     opened: Boolean(entry.opened),
   };
   const record = {
@@ -250,7 +289,7 @@ export async function recordContinuity(entry) {
 
 async function refreshRecord(record) {
   const artifacts = [];
-  for (const artifact of record?.artifacts || []) {
+  for (const artifact of (record?.artifacts || []).slice(0, MAX_ARTIFACTS_PER_RECORD)) {
     const current = await fileEvidence(artifact.path);
     const expected = cleanText(artifact.sha256, 128);
     const changed = Boolean(current.exists && expected && current.sha256 !== expected);
@@ -261,7 +300,7 @@ async function refreshRecord(record) {
       changed,
       verified,
       integrity: !current.exists
-        ? "missing"
+        ? current.reason || "missing"
         : changed
           ? "changed"
           : verified
@@ -288,7 +327,7 @@ async function refreshRecord(record) {
 function kindMatches(record, kind) {
   const wanted = normalizedKind(kind);
   if (!kind || wanted === "artifact") return true;
-  if (record.kind === wanted) return true;
+  if (normalizedKind(record.kind) === wanted) return true;
   return (record.artifacts || []).some((item) => normalizedKind(item.kind) === wanted);
 }
 
@@ -296,7 +335,7 @@ export async function listContinuityRecords({ kind = "", limit = 20 } = {}) {
   const ledger = await loadContinuityLedger();
   const selected = ledger.records
     .filter((record) => kindMatches(record, kind))
-    .slice(-Math.max(1, limit))
+    .slice(-Math.max(1, Math.min(MAX_RECORDS, Number(limit) || 20)))
     .reverse();
   const out = [];
   for (const record of selected) out.push(await refreshRecord(record));
@@ -316,7 +355,11 @@ export async function markRecordOpened(id) {
     const records = ledger.records.map((record) => {
       if (record.id !== id) return record;
       changed = true;
-      return { ...record, states: { ...record.states, opened: true }, opened_ts: Date.now() / 1000 };
+      return {
+        ...record,
+        states: { ...record.states, opened: true },
+        opened_ts: Date.now() / 1000,
+      };
     });
     if (changed) await atomicWriteJson(path, { ...ledger, records });
     return changed;
@@ -341,19 +384,30 @@ export function classifyContinuityQuestion(text) {
   const kind = referentKind(t);
   const explicitReferent = Boolean(kind || /\b(file|artifact)\b/.test(t));
   const pronounOnly = !explicitReferent && /\b(it|that|this)\b/.test(t);
+
   if (/\b(where|location|path|saved|save|put|find|folder|directory)\b/.test(t) && (explicitReferent || pronounOnly)) {
     return { intent: "where", kind, ambiguous: pronounOnly };
   }
   if (/\b(open|show me|launch)\b/.test(t) && (explicitReferent || pronounOnly)) {
     return { intent: "open", kind, ambiguous: pronounOnly };
   }
-  if (/\b(what did you (create|make|generate)|what was (created|made|generated)|which files? did you (create|make)|what files? were created)\b/.test(t)) {
+  if (/\b(what did you (create|make|generate)|what was (created|made|generated)|which files? did you (create|make|generate)|what files? were (created|made|generated)|what files? (was|were) (created|made|generated))\b/.test(t)) {
     return { intent: "created", kind, ambiguous: false };
   }
-  if (/\b(did (it|that|the file|the artifact) (deliver|save|export)|did (it|that) actually get (delivered|saved|exported)|was (it|that|the file|the artifact) (delivered|saved|exported)|did you actually (deliver|save|export))\b/.test(t)) {
+
+  const genericDelivery = /\bdid you actually (deliver|save|export)\b/.test(t);
+  const referentDelivery = (explicitReferent || pronounOnly) &&
+    /\b(deliver|delivered|save|saved|export|exported)\b/.test(t) &&
+    /\b(did|was|were|actually|get|got)\b/.test(t);
+  if (genericDelivery || referentDelivery) {
     return { intent: "delivery", kind, ambiguous: pronounOnly };
   }
-  if (/\b(last|previous|prior)\s+(task|run|receipt)\b/.test(t) || /\bwhat (was|is) (the )?(last|previous) (task|run|receipt)\b/.test(t) || /\bshow (me )?(the )?(last|previous) (task|run|receipt)\b/.test(t)) {
+
+  if (
+    /\b(last|previous|prior)\s+(task|run|receipt)\b/.test(t) ||
+    /\bwhat (was|is) (the )?(last|previous) (task|run|receipt)\b/.test(t) ||
+    /\bshow (me )?(the )?(last|previous) (task|run|receipt)\b/.test(t)
+  ) {
     const subject = t.includes("receipt") ? "receipt" : t.includes("run") ? "run" : "task";
     return { intent: subject, kind, ambiguous: false };
   }
@@ -371,21 +425,32 @@ export async function resolveContinuityQuestion(text) {
         ok: false,
         code: 2,
         intent: "clarify",
-        message: "More than one recent artifact could match. Name the type, such as PDF, document, image, spreadsheet, slides, or HTML.",
+        message: "More than one recent artifact could match. Name the type, such as PDF, document, image, spreadsheet, slides, HTML, or archive.",
       };
     }
   }
+
   const record = await findContinuityRecord({ kind: query.kind, index: 1 });
-  if (!record) return { handled: true, ok: false, code: 1, message: "No matching local continuity record was found." };
+  if (!record) {
+    return {
+      handled: true,
+      ok: false,
+      code: 1,
+      intent: query.intent,
+      message: "No matching local continuity record was found.",
+    };
+  }
+
   const usable = record.artifacts.filter((item) => item.exists && !item.changed);
   const verified = record.artifacts.filter((item) => item.verified);
   const changed = record.artifacts.filter((item) => item.changed);
   const missing = record.artifacts.filter((item) => !item.exists);
+
   if (query.intent === "where" || query.intent === "open") {
     if (!usable.length) {
       const reason = changed.length
         ? "The recorded file exists but its SHA-256 has changed since delivery."
-        : "The recorded local file is missing.";
+        : "The recorded local file is missing or unreadable.";
       return { handled: true, ok: false, code: 1, intent: query.intent, record, message: reason };
     }
     return {
@@ -398,9 +463,18 @@ export async function resolveContinuityQuestion(text) {
       verified: verified.length === usable.length,
     };
   }
+
   if (query.intent === "created") {
-    return { handled: true, ok: true, code: 0, intent: query.intent, record, artifacts: record.artifacts };
+    return {
+      handled: true,
+      ok: true,
+      code: 0,
+      intent: query.intent,
+      record,
+      artifacts: record.artifacts,
+    };
   }
+
   if (query.intent === "delivery") {
     const delivered = Boolean(
       record.states?.delivered &&
@@ -421,12 +495,13 @@ export async function resolveContinuityQuestion(text) {
         : changed.length
           ? "No longer verified. At least one delivered file has changed."
           : missing.length
-            ? "No longer available. At least one delivered local file is missing."
+            ? "No longer available. At least one delivered local file is missing or unreadable."
             : record.source_schema === "lolm.delivery.ledger.v1"
               ? "A legacy delivery path exists, but the old record has no SHA-256 proof and cannot be called verified."
               : "No. The recorded delivery is incomplete or unverified.",
     };
   }
+
   if (query.intent === "receipt") {
     return {
       handled: true,
@@ -438,6 +513,7 @@ export async function resolveContinuityQuestion(text) {
       message: record.receipt_sha ? "" : "The local record has no receipt SHA.",
     };
   }
+
   if (query.intent === "run") {
     const value = record.run_id || record.task_id || record.sandbox_id;
     return {
@@ -450,6 +526,7 @@ export async function resolveContinuityQuestion(text) {
       message: value ? "" : "The local record has no run identifier.",
     };
   }
+
   if (query.intent === "task") {
     return {
       handled: true,
