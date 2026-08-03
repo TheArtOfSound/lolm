@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Qira LLC. All rights reserved.
 /** Local artifact delivery, destination inference, and cross-command continuity. */
 import { access, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
-import { extname, join, resolve } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 
 const VALUE_FLAGS = new Set([
@@ -131,8 +131,8 @@ function ledgerPath() {
 }
 
 export async function recordDelivery(entry) {
-  const path = ledgerPath();
-  await mkdir(resolve(path, ".."), { recursive: true, mode: 0o700 });
+  const path = resolve(ledgerPath());
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   let previous = { schema: "lolm.delivery.ledger.v1", deliveries: [] };
   try { previous = JSON.parse(await readFile(path, "utf8")); } catch { /* new ledger */ }
   const deliveries = Array.isArray(previous.deliveries) ? previous.deliveries.slice(-99) : [];
@@ -151,7 +151,7 @@ export async function recordDelivery(entry) {
 
 export async function loadLastDelivery() {
   try {
-    const ledger = JSON.parse(await readFile(ledgerPath(), "utf8"));
+    const ledger = JSON.parse(await readFile(resolve(ledgerPath()), "utf8"));
     const entry = ledger.last || (ledger.deliveries || []).at(-1);
     if (!entry) return null;
     const existing = [];
