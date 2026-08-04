@@ -126,6 +126,74 @@ def test_bwrap_jail_hides_host_fs_and_net(tmp_path):
     assert ("No such file" in r["stdout"] or "cannot access" in r["stdout"])  # /home invisible
 
 
+
+def test_every_run_has_mandatory_admission_receipt(tmp_path):
+    sb = Sandbox(tmp_path)
+    rec = sb.run("echo admitted")
+    assert rec["blocked"] is False
+    assert rec["admission"]["schema"] == "lolm.command_admission.v1"
+    assert rec["admission"]["accepted"] is True
+    assert rec["admission_fingerprint"] == rec["admission"]["fingerprint"]
+    assert rec["outcome_class"] == "admitted"
+
+
+def test_direct_sandbox_calls_cannot_bypass_admission(tmp_path):
+    sb = Sandbox(tmp_path)
+    cases = {
+        "Open index.html in a browser": "natural_language_command",
+        "```sh\necho no\n```": "markdown_in_command",
+        "xdg-open index.html": "desktop_open_unavailable",
+        "node --check <(cat app.js)": "process_substitution",
+        "cat ../../etc/passwd": "path_traversal",
+        "curl https://example.com/data": "network_not_admitted",
+        "pip install requests": "package_install_not_admitted",
+    }
+    for command, reason in cases.items():
+        before = len(sb.commands)
+        rec = sb.run(command)
+        assert rec["blocked"] is True, command
+        assert rec["exit_code"] is None
+        assert reason in rec["admission"]["reason_codes"]
+        assert len(sb.commands) == before + 1
+
+
+def test_empty_command_is_rejected_and_recorded_by_admission(tmp_path):
+    sb = Sandbox(tmp_path)
+    rec = sb.run("")
+    assert rec["blocked"] is True
+    assert "empty_command" in rec["admission"]["reason_codes"]
+    assert sb.commands[-1]["admission_fingerprint"] == rec["admission_fingerprint"]
+
+
+def test_explicit_network_contract_is_visible_in_receipt(tmp_path, monkeypatch):
+    import local_ui.sandbox as sbx
+
+    class Completed:
+        returncode = 0
+        stdout = "cloned"
+        stderr = ""
+
+    monkeypatch.setattr(sbx, "_HAS_BWRAP", False)
+    monkeypatch.setattr(sbx.subprocess, "run", lambda *args, **kwargs: Completed())
+    sb = sbx.Sandbox(tmp_path)
+    rec = sb.run(
+        "git clone https://github.com/example/repo repo",
+        isolated=False,
+        admission_context={"source": "test.network", "allow_network": True},
+    )
+    assert rec["blocked"] is False
+    assert rec["admission"]["contract"]["allow_network"] is True
+    assert rec["admission"]["accepted"] is True
+
+
+def test_isolation_failure_is_not_mislabeled_as_command_rejection(tmp_path, monkeypatch):
+    import local_ui.sandbox as sbx
+    monkeypatch.setattr(sbx, "_HAS_BWRAP", False)
+    rec = sbx.Sandbox(tmp_path).run("echo hi", isolated=True)
+    assert rec["admission"]["accepted"] is True
+    assert rec["outcome_class"] == "infrastructure_rejection"
+    assert rec["blocked"] is True
+
 def test_state_and_destroy(tmp_path):
     sb = Sandbox(tmp_path)
     sb.write_file("a.txt", "1")
