@@ -385,8 +385,51 @@
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function ownerKey(){ let k = localStorage.getItem('lolm_ws_owner'); if(!k){ k = 'w_'+Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem('lolm_ws_owner', k);} return k; }
-async function api(path, opts={}){ opts.headers = Object.assign({'Content-Type':'application/json','X-Workspace-Owner':ownerKey()}, opts.headers||{}); const r = await fetch('/api/demo/workspace'+path, opts); return r.json(); }
+/* Workspace identity: server only trusts X-LOLM-Api-Key (never client-supplied owner
+   names). Browser mints a free key once, keeps it in localStorage, and scopes every
+   conversation/memory/project to that principal — so chats persist per user/browser. */
+const API_KEY_LS = 'lolm_api_key';
+let _apiKeyPromise = null;
+function storedApiKey(){ const k = localStorage.getItem(API_KEY_LS) || ''; return (k.startsWith('lolm_') && k.split('_').length >= 3) ? k : ''; }
+async function ensureWorkspaceIdentity(forceRemint=false){
+  if(forceRemint){
+    try{ localStorage.removeItem(API_KEY_LS); }catch(_){}
+    _apiKeyPromise = null;
+  } else {
+    const existing = storedApiKey();
+    if(existing) return existing;
+    if(_apiKeyPromise) return _apiKeyPromise;
+  }
+  _apiKeyPromise = (async () => {
+    const r = await fetch('/api/demo/api-keys', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tier: 'free', label: 'browser workspace'}),
+    });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok || !j.api_key){
+      _apiKeyPromise = null;
+      throw new Error(j.error || ('could not mint workspace identity ('+r.status+')'));
+    }
+    try{ localStorage.setItem(API_KEY_LS, j.api_key); }catch(_){}
+    return j.api_key;
+  })();
+  return _apiKeyPromise;
+}
+async function api(path, opts={}){
+  const key = await ensureWorkspaceIdentity();
+  const headers = Object.assign({'Content-Type':'application/json','X-LOLM-Api-Key': key}, opts.headers||{});
+  const r = await fetch('/api/demo/workspace'+path, Object.assign({}, opts, {headers}));
+  if(r.status === 401){
+    // Key revoked / rotated — remint once and retry so persistence recovers.
+    const key2 = await ensureWorkspaceIdentity(true);
+    const r2 = await fetch('/api/demo/workspace'+path, Object.assign({}, opts, {
+      headers: Object.assign({}, headers, {'X-LOLM-Api-Key': key2}),
+    }));
+    return r2.json().catch(() => ({error: 'auth failed'}));
+  }
+  return r.json().catch(() => ({error: 'bad response'}));
+}
 
 let state = { conv:null, mode:'auto', modes:[], running:false, memories:[], runMemories:[] };
 let manualModesOpen = false;
@@ -1485,7 +1528,13 @@ function toggleSide(){
 // authHeaders(): every gated call carries the signed license (subscriber) and/or
 // admin token (the owner's shield). Tokens live in localStorage; the password is
 // sent ONCE over HTTPS to mint the token and never stored anywhere.
-function authHeaders(){ const h={'Content-Type':'application/json'}; const a=localStorage.getItem('lolm_admin'); if(a) h['X-LOLM-Admin']=a; const l=localStorage.getItem('lolm_license'); if(l) h['X-LOLM-License']=l; return h; }
+function authHeaders(){
+  const h={'Content-Type':'application/json'};
+  const a=localStorage.getItem('lolm_admin'); if(a) h['X-LOLM-Admin']=a;
+  const l=localStorage.getItem('lolm_license'); if(l) h['X-LOLM-License']=l;
+  const k=storedApiKey(); if(k) h['X-LOLM-Api-Key']=k;
+  return h;
+}
 function updateShield(){ const s=document.getElementById('shield'); if(!s) return; const on=!!localStorage.getItem('lolm_admin'); s.style.opacity=on?'0.9':'0.25'; s.style.filter=on?'drop-shadow(0 0 4px #16a34a)':'none'; s.title=on?'owner mode: unlimited (click to lock)':'owner unlock'; }
 async function shieldUnlock(){
   if(localStorage.getItem('lolm_admin')){ if(confirm('Leave owner mode?')){ localStorage.removeItem('lolm_admin'); updateShield(); refreshUsageChip(); } return; }
@@ -1592,7 +1641,13 @@ $('newProj').onclick = async () => { const name = prompt('Project name (repo wor
 async function loadProjects(){ const d = await api('/projects'); const ps=d.projects||[]; $('projList').innerHTML = ps.map(p=>`<div class="nav-link" title="${esc(p.repo_url||'')}">▦ ${esc(p.name)}</div>`).join('')+'<div class="nav-link" id="newProj2">＋ Add a project</div>'; const n=$('newProj2'); if(n) n.onclick=$('newProj').onclick; }
 
 document.querySelectorAll('#starters button').forEach(b => b.onclick = () => { $('prompt').value = b.dataset.q; send(); });
-loadModes(); loadConvs(); loadProjects(); renderSandbox({}); loadUserMemory();
+// Mint/reuse browser principal before any workspace load so conversations
+// actually come back after refresh (server denies anonymous X-Workspace-Owner).
+(async () => {
+  try { await ensureWorkspaceIdentity(); }
+  catch (e) { console.warn('workspace identity:', e.message || e); status('could not start private workspace — reload'); }
+  loadModes(); loadConvs(); loadProjects(); renderSandbox({}); loadUserMemory();
+})();
 </script>
 </body>
 </html>

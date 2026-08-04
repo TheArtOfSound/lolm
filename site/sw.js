@@ -12,7 +12,8 @@
  * but their failure degrades gracefully in the page, not here.
  */
 
-const CACHE = "lolm-v20-artifact-delivery-2026-08-02";  // bump on any shell/asset change
+const CACHE = "lolm-v21-workspace-identity-2026-08-03";  // bump on any shell/asset change
+// v21: browser mints free API key so workspace chats persist (X-LOLM-Api-Key).
 // v20: generated artifacts render as downloadable cards; exact-byte PDF delivery.
 // v19: product/pricing unification — canonical product-config, correct plan
 // quotas, safer pricing page, honest model wording.
