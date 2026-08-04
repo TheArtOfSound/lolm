@@ -1,0 +1,946 @@
+{
+  "done": {
+    "summary": "closed after html.render verification",
+    "steps": 0,
+    "ran": true,
+    "produced_output": true,
+    "stuck": false,
+    "budget_hit": false,
+    "receipt_sha": "5e42e1a5bc21cd96b7a56561c8c5eb99deeb28a6dc7b55371ed009124ccc6ec4",
+    "verdict": "shipped",
+    "ok": true,
+    "files": [
+      "index.html"
+    ],
+    "expected_ok": true,
+    "run_id": "sbx_ab7e6ae45a27",
+    "artifact_id": "art_57b9811cc2f7633ef25d6059",
+    "artifact_files": [
+      "index.html"
+    ],
+    "session_id": "sbx_ab7e6ae45a27",
+    "receipt": {
+      "budget_hit": false,
+      "error": "",
+      "expected": [],
+      "expected_ok": true,
+      "failed_runs": 0,
+      "files": [
+        "index.html"
+      ],
+      "green_runs": 1,
+      "kind": "code_agent",
+      "last_stdout_tail": "",
+      "missing_expected": [],
+      "nfet": {
+        "code_head": true,
+        "code_head_val_acc": 0.9123287796974182,
+        "counts": {},
+        "graft_available": true,
+        "last": null,
+        "mode": "none",
+        "n_decisions": 0,
+        "nfet_coding": true,
+        "timeline": []
+      },
+      "ok": true,
+      "produced_output": true,
+      "ran": true,
+      "reliability": {
+        "artifacts": {
+          "history": [],
+          "records": {
+            "index.html": {
+              "artifact_id": "art_aca3e92aec323523",
+              "checkpoint_id": "",
+              "content_sha256": "119344396cdd390e76dcc2760e390fe444d0d6a7e44abfa4892be8f420924dd4",
+              "contract_clause_ids": [],
+              "created_at_step": 0,
+              "delivery_status": "delivered",
+              "language_or_mime": "html",
+              "mime": "text/html",
+              "path": "index.html",
+              "role": "deliverable",
+              "size": 3675,
+              "source_candidate_id": "",
+              "supersedes": "",
+              "validators_required": [
+                "html.static_lint",
+                "html.render"
+              ],
+              "validators_run": [],
+              "verifier_evidence_ids": []
+            }
+          }
+        },
+        "branches": {
+          "accepted": [],
+          "failed": [],
+          "min_distance": 0.34
+        },
+        "budget": {
+          "freeze_reason": "",
+          "frozen": false,
+          "max_steps": 12,
+          "nonpositive_streak": 0,
+          "outcome_attribution": {
+            "actions": 0,
+            "deltas": [],
+            "frozen": false,
+            "nonpositive_streak": 0,
+            "positive_delta_actions": 0,
+            "utility_rate": 0
+          },
+          "remaining": 12,
+          "used": 0
+        },
+        "capabilities": {
+          "facts": {
+            "desktop.open": {
+              "alternatives": [
+                "html.render",
+                "html.static_lint"
+              ],
+              "attempts": 1,
+              "available": false,
+              "capability_id": "desktop.open",
+              "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+              "evidence": "coding sandbox has no GUI desktop opener",
+              "observed_at": 1785642765.2729702,
+              "strength": "definitive"
+            },
+            "html.render": {
+              "alternatives": [
+                "html.static_lint"
+              ],
+              "attempts": 0,
+              "available": true,
+              "capability_id": "html.render",
+              "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+              "evidence": "static lint or Chromium path",
+              "observed_at": 1785642765.2719285,
+              "strength": "provisional"
+            },
+            "html.static_lint": {
+              "alternatives": [],
+              "attempts": 0,
+              "available": true,
+              "capability_id": "html.static_lint",
+              "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+              "evidence": "static lint always available",
+              "observed_at": 1785642765.2719262,
+              "strength": "definitive"
+            },
+            "node": {
+              "alternatives": [],
+              "attempts": 0,
+              "available": true,
+              "capability_id": "node",
+              "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+              "evidence": "which node",
+              "observed_at": 1785642765.2719245,
+              "strength": "inferred"
+            },
+            "pdf.exists": {
+              "alternatives": [],
+              "attempts": 0,
+              "available": true,
+              "capability_id": "pdf.exists",
+              "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+              "evidence": "filesystem check",
+              "observed_at": 1785642765.2719307,
+              "strength": "inferred"
+            },
+            "python3": {
+              "alternatives": [],
+              "attempts": 0,
+              "available": true,
+              "capability_id": "python3",
+              "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+              "evidence": "which python3",
+              "observed_at": 1785642765.2718947,
+              "strength": "inferred"
+            },
+            "syntax.python": {
+              "alternatives": [],
+              "attempts": 0,
+              "available": true,
+              "capability_id": "syntax.python",
+              "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+              "evidence": "python3 available",
+              "observed_at": 1785642765.2719033,
+              "strength": "inferred"
+            },
+            "unittest": {
+              "alternatives": [],
+              "attempts": 0,
+              "available": true,
+              "capability_id": "unittest",
+              "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+              "evidence": "stdlib unittest",
+              "observed_at": 1785642765.271907,
+              "strength": "inferred"
+            }
+          },
+          "fingerprint": "6d9b2f11f0be732c1a5efca2"
+        },
+        "checkpoints": {
+          "checkpoints": [
+            {
+              "checkpoint_id": "ckpt_f7cef21e8b14d18f",
+              "contract_coverage": 0.3333333333333333,
+              "created_ts": 1785642787.465975,
+              "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+              "file_contents": {
+                "index.html": "<omitted len=3675>"
+              },
+              "file_hashes": {
+                "index.html": "119344396cdd390e76dcc2760e390fe444d0d6a7e44abfa4892be8f420924dd4"
+              },
+              "green_hard": 1,
+              "meta": {
+                "check": {
+                  "contract_id": "ctr_6e698b546e960970",
+                  "contradictory": false,
+                  "exact_count": null,
+                  "green_hard": 1,
+                  "notes": [],
+                  "ok": true,
+                  "open_hard": 2,
+                  "paths": [
+                    "index.html"
+                  ],
+                  "required_paths": [
+                    "index.html"
+                  ],
+                  "violations": []
+                },
+                "independent_hashes": {
+                  "index.html": "119344396cdd390e76dcc2760e390fe444d0d6a7e44abfa4892be8f420924dd4"
+                },
+                "meaningful_why": "html.render green"
+              },
+              "open_hard": 2,
+              "rank_score": 13.333333333333334,
+              "receipt_parent": "",
+              "step": 0,
+              "tree_hash": "d65882c773f3563a665ca19d70ad4954c42b9990c811094d3bb23cf8a2c4271a",
+              "verified_meaningful": true,
+              "verifier_outputs": {
+                "html.render": {
+                  "animates": true,
+                  "name": "html.render",
+                  "ok": true,
+                  "raw_keys": [
+                    "working",
+                    "renders",
+                    "animates",
+                    "responds",
+                    "has_canvas",
+                    "console_errors",
+                    "reasons"
+                  ],
+                  "renders": true,
+                  "responds": true,
+                  "why": "working=true",
+                  "working": true
+                }
+              }
+            }
+          ],
+          "head_id": "ckpt_f7cef21e8b14d18f",
+          "rejected_regressions": []
+        },
+        "closed_early": true,
+        "closure": {
+          "closed": true,
+          "closure_step": 0,
+          "model_turns_blocked": 0,
+          "result": {
+            "blocked_model_turns": 0,
+            "checkpoint_id": "ckpt_f7cef21e8b14d18f",
+            "closed": true,
+            "independent_hashes": {
+              "index.html": "119344396cdd390e76dcc2760e390fe444d0d6a7e44abfa4892be8f420924dd4"
+            },
+            "manifest": {
+              "claimed_hashes_rejected": false,
+              "hashes": {
+                "index.html": "119344396cdd390e76dcc2760e390fe444d0d6a7e44abfa4892be8f420924dd4"
+              },
+              "paths": [
+                "index.html"
+              ]
+            },
+            "preconditions": {
+              "claimed_hashes_match": true,
+              "contract_ok": true,
+              "exact_manifest_ok": true,
+              "has_deliverables": true,
+              "has_file_contents": true,
+              "hashes_authoritative": true,
+              "no_open_hard": true,
+              "not_contradictory": true,
+              "receipt_signable": true,
+              "type_bytes_ok": true,
+              "validators_green": true
+            },
+            "ready": true,
+            "reason": "all closure preconditions met (independent hashes)",
+            "ts": 1785642787.4662912
+          },
+          "writes_blocked": 0
+        },
+        "confidence": null,
+        "contract": {
+          "clauses": [
+            {
+              "artifact_dependency": "index.html",
+              "capability_dependency": "",
+              "clause_id": "del_ce067680ac",
+              "clause_type": "deliverable",
+              "evidence": "present",
+              "feasibility": "executable",
+              "hardness": "hard",
+              "status": "green",
+              "text": "Deliver file index.html",
+              "verifier": "exists.path",
+              "waiver_policy": "none"
+            },
+            {
+              "artifact_dependency": "",
+              "capability_dependency": "html.render",
+              "clause_id": "beh_6db9b39e8f",
+              "clause_type": "behavior",
+              "evidence": "html.render ok",
+              "feasibility": "executable",
+              "hardness": "hard",
+              "status": "green",
+              "text": "Playable / renderable in browser (not desktop opener)",
+              "verifier": "html.render",
+              "waiver_policy": "none"
+            },
+            {
+              "artifact_dependency": "",
+              "capability_dependency": "desktop.open",
+              "clause_id": "forb_2849e7f340",
+              "clause_type": "forbidden_output",
+              "evidence": "not_violated",
+              "feasibility": "executable",
+              "hardness": "hard",
+              "status": "green",
+              "text": "Do not use desktop browser openers (xdg-open) as verification",
+              "verifier": "capability.negative",
+              "waiver_policy": "none"
+            }
+          ],
+          "contract_id": "ctr_6e698b546e960970",
+          "contradictions": [],
+          "contradictory": false,
+          "exact_count": null,
+          "feasibility": "executable",
+          "forbidden_extensions": [],
+          "forbidden_paths": [],
+          "green_hard": 3,
+          "open_hard": 0,
+          "optional_paths": [],
+          "primary_language": "html",
+          "required_paths": [
+            "index.html"
+          ],
+          "source_text": "Build a complete playable Snake game as a single index.html file. Use browser-native HTML, CSS, and JavaScript only. Verify JavaScript syntax and browser rendering. Do not create Python files."
+        },
+        "decisions": [],
+        "failures": {
+          "entries": {},
+          "environment_id": "6d9b2f11f0be732c1a5efca2",
+          "order": []
+        },
+        "last_decision": null,
+        "manifest_check": {
+          "contract_id": "ctr_6e698b546e960970",
+          "contradictory": false,
+          "exact_count": null,
+          "green_hard": 3,
+          "notes": [],
+          "ok": true,
+          "open_hard": 0,
+          "paths": [
+            "index.html"
+          ],
+          "required_paths": [
+            "index.html"
+          ],
+          "violations": []
+        },
+        "retrieval": {
+          "attempts": [],
+          "max_zero_streak": 2,
+          "zero_keys": {},
+          "zero_streak": 0
+        },
+        "runtime_manifest": {
+          "active_model": "",
+          "browser_verifier": "html.render",
+          "capabilities": [
+            "python3",
+            "unittest",
+            "html.render",
+            "pdf.exists",
+            "syntax.python",
+            "html.static_lint",
+            "node"
+          ],
+          "cli_version": "",
+          "controller_version": "reliability-v1-2026-08",
+          "data_sources": [],
+          "filesystem_scope": "sandbox",
+          "generated_at": 1785642765.2724073,
+          "graft_state": "graft",
+          "manifest_sha256": "c7d04d9540d56018a35457b790c4d87be0efc2d3aa8052de5e865cc2b854a1c1",
+          "memory_enabled": false,
+          "network_enabled": false,
+          "reasoner_profile": "host=Linux-7.0.0-1006-aws-x86_64-with-glibc2.43",
+          "schema": "lolm.runtime_manifest.v1",
+          "server_commit": "",
+          "tools": [
+            "sandbox.run",
+            "sandbox.write",
+            "syntax.python",
+            "html.static_lint"
+          ]
+        },
+        "schema": "lolm.reliability.run.v1",
+        "strategy": {
+          "artifact_schema": "single_html",
+          "checkpoint_base": "",
+          "dependency_plan": "stdlib_only",
+          "implementation_pattern": "",
+          "label": "initial",
+          "predicted_information_gain": 0,
+          "tool_plan": "sandbox_run",
+          "verifier_plan": "html.render"
+        }
+      },
+      "run_id": "sbx_ab7e6ae45a27",
+      "schema": "lolm.code.receipt.v2",
+      "steps": 0,
+      "stuck": false,
+      "summary": "closed after html.render verification",
+      "syntax_checked": [],
+      "syntax_error": "",
+      "syntax_ok": true,
+      "task": "Build a complete playable Snake game as a single index.html file. Use browser-native HTML, CSS, and JavaScript only. Verify JavaScript syntax and browser rendering. Do not create Python files.",
+      "trail": [
+        {
+          "bytes": 3675,
+          "op": "write",
+          "path": "index.html"
+        },
+        {
+          "blocked": false,
+          "command": "html.render",
+          "exit": 0,
+          "op": "verify",
+          "stderr_tail": "",
+          "stdout_tail": "html.render working=true"
+        }
+      ],
+      "ts": 1785642787,
+      "verdict": "shipped",
+      "verification": {
+        "artifact_manifest_ok": true,
+        "artifact_manifest_sha256": "17287f233b31020987463f496c35b0268ac6d2acd491f837bc2cb92b577283cf",
+        "contract_ok": true,
+        "execution_ok": true,
+        "syntax_ok": true
+      },
+      "verifies": 1,
+      "visual_missing_html": false,
+      "signed_at": 1785642787,
+      "receipt_sha": "5e42e1a5bc21cd96b7a56561c8c5eb99deeb28a6dc7b55371ed009124ccc6ec4",
+      "signature": {
+        "alg": "Ed25519",
+        "key_id": "local-2026-08",
+        "sig": "71NvGlrjRF0xtXrQ3UsCrU6CfdX51ZNly3aFDDlkKqc8yaMBlKT0qQ8KyHuCDZ_LO3e0SERFZVdCsJOO94KKDQ"
+      },
+      "signing_key": "local-2026-08",
+      "source": "api.demo.code.run",
+      "ledger_ts": 1785642787,
+      "prev_ledger_sha": "abf7127c61578eb9fb7eb6b9",
+      "ledger_sha": "25b225d8c21074e8357be290"
+    }
+  },
+  "receipt": {
+    "budget_hit": false,
+    "error": "",
+    "expected": [],
+    "expected_ok": true,
+    "failed_runs": 0,
+    "files": [
+      "index.html"
+    ],
+    "green_runs": 1,
+    "kind": "code_agent",
+    "last_stdout_tail": "",
+    "missing_expected": [],
+    "nfet": {
+      "code_head": true,
+      "code_head_val_acc": 0.9123287796974182,
+      "counts": {},
+      "graft_available": true,
+      "last": null,
+      "mode": "none",
+      "n_decisions": 0,
+      "nfet_coding": true,
+      "timeline": []
+    },
+    "ok": true,
+    "produced_output": true,
+    "ran": true,
+    "reliability": {
+      "artifacts": {
+        "history": [],
+        "records": {
+          "index.html": {
+            "artifact_id": "art_aca3e92aec323523",
+            "checkpoint_id": "",
+            "content_sha256": "119344396cdd390e76dcc2760e390fe444d0d6a7e44abfa4892be8f420924dd4",
+            "contract_clause_ids": [],
+            "created_at_step": 0,
+            "delivery_status": "delivered",
+            "language_or_mime": "html",
+            "mime": "text/html",
+            "path": "index.html",
+            "role": "deliverable",
+            "size": 3675,
+            "source_candidate_id": "",
+            "supersedes": "",
+            "validators_required": [
+              "html.static_lint",
+              "html.render"
+            ],
+            "validators_run": [],
+            "verifier_evidence_ids": []
+          }
+        }
+      },
+      "branches": {
+        "accepted": [],
+        "failed": [],
+        "min_distance": 0.34
+      },
+      "budget": {
+        "freeze_reason": "",
+        "frozen": false,
+        "max_steps": 12,
+        "nonpositive_streak": 0,
+        "outcome_attribution": {
+          "actions": 0,
+          "deltas": [],
+          "frozen": false,
+          "nonpositive_streak": 0,
+          "positive_delta_actions": 0,
+          "utility_rate": 0
+        },
+        "remaining": 12,
+        "used": 0
+      },
+      "capabilities": {
+        "facts": {
+          "desktop.open": {
+            "alternatives": [
+              "html.render",
+              "html.static_lint"
+            ],
+            "attempts": 1,
+            "available": false,
+            "capability_id": "desktop.open",
+            "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+            "evidence": "coding sandbox has no GUI desktop opener",
+            "observed_at": 1785642765.2729702,
+            "strength": "definitive"
+          },
+          "html.render": {
+            "alternatives": [
+              "html.static_lint"
+            ],
+            "attempts": 0,
+            "available": true,
+            "capability_id": "html.render",
+            "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+            "evidence": "static lint or Chromium path",
+            "observed_at": 1785642765.2719285,
+            "strength": "provisional"
+          },
+          "html.static_lint": {
+            "alternatives": [],
+            "attempts": 0,
+            "available": true,
+            "capability_id": "html.static_lint",
+            "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+            "evidence": "static lint always available",
+            "observed_at": 1785642765.2719262,
+            "strength": "definitive"
+          },
+          "node": {
+            "alternatives": [],
+            "attempts": 0,
+            "available": true,
+            "capability_id": "node",
+            "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+            "evidence": "which node",
+            "observed_at": 1785642765.2719245,
+            "strength": "inferred"
+          },
+          "pdf.exists": {
+            "alternatives": [],
+            "attempts": 0,
+            "available": true,
+            "capability_id": "pdf.exists",
+            "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+            "evidence": "filesystem check",
+            "observed_at": 1785642765.2719307,
+            "strength": "inferred"
+          },
+          "python3": {
+            "alternatives": [],
+            "attempts": 0,
+            "available": true,
+            "capability_id": "python3",
+            "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+            "evidence": "which python3",
+            "observed_at": 1785642765.2718947,
+            "strength": "inferred"
+          },
+          "syntax.python": {
+            "alternatives": [],
+            "attempts": 0,
+            "available": true,
+            "capability_id": "syntax.python",
+            "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+            "evidence": "python3 available",
+            "observed_at": 1785642765.2719033,
+            "strength": "inferred"
+          },
+          "unittest": {
+            "alternatives": [],
+            "attempts": 0,
+            "available": true,
+            "capability_id": "unittest",
+            "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+            "evidence": "stdlib unittest",
+            "observed_at": 1785642765.271907,
+            "strength": "inferred"
+          }
+        },
+        "fingerprint": "6d9b2f11f0be732c1a5efca2"
+      },
+      "checkpoints": {
+        "checkpoints": [
+          {
+            "checkpoint_id": "ckpt_f7cef21e8b14d18f",
+            "contract_coverage": 0.3333333333333333,
+            "created_ts": 1785642787.465975,
+            "environment_fingerprint": "6d9b2f11f0be732c1a5efca2",
+            "file_contents": {
+              "index.html": "<omitted len=3675>"
+            },
+            "file_hashes": {
+              "index.html": "119344396cdd390e76dcc2760e390fe444d0d6a7e44abfa4892be8f420924dd4"
+            },
+            "green_hard": 1,
+            "meta": {
+              "check": {
+                "contract_id": "ctr_6e698b546e960970",
+                "contradictory": false,
+                "exact_count": null,
+                "green_hard": 1,
+                "notes": [],
+                "ok": true,
+                "open_hard": 2,
+                "paths": [
+                  "index.html"
+                ],
+                "required_paths": [
+                  "index.html"
+                ],
+                "violations": []
+              },
+              "independent_hashes": {
+                "index.html": "119344396cdd390e76dcc2760e390fe444d0d6a7e44abfa4892be8f420924dd4"
+              },
+              "meaningful_why": "html.render green"
+            },
+            "open_hard": 2,
+            "rank_score": 13.333333333333334,
+            "receipt_parent": "",
+            "step": 0,
+            "tree_hash": "d65882c773f3563a665ca19d70ad4954c42b9990c811094d3bb23cf8a2c4271a",
+            "verified_meaningful": true,
+            "verifier_outputs": {
+              "html.render": {
+                "animates": true,
+                "name": "html.render",
+                "ok": true,
+                "raw_keys": [
+                  "working",
+                  "renders",
+                  "animates",
+                  "responds",
+                  "has_canvas",
+                  "console_errors",
+                  "reasons"
+                ],
+                "renders": true,
+                "responds": true,
+                "why": "working=true",
+                "working": true
+              }
+            }
+          }
+        ],
+        "head_id": "ckpt_f7cef21e8b14d18f",
+        "rejected_regressions": []
+      },
+      "closed_early": true,
+      "closure": {
+        "closed": true,
+        "closure_step": 0,
+        "model_turns_blocked": 0,
+        "result": {
+          "blocked_model_turns": 0,
+          "checkpoint_id": "ckpt_f7cef21e8b14d18f",
+          "closed": true,
+          "independent_hashes": {
+            "index.html": "119344396cdd390e76dcc2760e390fe444d0d6a7e44abfa4892be8f420924dd4"
+          },
+          "manifest": {
+            "claimed_hashes_rejected": false,
+            "hashes": {
+              "index.html": "119344396cdd390e76dcc2760e390fe444d0d6a7e44abfa4892be8f420924dd4"
+            },
+            "paths": [
+              "index.html"
+            ]
+          },
+          "preconditions": {
+            "claimed_hashes_match": true,
+            "contract_ok": true,
+            "exact_manifest_ok": true,
+            "has_deliverables": true,
+            "has_file_contents": true,
+            "hashes_authoritative": true,
+            "no_open_hard": true,
+            "not_contradictory": true,
+            "receipt_signable": true,
+            "type_bytes_ok": true,
+            "validators_green": true
+          },
+          "ready": true,
+          "reason": "all closure preconditions met (independent hashes)",
+          "ts": 1785642787.4662912
+        },
+        "writes_blocked": 0
+      },
+      "confidence": null,
+      "contract": {
+        "clauses": [
+          {
+            "artifact_dependency": "index.html",
+            "capability_dependency": "",
+            "clause_id": "del_ce067680ac",
+            "clause_type": "deliverable",
+            "evidence": "present",
+            "feasibility": "executable",
+            "hardness": "hard",
+            "status": "green",
+            "text": "Deliver file index.html",
+            "verifier": "exists.path",
+            "waiver_policy": "none"
+          },
+          {
+            "artifact_dependency": "",
+            "capability_dependency": "html.render",
+            "clause_id": "beh_6db9b39e8f",
+            "clause_type": "behavior",
+            "evidence": "html.render ok",
+            "feasibility": "executable",
+            "hardness": "hard",
+            "status": "green",
+            "text": "Playable / renderable in browser (not desktop opener)",
+            "verifier": "html.render",
+            "waiver_policy": "none"
+          },
+          {
+            "artifact_dependency": "",
+            "capability_dependency": "desktop.open",
+            "clause_id": "forb_2849e7f340",
+            "clause_type": "forbidden_output",
+            "evidence": "not_violated",
+            "feasibility": "executable",
+            "hardness": "hard",
+            "status": "green",
+            "text": "Do not use desktop browser openers (xdg-open) as verification",
+            "verifier": "capability.negative",
+            "waiver_policy": "none"
+          }
+        ],
+        "contract_id": "ctr_6e698b546e960970",
+        "contradictions": [],
+        "contradictory": false,
+        "exact_count": null,
+        "feasibility": "executable",
+        "forbidden_extensions": [],
+        "forbidden_paths": [],
+        "green_hard": 3,
+        "open_hard": 0,
+        "optional_paths": [],
+        "primary_language": "html",
+        "required_paths": [
+          "index.html"
+        ],
+        "source_text": "Build a complete playable Snake game as a single index.html file. Use browser-native HTML, CSS, and JavaScript only. Verify JavaScript syntax and browser rendering. Do not create Python files."
+      },
+      "decisions": [],
+      "failures": {
+        "entries": {},
+        "environment_id": "6d9b2f11f0be732c1a5efca2",
+        "order": []
+      },
+      "last_decision": null,
+      "manifest_check": {
+        "contract_id": "ctr_6e698b546e960970",
+        "contradictory": false,
+        "exact_count": null,
+        "green_hard": 3,
+        "notes": [],
+        "ok": true,
+        "open_hard": 0,
+        "paths": [
+          "index.html"
+        ],
+        "required_paths": [
+          "index.html"
+        ],
+        "violations": []
+      },
+      "retrieval": {
+        "attempts": [],
+        "max_zero_streak": 2,
+        "zero_keys": {},
+        "zero_streak": 0
+      },
+      "runtime_manifest": {
+        "active_model": "",
+        "browser_verifier": "html.render",
+        "capabilities": [
+          "python3",
+          "unittest",
+          "html.render",
+          "pdf.exists",
+          "syntax.python",
+          "html.static_lint",
+          "node"
+        ],
+        "cli_version": "",
+        "controller_version": "reliability-v1-2026-08",
+        "data_sources": [],
+        "filesystem_scope": "sandbox",
+        "generated_at": 1785642765.2724073,
+        "graft_state": "graft",
+        "manifest_sha256": "c7d04d9540d56018a35457b790c4d87be0efc2d3aa8052de5e865cc2b854a1c1",
+        "memory_enabled": false,
+        "network_enabled": false,
+        "reasoner_profile": "host=Linux-7.0.0-1006-aws-x86_64-with-glibc2.43",
+        "schema": "lolm.runtime_manifest.v1",
+        "server_commit": "",
+        "tools": [
+          "sandbox.run",
+          "sandbox.write",
+          "syntax.python",
+          "html.static_lint"
+        ]
+      },
+      "schema": "lolm.reliability.run.v1",
+      "strategy": {
+        "artifact_schema": "single_html",
+        "checkpoint_base": "",
+        "dependency_plan": "stdlib_only",
+        "implementation_pattern": "",
+        "label": "initial",
+        "predicted_information_gain": 0,
+        "tool_plan": "sandbox_run",
+        "verifier_plan": "html.render"
+      }
+    },
+    "run_id": "sbx_ab7e6ae45a27",
+    "schema": "lolm.code.receipt.v2",
+    "steps": 0,
+    "stuck": false,
+    "summary": "closed after html.render verification",
+    "syntax_checked": [],
+    "syntax_error": "",
+    "syntax_ok": true,
+    "task": "Build a complete playable Snake game as a single index.html file. Use browser-native HTML, CSS, and JavaScript only. Verify JavaScript syntax and browser rendering. Do not create Python files.",
+    "trail": [
+      {
+        "bytes": 3675,
+        "op": "write",
+        "path": "index.html"
+      },
+      {
+        "blocked": false,
+        "command": "html.render",
+        "exit": 0,
+        "op": "verify",
+        "stderr_tail": "",
+        "stdout_tail": "html.render working=true"
+      }
+    ],
+    "ts": 1785642787,
+    "verdict": "shipped",
+    "verification": {
+      "artifact_manifest_ok": true,
+      "artifact_manifest_sha256": "17287f233b31020987463f496c35b0268ac6d2acd491f837bc2cb92b577283cf",
+      "contract_ok": true,
+      "execution_ok": true,
+      "syntax_ok": true
+    },
+    "verifies": 1,
+    "visual_missing_html": false,
+    "signed_at": 1785642787,
+    "receipt_sha": "5e42e1a5bc21cd96b7a56561c8c5eb99deeb28a6dc7b55371ed009124ccc6ec4",
+    "signature": {
+      "alg": "Ed25519",
+      "key_id": "local-2026-08",
+      "sig": "71NvGlrjRF0xtXrQ3UsCrU6CfdX51ZNly3aFDDlkKqc8yaMBlKT0qQ8KyHuCDZ_LO3e0SERFZVdCsJOO94KKDQ"
+    },
+    "signing_key": "local-2026-08",
+    "source": "api.demo.code.run",
+    "ledger_ts": 1785642787,
+    "prev_ledger_sha": "abf7127c61578eb9fb7eb6b9",
+    "ledger_sha": "25b225d8c21074e8357be290"
+  },
+  "integrity": {
+    "schema_valid": true,
+    "receipt_hash_match": true,
+    "expected_sha": "5e42e1a5bc21cd96b7a56561c8c5eb99deeb28a6dc7b55371ed009124ccc6ec4",
+    "claimed_sha": "5e42e1a5bc21cd96b7a56561c8c5eb99deeb28a6dc7b55371ed009124ccc6ec4",
+    "signature_valid": true,
+    "signing_key": "local-2026-08",
+    "signature_reason": "ok",
+    "timestamp_valid": true,
+    "ledger_link_present": true,
+    "ledger_sha": "25b225d8c21074e8357be290",
+    "prev_ledger_sha": "abf7127c61578eb9fb7eb6b9",
+    "verdict_consistent": true,
+    "shipped_allowed": true,
+    "notes": [],
+    "verified_at": "2026-08-02T03:53:07.880Z",
+    "integrity": {
+      "verified": true,
+      "method": "sha256+Ed25519-v2"
+    }
+  }
+}

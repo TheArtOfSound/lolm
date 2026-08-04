@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Snake Game</title>
+<style>
+  body {
+    margin: 0;
+    background: #111;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    color: #fff;
+    font-family: sans-serif;
+    user-select: none;
+  }
+  canvas {
+    background: #000;
+    border: 2px solid #555;
+  }
+  #overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right:0;
+    bottom:0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    pointer-events: none;
+    font-size: 2rem;
+    color: #fff;
+    text-shadow: 0 0 5px #000;
+  }
+</style>
+</head>
+<body>
+<canvas id="game" width="400" height="400"></canvas>
+<div id="overlay"></div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const overlay = document.getElementById('overlay');
+
+  const CELL_SIZE = 20;
+  const COLS = canvas.width / CELL_SIZE;
+  const ROWS = canvas.height / CELL_SIZE;
+
+  const DIR = {
+    ArrowUp:    {x: 0, y: -1},
+    ArrowDown:  {x: 0, y: 1},
+    ArrowLeft:  {x: -1, y: 0},
+    ArrowRight: {x: 1, y: 0}
+  };
+
+  let snake, direction, nextDirection, food, score, gameInterval, running;
+
+  function init() {
+    snake = [{x: Math.floor(COLS/2), y: Math.floor(ROWS/2)}];
+    direction = {x: 0, y: -1};
+    nextDirection = direction;
+    placeFood();
+    score = 0;
+    running = true;
+    overlay.textContent = '';
+    clearInterval(gameInterval);
+    gameInterval = setInterval(gameLoop, 100);
+  }
+
+  function placeFood() {
+    while (true) {
+      const fx = Math.floor(Math.random()*COLS);
+      const fy = Math.floor(Math.random()*ROWS);
+      const conflict = snake.some(seg => seg.x===fx && seg.y===fy);
+      if (!conflict) {
+        food = {x: fx, y: fy};
+        break;
+      }
+    }
+  }
+
+  function gameLoop() {
+    // Update direction
+    direction = nextDirection;
+
+    // Compute new head
+    const head = {x: snake[0].x + direction.x, y: snake[0].y + direction.y};
+
+    // Wall collision
+    if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+      endGame();
+      return;
+    }
+
+    // Self collision
+    if (snake.some(seg => seg.x===head.x && seg.y===head.y)) {
+      endGame();
+      return;
+    }
+
+    // Add new head
+    snake.unshift(head);
+
+    // Food check
+    if (head.x===food.x && head.y===food.y) {
+      score++;
+      placeFood();
+    } else {
+      snake.pop(); // remove tail
+    }
+
+    draw();
+  }
+
+  function draw() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // Draw food
+    ctx.fillStyle = '#f00';
+    ctx.fillRect(food.x*CELL_SIZE, food.y*CELL_SIZE, CELL_SIZE, CELL_SIZE);
+
+    // Draw snake
+    ctx.fillStyle = '#0f0';
+    snake.forEach((seg, idx) => {
+      ctx.fillRect(seg.x*CELL_SIZE, seg.y*CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    });
+
+    // Score
+    ctx.fillStyle = '#fff';
+    ctx.font = '16px sans-serif';
+    ctx.fillText(`Score: ${score}`, 10, 20);
+  }
+
+  function endGame() {
+    running = false;
+    clearInterval(gameInterval);
+    overlay.textContent = `Game Over! Score: ${score}. Press Space to restart.`;
+  }
+
+  // Input handling
+  document.addEventListener('keydown', e => {
+    if (!DIR[e.key]) return;
+
+    const proposed = DIR[e.key];
+    // Prevent reversing into itself
+    if (snake.length > 1 && (proposed.x === -direction.x && proposed.y === -direction.y)) {
+      return;
+    }
+    nextDirection = proposed;
+  });
+
+  // Restart on Space
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && !running) {
+      init();
+    }
+  });
+
+  // Start the game
+  init();
+})();
+</script>
+</body>
+</html>

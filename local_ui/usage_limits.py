@@ -160,6 +160,10 @@ def _identity_and_tier(request: Any) -> Dict[str, Any]:
 
     Returns keys: tier, identity, admin, unlimited (bool). unlimited covers
     local installs, loopback, and the owner shield.
+
+    Priority: admin shield → product API key → signed license → IP.
+    API keys beat IP so a browser-minted principal owns its own quota/conversations
+    even when behind a shared egress IP.
     """
     if not enforced():
         return {"tier": "unlimited", "identity": "local", "admin": False, "unlimited": True}
@@ -171,6 +175,25 @@ def _identity_and_tier(request: Any) -> Dict[str, Any]:
         return {"tier": "unlimited", "identity": "loopback", "admin": False, "unlimited": True}
     if is_admin(headers.get("x-lolm-admin", "")):
         return {"tier": "admin", "identity": "admin", "admin": True, "unlimited": True}
+    # Product API key (X-LOLM-Api-Key) — immutable principal, tier from key row.
+    try:
+        from local_ui import api_keys
+        token = api_keys.extract_api_key(headers)
+        row = api_keys.read_api_key(token) if token else None
+    except Exception:
+        row = None
+    if row:
+        tier = (row.get("tier") or "free").strip().lower()
+        if tier not in TIERS:
+            tier = "free"
+        return {
+            "tier": tier,
+            "identity": f"api:{row.get('key_id')}",
+            "admin": False,
+            "unlimited": False,
+            "sub_id": row.get("sub_id") or "",
+            "key_id": row.get("key_id"),
+        }
     lic = read_license(headers.get("x-lolm-license", ""))
     tier = lic["tier"] if lic else "free"
     identity = f"sub:{lic['sub_id']}" if lic else f"ip:{_client_ip(request)}"

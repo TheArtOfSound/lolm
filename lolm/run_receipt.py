@@ -107,6 +107,18 @@ def parse_contract(command: str) -> Dict[str, Any]:
                 else "exact" if qual in _WC_EXACT else "target")
         contract["word_limit"] = {"kind": kind, "count": count}
 
+    # Freeform multi-requirement tasks (story + engineering + sources + …)
+    # used to fall through as has_contract=False, so receipts could never FAIL
+    # them. Attach extracted requirement ledger when present.
+    try:
+        from lolm.task_contract import extract_requirements
+        freereqs = extract_requirements(command)
+    except Exception:
+        freereqs = []
+    if freereqs:
+        contract["requirements"] = freereqs
+        contract["freeform_requirements"] = True
+
     contract["has_contract"] = any(k for k in contract if k != "has_contract")
     return contract
 
@@ -203,12 +215,41 @@ def check_contract(answer: str, contract: Dict[str, Any]) -> Dict[str, Any]:
     if _max_ngram_repeat(answer) >= 3:
         reasons.append("duplicate_generation_detected")
 
+    # Freeform requirement ledger (aerospace-fiction style multi-axis tasks)
+    freereqs = contract.get("requirements") or []
+    freeform_report = None
+    if freereqs and contract.get("freeform_requirements"):
+        try:
+            from lolm.task_contract import check_requirements
+            freeform_report = check_requirements(
+                contract.get("_source_command") or "",
+                answer,
+                evidence=contract.get("_evidence"),
+            )
+            # If command was not stashed, re-check from requirement ids only via
+            # a synthetic path is weaker; prefer call sites that set _source_command.
+            if freeform_report.get("passed") is False:
+                reasons.append("task_contract_failed")
+                for lab in freeform_report.get("labels") or []:
+                    if lab not in reasons:
+                        reasons.append(lab)
+        except Exception:
+            freeform_report = None
+
     passed = not reasons
+    # Freeform report is authoritative when present
+    if freeform_report is not None and freeform_report.get("has_requirements"):
+        passed = bool(freeform_report.get("passed"))
+        if not passed and "task_contract_failed" not in reasons:
+            reasons.append("task_contract_failed")
+
     return {
-        "verdict": "task_passed" if passed else "audit_contract_failed",
+        "verdict": ("task_passed" if passed else
+                    "task_contract_failed" if freereqs else "audit_contract_failed"),
         "passed": passed,
         "reasons": reasons,
         "evidence": evidence,
+        "freeform": freeform_report,
     }
 
 
@@ -251,6 +292,10 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
     }
 
     contract = parse_contract(command)
+    # Stash source + retrieval items so freeform requirement checks see them.
+    contract["_source_command"] = command
+    if retrieval and isinstance(retrieval, dict):
+        contract["_evidence"] = retrieval.get("items") or []
     if contract["has_contract"]:
         answer_layer = check_contract(answer, contract)
     else:
@@ -366,6 +411,8 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
 
     return {
         "receipt_schema": "qira.run.receipt.v1",
+        "receipt_stage": "pre_seal",
+        "envelope_integrity": {"sealed": False, "verified": False},
         "verdict": verdict,
         "status_color": status_color,
         "run_mode": run_mode,
@@ -398,13 +445,7 @@ def build_receipt(command: str, answer: str, timeline: List[Dict[str, Any]],
             },
             "answer": {k: v for k, v in answer_layer.items() if k != "evidence"},
             "evidence": answer_layer["evidence"] or {"verdict": "no_facts_provided"},
-            "retrieval": ({"verdict": "no_retrieval", "retrieved": 0} if not retrieval else {
-                "verdict": "retrieval_used" if retrieval.get("used") else "retrieval_decorative",
-                "retrieved": retrieval.get("retrieved", 0),
-                "used": retrieval.get("used", 0),
-                "decorative": retrieval.get("decorative", 0),
-                "items": retrieval.get("items", []),
-            }),
+            "retrieval": _retrieval_layer(command, retrieval),
             "verifiers": {
                 "verdict": ("math_check_failed" if math_failed
                             else "no_math_to_check" if vres["checked"] == 0
@@ -438,6 +479,10 @@ def mark_sealed(receipt: Dict[str, Any], env_id: str) -> Dict[str, Any]:
     # a "layers" dict (e.g. a workspace turn receipt) — never crash on sealing.
     receipt.setdefault("layers", {})["vault"] = {"verdict": "vault_sealed", "envelope_id": env_id}
     receipt["qev_seal_id"] = env_id
+    receipt["receipt_stage"] = "post_seal"
+    ei = receipt.setdefault("envelope_integrity", {})
+    ei["sealed"] = True
+    ei["envelope_id"] = env_id
     return receipt
 
 
@@ -448,4 +493,57 @@ def mark_verified(receipt: Dict[str, Any], integrity: Dict[str, Any]) -> Dict[st
         **integrity,
     }
     receipt["artifact_integrity_verified"] = ok
+    receipt["receipt_stage"] = "post_seal_verified" if ok else receipt.get("receipt_stage", "post_seal")
+    ei = receipt.setdefault("envelope_integrity", {})
+    ei["verified"] = bool(ok)
+    ei.update({k: integrity.get(k) for k in ("aead_authenticated", "payload_hash_match", "algorithm")
+               if k in integrity})
     return receipt
+
+
+def _retrieval_layer(command: str, retrieval: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not retrieval:
+        return {"verdict": "no_retrieval", "retrieved": 0}
+    items = retrieval.get("items") or []
+    base = {
+        "verdict": "retrieval_used" if retrieval.get("used") else "retrieval_decorative",
+        "retrieved": retrieval.get("retrieved", len(items)),
+        "used": retrieval.get("used", 0),
+        "decorative": retrieval.get("decorative", 0),
+        "items": items,
+    }
+    if not items:
+        return base
+    try:
+        from lolm.task_contract import score_evidence_relevance
+        # Normalize snippet→text so freeform relevance scoring can see memory rows.
+        normalized = []
+        for it in items:
+            row = dict(it) if isinstance(it, dict) else {"text": str(it)}
+            if not row.get("text") and row.get("snippet"):
+                row["text"] = row["snippet"]
+            normalized.append(row)
+        scored = score_evidence_relevance(command, normalized)
+        # Only override when the scorer actually saw items (avoid wiping
+        # retrieval_used/decorative from retrieval_support).
+        if scored.get("retrieved", 0) > 0 and scored.get("verdict"):
+            base["relevant"] = scored.get("relevant", 0)
+            base["junk"] = scored.get("junk", 0)
+            base["usage_rate"] = scored.get("usage_rate")
+            base["details"] = scored.get("details")
+            # Freeform multi-requirement tasks: surface junk retrieval honestly.
+            # Simple Q&A keeps retrieval_support's used/decorative verdicts.
+            try:
+                from lolm.task_contract import extract_requirements
+                freeform = bool(extract_requirements(command))
+            except Exception:
+                freeform = False
+            if freeform and scored["verdict"] in (
+                "retrieval_failed_relevance",
+                "retrieval_mostly_decorative",
+            ):
+                base["verdict"] = scored["verdict"]
+                base["decorative"] = scored.get("decorative", base.get("decorative", 0))
+    except Exception:
+        pass
+    return base
