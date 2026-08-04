@@ -12,16 +12,15 @@
  * but their failure degrades gracefully in the page, not here.
  */
 
-const CACHE = "lolm-nfet-v6";   // bump on any shell/asset change so returning
-                                // visitors get the update (activate clears old)
-                                // v5: homepage demo video (media/ is served
-                                // network-first and never precached).
-                                // v4: design-system reskin (lolm-ds.css/js). A
-                                // stale v3 was still serving a pre-workspace
-                                // shell to returning visitors.
+const CACHE = "lolm-v21-workspace-identity-2026-08-03";  // bump on any shell/asset change
+// v21: browser mints free API key so workspace chats persist (X-LOLM-Api-Key).
+// v20: generated artifacts render as downloadable cards; exact-byte PDF delivery.
+// v19: product/pricing unification — canonical product-config, correct plan
+// quotas, safer pricing page, honest model wording.
 const SHELL = [
-  "/", "/index.html", "/try.html", "/og-card.png",
-  "/lolm-ds.css", "/lolm-ds.js",
+  "/", "/index.html", "/try.html", "/pricing.html", "/app.html",
+  "/og-card.png", "/lolm-ds.css", "/lolm-ds.js", "/artifact-delivery-ui.js",
+  "/product-config.json", "/product-config.js",
   "/manifest.webmanifest", "/replays/index.json",
 ];
 
@@ -57,9 +56,15 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET") return;
 
-  // Live API: network-only. Never cache a single-flight run; let the page handle
-  // failure (offline banner / replays / in-browser engine).
+  // Live API + product config: network-only. Never cache mutable status/pricing.
   if (url.pathname.startsWith("/api/")) return;
+  if (url.pathname === "/product-config.json" || url.pathname === "/product-config.js") {
+    event.respondWith(fetch(event.request).catch(async () => {
+      const cache = await caches.open(CACHE);
+      return (await cache.match(event.request)) || Response.error();
+    }));
+    return;
+  }
 
   // Media: hand straight to the browser, no worker in the middle. A <video> fetches
   // by Range, and cache.put() REJECTS a 206 Partial Content — which would fall

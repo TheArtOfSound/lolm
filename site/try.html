@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Try the LOLM Agent — an AI that knows when it's unsure</title>
-<meta name="description" content="Ask a question and watch the AI notice its own uncertainty — checking notes, double-checking drafts, and deciding when it's done. No jargon, live, free.">
-<meta property="og:title" content="Try the LOLM Agent">
-<meta property="og:description" content="An AI that measures its own uncertainty and acts on it — watch it happen, live.">
+<title>Try LOLM — the agent that does not lose the plot</title>
+<meta name="description" content="Persistent task-state control: goals, plan, failures, and completion criteria that survive steps and sessions. Watch uncertainty-aware control and sealed receipts — live, free. Honest claims only.">
+<meta property="og:title" content="Try LOLM — does not lose the plot">
+<meta property="og:description" content="Structured task state under the token stream — not just chat. Control that blocks false “done.” Receipts you can audit.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
 <meta property="og:url" content="https://lolm.imagineqira.com/try.html">
 <meta property="og:site_name" content="LOLM · Qira">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Try the LOLM Agent">
-<meta name="twitter:description" content="An AI that measures its own uncertainty and acts on it — watch it happen, live.">
+<meta name="twitter:title" content="Try LOLM — does not lose the plot">
+<meta name="twitter:description" content="Persistent task-state control: z_t for goals, plan, failures, completion. Architecture you can audit — live demo, honest claims.">
 <meta name="twitter:image" content="https://lolm.imagineqira.com/og-card.png">
 <link rel="canonical" href="https://lolm.imagineqira.com/try.html">
 <meta name="robots" content="index,follow,max-image-preview:large">
@@ -26,10 +26,10 @@
   :root{
     /* shared design system with the LOLM landing page (one neutral slate ramp
        + one brand accent; the five data colors only encode the five streams) */
-    --bg:#ffffff; --bg2:#f6f7f9; --panel:#ffffff; --panel-2:#f1f3f6;
-    --line:#e6e8ec; --line-2:#cdd2da;
-    --t-hi:#0a0c10; --text:#2a323c; --dim:#525c69; --faint:#8a94a2;
-    --accent:#f43f5e; --accent-2:#6366f1; --good:#0f9d6b;
+    /* theme tokens from lolm-ds.css */
+    
+    
+    
     /* data palette — agent activity dots / telemetry, not decoration */
     --blue:#2563eb; --purple:#7c3aed; --amber:#b8730a; --green:#0f9d6b; --pink:#e11d6b;
     --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
@@ -37,15 +37,15 @@
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{overflow-x:hidden}
-  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.65;
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.65;
        letter-spacing:-.003em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
   h1,h2,h3{color:var(--t-hi);letter-spacing:-.02em}
   a{color:var(--accent);text-decoration:none;transition:color .15s} a:hover{color:var(--t-hi)}
   ::selection{background:rgba(244,63,94,.16)}
   .wrap{max-width:760px;margin:0 auto;padding:0 20px}
-  header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  header{position:sticky;top:0;z-index:10;background:color-mix(in srgb, var(--panel) 82%, transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
   nav{display:flex;align-items:center;height:54px;gap:14px}
-  .brand{font-family:var(--mono);font-weight:700;letter-spacing:.12em;font-size:14px;color:var(--text)}
+  .brand{font-family:var(--mono);font-weight:700;letter-spacing:.12em;font-size:14px;color:var(--ink)}
   .brand b{color:var(--accent)}
   nav a.right{margin-left:auto;font-size:13px;color:var(--dim)}
 
@@ -60,20 +60,20 @@
   .ex-label{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);text-align:center;margin-bottom:14px}
   .ex-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   @media (max-width:560px){ .ex-grid{grid-template-columns:1fr} }
-  .ex{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer;text-align:left;color:var(--text);font-size:14.5px;font-family:var(--sans);transition:border-color .15s}
+  .ex{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer;text-align:left;color:var(--ink);font-size:14.5px;font-family:var(--sans);transition:border-color .15s}
   .ex:hover{border-color:var(--accent)}
   .ex small{display:block;color:var(--faint);font-size:11.5px;margin-top:5px;font-family:var(--mono)}
   .ex small.live-tag{color:#b8730a}
 
   .ask{display:flex;gap:10px;margin:22px 0 6px}
-  .ask input{flex:1;background:var(--bg2);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:14px 16px;font-size:15.5px}
+  .ask input{flex:1;background:var(--bg2);border:1px solid var(--line);border-radius:12px;color:var(--ink);padding:14px 16px;font-size:15.5px}
   .ask input:focus{outline:none;border-color:var(--accent)}
   .ask button{background:var(--accent);color:#fff;border:none;border-radius:12px;padding:14px 22px;font-size:15px;font-weight:700;cursor:pointer}
   .ask button[disabled]{opacity:.45;cursor:not-allowed}
   .ask button.stopping{background:var(--pink);color:#fff}
   .follow-row{display:none;justify-content:space-between;align-items:center;gap:10px;margin:-2px 0 10px;font-size:12px;color:var(--faint)}
   .follow-row button{background:none;border:1px solid var(--line);color:var(--dim);border-radius:7px;font-size:11.5px;padding:4px 10px;cursor:pointer;font-family:var(--mono)}
-  .follow-row button:hover{border-color:var(--faint);color:var(--text)}
+  .follow-row button:hover{border-color:var(--faint);color:var(--ink)}
   .ask-note{font-size:12px;color:var(--faint);text-align:center;min-height:16px;margin-bottom:10px}
   .backend-row{display:none;justify-content:center;gap:8px;margin:-2px 0 8px}
   .backend-row.on{display:flex}
@@ -84,7 +84,7 @@
 
   .stage{display:none;margin:26px 0}
   .stage.on{display:block}
-  .q-bubble{background:var(--panel);border:1px solid var(--line);border-radius:14px 14px 4px 14px;padding:13px 17px;font-size:15px;margin-left:15%;margin-bottom:18px;color:var(--text)}
+  .q-bubble{background:var(--panel);border:1px solid var(--line);border-radius:14px 14px 4px 14px;padding:13px 17px;font-size:15px;margin-left:15%;margin-bottom:18px;color:var(--ink)}
   .activity{display:flex;flex-direction:column;gap:9px;margin-bottom:18px}
   .act{display:flex;gap:11px;align-items:baseline;font-size:14px;color:var(--dim);opacity:0;animation:fadein .4s forwards}
   @keyframes fadein{to{opacity:1}}
@@ -95,17 +95,17 @@
   .act.check .dot{background:var(--amber);box-shadow:0 0 7px var(--amber)}
   .act.fork .dot{background:var(--purple);box-shadow:0 0 7px var(--purple)}
   .act.done .dot{background:var(--green);box-shadow:0 0 7px var(--green)}
-  .act b{color:var(--text);font-weight:600}
+  .act b{color:var(--ink);font-weight:600}
   .act .why{color:var(--faint);font-size:12.5px}
   .working{font-family:var(--mono);font-size:11.5px;color:var(--faint);padding-left:19px}
   .working .tick{display:inline-block;min-width:34px;color:var(--dim)}
 
-  .answer{background:rgba(15,157,107,.06);border:1px solid rgba(15,157,107,.28);border-radius:4px 14px 14px 14px;padding:17px 20px;font-size:15.5px;color:var(--text);white-space:pre-wrap;margin-right:8%;display:none}
+  .answer{background:rgba(15,157,107,.06);border:1px solid rgba(15,157,107,.28);border-radius:4px 14px 14px 14px;padding:17px 20px;font-size:15.5px;color:var(--ink);white-space:pre-wrap;margin-right:8%;display:none}
   .answer.on{display:block}
   .answer-label{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:8px}
   #answerText.md{white-space:normal}
   #answerText.md p{margin:0 0 10px} #answerText.md p:last-child{margin-bottom:0}
-  #answerText.md h3,#answerText.md h4,#answerText.md h5{font-size:15px;margin:14px 0 6px;color:var(--text)}
+  #answerText.md h3,#answerText.md h4,#answerText.md h5{font-size:15px;margin:14px 0 6px;color:var(--ink)}
   #answerText.md ul,#answerText.md ol{margin:0 0 10px;padding-left:22px} #answerText.md li{margin:3px 0}
   #answerText.md code{font-family:var(--mono);font-size:.88em;background:var(--bg2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
   #answerText.md pre.md-code{font-family:var(--mono);font-size:12.5px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow-x:auto;margin:0 0 10px;white-space:pre}
@@ -120,7 +120,7 @@
 
   .friendly-receipt{display:none;margin-top:16px;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px 18px;font-size:13.5px;color:var(--dim)}
   .friendly-receipt.on{display:block}
-  .friendly-receipt b{color:var(--text)}
+  .friendly-receipt b{color:var(--ink)}
   .friendly-receipt .row{margin-top:8px;font-family:var(--mono);font-size:11.5px;color:var(--faint)}
 
   details.behind{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
@@ -131,7 +131,7 @@
   .explainer h2{font-size:21px;margin-bottom:10px;text-align:center}
   .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:18px}
   .step{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 15px;font-size:13px;color:var(--dim)}
-  .step b{display:block;font-size:14px;color:var(--text);margin-bottom:4px}
+  .step b{display:block;font-size:14px;color:var(--ink);margin-bottom:4px}
   .step .tag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
   footer{margin-top:60px;border-top:1px solid var(--line);padding:26px 0 40px;color:var(--faint);font-size:12.5px;text-align:center}
 </style>
@@ -144,25 +144,26 @@
   <a class="mark" href="/">LO<em>LM</em></a>
   <div class="links">
     <a class="keep" href="/pricing.html">Pricing</a>
-    <a class="keep primary" href="/">Open workspace</a>
+    <a class="keep primary" href="/app.html">Open app</a>
   </div>
 </nav></div></header>
 
 <div class="wrap">
 
 <div class="lolm-hero" style="padding-top:40px;padding-bottom:12px">
-  <div class="kicker">Coding agent · with receipts</div>
-  <h1>Ship real work.<br><em>Prove what happened.</em></h1>
-  <p>Write and run code in a network-isolated jail. Race several open models and keep the one that actually works. Every turn ends with a sealed receipt — not a vibe check.</p>
+  <div class="kicker">Persistent task-state control</div>
+  <h1>The architecture that<br><em>does not lose the plot.</em></h1>
+  <p>LOLM maintains a structured latent task state — goals, plan, world, assumptions, uncertainty, failures, completion — and uses it to choose the next action. Across steps, interruptions, and sessions. Output is not completion.</p>
+  <p class="honest" style="margin-top:14px;text-align:left"><b>Honest scope:</b> We measure this on our Latent Task Integrity harness (continuous z_t vs amnesiac reset). We do <b>not</b> claim LOLM beats Claude Code, Codex, or every frontier agent on every coding benchmark. We claim an architecture you can audit.</p>
   <div class="lolm-cta-row">
-    <a class="primary" href="/">Open workspace</a>
+    <a class="primary" href="/app.html">Open app</a>
     <a class="ghost" href="#live">Try live below</a>
   </div>
 </div>
 <div class="lolm-strip">
-  <div class="cell"><b>Multi-model race</b><span>GLM-class + gpt-oss-120b + Llama 4 Maverick — keep the candidate that runs green.</span></div>
-  <div class="cell"><b>Real sandbox</b><span>Write → run → fix in a jail. No fake “done” when the code fails.</span></div>
-  <div class="cell"><b>Sealed receipt</b><span>Hash-chained record of files, commands, and control decisions.</span></div>
+  <div class="cell"><b>Task state z_t</b><span>Goals, plan, world, failures, completion criteria — persisted and used to control next actions.</span></div>
+  <div class="cell"><b>Multi-session resume</b><span>Same conversation_id reloads the same plot after wipes — not a chat summary.</span></div>
+  <div class="cell"><b>Sealed evidence</b><span>Hash-chained receipts + LTI counters. False “done” is blocked when criteria are open.</span></div>
 </div>
 
 <style>
@@ -232,11 +233,11 @@
 
 <style>
 .source-box{margin:18px 0 8px;border:1px solid var(--line);border-radius:12px;background:var(--bg2);overflow:hidden}
-.source-box>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--text);list-style:none;display:flex;align-items:center;gap:8px}
+.source-box>summary{cursor:pointer;padding:12px 15px;font-size:13.5px;font-weight:650;color:var(--ink);list-style:none;display:flex;align-items:center;gap:8px}
 .source-box>summary span{color:var(--dim);font-weight:400}
 .source-box>summary::-webkit-details-marker{display:none}
 .source-box[open]>summary{border-bottom:1px solid var(--line)}
-.source-box textarea{width:100%;box-sizing:border-box;border:none;background:transparent;color:var(--text);padding:12px 15px;font:14px/1.55 inherit;resize:vertical;min-height:104px;outline:none}
+.source-box textarea{width:100%;box-sizing:border-box;border:none;background:transparent;color:var(--ink);padding:12px 15px;font:14px/1.55 inherit;resize:vertical;min-height:104px;outline:none}
 .source-box textarea::placeholder{color:var(--faint)}
 .source-on #q::placeholder{color:var(--memory)}
 </style>
@@ -245,10 +246,10 @@
   <textarea id="sources" placeholder="Paste your notes, a contract, docs, an email thread… LOLM answers ONLY from this, cites the exact passage it used, and tells you plainly when the answer isn't in here — instead of making one up."></textarea>
 </details>
 <div class="live-starters" id="liveStarters" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:10px 0 4px">
-  <button type="button" class="live-chip" data-live="Explain what a receipt is in LOLM in one short paragraph." style="border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 12px;font-size:12.5px;cursor:pointer;color:var(--text)">What is a receipt?</button>
-  <button type="button" class="live-chip" data-live="In one short answer: why would someone switch from Claude Code to LOLM?" style="border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 12px;font-size:12.5px;cursor:pointer;color:var(--text)">Why switch?</button>
-  <button type="button" class="live-chip" data-live="Remember my name is Alex for this chat. Suggest one next thing to try on LOLM." style="border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 12px;font-size:12.5px;cursor:pointer;color:var(--text)">Memory demo</button>
-  <button type="button" class="live-chip" data-live="In one short answer: how does LOLM fix a ModuleNotFoundError or third-party import in the sandbox without pip?" style="border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 12px;font-size:12.5px;cursor:pointer;color:var(--text)">Code self-fix</button>
+  <button type="button" class="live-chip" data-live="Explain what a receipt is in LOLM in one short paragraph." style="border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 12px;font-size:12.5px;cursor:pointer;color:var(--ink)">What is a receipt?</button>
+  <button type="button" class="live-chip" data-live="In one short answer: why would someone switch from Claude Code to LOLM?" style="border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 12px;font-size:12.5px;cursor:pointer;color:var(--ink)">Why switch?</button>
+  <button type="button" class="live-chip" data-live="Remember my name is Alex for this chat. Suggest one next thing to try on LOLM." style="border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 12px;font-size:12.5px;cursor:pointer;color:var(--ink)">Memory demo</button>
+  <button type="button" class="live-chip" data-live="In one short answer: how does LOLM fix a ModuleNotFoundError or third-party import in the sandbox without pip?" style="border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 12px;font-size:12.5px;cursor:pointer;color:var(--ink)">Code self-fix</button>
 </div>
 <div class="ask">
   <input id="q" placeholder="…or ask your own question, run live">
@@ -375,8 +376,12 @@
     $('stage').scrollIntoView({behavior:'smooth', block:'start'});
   }
   const ENDED = {nfet_finalize:'it decided on its own that it was done',
+                 draft_cap_finalize:'it finished the answer after drafting',
+                 audit_verified:'it double-checked a high-stakes answer and finished',
                  natural_eos:'it reached a natural stopping point',
-                 segment_budget:'it hit the demo length limit'};
+                 dialog_direct:'it answered in conversation mode',
+                 social_direct:'it answered a greeting directly',
+                 segment_budget:'safety backstop before an answer formed (rare)'};
 
   let lastConfidence = null;   // {spans:[{text,score}], mean_entropy, n_tokens}
 
@@ -472,7 +477,7 @@
       // daily quota) and the run fell back to the small local model
       if (data && data.result && data.result.fell_back_from === 'frontier'){
         addAct('check', '<b>Frontier model unavailable</b> — answered with the small local model instead',
-               '(the 70B daily quota is used up; resets daily)');
+               '(the hosted daily quota is used up; resets UTC midnight)');
       }
       // settle on the best final text, then render markdown (the model emits
       // **bold**, lists, and code — rendering them is the difference between
@@ -513,8 +518,8 @@
         const accent = rc.status_color === 'red' ? '#d62828' : rc.status_color === 'green' ? 'var(--green)' : '#e0a106';
         r.style.borderLeft = '3px solid ' + accent;
         if (rc.run_mode){
-          const modeLabel = rc.run_mode === 'FALLBACK_MODEL' ? '⚠ FALLBACK MODEL — not the 70B; quality may be reduced'
-            : rc.run_mode === 'LIVE_NFET_FRONTIER' ? '70B writes · LOLM monitors'
+          const modeLabel = rc.run_mode === 'FALLBACK_MODEL' ? '⚠ FALLBACK MODEL — secondary generator; quality may differ'
+            : rc.run_mode === 'LIVE_NFET_FRONTIER' ? 'Hosted generator · LOLM controls'
             : 'local monitor model';
           r.innerHTML += '<div class="row"><b>Run mode:</b> ' + modeLabel + '</div>';
         }
@@ -545,9 +550,10 @@
           else
             r.innerHTML += '<div class="row" style="color:var(--green)">✓ Math check: ' + rc.math_checks.checked + ' calculation(s) verified correct.</div>';
         }
-        if (rc.termination && rc.termination.demote){
-          r.innerHTML += '<div class="row" style="color:#e0a106">⚠ Ended on <b>' + rc.termination.category +
-            '</b> — not a clean finish, so this run is demoted (a budget/timeout/stall stop is not a confident result).</div>';
+        if (rc.termination && rc.termination.demote && rc.termination.category !== 'controller_finish'){
+          // Never scare the user for a finished answer. Only true stalls/timeouts/empty budget.
+          r.innerHTML += '<div class="row" style="color:#e0a106">⚠ Run stopped early (<b>' + rc.termination.category +
+            '</b>) before a confident finish.</div>';
         }
         const crit = rc.layers && rc.layers.critique;
         if (crit && crit.overclaim){
@@ -667,7 +673,7 @@
     resetStage(q);
     // The server loads the full prior thread from the shared cloud brain via the
     // session id — no need to re-send history from the client.
-    addAct('think', '<b>Connecting to Llama 70B…</b>', '(it answers in a few seconds)');
+    addAct('think', '<b>Connecting to hosted generator…</b>', '(it answers in a few seconds)');
     liveAbort = new AbortController();
     try {
       const resp = await fetch(activeBase + '/run/stream', {method:'POST',
@@ -776,16 +782,16 @@
     });
     const live = document.createElement('button');
     live.className = 'ex';
-    live.innerHTML = `Ask anything you like<small class="live-tag">live — a 70B model answers in ~15 seconds</small>`;
+    live.innerHTML = `Ask anything you like<small class="live-tag">live — hosted generator; model may vary</small>`;
     live.addEventListener('click', () => $('q').focus());
     grid.appendChild(live);
   }).catch(() => {});
 
   const lines = {
-    '/api/demo':   {ready: false, busy: false, label: 'Llama 70B + LOLM',
-                    note: 'Llama 70B writes, the LOLM graft measures its uncertainty and drives the control loop · answers in seconds'},
-    '/api/demo4b': {ready: false, busy: false, label: '4B · lab line',
-                    note: 'the 4B runs on our lab machine over a tunnel — self-hosted, ~3–5 minutes per run'},
+    '/api/demo':   {ready: false, busy: false, label: 'Hosted generator + LOLM',
+                    note: 'A hosted generator writes; LOLM measures uncertainty and drives the control loop · answers in seconds'},
+    '/api/demo4b': {ready: false, busy: false, label: 'Lab line (when available)',
+                    note: 'optional lab line when the tunnel is up — self-hosted, slower'},
   };
 
   function applyLineState(){

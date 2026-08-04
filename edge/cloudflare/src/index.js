@@ -98,28 +98,64 @@ async function cachedReplay(request, env, ctx, path) {
 }
 
 function statusPage(health) {
+  const now = Date.now();
+  const checked = health.checked || null;
+  const ageMs = checked ? Math.max(0, now - Number(checked)) : null;
+  const STALE_MS = 15 * 60 * 1000; // no sample in 15 min → stale
+  const stale = !checked || ageMs > STALE_MS;
+  const ageLabel = ageMs == null ? "never"
+    : ageMs < 60_000 ? `${Math.round(ageMs / 1000)}s ago`
+    : ageMs < 3600_000 ? `${Math.round(ageMs / 60000)}m ago`
+    : `${(ageMs / 3600000).toFixed(1)}h ago`;
   const rows = Object.entries(health.lines).map(([path, l]) => {
     const up = l.last && l.last.up && l.last.ready;
-    const dot = up ? "🟢" : (l.last && l.last.up ? "🟡" : "🔴");
-    return `<tr><td>${dot} ${l.label || path}</td><td>${l.uptime_24h ?? "—"}%</td>` +
-           `<td>${l.up_last_hour ?? "—"}</td><td>${l.avg_latency_ms ?? "—"} ms</td></tr>`;
+    const sampleAge = l.last && l.last.ts ? now - Number(l.last.ts) : null;
+    const lineStale = sampleAge == null || sampleAge > STALE_MS;
+    const dot = lineStale ? "⚪" : (up ? "🟢" : (l.last && l.last.up ? "🟡" : "🔴"));
+    const lastTs = l.last && l.last.ts ? new Date(l.last.ts).toISOString() : "—";
+    return `<tr><td>${dot} ${escapeHtml(l.label || path)}</td>` +
+           `<td>${l.uptime_24h ?? "—"}%</td>` +
+           `<td>${escapeHtml(l.up_last_hour ?? "—")}</td>` +
+           `<td>${l.avg_latency_ms ?? "—"} ms</td>` +
+           `<td class="m">${lastTs}</td></tr>`;
   }).join("");
-  const when = health.checked ? new Date(health.checked).toISOString() : "never";
+  const when = checked ? new Date(checked).toISOString() : "never";
+  const banner = stale
+    ? `<p style="background:#3a1a1a;border:1px solid #7a3030;border-radius:10px;padding:12px 14px;color:#ffb4b4">
+        ⚠ <b>Stale monitor data</b> — last sample ${escapeHtml(ageLabel)}.
+        Do not treat the table as live. Website availability and model availability are independent.
+       </p>`
+    : `<p style="background:#13251c;border:1px solid #2a5a40;border-radius:10px;padding:12px 14px;color:#9ddebe">
+        Live sample age: ${escapeHtml(ageLabel)} · generated ${new Date(now).toISOString()}
+       </p>`;
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LOLM-NFET · status</title>
+<meta http-equiv="refresh" content="60">
+<title>LOLM · edge status</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2307090d'/%3E%3Cpath d='M5 7 Q20 7 26 16' stroke='%234ea1ff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 12 Q19 12 26 16' stroke='%23b07fff' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 16 H26' stroke='%23ffb454' stroke-width='2.2'/%3E%3Cpath d='M5 20 Q19 20 26 16' stroke='%233fd6a0' stroke-width='2.2' fill='none'/%3E%3Cpath d='M5 25 Q20 25 26 16' stroke='%23ff6b81' stroke-width='2.2' fill='none'/%3E%3Ccircle cx='26' cy='16' r='2.6' fill='%23d7dde6'/%3E%3C/svg%3E">
-<style>body{background:#07090d;color:#d7dde6;font:15px/1.6 -apple-system,system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px}
+<style>body{background:#07090d;color:#d7dde6;font:15px/1.6 -apple-system,system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 20px}
 h1{font-size:20px}table{width:100%;border-collapse:collapse;margin:18px 0}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid #1d2530}
 th{font:11px ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;color:#5a6675}
 a{color:#4ea1ff}.m{font:12px ui-monospace,monospace;color:#5a6675}</style></head>
-<body><h1>LOLM-NFET · edge monitor</h1>
-<p class="m">Cloudflare Worker watching ${health.origin} · last check ${when}</p>
-<table><tr><th>line</th><th>uptime 24h</th><th>up / last hr</th><th>latency</th></tr>${rows}</table>
-<p class="m">🟢 ready · 🟡 reachable, model loading/busy · 🔴 down · samples every 5 min</p>
-<p><a href="/health">/health</a> · <a href="https://lolm.imagineqira.com">live demo →</a></p>
-<p class="m" style="margin-top:24px;border-top:1px solid #1d2530;padding-top:14px">© 2026 Qira LLC · Bryan Leonard &amp; Brandyn Leonard · all rights reserved · patent pending</p>
+<body><h1>LOLM · edge monitor</h1>
+<p class="m">Cloudflare Worker watching model API lines at
+  <a href="${escapeHtml(health.origin)}">${escapeHtml(health.origin)}</a>
+  · last check ${escapeHtml(when)} · page rendered ${new Date(now).toISOString()}</p>
+${banner}
+<table><tr><th>line</th><th>uptime 24h</th><th>up / last hr</th><th>latency</th><th>last sample</th></tr>${rows}</table>
+<p class="m">🟢 ready · 🟡 reachable, model loading/busy · 🔴 down · ⚪ stale sample · every 5 min</p>
+<p class="m">This page measures <b>API/model readiness</b> on the origin, not full website HTML availability.
+  Website: <a href="https://lolm.imagineqira.com/">lolm.imagineqira.com</a> ·
+  Origin health: <a href="https://lolm.imagineqira.com/api/demo/status">/api/demo/status</a></p>
+<p><a href="/health">/health JSON</a> · <a href="https://lolm.imagineqira.com/app.html">Open app →</a></p>
+<p class="m" style="margin-top:24px;border-top:1px solid #1d2530;padding-top:14px">© 2026 Qira LLC · Bryan Leonard &amp; Brandyn Leonard · patent pending</p>
 </body></html>`;
+}
+
+function escapeHtml(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 // ---- cloud brain: shared memory + conversation sessions on D1 --------------

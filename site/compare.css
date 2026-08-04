@@ -1,0 +1,44 @@
+/* Shared styles for LOLM comparison / SEO pages */
+body{margin:0;background:var(--bg,#07080b);color:var(--ink,#e9edf4);font-family:var(--sans,system-ui,sans-serif);line-height:1.6}
+a{color:var(--accent2,#7f88f8);text-decoration:none}a:hover{color:var(--ink,#e9edf4)}
+.shell{max-width:820px;margin:0 auto;padding:0 20px 80px}
+.top{display:flex;align-items:center;gap:14px;height:54px;border-bottom:1px solid var(--line,#1c212b);margin:0 -20px 28px;padding:0 20px;position:sticky;top:0;background:rgba(7,8,11,.9);backdrop-filter:blur(10px);z-index:10}
+.mark{font-weight:750;color:var(--ink);letter-spacing:-.02em}.mark em{font-style:normal;background:linear-gradient(135deg,#f43f5e,#6366f1);-webkit-background-clip:text;background-clip:text;color:transparent}
+.top nav{display:flex;gap:12px;flex:1;flex-wrap:wrap;font-size:13px}
+.top nav a{color:var(--dim,#9aa5b5)}
+.btn{display:inline-block;border-radius:10px;padding:11px 16px;font:inherit;font-weight:650;font-size:14px;text-decoration:none;border:0;cursor:pointer}
+.btn-primary{background:linear-gradient(135deg,#f43f5e,#6366f1);color:#fff}
+.btn-ghost{background:transparent;border:1px solid var(--line-2,#2a313e);color:var(--ink)}
+.btn-ink{background:var(--ink);color:var(--bg,#07080b)}
+.crumbs{font-size:12.5px;color:var(--faint,#6b7686);margin:0 0 14px}
+.crumbs a{color:var(--dim)}
+h1{font-size:clamp(26px,4.5vw,38px);letter-spacing:-.03em;line-height:1.15;margin:0 0 12px;color:var(--t-hi,#f3f6fa)}
+.lede{font-size:17px;color:var(--dim,#9aa5b5);margin:0 0 22px;max-width:40em}
+h2{font-size:20px;letter-spacing:-.02em;margin:36px 0 12px;color:var(--t-hi)}
+h3{font-size:15.5px;margin:22px 0 8px;color:var(--t-hi)}
+p,li{color:var(--dim);font-size:15px}
+ul,ol{padding-left:1.2em;margin:0 0 14px}
+li{margin:6px 0}
+strong,b{color:var(--ink);font-weight:650}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin:14px 0 18px}
+th,td{text-align:left;padding:10px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--faint);font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:650}
+td.yes{color:var(--good,#2ed9a3);font-weight:650}
+td.mid{color:var(--warn,#f5b23d);font-weight:650}
+td.no{color:var(--faint)}
+.callout{border:1px solid var(--line);background:var(--panel,#0d1015);border-radius:14px;padding:14px 16px;margin:16px 0;font-size:14px;color:var(--dim)}
+.callout.honest{border-color:rgba(245,178,61,.35)}
+.callout b{color:var(--ink)}
+.cta-row{display:flex;flex-wrap:wrap;gap:10px;margin:28px 0 12px}
+.faq details{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 8px;background:var(--panel)}
+.faq summary{cursor:pointer;font-weight:650;color:var(--ink);font-size:14.5px}
+.faq details p{margin:10px 0 0;font-size:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}.top nav{display:none}}
+.card{border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:var(--panel)}
+.card h3{margin:0 0 6px;font-size:14.5px}
+.card p{margin:0;font-size:13.5px}
+.related{margin-top:40px;padding-top:20px;border-top:1px solid var(--line)}
+.related a{display:inline-block;margin:4px 10px 4px 0;font-size:13.5px}
+footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--faint)}
+.price-tag{font-family:var(--mono,ui-monospace,monospace);font-size:12px;color:var(--good);letter-spacing:.02em}

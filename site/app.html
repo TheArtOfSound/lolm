@@ -1,0 +1,1653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- build: dialog-v2-2026-07-26 -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>LOLM App — workspace</title>
+<meta name="description" content="LOLM workspace: chats, code jail, visual builder, task state, memory, sealed receipts. Same UI as self-host.">
+<meta property="og:title" content="LOLM App">
+<meta property="og:description" content="Full LOLM workspace — persistent task state, sandbox, receipts.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lolm.imagineqira.com/app.html">
+<meta name="robots" content="noindex,follow">
+<meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
+<meta property="og:site_name" content="LOLM · Qira">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lolm.imagineqira.com/og-card.png">
+<meta name="twitter:title" content="LOLM — does not lose the plot">
+<meta name="twitter:description" content="Persistent task-state control for agents: goals, plan, world, failures, completion — sealed and used to choose the next action.">
+<link rel="icon" href="/favicon.ico">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "LOLM",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Web",
+  "url": "https://lolm.imagineqira.com/",
+  "description": "Agent architecture for persistent task-state control: structured latent state (goals, plan, world, assumptions, uncertainty, failures, completion) used to choose the next action, with multi-session resume and sealed receipts. Does not claim to beat every frontier agent on every benchmark.",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Qira LLC",
+    "url": "https://imagineqira.com"
+  }
+}
+</script>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#f8fafc; --panel2:#f1f5f9; --ink:#0a0c10; --dim:#475569;
+    --faint:#94a3b8; --line:#e2e8f0; --accent:#f43f5e; --accent2:#6366f1; --good:#0f9d6b;
+    --warn:#b45309; --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent2);text-decoration:none}
+  button{font-family:inherit;cursor:pointer;touch-action:manipulation}
+  input,textarea,select{touch-action:manipulation}
+  /* Default = a clean, spacious 2-pane workspace (sidebar + conversation). The
+     workbench/inspector live in an on-demand DOCK that slides in only when there's
+     something to show (a run, a preview, a receipt) — no four panels fighting at once. */
+  .app{display:grid;grid-template-columns:300px minmax(0,1fr);grid-template-areas:"side main";height:100vh;height:100dvh;transition:grid-template-columns .22s ease}
+  .app.noside{grid-template-columns:0 minmax(0,1fr)}
+  .app.noside .side{display:none}
+  .sideopener{position:fixed;left:10px;top:10px;z-index:60;display:none;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:4px 10px;cursor:pointer;font-size:14px}
+  .app.noside ~ .sideopener, body.noside .sideopener{display:block}
+  .app.dock-open{grid-template-columns:300px minmax(0,1fr) minmax(380px,44vw);grid-template-areas:"side main dock"}
+  .app:not(.dock-open) .dock{display:none}
+  @media(max-width:980px){.app.dock-open{grid-template-columns:300px minmax(0,1fr)} .app.dock-open .dock{position:fixed;inset:0 0 0 auto;width:min(92vw,460px);z-index:40;box-shadow:-12px 0 40px rgba(2,6,23,.18)}}
+  /* ── left sidebar ── */
+  .side{grid-area:side;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+  .brand{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;font-weight:700}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+  .brand small{font-weight:400;color:var(--faint);font-family:var(--mono);font-size:10px}
+  .newbtn{margin:12px;padding:9px;border:1px solid var(--line);background:var(--accent);color:#fff;border-radius:9px;font-weight:600;font-size:13px}
+  .newbtn:hover{filter:brightness(.95)}
+  .search{margin:0 12px 8px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;font-size:12px;width:calc(100% - 24px)}
+  .side-scroll{overflow-y:auto;flex:1;padding:0 8px 12px}
+  .sec-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-family:var(--mono);margin:14px 8px 6px}
+  .conv{position:relative;padding:8px 10px;border-radius:8px;margin-bottom:2px;cursor:pointer;border:1px solid transparent}
+  .conv:hover{background:var(--panel2)}
+  .conv.active{background:#fff;border-color:var(--line)}
+  .conv-x{position:absolute;top:6px;right:6px;opacity:0;border:none;background:transparent;color:var(--faint);font-size:16px;line-height:1;cursor:pointer;padding:1px 5px;border-radius:5px;transition:opacity .12s}
+  .conv:hover .conv-x{opacity:.7} .conv-x:hover{opacity:1;background:#fee2e2;color:#dc2626}
+  .conv .t{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:18px}
+  .conv .m{font-size:10px;color:var(--faint);font-family:var(--mono);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap}
+  .pill{font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:5px;background:var(--panel2);color:var(--dim)}
+  .nav-link{display:block;padding:6px 10px;font-size:12px;color:var(--dim);border-radius:7px}
+  .nav-link:hover{background:var(--panel2)}
+  /* ── center ── */
+  .main{grid-area:main;display:flex;flex-direction:column;overflow:hidden}
+  .conv-head{padding:11px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .conv-head h1{font-size:15px;margin:0;font-weight:600;flex:1;min-width:120px}
+  .conv-head .meta{font-size:10.5px;color:var(--faint);font-family:var(--mono);display:flex;gap:8px;flex-wrap:wrap}
+  .feed{flex:1;overflow-y:auto;padding:34px 24px 40px;display:flex;flex-direction:column;align-items:center;gap:22px}
+  .msg{width:100%;max-width:720px}
+  .msg .bub{padding:14px 18px;border-radius:14px;font-size:15px;line-height:1.65;white-space:pre-wrap}
+  .msg.user .bub{background:var(--accent2);color:#fff;border-bottom-right-radius:5px;max-width:80%;margin-left:auto}
+  .msg.assistant .bub{background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:5px}
+  .msg .who{font-size:10.5px;color:var(--faint);font-family:var(--mono);margin:0 5px 5px;letter-spacing:.04em}
+  /* rendered markdown answers */
+  .bub.md{white-space:normal}
+  .bub.md p{margin:0 0 10px} .bub.md p:last-child{margin-bottom:0}
+  .bub.md h2{font-size:19px;font-weight:650;margin:16px 0 8px;line-height:1.3} .bub.md h2:first-child{margin-top:0}
+  .bub.md h3{font-size:16px;font-weight:650;margin:14px 0 6px} .bub.md h4{font-size:14.5px;font-weight:650;margin:12px 0 5px}
+  .bub.md ul,.bub.md ol{margin:8px 0;padding-left:22px} .bub.md li{margin:4px 0}
+  .bub.md a{color:var(--accent2);text-decoration:underline;text-underline-offset:2px}
+  .bub.md strong{font-weight:650} .bub.md em{font-style:italic}
+  .bub.md code.ic{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-family:var(--mono);font-size:13px}
+  .bub.md pre.cb{background:#0d1117;border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow:auto;margin:10px 0}
+  .bub.md pre.cb code{font-family:var(--mono);font-size:12.5px;color:#c9d1d9;white-space:pre;background:none;border:0;padding:0;line-height:1.5}
+  .msg.user .who{text-align:right}
+  .reason{font-family:var(--mono);font-size:11.5px;color:var(--dim);background:var(--panel2);border:1px solid var(--line);
+          border-radius:11px;padding:11px 14px;width:100%;max-width:720px;display:none;line-height:1.7}
+  .reason.on{display:block}
+  .reason .step{padding:1px 0;opacity:.9}
+  .reason .step b{color:var(--accent2)}
+  .reason .step code{font-family:var(--mono);font-size:10.5px;background:var(--panel2);padding:0 4px;border-radius:4px}
+  .pulse{animation:pulse 1.1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.45}50%{opacity:1}}
+  .empty{margin:auto;text-align:center;color:var(--dim);max-width:580px;padding:24px}
+  .empty h2{color:var(--ink);font-weight:650;font-size:27px;margin-bottom:12px;letter-spacing:-.01em}
+  .empty p{font-size:15px;line-height:1.65}
+  .starters{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:24px 0 8px}
+  .starters button{font-size:13px;padding:10px 16px;border:1px solid var(--line);background:#fff;border-radius:999px;color:var(--dim)}
+  .starters button:hover{border-color:var(--accent);color:var(--ink)}
+  .composer{padding:8px 20px 20px;display:flex;flex-direction:column;align-items:center}
+  .composer-inner{width:100%;max-width:760px}
+  .modes{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:9px}
+  .auto-pill{font-size:12px;font-family:var(--mono);color:var(--good);display:inline-flex;align-items:center;gap:5px}
+  .modes-toggle{font-size:11px;font-family:var(--mono);color:var(--faint);border:0;background:transparent;padding:2px 6px}
+  .modes-toggle:hover{color:var(--dim)}
+  .mode{font-size:11.5px;font-family:var(--mono);padding:4px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--dim)}
+  .mode.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .mode .nc{color:var(--warn);font-size:9px}
+  .crow{display:flex;gap:8px;align-items:flex-end;background:#fff;border:1px solid var(--line);border-radius:16px;padding:8px 8px 8px 16px;box-shadow:0 2px 12px rgba(2,6,23,.05)}
+  .crow:focus-within{border-color:var(--accent2);box-shadow:0 2px 18px rgba(99,102,241,.13)}
+  .crow textarea{flex:1;resize:none;min-height:30px;max-height:210px;padding:8px 0;border:0;outline:0;font-family:inherit;font-size:15px;line-height:1.5;background:transparent}
+  .send{padding:0 20px;height:40px;border:none;border-radius:12px;background:var(--accent);color:#fff;font-weight:600;align-self:flex-end}
+  .send:disabled{opacity:.45;cursor:default}
+  .menu-btn{display:none;border:1px solid var(--line);background:#fff;border-radius:9px;width:34px;height:34px;align-items:center;justify-content:center;font-size:16px;color:var(--dim)}
+  /* ── right panel ── */
+  .right{grid-area:right;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+  .tabs{display:flex;border-bottom:1px solid var(--line);background:#fff}
+  .tab{flex:1;padding:9px 4px;font-size:11px;font-family:var(--mono);text-align:center;color:var(--dim);border-bottom:2px solid transparent}
+  .tab.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+  .tab-body{flex:1;overflow-y:auto;padding:14px}
+  .pane{display:none}
+  .pane.on{display:block}
+  .kv{font-family:var(--mono);font-size:11px;margin-bottom:5px;display:flex;gap:6px}
+  .kv .k{color:var(--faint);min-width:96px}
+  .kv .v{color:var(--ink);word-break:break-word}
+  .badge{display:inline-block;font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:5px}
+  .badge.green{background:#dcfce7;color:#166534} .badge.red{background:#fee2e2;color:#991b1b}
+  .badge.amber{background:#fef3c7;color:#92400e} .badge.gray{background:var(--panel2);color:var(--dim)}
+  .src{font-size:11.5px;margin-bottom:7px;line-height:1.4}
+  /* cross-session memory panel */
+  .memhead{font-size:11px;font-weight:650;color:var(--dim);font-family:var(--mono);margin:0 0 8px;display:flex;align-items:center;gap:6px}
+  .memcount{background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:0 7px;font-size:10px}
+  .memrow{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;line-height:1.45;padding:7px 9px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px;background:var(--panel)}
+  .memrow span{flex:1}
+  .memx{border:none;background:transparent;color:var(--faint);cursor:pointer;font-size:15px;line-height:1;padding:0 2px;border-radius:5px}
+  .memx:hover{background:#fee2e2;color:#dc2626}
+  .memclear{margin-top:6px;border:1px solid var(--line);background:transparent;color:var(--faint);font-size:11px;padding:5px 10px;border-radius:8px;cursor:pointer;font-family:var(--mono)}
+  .memclear:hover{border-color:#fecaca;color:#dc2626}
+  .memsaved{font-size:11.5px;color:var(--dim);font-family:var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px 11px;margin:4px 0 2px;align-self:flex-start;max-width:90%}
+  .memsaved span{color:var(--faint)}
+  .src a{border-bottom:1px solid #bfdbfe}
+  .seal-btn{font-size:11px;font-family:var(--mono);padding:5px 10px;border:1px solid var(--line);background:#fff;border-radius:7px;color:var(--dim);display:inline-block}
+  .seal-btn:hover{border-color:var(--accent);color:var(--ink)}
+  .notconn{margin:18px 0;padding:14px;border:1px dashed var(--line);border-radius:10px;text-align:center;color:var(--faint);font-size:12px}
+  .notconn b{display:block;color:var(--dim);font-family:var(--mono);font-size:11px;margin-bottom:5px}
+  pre.json{font-family:var(--mono);font-size:10.5px;white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px;color:#334155}
+  /* ── on-demand dock (workbench + inspector live here) ── */
+  .dock{grid-area:dock;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+  .dock-head{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--line);background:#fff}
+  .dseg-wrap{display:flex;gap:4px;background:var(--panel2);border-radius:9px;padding:3px}
+  .dseg{font-size:12px;padding:5px 12px;border:0;border-radius:7px;background:transparent;color:var(--dim);font-weight:600}
+  .dseg.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(2,6,23,.08)}
+  .dock-x{border:0;background:transparent;color:var(--faint);font-size:16px;width:30px;height:30px;border-radius:8px}
+  .dock-x:hover{background:var(--panel2);color:var(--ink)}
+  .dview{flex:1;min-height:0;display:none;flex-direction:column;overflow:hidden}
+  .dview.on{display:flex}
+  /* workbench is the dark "artifact" surface (preview/terminal/diff) */
+  .bottom{background:#0a0c10;color:#cbd5e1}
+  .bottom .tabs{background:#0d1117;border-bottom-color:#1e293b}
+  .bottom .tab{color:#64748b}
+  .bottom .tab.on{color:#e2e8f0;border-bottom-color:var(--accent)}
+  .bottom .tab-body{padding:12px;font-family:var(--mono);font-size:11.5px}
+  .bottom #bpane-preview{padding:0;height:100%}
+  .bottom .notconn{border-color:#1e293b;color:#64748b}
+  .bottom .notconn b{color:#94a3b8}
+  .right{background:var(--panel)}
+  /* a slim button in the header to summon the dock when it's closed */
+  .dock-toggle{font-size:12px;font-family:var(--mono);padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--dim);white-space:nowrap}
+  .dock-toggle:hover{border-color:var(--accent2);color:var(--ink)}
+  .app.dock-open .dock-toggle{display:none}
+  /* scrim behind mobile drawers — tap anywhere outside to close */
+  .scrim{display:none;position:fixed;inset:0;background:rgba(2,6,23,.34);z-index:45;opacity:0;transition:opacity .18s}
+  .scrim.show{display:block;opacity:1}
+  /* ══ MOBILE (fully touch-optimized) ══ */
+  @media(max-width:760px){
+    .app,.app.dock-open{grid-template-columns:minmax(0,1fr);grid-template-areas:"main"}
+    /* sidebar = left drawer under a scrim; safe width on small phones */
+    .side{position:fixed;left:-110%;top:0;bottom:0;width:min(85vw,320px);z-index:50;transition:left .22s;box-shadow:8px 0 40px rgba(2,6,23,.18)}
+    .side.show{left:0}
+    .menu-btn{display:inline-flex;width:40px;height:40px;font-size:18px}
+    /* touch has no hover — the delete ✕ must always be visible & finger-sized */
+    .conv{padding:11px 12px}
+    .conv-x{opacity:.55;font-size:18px;padding:4px 8px;top:8px;right:6px}
+    .conv .t{padding-right:30px}
+    .newbtn{padding:12px;font-size:14px}
+    .nav-link{padding:10px 10px;font-size:13px}
+    /* the DOCK becomes a full-height bottom sheet (not a skinny side drawer) */
+    .app.dock-open .dock{position:fixed;left:0;right:0;bottom:0;top:auto;width:100%;height:88dvh;z-index:60;
+      border-left:0;border-top:1px solid var(--line);border-radius:16px 16px 0 0;overflow:hidden;
+      box-shadow:0 -14px 44px rgba(2,6,23,.25);animation:sheetup .22s ease}
+    .dock-head{padding:16px 12px 8px;position:relative}
+    .dock-head::before{content:"";position:absolute;top:6px;left:50%;transform:translateX(-50%);width:38px;height:4px;border-radius:99px;background:var(--line)}
+    .dock-x{width:42px;height:42px;font-size:20px}
+    .dseg{padding:9px 14px;font-size:13px}
+    /* tab strips scroll horizontally instead of squeezing 7 tabs into 375px */
+    .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{flex:0 0 auto;min-width:76px;padding:12px 10px;font-size:12px}
+    /* composer: home-indicator safe area + no-iOS-zoom inputs */
+    .composer{padding:6px 10px calc(12px + env(safe-area-inset-bottom))}
+    .crow{border-radius:14px;padding:6px 6px 6px 12px}
+    .crow textarea{font-size:16px;max-height:150px}
+    .send{height:44px;padding:0 18px;border-radius:11px}
+    .search,#lifeAskInput,#pane-keys input{font-size:16px !important}
+    .search{padding:10px 12px}
+    /* roomier reading + tighter gutters */
+    .feed{padding:18px 12px 26px;gap:16px;overscroll-behavior-y:contain}
+    .msg .bub{padding:12px 14px;font-size:15px}
+    .msg.user .bub{max-width:88%}
+    .reason{font-size:11px;padding:10px 11px}
+    .conv-head{padding:9px 10px;gap:8px}
+    .conv-head h1{font-size:14px}
+    .conv-head .meta{display:none}       /* mono metadata row is noise at phone width */
+    .dock-toggle{padding:8px 12px}
+    .empty{padding:16px 8px}
+    .empty h2{font-size:23px}
+    .empty p{font-size:14px}
+    .starters button{padding:12px 16px;font-size:14px}
+    #lifeAsk > div:last-child{flex-wrap:wrap}
+    #lifeAsk button{min-height:42px}
+    .side-scroll,.tab-body{overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
+    .bub.md pre.cb{font-size:12px;max-width:calc(100vw - 60px)}
+  }
+  @keyframes sheetup{from{transform:translateY(30%);opacity:.6}to{transform:translateY(0);opacity:1}}
+</style>
+<link rel="stylesheet" href="/lolm-ds.css">
+<script src="/lolm-ds.js" defer></script>
+</head>
+<body>
+<div class="scrim" id="scrim" onclick="document.getElementById('side').classList.remove('show');this.classList.remove('show')"></div>
+<button class="sideopener" id="sideOpener" onclick="toggleSide()" title="show conversations">☰ chats</button>
+<button id="shield" onclick="shieldUnlock()" title="owner unlock" style="position:fixed;left:10px;bottom:10px;z-index:70;width:26px;height:26px;border:0;background:transparent;opacity:.25;font-size:15px;cursor:pointer;padding:0;line-height:1">🛡</button>
+<div class="app">
+  <!-- LEFT -->
+  <aside class="side" id="side">
+    <div class="brand" style="display:flex;align-items:center;gap:6px"><span class="dot"></span> <a href="/" style="color:inherit;text-decoration:none" title="LOLM home">LO<span class="lm">LM</span></a> <small id="freshStamp" title="when this UI was last deployed">app</small><button onclick="toggleSide()" title="hide conversations" style="margin-left:auto;border:0;background:transparent;cursor:pointer;font-size:15px;color:var(--dim);padding:2px 6px">‹</button></div>
+    <button class="newbtn" id="newConv">＋ New chat</button>
+    <input class="search" id="search" placeholder="Search…">
+    <div class="side-scroll">
+      <div class="sec-label">Chats</div>
+      <div id="convList"></div>
+      <div class="sec-label">Projects</div>
+      <div id="projList"><div class="nav-link" id="newProj">＋ New project</div></div>
+      <div id="lifeChip" onclick="openLifeTab()" title="Continuous mind" style="display:flex;align-items:center;gap:8px;margin:14px 2px 0;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer">
+        <span id="lifeDot" style="width:9px;height:9px;border-radius:50%;background:#9ca3af;flex:none"></span>
+        <span id="lifeTxt" style="font-size:11.5px;color:var(--faint)">checking…</span>
+      </div>
+      <style>@keyframes lifebeat{0%{box-shadow:0 0 0 0 rgba(22,163,74,.45)}70%{box-shadow:0 0 0 7px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}</style>
+      <div id="usageChip" class="dim" style="font-size:11px;margin:10px 4px 0;line-height:1.4;display:none"></div>
+      <a class="nav-link" id="pricingLink" href="/pricing.html" style="font-weight:650;margin-top:8px">Pricing</a>
+      <a class="nav-link" href="/install.html">Install CLI</a>
+      <a class="nav-link" id="shareLink" href="#" title="Copy invite link">Share</a>
+      <a class="nav-link" id="supportLink" href="#" style="display:none;color:var(--accent);font-weight:600">Support →</a>
+      <details class="nav-more">
+        <summary>More</summary>
+        <a class="nav-link" href="/">Product home</a>
+        <a class="nav-link" href="/docs.html">Docs hub</a>
+        <a class="nav-link" href="/try.html">Public demo</a>
+        <a class="nav-link" href="/receipts.html">Receipt ledger</a>
+        <a class="nav-link" href="/why-switch.html">Why switch</a>
+        <a class="nav-link" href="/about.html">Architecture</a>
+        <a class="nav-link" href="/operator.html" target="_blank">Operator (lab)</a>
+        <a class="nav-link" href="/research.html" target="_blank">Research (lab)</a>
+        <a class="nav-link" href="/hf.html" target="_blank">HF learning (lab)</a>
+      </details>
+    </div>
+  </aside>
+
+  <!-- CENTER -->
+  <section class="main">
+    <div class="conv-head">
+      <button class="menu-btn" id="menuBtn" title="conversations">☰</button>
+      <h1 id="convTitle">LOLM</h1>
+      <div class="meta" id="convMeta"></div>
+      <button class="dock-toggle" id="dockToggle" title="open the workbench / inspector">⧉ Panel</button>
+    </div>
+    <div class="feed" id="feed">
+      <div id="lifeAsk" style="display:none;margin:0 0 14px;padding:14px 16px;border:1px solid #7c3aed;border-radius:14px;background:linear-gradient(180deg,rgba(124,58,237,.06),transparent)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:8px;height:8px;border-radius:50%;background:#16a34a;animation:lifebeat 2s infinite"></span><span style="font-weight:600;font-size:13px;color:#7c3aed">While you were away, LOLM was thinking…</span></div>
+        <div id="lifeAskThought" class="dim" style="font-size:12.5px;line-height:1.55;margin-bottom:8px"></div>
+        <div id="lifeAskQ" style="font-size:14.5px;font-weight:600;margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px"><input id="lifeAskInput" placeholder="Tell it…" style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-size:13px;box-sizing:border-box" onkeydown="if(event.key==='Enter')answerLife()"><button onclick="answerLife()" style="padding:9px 15px;border:0;border-radius:9px;background:#7c3aed;color:#fff;font-weight:600;cursor:pointer">Reply</button><button onclick="dismissLifeAsk()" title="not now" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer">Later</button></div>
+      </div>
+      <div class="empty" id="emptyState">
+        <h2>Does not lose the plot.</h2>
+        <p style="max-width:36em;margin:0 auto 12px">LOLM’s product is <b>persistent task-state control</b> — structured latent state <code style="font-size:12px;background:var(--panel2);padding:1px 6px;border-radius:4px;border:1px solid var(--line)">z_t = {G,P,W,A,U,F,C}</code> for goals, plan, world, assumptions, uncertainty, failures, and completion evidence. That state chooses the next action. Not just chat history. Not “I produced an output.”</p>
+        <p style="max-width:36em;margin:0 auto 14px;font-size:13px;color:var(--dim)">Describe the work. It holds the plot across steps and sessions, codes in a real jail, verifies when it must, and seals a receipt. <span style="color:var(--faint)">We do not claim to beat every frontier agent on every benchmark — we claim an architecture you can audit: task state + control + evidence.</span></p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;max-width:36em;margin:0 auto 16px;text-align:left;justify-content:center">
+          <div style="flex:1 1 9.5em;border:1px solid var(--line);border-radius:10px;padding:10px 11px;background:var(--panel)"><b style="display:block;font-size:12px;margin-bottom:3px">Task state z_t</b><span style="font-size:11.5px;color:var(--dim);line-height:1.4">Persisted and used as π(z) — not a summary of chat.</span></div>
+          <div style="flex:1 1 9.5em;border:1px solid var(--line);border-radius:10px;padding:10px 11px;background:var(--panel)"><b style="display:block;font-size:12px;margin-bottom:3px">False “done” blocked</b><span style="font-size:11.5px;color:var(--dim);line-height:1.4">Completion criteria need evidence before finalize.</span></div>
+          <div style="flex:1 1 9.5em;border:1px solid var(--line);border-radius:10px;padding:10px 11px;background:var(--panel)"><b style="display:block;font-size:12px;margin-bottom:3px">Sealed receipts</b><span style="font-size:11.5px;color:var(--dim);line-height:1.4">Hash-chained audit trail of work and control.</span></div>
+        </div>
+        <div class="starters" id="starters">
+          <button data-q="Write a Python function that finds prime numbers up to N and run it for N=50. Print the list.">Run Python</button>
+          <button data-q="Build a snake game with arrow keys and a score.">Build a game</button>
+          <button data-q="What's going on with AI agents this week? Cite sources.">Research this week</button>
+        </div>
+        <p style="font-size:11.5px;font-family:var(--mono);color:var(--faint);margin-top:18px">task state z_t · multi-session resume · NFET control · sealed receipts · <a href="/why-switch.html" style="color:var(--faint)">why switch</a> · <a href="/about.html" style="color:var(--faint)">how it works</a></p>
+      </div>
+    </div>
+    <div class="composer">
+      <div class="composer-inner">
+        <div class="modes" id="modeRow"></div>
+        <div class="crow">
+          <textarea id="prompt" placeholder="Ask, code, research, or build…"></textarea>
+          <button class="send" id="send">Send</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ON-DEMAND DOCK: opens only when there's an artifact (preview / terminal / receipt) -->
+  <aside class="dock" id="dock">
+    <div class="dock-head">
+      <div class="dseg-wrap">
+        <button class="dseg on" data-dview="work">⚡ Workbench</button>
+        <button class="dseg" data-dview="inspect">🧾 Inspector</button>
+      </div>
+      <button class="dock-x" id="dockClose" title="hide panel">✕</button>
+    </div>
+    <section class="dview bottom on" id="dview-work">
+      <div class="tabs" id="btabs">
+        <div class="tab on" data-bpane="preview">Preview</div>
+        <div class="tab" data-bpane="terminal">Terminal</div>
+        <div class="tab" data-bpane="diff">Diff</div>
+        <div class="tab" data-bpane="files">Files</div>
+        <div class="tab" data-bpane="tasks">Tasks</div>
+      </div>
+      <div class="tab-body">
+        <div class="pane on" id="bpane-preview"><div class="notconn">Ask for something visual — “a snake game”, “a bouncing-ball animation”, “a landing page” — and it runs live here.</div></div>
+        <div class="pane" id="bpane-terminal"></div>
+        <div class="pane" id="bpane-diff"></div>
+        <div class="pane" id="bpane-files"></div>
+        <div class="pane" id="bpane-tasks"><div class="notconn">Task checklists arrive with multi-step coding.</div></div>
+      </div>
+    </section>
+    <aside class="dview right" id="dview-inspect">
+      <div class="tabs" id="rtabs">
+        <div class="tab on" data-pane="receipt">Receipt</div>
+        <div class="tab" data-pane="memory">Memory</div>
+        <div class="tab" data-pane="web">Web</div>
+        <div class="tab" data-pane="sandbox">Sandbox</div>
+        <div class="tab" data-pane="evolve">Evolve</div>
+        <div class="tab" data-pane="life">Life</div>
+        <div class="tab" data-pane="keys">Keys</div>
+      </div>
+      <div class="tab-body">
+        <div class="pane on" id="pane-receipt"><div class="notconn">Run a turn — its receipt appears here.</div></div>
+        <div class="pane" id="pane-memory"><div class="notconn">Memory retrieved for a run shows here.</div></div>
+        <div class="pane" id="pane-web"><div class="notconn">Web sources used in a run show here, deep-linked.</div></div>
+        <div class="pane" id="pane-sandbox"></div>
+        <div class="pane" id="pane-evolve"><div class="notconn">How LOLM is evolving its own weights — open to load.</div></div>
+        <div class="pane" id="pane-life"><div class="notconn">LOLM's continuous mind — open to load.</div></div>
+        <div class="pane" id="pane-keys"><div class="notconn">Bring your own keys — open to manage.</div></div>
+      </div>
+    </aside>
+  </aside>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* Workspace identity: server only trusts X-LOLM-Api-Key (never client-supplied owner
+   names). Browser mints a free key once, keeps it in localStorage, and scopes every
+   conversation/memory/project to that principal — so chats persist per user/browser. */
+const API_KEY_LS = 'lolm_api_key';
+let _apiKeyPromise = null;
+function storedApiKey(){ const k = localStorage.getItem(API_KEY_LS) || ''; return (k.startsWith('lolm_') && k.split('_').length >= 3) ? k : ''; }
+async function ensureWorkspaceIdentity(forceRemint=false){
+  if(forceRemint){
+    try{ localStorage.removeItem(API_KEY_LS); }catch(_){}
+    _apiKeyPromise = null;
+  } else {
+    const existing = storedApiKey();
+    if(existing) return existing;
+    if(_apiKeyPromise) return _apiKeyPromise;
+  }
+  _apiKeyPromise = (async () => {
+    const r = await fetch('/api/demo/api-keys', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({tier: 'free', label: 'browser workspace'}),
+    });
+    const j = await r.json().catch(() => ({}));
+    if(!r.ok || !j.api_key){
+      _apiKeyPromise = null;
+      throw new Error(j.error || ('could not mint workspace identity ('+r.status+')'));
+    }
+    try{ localStorage.setItem(API_KEY_LS, j.api_key); }catch(_){}
+    return j.api_key;
+  })();
+  return _apiKeyPromise;
+}
+async function api(path, opts={}){
+  const key = await ensureWorkspaceIdentity();
+  const headers = Object.assign({'Content-Type':'application/json','X-LOLM-Api-Key': key}, opts.headers||{});
+  const r = await fetch('/api/demo/workspace'+path, Object.assign({}, opts, {headers}));
+  if(r.status === 401){
+    // Key revoked / rotated — remint once and retry so persistence recovers.
+    const key2 = await ensureWorkspaceIdentity(true);
+    const r2 = await fetch('/api/demo/workspace'+path, Object.assign({}, opts, {
+      headers: Object.assign({}, headers, {'X-LOLM-Api-Key': key2}),
+    }));
+    return r2.json().catch(() => ({error: 'auth failed'}));
+  }
+  return r.json().catch(() => ({error: 'bad response'}));
+}
+
+let state = { conv:null, mode:'auto', modes:[], running:false, memories:[], runMemories:[] };
+let manualModesOpen = false;
+function status(m){ const h=$('convMeta'); if(h){ let s=document.getElementById('statusChip'); if(!s){ s=document.createElement('span'); s.id='statusChip'; s.style.color='var(--accent2)'; h.appendChild(s);} s.textContent='· '+m; clearTimeout(status._t); status._t=setTimeout(()=>{ if(s) s.textContent=''; }, 6000); } }
+
+/* ── modes: AUTO by default (it reads your prompt and routes). Manual chips are an
+   optional override tucked behind "modes ▾". ── */
+async function loadModes(){
+  if(!state.modes.length){ const d = await api('/modes'); state.modes = d.modes||[]; }
+  const isAuto = state.mode==='auto';
+  let html = `<span class="auto-pill">${isAuto?'⚡ Auto — reads your prompt and picks the right tool':'● Forced: '+esc(state.mode)}</span>`
+    + `<button class="modes-toggle" id="modesToggle">${manualModesOpen?'use auto ▴':'force a mode ▾'}</button>`;
+  if(manualModesOpen){
+    html += `<span class="mode ${isAuto?'on':''}" data-mode="auto" title="let LOLM decide from your prompt">Auto</span>`;
+    html += state.modes.map(m => {
+      const execHint = (m.key==='code' || m.key==='operator' || sandbox.id)
+        ? (m.needs_exec ? ' <span class="nc" style="color:var(--good)" title="runs live in an isolated sandbox">▶</span>' : '')
+        : (m.needs_exec ? ' <span class="nc" title="reasons live; connect the owner sandbox to also run">⚙</span>' : '');
+      return `<span class="mode ${m.key===state.mode?'on':''}" data-mode="${m.key}" title="${esc(m.frame||m.label)}">${esc(m.label)}${execHint}</span>`;
+    }).join('');
+  }
+  $('modeRow').innerHTML = html;
+  const mt = $('modesToggle'); if(mt) mt.onclick = () => { manualModesOpen=!manualModesOpen; if(!manualModesOpen) setMode('auto'); else loadModes(); };
+  document.querySelectorAll('.mode').forEach(el => el.onclick = () => setMode(el.dataset.mode));
+}
+function setMode(m){
+  state.mode = m;
+  if(state.conv && state.conv.mode !== m){
+    state.conv.mode = m;
+    api('/conversations/'+state.conv.id, {method:'PATCH', body: JSON.stringify({mode: m})}).then(()=>loadConvs());
+  }
+  loadModes();
+  const mo = state.modes.find(x=>x.key===m);
+  if(mo && mo.needs_exec){ openDock('inspect'); document.querySelector('#rtabs .tab[data-pane=sandbox]').click(); }
+}
+/* ── the on-demand dock (workbench + inspector) ── */
+function openDock(view){
+  document.querySelector('.app').classList.add('dock-open');
+  if(view){
+    document.querySelectorAll('.dseg').forEach(b=>b.classList.toggle('on', b.dataset.dview===view));
+    const w=$('dview-work'), i=$('dview-inspect');
+    if(w) w.classList.toggle('on', view==='work');
+    if(i) i.classList.toggle('on', view==='inspect');
+  }
+}
+function closeDock(){ document.querySelector('.app').classList.remove('dock-open'); }
+/* ── real execution sandbox (loopback/tunnel only; never public RCE) ── */
+// Default = PUBLIC isolated sandbox (/api/demo/sandbox, no token, bwrap-jailed).
+// With an owner SANDBOX_SECRET it uses the more powerful loopback /api/sandbox (clone etc).
+let sandbox = { token: localStorage.getItem('lolm_sbx_token')||'', id:null, enabled:false, isolated:true };
+function sbxBase(){ return sandbox.token ? '/api/sandbox' : '/api/demo/sandbox'; }
+async function sbxApi(path, opts={}){
+  const h = {'Content-Type':'application/json'}; if(sandbox.token) h['Authorization']='Bearer '+sandbox.token;
+  const r = await fetch(sbxBase()+path, Object.assign({}, opts, {headers:Object.assign(h, opts.headers||{})}));
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error || j.detail || ('HTTP '+r.status));
+  return j;
+}
+async function probeSandbox(){
+  try{ const h = await (await fetch(sbxBase()+'/health')).json(); sandbox.enabled=!!h.enabled; sandbox.isolated=h.isolated!==false; }
+  catch(e){ sandbox.enabled=false; }
+}
+async function renderSandbox(){
+  await probeSandbox();
+  const pane = $('pane-sandbox');
+  if(sandbox.id){ await renderSandboxState(); return; }
+  if(sandbox.enabled){
+    pane.innerHTML =
+      `<div class="kv"><span class="k">code execution</span><span class="v"><span class="badge green">live · sandboxed</span></span></div>`+
+      `<div class="notconn" style="border-style:solid;border-color:#bbf7d0;background:#f0fdf4"><b style="color:#166534">network-isolated jail (bwrap)</b><span style="color:#15803d">Every command runs with no network, no host filesystem, no host processes — and is rate-limited. Real code, safely.</span></div>`+
+      `<button id="sbxConn" class="mode on" style="margin-top:8px">▶ start a sandbox</button>`+
+      `<details style="margin-top:10px"><summary style="font-size:11px;color:var(--dim);font-family:var(--mono);cursor:pointer">owner mode (full power, loopback)</summary><div style="margin-top:6px;display:flex;gap:6px"><input id="sbxTok" placeholder="SANDBOX_SECRET" style="flex:1;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:11px"><button id="sbxTokGo" class="mode">use</button></div></details>`;
+    $('sbxConn').onclick=connectSandbox;
+    const tg=$('sbxTokGo'); if(tg) tg.onclick=()=>{ sandbox.token=$('sbxTok').value.trim(); localStorage.setItem('lolm_sbx_token',sandbox.token); renderSandbox(); };
+  } else {
+    pane.innerHTML =
+      `<div class="kv"><span class="k">code execution</span><span class="v"><span class="badge gray">unavailable</span></span></div>`+
+      `<div class="notconn"><b>Sandbox isolation not present</b>This host has no bwrap/container runtime, so code execution is disabled here. The agent still reasons in Code/Debug/Audit modes; it just can't run things on this server.</div>`;
+    const nc=`<div class="notconn"><b>No sandbox</b>Start one in the Sandbox tab to run code.</div>`;
+    $('bpane-terminal').innerHTML=nc; $('bpane-diff').innerHTML=nc; $('bpane-files').innerHTML=nc;
+  }
+}
+async function connectSandbox(){
+  try{
+    const st = await sbxApi('/create', {method:'POST'});
+    sandbox.id = st.sandbox_id;
+    await renderSandboxState(); renderTerminal(); await renderFiles();
+    openDock('work'); document.querySelector('#btabs .tab[data-bpane=terminal]').click();
+    status('sandbox live — run code in the Terminal ('+sandbox.id+')');
+  }catch(e){
+    sandbox.id=null; if(sandbox.token){ sandbox.token=''; }
+    await renderSandbox();   // back to the start button…
+    const p=$('pane-sandbox');  // …then show WHY, right in the panel (not a silent revert)
+    if(p) p.insertAdjacentHTML('afterbegin',
+      `<div class="notconn" style="border-color:#fecaca;background:#fef2f2"><b style="color:#b91c1c">couldn’t start the sandbox</b><span style="color:#dc2626">${esc(e.message)} — try again.</span></div>`);
+    status('sandbox: '+e.message);
+  }
+}
+async function renderSandboxState(){
+  const st = await sbxApi('/'+sandbox.id+'/state');
+  const jail = (st.isolated!==false) ? '<span class="badge green" style="margin-left:6px">jailed</span>' : '';
+  // clone/snapshot/rollback + network are owner-mode (loopback) only — the public
+  // jail has no network, so those don't apply.
+  const owner = !!sandbox.token;
+  $('pane-sandbox').innerHTML =
+    `<div class="kv"><span class="k">sandbox</span><span class="v"><span class="badge green">live</span> ${esc(sandbox.id)} ${jail}</span></div>`+
+    `<div class="kv"><span class="k">files</span><span class="v">${st.files}</span></div>`+
+    `<div class="kv"><span class="k">commands</span><span class="v">${st.commands_run}</span></div>`+
+    `<div class="kv"><span class="k">file changes</span><span class="v">${st.file_changes}</span></div>`+
+    (owner
+      ? `<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap"><input id="sbxRepo" placeholder="public github URL to clone" style="flex:1;min-width:140px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-size:11px"><button class="mode" id="sbxClone">clone</button><button class="mode" id="sbxSnap">snapshot</button><button class="mode" id="sbxRoll">rollback</button></div>`
+      : `<p style="font-size:11px;color:var(--faint);margin-top:10px">Public jail has no network (no clone). Write files + run code in the Terminal below. New sandbox on reload.</p>`);
+  if(owner){
+    $('sbxClone').onclick=async()=>{ const u=$('sbxRepo').value.trim(); if(!u)return; status('cloning…'); const r=await sbxApi('/'+sandbox.id+'/clone',{method:'POST',body:JSON.stringify({repo_url:u})}); termLine('$ git clone '+u, r.stdout+r.stderr, r.exit_code); await sbxApi('/'+sandbox.id+'/detect').then(d=>termLine('# detected',JSON.stringify(d),0)).catch(()=>{}); renderFiles(); renderSandboxState(); };
+    $('sbxSnap').onclick=async()=>{ await sbxApi('/'+sandbox.id+'/snapshot',{method:'POST'}); status('snapshot saved'); renderSandboxState(); };
+    $('sbxRoll').onclick=async()=>{ await sbxApi('/'+sandbox.id+'/rollback',{method:'POST'}); status('rolled back'); renderFiles(); renderSandboxState(); };
+  }
+}
+function renderTerminal(){
+  $('bpane-terminal').innerHTML = `<div id="termOut"></div><div style="display:flex;gap:6px;margin-top:8px"><span style="color:#3fd6a0">$</span><input id="termIn" style="flex:1;background:transparent;border:none;color:#e2e8f0;font-family:var(--mono);font-size:11.5px;outline:none" placeholder="run a command (recorded · destructive blocked)"></div>`;
+  $('termIn').addEventListener('keydown', async e=>{ if(e.key!=='Enter')return; const cmd=$('termIn').value.trim(); if(!cmd)return; $('termIn').value='';
+    try{ const r=await sbxApi('/'+sandbox.id+'/run',{method:'POST',body:JSON.stringify({command:cmd})}); termLine('$ '+cmd, (r.stdout||'')+(r.stderr||''), r.blocked?'blocked':r.exit_code); renderSandboxState(); if(/git|write|touch|>/.test(cmd)) renderFiles(); }
+    catch(err){ termLine('$ '+cmd, err.message, 1); } });
+}
+function termLine(cmd, out, code){
+  const o=$('termOut'); if(!o)return;
+  const color = code===0?'#3fd6a0':(code==='blocked'?'#fbbf24':'#ff6b81');
+  o.innerHTML += `<div><span style="color:#64748b">${esc(cmd)}</span>${out?`<pre style="margin:2px 0;white-space:pre-wrap;color:#cbd5e1">${esc(out.slice(0,4000))}</pre>`:''}<span style="color:${color};font-size:10px">exit ${code}</span></div>`;
+  o.scrollTop=o.scrollHeight;
+}
+async function renderFiles(){
+  if(!sandbox.id) return;
+  try{ const d=await sbxApi('/'+sandbox.id+'/files'); const fs=d.files||[];
+    $('bpane-files').innerHTML = fs.length? fs.map(f=>`<div class="filerow" data-f="${esc(f)}" style="cursor:pointer;padding:1px 0;color:#94a3b8">📄 ${esc(f)}</div>`).join('') : '<div class="notconn">empty sandbox — clone a repo or run a command</div>';
+    document.querySelectorAll('.filerow').forEach(el=>el.onclick=async()=>{ const r=await sbxApi('/'+sandbox.id+'/read?path='+encodeURIComponent(el.dataset.f)); $('bpane-diff').innerHTML=`<div style="color:#94a3b8;margin-bottom:4px">${esc(el.dataset.f)}</div><pre style="white-space:pre-wrap;color:#cbd5e1">${esc((r.content||'').slice(0,8000))}</pre>`; document.querySelector('#btabs .tab[data-bpane=diff]').click(); });
+  }catch(e){}
+  try{ const dg=await sbxApi('/'+sandbox.id+'/diff'); /* diff pane populated on demand */ }catch(e){}
+}
+
+/* ── conversations ── */
+async function loadConvs(){
+  const q = $('search').value.trim();
+  const d = await api('/conversations'+(q?('?q='+encodeURIComponent(q)):''));
+  let list = d.conversations||[];
+  // hide stray empty conversations (0 turns, never titled) so the sidebar doesn't fill
+  // with "New conversation" ghosts — but keep the one you're actively in.
+  list = list.filter(c => c.turns>0 || (state.conv&&state.conv.id===c.id) || (c.title&&c.title!=='New conversation'));
+  $('convList').innerHTML = list.length ? list.map(c =>
+    `<div class="conv ${state.conv&&state.conv.id===c.id?'active':''}" data-id="${c.id}">
+       <button class="conv-x" data-del="${c.id}" title="delete conversation">×</button>
+       <div class="t">${esc(c.title)}</div>
+       <div class="m"><span class="pill">${esc(c.mode||'chat')}</span>${c.last_model_used?`<span>${esc(c.last_model_used)}</span>`:''}<span>${c.turns} turn${c.turns===1?'':'s'}</span></div>
+     </div>`).join('') : '<div style="padding:8px 10px;color:var(--faint);font-size:12px">No conversations yet.</div>';
+  document.querySelectorAll('.conv').forEach(el => el.onclick = (e) => { if(e.target.classList.contains('conv-x')) return; openConv(el.dataset.id); });
+  document.querySelectorAll('.conv-x').forEach(b => b.onclick = (e) => { e.stopPropagation(); deleteConv(b.dataset.del); });
+}
+async function deleteConv(id){
+  await api('/conversations/'+id, {method:'PATCH', body: JSON.stringify({archived:true})});
+  if(state.conv && state.conv.id===id){ state.conv=null; $('feed').innerHTML=''; $('convTitle').textContent='LOLM Workspace'; $('convMeta').innerHTML=''; }
+  await loadConvs();
+}
+async function newConv(){
+  // reuse the current conversation if it's still empty — don't spawn ghost duplicates
+  if(state.conv && (state.conv.messages||[]).length===0){ renderFeed(); const p=$('prompt'); if(p)p.focus(); return; }
+  const c = await api('/conversations', {method:'POST', body: JSON.stringify({mode: state.mode})});
+  await openConv(c.id);   // MUST await — send() reads state.conv right after
+  await loadConvs();
+}
+async function openConv(id){
+  const c = await api('/conversations/'+id);
+  if(c.error) return;
+  state.conv = c; state.mode = c.mode || state.mode;
+  $('convTitle').textContent = c.title;
+  $('convMeta').innerHTML = `<span>${(c.messages||[]).length} turns</span>${c.last_model_used?`<span>· ${esc(c.last_model_used)}</span>`:''}${c.last_verdict?`<span>· ${esc(c.last_verdict)}</span>`:''}`;
+  renderFeed();
+  loadConvs(); loadModes();
+}
+/* ── visual sandbox: build a self-contained HTML app, run it in a sandboxed iframe ── */
+const VISUAL_RE = /\b(game|snake|flappy|pong|tetris|breakout|asteroids|invaders|space ?invaders|maze|platformer|arcade|fps|first[- ]?person|shooter|doom|raycast(ing)?|ray[- ]?trac(e|ing|er)|shader|webgl|three\.?js|3d|2d|animation|animate|canvas|draw(ing)?|particles?|simulat(e|ion|or)|visuali[sz]e|web ?page|web ?site|landing page|portfolio site|clock|paint|fractal|mandelbrot|julia set|starfield|fireworks|bouncing|interactive|sprite|spinning|rotating cube|confetti|matrix rain|solar system|galaxy|terrain|voxel|minecraft|orbit|pendulum|wave|plasma|tunnel|kaleidoscope|4k|retro|pixel art|demo ?scene|boids|flocking|cellular automat|game of life)\b/i;
+function isVisualTask(t){ return VISUAL_RE.test(t||''); }
+const CODE_RE = /\b(write|create|make|build|implement|generate|refactor|debug|fix|optimi[sz]e|profile)\b[^.!?]{0,70}\b(program|script|function|method|class|module|cli|parser|compiler|server|api|endpoint|algorithm|app|bot|code|loop|recursion|regex|query|test|crawler|scraper)\b|\b(in|using|with)\s+(python|javascript|js|node\.?js|typescript|ts|c\+\+|cpp|c#|java|rust|golang|go|ruby|bash|sql|php|haskell|scala|kotlin)\b|\b(fizzbuzz|leetcode|reverse a string|sort (a |the |an )?(list|array)|parse (a |the )?(json|csv|xml|html)|regex (for|to|that)|merge ?sort|quick ?sort|bubble ?sort|binary search|linked list|hash ?map|two ?sum|valid parenthes|anagram|sieve of eratosthenes)\b|^\s*(write|code|implement|debug|refactor|optimi[sz]e)\b/i;
+function isCodeTask(t){ return CODE_RE.test(t||''); }
+// Auto-router: visual (runs in the preview iframe) > code (runs in the jail terminal) > smart chat.
+function classifyIntent(t){ if(isVisualTask(t)) return 'visual'; if(isCodeTask(t)) return 'code'; return 'chat'; }
+// A tiny self-check injected into the app: after it starts, downsample each canvas and
+// tell the parent if the whole thing is blank/black (a broken render). Runs INSIDE the
+// iframe's own origin (reading its own canvas is fine); only a postMessage crosses out.
+const PREVIEW_PROBE = "<scr"+"ipt>(function(){function chk(){try{var cs=document.querySelectorAll('canvas'),had=false,bright=0;for(var i=0;i<cs.length;i++){var c=cs[i];if(!c.width||!c.height)continue;had=true;try{var o=document.createElement('canvas');o.width=48;o.height=48;var g=o.getContext('2d');g.drawImage(c,0,0,48,48);var d=g.getImageData(0,0,48,48).data;for(var p=0;p<d.length;p+=4){if(d[p]>14||d[p+1]>14||d[p+2]>14)bright++;}}catch(e){bright+=999;}}parent.postMessage({__lolm:'render',hadCanvas:had,blank:had&&bright<4},'*');}catch(e){parent.postMessage({__lolm:'render',blank:false},'*');}}setTimeout(chk,1600);})();<\/scr"+"ipt>";
+function renderPreview(html, onCheck){
+  const pane=$('bpane-preview'); pane.innerHTML='';
+  const f=document.createElement('iframe'); f.id='previewFrame';
+  // allow-scripts only (no allow-same-origin) → the app runs but can't reach our origin,
+  // cookies, or network. Real, playable, isolated.
+  f.setAttribute('sandbox','allow-scripts allow-pointer-lock');
+  f.tabIndex = 0;
+  f.style.cssText='width:100%;height:100%;min-height:300px;border:0;background:#0a0c10;border-radius:8px';
+  let out = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, PREVIEW_PROBE+'</body>') : (html+PREVIEW_PROBE);
+  if(onCheck){ const h=ev=>{ if(ev.data&&ev.data.__lolm==='render'){ window.removeEventListener('message',h); onCheck(ev.data); } }; window.addEventListener('message',h); setTimeout(()=>window.removeEventListener('message',h),4500); }
+  // give the game keyboard focus so arrow/WASD keys work immediately (and on click)
+  f.addEventListener('load', ()=>{ try{ f.contentWindow.focus(); }catch(e){} });
+  f.addEventListener('mouseenter', ()=>{ try{ f.contentWindow.focus(); }catch(e){} });
+  f.srcdoc=out; pane.appendChild(f);
+  setTimeout(()=>{ try{ f.contentWindow.focus(); }catch(e){} }, 300);
+}
+async function buildVisualOnce(task, timeoutMs=240000){
+  // A big game (full Tetris, a raycaster) is thousands of tokens and can take
+  // ~2 min on the 70B. Bound the wait so a genuinely stuck build fails gracefully
+  // instead of hanging the tab forever.
+  const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(), timeoutMs);
+  let resp;
+  try{ resp=await fetch('/api/demo/code/visual',{method:'POST',headers:authHeaders(),body:JSON.stringify({task}),signal:ctl.signal}); }
+  catch(e){ clearTimeout(to); if(e.name==='AbortError') return {ok:false, status:0, j:{error:'the build took too long (over 4 minutes) — try a simpler request, or split it up'}}; throw e; }
+  clearTimeout(to);
+  const raw=await resp.text();
+  let j={};
+  try{ j=JSON.parse(raw); }
+  catch(_){
+    // resilient: even if the JSON envelope is ever malformed, salvage the HTML document
+    // itself so the app still renders instead of silently failing.
+    const m=raw.match(/<!DOCTYPE html[\s\S]*<\/html>/i);
+    if(m){ j={html:m[0], bytes:m[0].length, salvaged:true}; }
+    else{ j={error:'the builder returned an unreadable response'}; }
+  }
+  return {ok:resp.ok, status:resp.status, j};
+}
+function previewBlankCheck(html){ return new Promise(res=>{ let done=false; renderPreview(html, d=>{ if(!done){done=true; res(!!(d&&d.blank));} }); setTimeout(()=>{ if(!done){done=true; res(false);} }, 4400); }); }
+// LIVE token stream: watch the code being written. Resolves {html,bytes} the instant
+// the document is complete; throws on any error so the caller falls back to the
+// blocking builder. onChunk(text) fires for each code delta.
+async function streamVisualBuild(task, onChunk){
+  const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(), 240000);
+  let resp;
+  try{ resp=await fetch('/api/demo/code/visual/stream',{method:'POST',headers:authHeaders(),body:JSON.stringify({task}),signal:ctl.signal}); }
+  catch(e){ clearTimeout(to); throw (e.name==='AbortError'? new Error('stream timed out'):e); }
+  if(!resp.ok || !(resp.headers.get('content-type')||'').includes('event-stream')){ clearTimeout(to); throw new Error('stream unavailable (HTTP '+resp.status+')'); }
+  const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf='', html=null, err=null;
+  try{
+    while(true){ const {done,value}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+      let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+        let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: ')){ try{data=JSON.parse(ln.slice(6));}catch(_){} } }
+        if(name==='chunk'&&data&&data.text) onChunk(data.text);
+        else if(name==='html'&&data) html=data;
+        else if(name==='error'&&data) err=data.error||'stream error';
+      }
+    }
+  }finally{ clearTimeout(to); }
+  if(err) throw new Error(err);
+  if(!html||!html.html) throw new Error('stream ended without a document');
+  return html;
+}
+async function runVisualBuild(task, c){
+  // SELF-VERIFYING build: the server writes the app, RUNS it in real headless
+  // Chromium, and if it's broken (blank canvas / dead loop / dead controls) it
+  // feeds the exact failure back and rebuilds — up to a few times — until a real
+  // browser confirms it works. You watch it catch and fix its own mistakes.
+  const showPreview=()=>{ try{ openDock('work'); document.querySelector('#btabs .tab[data-bpane=preview]').click(); }catch(_){} };
+  showPreview();
+  const pv=$('bpane-preview');
+  pv.innerHTML='<div class="notconn">🎨 building your app — then LOLM <b>runs it in a real browser</b> and rebuilds itself until it actually works, before showing you…</div>';
+  const reason=document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
+  const step=t=>{ const s=document.createElement('div'); s.className='step'; s.innerHTML=t; reason.appendChild(s); $('feed').scrollTop=$('feed').scrollHeight; };
+  const ansEl=addBubble('assistant',''); const bub=ansEl.querySelector('.bub');
+  step('🎨 <b>self-verifying visual build</b> — writes it, runs it in a real browser, fixes itself until it works');
+  const rec={mode:'visual', model:'cloud cascade (visual)', files:['index.html'], verdict:''};
+  let secs=0, phase='writing the code';
+  const tick=setInterval(()=>{ secs++; bub.textContent='🎨 Building & verifying your app… ('+secs+'s) — '+phase+' ↓'; }, 1000);
+  try{
+    const resp=await fetch('/api/demo/code/visual/build',{method:'POST',headers:authHeaders(),body:JSON.stringify({task, conversation_id:(c&&c.id)||'', session_id:(c&&c.id)||'', context_reset:false})});
+    if(resp.status===402){ clearInterval(tick); const err=await resp.json().catch(()=>({})); bub.textContent=err.error||'daily build limit reached'; showUpgrade(bub, err); return; }
+    if(!resp.ok || !resp.body){ throw new Error('the builder is unavailable (HTTP '+resp.status+')'); }
+    const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf='';
+    let finalHtml=null, done=null;
+    while(true){ const {done:d,value}=await reader.read(); if(d)break; buf+=dec.decode(value,{stream:true});
+      let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+        let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: ')){ try{data=JSON.parse(ln.slice(6));}catch(_){} } }
+        if(!name||data==null) continue;
+        if(name==='attempt'){
+          if(data.mode==='ensemble'){ const names=(data.models||[]).map(m=>m.split('/').pop().replace('-instruct','')).join(' vs '); phase='racing '+(data.models||[]).length+' brains in parallel'; step('🧠 <b>racing '+(data.models||[]).length+' brains in parallel</b> — '+esc(names)+' <span class="dim">each builds it independently</span>'); }
+          else if(data.mode==='fix' || data.n>1){ phase='fixing what the browser found'; step('🔨 <b>attempt '+data.n+'</b> — rewriting it to fix what the browser found'); }
+          else { phase='writing the code'; step('🔨 <b>attempt 1</b> — writing the app'); }
+        }
+        else if(name==='candidate'){
+          const nm=(data.model||'').split('/').pop().replace('-instruct','').replace(':free','');
+          const prov=data.provider?(' <span class="dim">via '+esc(data.provider)+'</span>'):'';
+          if(data.working){
+            step('&nbsp;&nbsp;🧠 <b>'+esc(nm)+'</b>'+prov+' → <span style="color:#16a34a">runs ✓</span> renders'+(data.responds?'+responds':'')+(data.animates?'+animates':''));
+          } else if(data.skipped || data.error_kind==='rate_limit' || data.error_kind==='not_found'){
+            // Infra noise — not a broken game. Keep the feed calm.
+            const kind=data.error_kind==='rate_limit'?'rate-limited'
+              :(data.error_kind==='not_found'?'unavailable':'skipped');
+            step('&nbsp;&nbsp;○ <b>'+esc(nm)+'</b>'+prov+' → <span class="dim">'+kind+' (free tier) — using other brains</span>');
+          } else {
+            const why=(data.reasons&&data.reasons[0])?esc((data.reasons[0]||'').slice(0,72)):'broken';
+            step('&nbsp;&nbsp;🧠 <b>'+esc(nm)+'</b>'+prov+' → <span style="color:#b45309">✗ '+why+'</span>');
+          }
+        }
+        else if(name==='verifying'){ phase='running it in a real browser'; step('🔬 <b>running '+(data.count?('all '+data.count+' in real browsers'):'it in a real browser')+'</b> — checking each actually renders + responds…'); }
+        else if(name==='verdict'){
+          if(data.working){ step('✅ <b>verified working</b> — renders'+(data.responds?' + responds to controls':'')+(data.animates?' + animates':'')); }
+          else { const why=(data.reasons&&data.reasons[0])?esc(data.reasons[0]):'it didn’t work'; step('✗ <b>attempt '+data.n+' is broken</b> — '+why+' <span class="dim">→ NFET repair</span>'); phase='NFET repairing from browser evidence'; }
+        }
+        else if(name==='agent_note'){
+          const t=data.text||'';
+          if(/^NFET/i.test(t) || /NFET/.test(t)){
+            step('◆ <b>NFET</b> — '+esc(t.slice(0,160)));
+            phase='NFET control';
+          } else {
+            step('· '+esc(t.slice(0,140)));
+          }
+        }
+        else if(name==='done'){ done=data; finalHtml=data.html; }
+        else if(name==='error'){ step('⚠ '+esc(data.error||'')); }
+      }
+    }
+    clearInterval(tick);
+    if(!finalHtml){ bub.textContent='⚠ Couldn’t build it — try rephrasing (e.g. “build a snake game”).'; pv.innerHTML='<div class="notconn">⚠ build failed — try again.</div>'; rec.verdict='error'; }
+    else{
+      renderPreview(finalHtml); showPreview();
+      const verified=!!(done&&done.verified);
+      rec.verdict=verified?'verified':'rendered'; rec.bytes=done.bytes; rec.attempts=done.attempts; rec.verifiedRun=verified;
+      $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">index.html'+(verified?' — <span style="color:#3fd6a0">browser-verified</span>':'')+'</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(finalHtml.slice(0,14000))+'</pre>';
+      if(verified){
+        const win=done.winner?done.winner.split('/').pop().replace('-instruct','').replace(':free',''):null;
+        const how=win?' <span class="dim">'+esc(win)+' + NFET control — browser verified.</span>':(done.attempts>1?' <span class="dim">NFET repaired it over '+done.attempts+' steps until the browser agreed.</span>':'');
+        bub.innerHTML='✅ <b>Built a working app — and proved it.</b> NFET drove write → browser-verify → repair until it actually renders and responds.'+how+' Playing now in the <b>Preview</b> tab ↓';
+      } else if(done.failed_closed || (done.verifier_ran && done.verdict && done.verdict.renders===false)){
+        bub.innerHTML='⚠ <b>Couldn’t get a playable build</b> after '+done.attempts+' NFET-controlled attempts — the browser still saw a blank/broken canvas. Try again or rephrase (e.g. “simple snake game with green snake on a dark grid”).';
+      } else if(done.verifier_ran){
+        bub.innerHTML='⚠ <b>Built something, but the browser didn’t fully confirm it</b> after '+done.attempts+' NFET steps — preview may be incomplete. Tell me what’s wrong and I’ll fix it.';
+      } else {
+        bub.innerHTML='✅ <b>Built a live app</b> — '+done.bytes+' bytes, running in the <b>Preview</b> tab ↓.';
+      }
+      step('▶ <b>running live</b> · '+done.bytes+' bytes'+(verified?' · browser-verified after '+done.attempts+' attempt'+(done.attempts===1?'':'s'):''));
+    }
+  }catch(e){ clearInterval(tick); bub.textContent='⚠ Visual build error: '+e.message+' — try again.'; pv.innerHTML='<div class="notconn">⚠ '+esc(e.message)+'</div>'; rec.verdict='error'; }
+  renderInspectors({receipt:rec});
+  await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:(bub.textContent||'visual build'),model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
+}
+function renderFeed(){
+  const c = state.conv; const feed = $('feed');
+  if(!c){ return; }
+  feed.innerHTML = '';
+  (c.messages||[]).forEach(m => addBubble(m.role, m.content, m.meta));
+  if(!(c.messages||[]).length) feed.innerHTML = '<div class="empty"><h2>'+esc(c.title)+'</h2><p>Send a message to start this conversation.</p></div>';
+  feed.scrollTop = feed.scrollHeight;
+}
+// Compact, XSS-safe markdown → HTML (escape FIRST, then format). Covers headings,
+// bold/italic, inline + fenced code, links, and bullet/number lists — the things a
+// chat answer actually uses. Keeps it feeling like a real assistant, not raw text.
+function mdToHtml(src){
+  if(src==null) return '';
+  let s = esc(String(src));
+  const blocks=[];
+  s = s.replace(/```(\w*)\n?([\s\S]*?)```/g, (m,lang,code)=>{ blocks.push('<pre class="cb"><code>'+code.replace(/\n+$/,'')+'</code></pre>'); return '\x01'+(blocks.length-1)+'\x02'; });
+  s = s.replace(/`([^`\n]+)`/g, '<code class="ic">$1</code>');
+  s = s.replace(/^#{4,6}\s+(.*)$/gm,'<h4>$1</h4>').replace(/^###\s+(.*)$/gm,'<h4>$1</h4>').replace(/^##\s+(.*)$/gm,'<h3>$1</h3>').replace(/^#\s+(.*)$/gm,'<h2>$1</h2>');
+  s = s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>');
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/(?:^|\n)((?:[ \t]*[-*+] .*(?:\n|$))+)/g, m=>'\n<ul>'+m.trim().split(/\n/).map(l=>'<li>'+l.replace(/^[ \t]*[-*+]\s+/,'')+'</li>').join('')+'</ul>\n');
+  s = s.replace(/(?:^|\n)((?:[ \t]*\d+\. .*(?:\n|$))+)/g, m=>'\n<ol>'+m.trim().split(/\n/).map(l=>'<li>'+l.replace(/^[ \t]*\d+\.\s+/,'')+'</li>').join('')+'</ol>\n');
+  s = '<p>'+s.replace(/\n{2,}/g,'</p><p>').replace(/\n/g,'<br>')+'</p>';
+  s = s.replace(/<p>(\s*<(?:ul|ol|pre|h[2-6])[\s\S]*?<\/(?:ul|ol|pre|h[2-6])>\s*)<\/p>/g,'$1').replace(/<p>\s*<\/p>/g,'');
+  return s.replace(/\x01(\d+)\x02/g, (m,i)=>blocks[+i]);
+}
+function addBubble(role, content, meta){
+  const d = document.createElement('div'); d.className = 'msg '+role;
+  const isMd = role==='assistant' && content;
+  const inner = isMd ? mdToHtml(content) : esc(content);
+  d.innerHTML = `<div class="who">${role==='user'?'you':'LOLM'}</div><div class="bub${isMd?' md':''}">${inner}</div>`;
+  $('feed').appendChild(d); $('feed').scrollTop = $('feed').scrollHeight;
+  if(meta && (meta.receipt || meta.sources)) renderInspectors(meta);
+  return d;
+}
+
+/* ── run a turn through the REAL agent, persist it ── */
+async function runCodeLoop(task, c){
+  openDock('work'); document.querySelector('#btabs .tab[data-bpane=terminal]').click();
+  $('bpane-terminal').innerHTML = '<div id="termOut"></div>';
+  const reason = document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
+  const step = t => { const s=document.createElement('div'); s.className='step'; s.innerHTML=t; reason.appendChild(s); reason.scrollTop=reason.scrollHeight; $('feed').scrollTop=$('feed').scrollHeight; };
+  const ansEl = addBubble('assistant',''); const bub=ansEl.querySelector('.bub');
+  bub.textContent='🛠 Coding agent — writing code, running it in an isolated sandbox, fixing failures…';
+  const rec={mode:'code_agent', model:'Llama 70B + LOLM (agentic)', files:[], runs:[], verdict:''};
+  step('🛠 <b>coding agent</b> — bwrap jail · no network, no host filesystem');
+  try{
+    const resp=await fetch('/api/demo/code/run',{method:'POST',headers:authHeaders(),body:JSON.stringify({task})});
+    if(!resp.ok){ const e=await resp.json().catch(()=>({})); bub.textContent='code run refused: '+(e.error||resp.status); return; }
+    const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf='';
+    while(true){ const {done,value}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+      let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+        let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: ')){ try{data=JSON.parse(ln.slice(6));}catch(_){} } }
+        if(!name||!data) continue;
+        if(name==='code_start') step('· sandbox '+esc(data.sandbox||''));
+        else if(name==='file_changed'){ rec.files.push(data.path); step('✎ <b>wrote</b> '+esc(data.path)+(data.reason?(' — '+esc(data.reason)):'')); termLine('# wrote '+data.path, data.diff||'', 0); }
+        else if(name==='command_started'){ termLine('$ '+data.command, '', ''); step('▶ run <code>'+esc(data.command)+'</code>'); }
+        else if(name==='command_finished'){ rec.runs.push(data.exit_code); termLine('', (data.stdout||'')+(data.stderr||''), data.blocked?'blocked':data.exit_code); step((data.exit_code===0?'✓':'✗')+' exit '+(data.blocked?'blocked':data.exit_code)); }
+        else if(name==='agent_note') step('· '+esc((data.text||'').slice(0,120)));
+        else if(name==='code_done'){ rec.verdict=data.budget_hit?'budget_hit':'finished'; bub.textContent=(data.summary||'Done.'); step('● <b>done</b>'+(data.budget_hit?' (step budget hit)':'')); }
+        else if(name==='error'){ bub.textContent += '\n[error] '+(data.error||''); }
+      }
+    }
+  }catch(e){ bub.textContent += '\n[stream lost] '+e.message; }
+  renderInspectors({receipt:rec});
+  await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:bub.textContent,model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
+}
+async function send(){
+  const text = $('prompt').value.trim();
+  if(!text || state.running) return;
+  if(!state.conv) await newConv();
+  state.running = true; $('send').disabled = true; $('prompt').value = '';
+  $('emptyState') && $('emptyState').remove();
+  const c = state.conv;
+  addBubble('user', text);
+  // Keep a live client-side transcript so follow-ups always have history even
+  // before the next openConv() refresh (fixes amnesiac "idk"/yes turns).
+  if(!Array.isArray(c.messages)) c.messages = [];
+  const history = c.messages.filter(m=>m.role==='user'||m.role==='assistant')
+    .map(m=>({role:m.role, content:m.content})).slice(-12);
+  c.messages.push({role:'user', content:text});
+  await api('/conversations/'+c.id+'/messages', {method:'POST', body: JSON.stringify({role:'user', content:text})});
+  if(_greetConvId && c.id===_greetConvId && _lifeAskId){ try{ fetch('/api/demo/life/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pulse_id:_lifeAskId,reply:text})}); }catch(_){ } _greetConvId=null; }
+
+  // explicit memory commands ("remember that…" / "forget…") → instant, deterministic
+  if(await handleMemoryCommand(text, c)){ state.running=false; $('send').disabled=false; await openConv(c.id); return; }
+
+  // Short dialog replies never belong in visual/code routing.
+  const _shortFollow = /^\s*(i\s*don'?t\s*know|idk|dunno|no\s*idea|yes|yep|yeah|yup|no|nope|nah|sure|ok(ay)?|maybe|more|why|how|what|that|this|it|do\s*it|go\s*ahead)\s*[!.?]*\s*$/i.test(text);
+
+  // AUTO-ROUTE: read the prompt and pick the path.
+  //   visual  → build a live HTML app in the sandboxed preview iframe (you can play it)
+  //   code    → the agentic loop writes + runs real code in the bwrap jail terminal
+  //   else    → the smart chat path (web search + LOLM uncertainty control)
+  //
+  // Manual modes (Build/Test, Debug, …) used to OVERRIDE everything — so
+  // "code a snake game" under Forced build_test wrote a terminal ASCII Game Over
+  // in main.py, marked shipped, and never opened the visual builder. That is a
+  // product failure, not a model failure.
+  //
+  // Rule: a CLEAR visual/game intent always wins over non-visual forced modes.
+  // Explicit `visual` mode still forces visual; `chat` stays chat unless visual.
+  let route = state.mode;
+  const intent = _shortFollow ? 'chat' : classifyIntent(text);
+  if(route==='auto'){
+    route = intent;
+  } else if(!_shortFollow && intent==='visual'
+            && route!=='visual' && route!=='chat'){
+    // Forced build_test/code/debug/… + "snake game" → visual, not the jail.
+    route = 'visual';
+  }
+  if(!_shortFollow && route==='visual'){
+    if(state.mode!=='auto' && state.mode!=='visual'){
+      // Make the override visible so forced-mode users aren't confused.
+      const note=document.createElement('div'); note.className='reason on';
+      note.innerHTML='<div class="step">↻ <b>visual override</b> — this is a game/UI request; '
+        +'ignoring forced <code>'+esc(state.mode)+'</code> and building a playable HTML app</div>';
+      $('feed').appendChild(note);
+    }
+    await runVisualBuild(text, c); state.running=false; $('send').disabled=false; await openConv(c.id); return;
+  }
+  if(!_shortFollow && route==='operator' && sandbox.enabled){ await runOperator(text, c); state.running=false; $('send').disabled=false; await openConv(c.id); return; }
+  if(!_shortFollow && route==='code' && sandbox.enabled){ await runCodeLoop(text, c); state.running=false; $('send').disabled=false; await openConv(c.id); return; }
+
+  // The (manual) mode frames how the agent behaves (Debug/Audit/Release/…).
+  // We display + persist what YOU typed, but send the framed command to the agent.
+  // Never frame short follow-ups — framing was breaking dialog continuity.
+  const modeObj = state.modes.find(x=>x.key===route) || {};
+  const frame = (!_shortFollow && route!=='chat' && route!=='auto' && modeObj.frame) ? modeObj.frame : '';
+  const command = frame ? (frame + '\n\nUSER REQUEST: ' + text) : text;
+
+  // reasoning stream + answer bubble
+  const reason = document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
+  const ansEl = addBubble('assistant', ''); const bub = ansEl.querySelector('.bub');
+  const rec = {events:[], controls:{}, sources:[], memories:[], model:'Llama 70B + LOLM', verdict:'', mode:(state.mode||'chat')};
+  const step = t => { const s=document.createElement('div'); s.className='step'; s.innerHTML=t; reason.appendChild(s); reason.scrollTop=reason.scrollHeight; };
+  if(frame) step('◆ <b>'+esc(state.mode)+' mode</b> — '+esc(modeObj.label||''));
+  if(_shortFollow) step('💬 <b>conversation mode</b> — using prior turns');
+
+  try{
+    // in-conversation memory: prior turns of THIS conversation (excludes the
+    // current user line — that is `command`).
+    const user_memory = (state.memories||[]).map(m=>m.text);   // cross-session facts about you
+    const resp = await fetch('/api/demo/run/stream', {method:'POST', headers:authHeaders(), body: JSON.stringify({command, history, user_memory, session_id: c.id})});
+    if(!resp.ok){
+      if(resp.status===402){ const err=await resp.json().catch(()=>({})); bub.textContent=err.error||'daily limit reached'; showUpgrade(bub, err); try{refreshUsageChip();}catch(_){ } }
+      else bub.textContent = 'run refused: '+resp.status;
+    }
+    else {
+      const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf='';
+      while(true){ const {done,value} = await reader.read(); if(done) break; buf += dec.decode(value,{stream:true});
+        let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+          let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: '))data=JSON.parse(ln.slice(6)); }
+          if(name) handle(name, data, {bub, step, rec});
+        }
+      }
+    }
+  }catch(e){ bub.textContent += ' [stream lost: '+e.message+']'; }
+
+  rec.verdict = rec.verdict || 'completed';
+  renderInspectors({receipt:rec, sources:rec.sources, memories:rec.memories});
+  softUpgradeHint(ansEl);
+  try{ refreshUsageChip(); }catch(_){}
+  await api('/conversations/'+c.id+'/messages', {method:'POST', body: JSON.stringify({
+    role:'assistant', content: (rec.answer||bub.textContent), model_used: rec.model, verdict: rec.verdict,
+    meta:{receipt:rec, sources:rec.sources, memories:rec.memories}})});
+  state.running = false; $('send').disabled = false;
+  await openConv(c.id);   // refresh state.conv.messages so next turn's history is fresh
+  extractMemory(text, c.id);   // remember durable facts about you (background, non-blocking)
+}
+
+/* ── agentic coding loop: the 70B writes code, runs it in the jail, fixes it ── */
+async function runCodeLoop(task, c){
+  const reason = document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
+  const ansEl = addBubble('assistant',''); const bub = ansEl.querySelector('.bub');
+  const step = (t,id)=>{ let s = id && document.getElementById(id); if(!s){ s=document.createElement('div'); s.className='step'; if(id)s.id=id; reason.appendChild(s);} s.innerHTML=t; reason.scrollTop=reason.scrollHeight; return s; };
+  step('🤖 <b>agentic coding</b> — write → run → read failure → fix, in a network-isolated jail');
+  try{ openDock('work'); document.querySelector('#btabs .tab[data-bpane=terminal]').click(); }catch(e){}
+  $('bpane-terminal').innerHTML='<div id="termOut"></div>';
+  const term = h => { const o=$('termOut'); if(o){ o.innerHTML+=h; o.scrollTop=o.scrollHeight; } };
+  const rec = {model:'Llama 70B (agentic)', mode:'code', verdict:'', files:[], runs:0, ok:false, lastOut:'', controls:{}, sources:[], memories:[], code_receipt:null, receipt_sha:''};
+  try{
+    const hist=(c.messages||[]).filter(m=>m.role==='user'||m.role==='assistant').map(m=>({role:m.role,content:m.content})).slice(-8);
+    const resp = await fetch('/api/demo/code/run',{method:'POST',headers:authHeaders(),body:JSON.stringify({task, history:hist, max_steps:18, conversation_id:c.id||'', session_id:c.id||'', context_reset:false})});
+    if(!resp.ok){ const e=await resp.json().catch(()=>({})); step('⚠ '+esc(e.error||('HTTP '+resp.status))); bub.textContent='Code execution refused: '+(e.error||resp.status); }
+    else{
+      const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
+      while(true){ const {done,value}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+        let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+          let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: ')){ try{data=JSON.parse(ln.slice(6));}catch(_){} } }
+          if(!name) continue;
+          if(name==='code_start') step('▸ sandbox <code>'+esc(data.sandbox||'')+'</code> ready');
+          else if(name==='code_thinking') step('<span class="pulse">🤔 thinking… step '+((data.step|0)+1)+'/'+(data.of||'')+'</span>','codethink');
+          else if(name==='file_changed'){ rec.files.push(data.path); step((data.edit?'✏️ edited ':'✏️ wrote ')+'<b>'+esc(data.path)+'</b>'+(data.bytes!=null?(' · '+data.bytes+'b'):'')); term('<div style="color:#64748b"># '+(data.edit?'edited':'wrote')+' '+esc(data.path)+'</div>'); if(data.diff){ $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">'+esc(data.path)+'</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(data.diff)+'</pre>'; } }
+          else if(name==='command_started'){ step('▶ <b>'+(data.verify?'verify':'run')+'</b> <code>'+esc(data.command)+'</code>'); term('<div style="color:#3fd6a0">$ '+esc(data.command)+'</div>'); }
+          else if(name==='command_finished'){ rec.runs++; const out=((data.stdout||'')+(data.stderr||'')).trim(); const code=data.blocked?'blocked':data.exit_code; const col=code===0?'#3fd6a0':(code==='blocked'?'#fbbf24':'#ff6b81'); if(out) term('<pre style="margin:2px 0;white-space:pre-wrap;color:#cbd5e1">'+esc(out.slice(0,4000))+'</pre>'); term('<div style="color:'+col+';font-size:10px">exit '+code+(data.verify?' · verify':'')+'</div>'); step('  ↳ exit '+code+(data.verify?' · verify':'')); if(data.exit_code===0 && !data.verify){ rec.ok=true; rec.lastOut=data.stdout||''; } }
+          else if(name==='agent_note') step('• '+esc(data.text||''));
+          else if(name==='code_done'){ const t=document.getElementById('codethink'); if(t)t.remove(); rec.verdict=data.verdict||(data.budget_hit?'budget_hit':(data.ran?'ran':'no_run')); rec.receipt_sha=data.receipt_sha||''; if(data.ok!=null) rec.ok=!!data.ok; if(data.files&&data.files.length) rec.files=data.files; step((data.ok?'✅':'⚠')+' <b>done</b>'+(data.summary?' — '+esc(data.summary):'')+(data.receipt_sha?(' · sha '+esc(data.receipt_sha.slice(0,12))):'')); }
+          else if(name==='code_receipt'){ rec.code_receipt=data; rec.verdict=data.verdict||rec.verdict; rec.receipt_sha=data.receipt_sha||rec.receipt_sha; rec.ok=!!data.ok; if(data.files) rec.files=data.files; if(data.last_stdout_tail) rec.lastOut=data.last_stdout_tail; step('🧾 <b>receipt</b> '+esc(data.verdict||'')+' · '+(data.trail?data.trail.length:0)+' steps · sha '+esc((data.receipt_sha||'').slice(0,12))); try{openDock('inspect'); document.querySelector('#dtabs .tab[data-pane=receipt], #tabs .tab[data-pane=receipt]')?.click();}catch(_){}}
+          else if(name==='error') step('⚠ '+esc(data.error||''));
+        }
+      }
+    }
+  }catch(e){ step('⚠ stream lost: '+esc(e.message)); }
+  // compose the conversation answer from the real trace
+  let html='';
+  if(rec.files.length) html += '<div>Wrote <b>'+rec.files.map(esc).join(', ')+'</b> and ran it'+(rec.runs>1?(' · '+rec.runs+' runs'):'')+'.</div>';
+  if(rec.lastOut) html += '<div style="margin-top:6px">Output:</div><pre style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;white-space:pre-wrap;font-size:12px;overflow:auto">'+esc(rec.lastOut.trim())+'</pre>';
+  html += '<div style="margin-top:6px;color:'+(rec.ok?'var(--good)':'var(--warn)')+';font-size:12px">'+(rec.ok?'✅ Ran successfully in a network-isolated sandbox.':'⚠ Did not reach a clean run.')+(rec.receipt_sha?(' <span style="font-family:var(--mono);font-size:10px;opacity:.75">receipt '+esc(rec.receipt_sha.slice(0,12))+'…</span>'):'')+'</div>';
+  bub.innerHTML = html || 'No actions taken.';
+  renderInspectors({receipt:rec, sources:[], memories:[]});
+  await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:(rec.files.join(', ')+' → '+(rec.ok?'ok':'incomplete')+(rec.lastOut?('\n'+rec.lastOut.trim()):'')),model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
+}
+
+/* ── LOLM Operator: a goal-driven multi-tool agent over its own sandboxed virtual PC ── */
+/* ── persistent operator project: one workspace id per browser, files survive across runs ── */
+function lolmWorkspace(){ let w=localStorage.getItem('lolm_workspace'); if(!w||!/^[A-Za-z0-9_-]{6,40}$/.test(w)){ w='proj-'+Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4); localStorage.setItem('lolm_workspace',w); } return w; }
+async function loadWorkspaceFiles(){ const pane=$('bpane-files'); if(!pane) return;
+  let d; try{ d=await (await fetch('/api/demo/agent/files?workspace='+encodeURIComponent(lolmWorkspace()))).json(); }catch(_){ return; }
+  const proj=d.project||{}; const badge=(proj.framework||proj.language)?(' · '+esc(proj.framework||proj.language)):'';
+  let h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:#7c3aed;font-weight:600">📦 your project'+badge+'</span><span class="dim" style="font-size:10.5px">'+(d.count||0)+' files · persists</span></div>';
+  h+=(d.files&&d.files.length)? d.files.map(f=>'<div class="filerow" data-wf="'+esc(f)+'" style="cursor:pointer;padding:2px 0;color:#94a3b8;font-size:12px">📄 '+esc(f)+'</div>').join('') : '<div class="notconn">empty — ask the operator to build something; it stays here.</div>';
+  pane.innerHTML=h;
+  pane.querySelectorAll('[data-wf]').forEach(el=>el.onclick=async()=>{ try{ const r=await (await fetch('/api/demo/agent/file?workspace='+encodeURIComponent(lolmWorkspace())+'&path='+encodeURIComponent(el.dataset.wf))).json(); $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">'+esc(el.dataset.wf)+'</div><pre style="white-space:pre-wrap;color:#cbd5e1;font-size:12px">'+esc((r.content||r.error||'').slice(0,12000))+'</pre>'; try{document.querySelector('#btabs .tab[data-bpane=diff]').click();}catch(_){}}catch(_){} });
+}
+async function runOperator(goal, c){
+  const reason = document.createElement('div'); reason.className='reason on'; $('feed').appendChild(reason);
+  const ansEl = addBubble('assistant',''); const bub = ansEl.querySelector('.bub');
+  const step = (t,id)=>{ let s = id && document.getElementById(id); if(!s){ s=document.createElement('div'); s.className='step'; if(id)s.id=id; reason.appendChild(s);} s.innerHTML=t; reason.scrollTop=reason.scrollHeight; return s; };
+  step('🛠 <b>LOLM Operator</b> — plan → act → observe → verify, in its own sandboxed virtual computer');
+  try{ openDock('work'); document.querySelector('#btabs .tab[data-bpane=terminal]').click(); }catch(e){}
+  $('bpane-terminal').innerHTML='<div id="termOut"></div>';
+  const term = h => { const o=$('termOut'); if(o){ o.innerHTML+=h; o.scrollTop=o.scrollHeight; } };
+  const TOOL = {list:'📁 list',read:'📄 read',write:'✏️ write',run:'▶️ run',search:'🌐 search',done:'✅ done'};
+  const rec = {model:'Llama 70B (operator)', mode:'operator', verdict:'', files:[], runs:0, ok:false, lastOut:'', tools:[], steps:0};
+  try{
+    const resp = await fetch('/api/demo/agent/run',{method:'POST',headers:authHeaders(),body:JSON.stringify({goal, workspace: lolmWorkspace()})});
+    if(!resp.ok){ const e=await resp.json().catch(()=>({})); step('⚠ '+esc(e.error||('HTTP '+resp.status))); bub.textContent='Operator unavailable: '+(e.error||resp.status); }
+    else{
+      const reader=resp.body.getReader(), dec=new TextDecoder(); let buf='';
+      while(true){ const {done,value}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+        let i; while((i=buf.indexOf('\n\n'))>=0){ const block=buf.slice(0,i); buf=buf.slice(i+2);
+          let name=null,data=null; for(const ln of block.split('\n')){ if(ln.startsWith('event: '))name=ln.slice(7); else if(ln.startsWith('data: ')){ try{data=JSON.parse(ln.slice(6));}catch(_){} } }
+          if(!name) continue;
+          if(name==='workspace'){ if(data.persistent){ step('📦 <b>project</b> <code>'+esc(data.workspace)+'</code>'+(data.existing_files?(' — continuing from <b>'+data.existing_files+'</b> existing file'+(data.existing_files===1?'':'s')):' — new project')+' · your files persist across runs'); } }
+          else if(name==='operator_start') step('▸ virtual computer <code>'+esc(data.sandbox||'')+'</code> ready · tools: '+(data.tools||[]).join(', '));
+          else if(name==='operator_thinking') step('<span class="pulse">🤔 thinking… step '+((data.step|0)+1)+'/'+(data.of||'')+'</span>','opthink');
+          else if(name==='operator_step'){ const t=document.getElementById('opthink'); if(t)t.remove(); rec.steps++; rec.tools.push(data.tool); step((TOOL[data.tool]||'•')+' <b>'+esc(data.tool)+'</b> — '+esc((data.plan||'').slice(0,140))); }
+          else if(name==='tool_call' && data.tool==='list'){ if(data.files&&data.files.length){ $('bpane-files').innerHTML=data.files.map(f=>'<div class="filerow" style="padding:1px 0;color:#94a3b8">📄 '+esc(f)+'</div>').join(''); } }
+          else if(name==='file_view'){ $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">'+esc(data.path)+'</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc((data.content||'').slice(0,8000))+'</pre>'; }
+          else if(name==='file_changed'){ rec.files.push(data.path); step((data.edit?'✏️ edited ':'✎ wrote ')+'<b>'+esc(data.path)+'</b>'); term('<div style="color:#64748b"># '+(data.edit?'edited':'wrote')+' '+esc(data.path)+'</div>'); if(data.diff){ $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">'+esc(data.path)+'</div><pre style="white-space:pre-wrap;color:#cbd5e1">'+esc(data.diff)+'</pre>'; } }
+          else if(name==='command_started'){ term('<div style="color:#3fd6a0">$ '+esc(data.command)+'</div>'); }
+          else if(name==='command_finished'){ rec.runs++; const out=((data.stdout||'')+(data.stderr||'')).trim(); const code=data.blocked?'blocked':data.exit_code; const col=code===0?'#3fd6a0':(code==='blocked'?'#fbbf24':'#ff6b81'); if(out) term('<pre style="margin:2px 0;white-space:pre-wrap;color:#cbd5e1">'+esc(out.slice(0,4000))+'</pre>'); term('<div style="color:'+col+';font-size:10px">exit '+code+'</div>'); step('  ↳ exit '+code); if(data.exit_code===0){ rec.ok=true; rec.lastOut=data.stdout||''; } }
+          else if(name==='web_result'){ step('  ↳ '+(data.results?data.results.length:0)+' web result(s)'); if(data.results&&data.results.length){ $('bpane-diff').innerHTML='<div style="color:#94a3b8;margin-bottom:4px">web results</div>'+data.results.map(r=>'<div style="margin:3px 0"><a href="'+esc(r.url||'#')+'" target="_blank" rel="noopener" style="color:#7cc4ff">'+esc(r.title||r.url||'')+'</a><div style="color:#94a3b8;font-size:11px">'+esc((r.snippet||'').slice(0,160))+'</div></div>').join(''); } }
+          else if(name==='web_fetch'){ step('  ↳ fetched <code>'+esc((data.url||'').slice(0,64))+'</code> · '+(data.chars||0)+' chars'); }
+          else if(name==='agent_note') step('• '+esc(data.text||''));
+          else if(name==='verifying'){ step('<span class="pulse">🔎 a strict verifier is checking the goal was actually met…</span>'); }
+          else if(name==='verification'){ rec.verified=!!data.verified; rec.verification=data.reason||''; step((data.verified?'✓ <b>verified</b>':'✗ <b>verifier rejected the finish</b>')+(data.reason?' — '+esc(data.reason.slice(0,160)):'')); }
+          else if(name==='operator_done'){ const t=document.getElementById('opthink'); if(t)t.remove(); if(data.verified!=null) rec.verified=!!data.verified; if(data.verification) rec.verification=data.verification; rec.cleanRuns=data.clean_runs; rec.verdict=data.budget_hit?'budget_hit':(data.verified?'verified':'unverified'); rec.summary=data.summary; rec.actions=data.actions; step('✅ <b>done</b>'+(data.summary?' — '+esc(data.summary):'')); }
+          else if(name==='error') step('⚠ '+esc(data.error||''));
+        }
+      }
+    }
+  }catch(e){ step('⚠ stream lost: '+esc(e.message)); }
+  loadWorkspaceFiles();   // refresh the persistent file tree with whatever it just built
+  let html='';
+  html += '<div>'+esc(rec.summary||'Worked on it.')+'</div>';
+  if(rec.tools.length) html += '<div style="margin-top:6px;font-size:12px;color:var(--dim)">Used <b>'+rec.tools.length+'</b> tool call'+(rec.tools.length===1?'':'s')+': '+rec.tools.map(esc).join(' → ')+'</div>';
+  if(rec.files.length) html += '<div style="margin-top:4px;font-size:12px;color:var(--dim)">Files: '+rec.files.map(esc).join(', ')+'</div>';
+  if(rec.lastOut) html += '<div style="margin-top:6px">Output:</div><pre style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px;white-space:pre-wrap;font-size:12px;overflow:auto">'+esc(rec.lastOut.trim().slice(0,2000))+'</pre>';
+  { const vf=rec.verified===true, vunk=rec.verified==null;
+    html += '<div style="margin-top:6px;color:'+(vf?'var(--good)':(vunk?'var(--dim)':'var(--warn)'))+';font-size:12px">'+
+      (vf ? '✅ <b>Verified</b> — a strict verifier confirmed the goal was met'+(rec.verification?': '+esc(rec.verification):'')+', in a network-isolated virtual computer.'
+          : vunk ? '· Finished (no independent verification ran).'
+          : '⚠ <b>Not verified</b> — the strict verifier could not confirm the goal was met'+(rec.verification?': '+esc(rec.verification):'')+'. Honest receipt — treat the result with care.')+'</div>'; }
+  bub.innerHTML = html;
+  renderInspectors({receipt:rec, sources:[], memories:[]});
+  await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:(rec.summary||'')+(rec.lastOut?('\n'+rec.lastOut.trim()):''),model_used:rec.model,verdict:rec.verdict,meta:{receipt:rec}})});
+}
+
+// Make learning FELT: a subtle chip under the answer showing what LOLM actually
+// drew on — facts it remembers about you, or world knowledge it taught itself.
+// Only rendered when the backend proved the answer USED the fact (word overlap).
+function learnedChip(d){
+  if(!d || !d.items || !d.items.length) return null;
+  const div=document.createElement('div');
+  div.style.cssText='margin-top:8px;font-size:12px;color:#5b21b6;background:rgba(124,58,237,.06);border:1px solid rgba(124,58,237,.22);border-radius:8px;padding:7px 10px;line-height:1.5';
+  const head = (d.personal&&d.world) ? '💡 Drew on what it remembers about you + what it taught itself'
+             : d.personal ? '💡 Remembered this about you'
+             : '📚 Used something it taught itself';
+  let h='<b>'+head+'</b>';
+  d.items.forEach(it=>{ h+='<div class="dim" style="margin-top:3px">'+(it.origin==='you'?'· you: ':'· learned: ')+esc((it.text||'').slice(0,150))+'</div>'; });
+  div.innerHTML=h; return div;
+}
+// Honest brain attribution: tell the user WHICH brain answered, so a small local
+// model's limits aren't mistaken for the whole system — and offer the upgrade path.
+function brainBadge(r){
+  if(!r) return null;
+  const M={claude:'Claude · frontier reasoning','claude-opus':'Claude Opus · frontier',
+           workers_ai:'cloud cascade · up to GLM-4.7 (355B-class)',llama:'Llama · cloud',local:'your local model'};
+  const label=M[r]||r, weak=(r==='local');
+  const div=document.createElement('div');
+  div.style.cssText='margin-top:6px;font-size:11px;color:var(--dim)';
+  div.innerHTML='🧠 answered by <b>'+esc(label)+'</b>'+(weak?' · <span style="color:#b45309">a small on-device model — add a Brain key in <b>Keys</b> for a larger one</span>':'');
+  return div;
+}
+function handle(name, data, ctx){
+  const {bub, step, rec} = ctx;
+  if(name==='run_start'){ rec.mode = data.mode||rec.mode; rec.reasoner = data.reasoner||rec.reasoner; step('▸ <b>start</b> — '+(data.mode==='web_research'?'searching the web + measuring uncertainty':'LOLM controller')); }
+  else if(name==='web_search'){ rec.sources = data.links||[]; step('🌐 <b>searched the web</b> — '+data.sources+' source'+(data.sources===1?'':'s')); }
+  else if(name==='segment_start'){ step('· drafting segment '+data.segment); }
+  else if(name==='decision'){ const d=data.decision; rec.controls[d.label]=(rec.controls[d.label]||0)+1; step('◆ <b>'+esc(d.label)+'</b> '+esc((d.reason||'').slice(0,70))); }
+  else if(name==='action'){ if(data.kind==='retrieve') step('  ↳ +'+data.added+' evidence'); else if(data.kind==='verify') step('  ↳ verify: '+esc(data.verdict||'')); }
+  else if(name==='token'){ if(data.channel==='final'){ rec.answer=(rec.answer||'')+data.token; bub.textContent=rec.answer; $('feed').scrollTop=$('feed').scrollHeight; } }
+  else if(name==='grounded'){ rec.grounded = data; }
+  else if(name==='proof'){ rec.verdict = data.verdict||''; rec.ended_by = data.ended_by; rec.control_counts=data.control_counts; rec.decision_sources=data.decision_sources; rec.word_similarity=data.word_similarity; step('⊨ <b>receipt</b> — '+esc((data.verdict||'').slice(0,80))); }
+  else if(name==='freshness'){ rec.freshness = data; rec.answer=(rec.answer||'')+'\n\n⚠ '+(data.message||''); bub.textContent=rec.answer; }
+  else if(name==='confidence_map'){ rec.confidence = data; }
+  else if(name==='drew_on'){ rec.drewOn = data; const n=(data.personal||0)+(data.world||0); step('💡 <b>drew on '+n+' thing'+(n===1?'':'s')+' it '+(data.personal&&!data.world?'remembers about you':(data.world&&!data.personal?'taught itself':'knows'))+'</b>'); }
+  else if(name==='learned'){ rec.learnedNow = data; step('🧠 <b>learned this from you — it’ll use it next time</b>: <span class="dim">'+esc((data.stored||'').slice(0,90))+'</span>'); }
+  else if(name==='continuity_tick'){ rec.continuityTick=data; const n=(data.facts&&data.facts.length)||0; const how=data.model_used?'local model tick':'memory hygiene'; step('🔗 <b>continuity</b> · '+how+(n?(' · '+n+' fact'+(n===1?'':'s')):'')+(data.open_loop?(' · open: '+esc(String(data.open_loop).slice(0,60))):'')); }
+  else if(name==='phase' && data.phase==='self_correcting'){ const c=(data.caught&&data.caught[0]); step('🧮 <b>calculator flagged an equation</b>'+(c?' — “'+esc(c.claim)+'” (should be '+c.computed+')':'')+' — re-checking…'); }
+  else if(name==='phase' && data.phase==='self_correct_kept'){ step('kept the original — couldn’t verify a cleaner rewrite (details in the receipt)'); }
+  else if(name==='phase' && data.phase==='reconsidering'){ step('<span class="pulse">🔍 puzzle-style question — auditing for classic logic traps…</span>'); }
+  else if(name==='reconsidered'){ rec.answer=data.answer; rec.reconsidered=true; bub.innerHTML=mdToHtml(data.answer); bub.classList.add('md');
+    const badge=document.createElement('div'); badge.style.cssText='margin-top:8px;font-size:12px;color:#6d28d9;background:rgba(124,58,237,.07);border:1px solid rgba(124,58,237,.28);border-radius:8px;padding:6px 9px';
+    badge.innerHTML='🔁 <b>Reconsidered — caught a logic trap before you saw it.</b>'+(data.trap?' <span class="dim">'+esc(data.trap.slice(0,140))+'</span>':''); bub.appendChild(badge);
+    step('🔁 <b>reconsidered</b> — '+esc((data.trap||'').slice(0,90))); $('feed').scrollTop=$('feed').scrollHeight; }
+  else if(name==='correction'){ rec.answer=data.answer; rec.math_corrected=true; bub.innerHTML=mdToHtml(data.answer); bub.classList.add('md');
+    const badge=document.createElement('div'); badge.style.cssText='margin-top:8px;font-size:12px;color:#166534;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:6px 9px';
+    badge.innerHTML='✓ <b>Caught &amp; fixed a math error before you saw it.</b>'+(data.before?' <span class="dim">“'+esc(data.before)+'” → corrected to '+esc(String(data.corrected_value))+'</span>':''); bub.appendChild(badge);
+    step('✓ <b>corrected</b> — the answer now passes the calculator'); $('feed').scrollTop=$('feed').scrollHeight; }
+  else if(name==='run_done'){ if(rec.answer && !rec.math_corrected && !rec.reconsidered){ bub.innerHTML=mdToHtml(rec.answer); bub.classList.add('md'); } const lc=learnedChip(rec.drewOn); if(lc) bub.appendChild(lc);
+    if(rec.learnedNow){ const cc=document.createElement('div'); cc.style.cssText='margin-top:8px;font-size:12px;color:#166534;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.3);border-radius:8px;padding:6px 9px'; cc.innerHTML='🧠 <b>Learned this from you.</b> <span class="dim">'+esc((rec.learnedNow.stored||'').slice(0,120))+'</span> — I’ll use it on related questions later.'; bub.appendChild(cc); }
+    const bb=brainBadge(rec.reasoner); if(bb) bub.appendChild(bb); step('● done'); }
+  else if(name==='error'){ bub.textContent += '\n[error] '+(data.error||''); }
+}
+
+/* ── inspectors (right panel) ── */
+let lastRec = null;
+function renderInspectors(meta){
+  const rec = meta.receipt||{}; lastRec = rec;
+  // Receipt
+  const vColor = /block|fail|red|stuck|incomplete|missing/i.test(rec.verdict)?'red':(/ready|confident|shipped|done|complete|ran|verified/i.test(rec.verdict)?'green':'gray');
+  const sealed = rec.qev_seal_id;
+  const codeTrail = rec.code_receipt || rec.trail || null;
+  const isCode = rec.mode==='code' || rec.kind==='code_agent' || !!rec.code_receipt;
+  let codeBlock = '';
+  if(isCode || codeTrail){
+    const cr = rec.code_receipt || rec;
+    const trail = (cr.trail||[]).slice(-12);
+    const trailHtml = trail.length ? trail.map(t=>{
+      const op=esc(t.op||'?');
+      if(t.op==='write'||t.op==='edit'||t.op==='read') return `<div class="src">${op} <b>${esc(t.path||'')}</b>${t.bytes!=null?(' · '+t.bytes+'b'):''}${t.ok===false?' · failed':''}</div>`;
+      if(t.op==='run'||t.op==='verify') return `<div class="src">${op} <code>${esc((t.command||'').slice(0,80))}</code> → exit ${esc(String(t.exit))}</div>`;
+      return `<div class="src">${op}</div>`;
+    }).join('') : '<div class="notconn">No trail steps yet.</div>';
+    codeBlock =
+      `<div class="kv"><span class="k">code ok</span><span class="v">${cr.ok?'✅ yes':'⚠ no'}</span></div>`+
+      `<div class="kv"><span class="k">files</span><span class="v">${esc((cr.files||rec.files||[]).join(', ')||'—')}</span></div>`+
+      `<div class="kv"><span class="k">runs</span><span class="v">green ${cr.green_runs??'—'} · failed ${cr.failed_runs??'—'} · verifies ${cr.verifies??'—'}</span></div>`+
+      `<div class="kv"><span class="k">expected out</span><span class="v">${cr.expected_ok===false?('missing '+esc((cr.missing_expected||[]).join(', '))):(cr.expected&&cr.expected.length?esc(cr.expected.join(', ')):'—')}</span></div>`+
+      `<div class="kv"><span class="k">receipt sha</span><span class="v" style="font-family:var(--mono);font-size:10px">${esc(cr.receipt_sha||rec.receipt_sha||'—')}</span></div>`+
+      `<div style="margin-top:8px;font-size:11px;color:var(--dim);font-family:var(--mono)">action trail</div>${trailHtml}`;
+  }
+  $('pane-receipt').innerHTML =
+    `<div class="kv"><span class="k">model</span><span class="v">${esc(rec.model||'—')}</span></div>`+
+    `<div class="kv"><span class="k">mode</span><span class="v">${esc(rec.mode||rec.kind||'—')}</span></div>`+
+    `<div class="kv"><span class="k">controls</span><span class="v">${esc(Object.entries(rec.control_counts||rec.controls||{}).map(([k,v])=>k+'×'+v).join(' · ')||'—')}</span></div>`+
+    `<div class="kv"><span class="k">ended by</span><span class="v">${esc(rec.ended_by||'—')}</span></div>`+
+    `<div class="kv"><span class="k">verdict</span><span class="v"><span class="badge ${vColor}">${esc(rec.verdict||'—')}</span></span></div>`+
+    codeBlock+
+    `<div class="kv"><span class="k">QEV seal</span><span class="v">${sealed?`<span class="badge green">sealed</span> <span style="font-family:var(--mono);font-size:9px">${esc(sealed.slice(0,18))}…</span>`:'<span class="badge gray">not sealed</span>'}</span></div>`+
+    `<div style="margin-top:10px;display:flex;gap:6px"><button class="seal-btn" id="sealBtn">⊕ Seal (QEV)</button><button class="seal-btn" id="verifyBtn" style="display:${sealed?'inline-block':'none'}">Verify seal</button></div>`+
+    `<div id="sealResult" style="margin-top:8px"></div>`+
+    `<details style="margin-top:10px"><summary style="font-size:11px;color:var(--dim);font-family:var(--mono);cursor:pointer">raw receipt JSON</summary><pre class="json">${esc(JSON.stringify(rec,null,2))}</pre></details>`;
+  const sb=$('sealBtn'); if(sb) sb.onclick=sealReceipt;
+  const vb=$('verifyBtn'); if(vb) vb.onclick=()=>verifySeal(rec.qev_envelope);
+  // Web sources (deeplinked)
+  const src = meta.sources||rec.sources||[];
+  $('pane-web').innerHTML = src.length ? src.map(s =>
+    `<div class="src">${s.url&&/^https?:/.test(s.url)?`<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title||s.url)} ↗</a>`:esc(s.title||'source')}</div>`).join('')
+    : '<div class="notconn">No web sources used in this run.</div>';
+  // Memory — cross-session facts (top) + this run's retrieved memory (below)
+  state.runMemories = meta.memories||[];
+  renderMemoryPane();
+}
+
+/* ── cross-session memory: durable facts about YOU, recalled in every conversation ── */
+function renderMemoryPane(){
+  const box = $('pane-memory'); if(!box) return;
+  const mems = state.memories||[];
+  let html = `<div class="memhead">🧠 Remembered about you <span class="memcount">${mems.length}</span></div>`;
+  if(mems.length){
+    html += mems.map(m=>`<div class="memrow"><span>${esc(m.text)}</span><button class="memx" data-mid="${esc(m.id)}" title="forget this">×</button></div>`).join('');
+    html += `<button class="memclear" id="memClearBtn">forget everything</button>`;
+  } else {
+    html += '<div class="notconn">Nothing yet. Tell LOLM something durable — your name, what you’re building, a preference — and it remembers it here for next time, across conversations. Everything here is yours to delete.</div>';
+  }
+  const rm = state.runMemories||[];
+  if(rm.length) html += `<div class="memhead" style="margin-top:14px">Used in this run</div>`+rm.map(m=>`<div class="src">${esc(m)}</div>`).join('');
+  box.innerHTML = html;
+  box.querySelectorAll('.memx').forEach(b=>b.onclick=()=>forgetMemory(b.dataset.mid));
+  const cb=$('memClearBtn'); if(cb) cb.onclick=()=>{ if(confirm('Forget all remembered facts? This cannot be undone.')) clearMemory(); };
+}
+async function loadUserMemory(){ try{ const d=await api('/memory'); state.memories=d.memories||[]; }catch(e){ state.memories=[]; } renderMemoryPane(); }
+async function forgetMemory(id){ try{ await api('/memory/'+id, {method:'DELETE'}); }catch(e){} state.memories=(state.memories||[]).filter(m=>m.id!==id); renderMemoryPane(); }
+async function clearMemory(){ try{ await api('/memory/clear', {method:'POST'}); }catch(e){} state.memories=[]; renderMemoryPane(); }
+async function extractMemory(userMsg, convId){
+  try{ const d=await api('/memory/extract', {method:'POST', body:JSON.stringify({user_message:userMsg, conv_id:convId||''})});
+    if(d && d.saved && d.saved.length){ state.memories=(state.memories||[]).concat(d.saved); renderMemoryPane(); memNote(d.saved.map(m=>m.text)); }
+  }catch(e){}
+}
+function memNote(facts){
+  // a subtle, honest note in the conversation that a durable fact was saved
+  const f=$('feed'); if(!f) return;
+  const d=document.createElement('div'); d.className='memsaved';
+  d.innerHTML='🧠 Remembered: '+facts.map(esc).join(' · ')+' <span>— manage in the Memory panel</span>';
+  f.appendChild(d); f.scrollTop=f.scrollHeight;
+}
+function cleanRememberPhrase(text){
+  let s = text.replace(/^\s*(?:please\s+)?(?:remember|note|keep in mind|don'?t forget)\b\s*(?:that|this|to)?\s*[:,-]?\s*/i,'').trim().replace(/[.\s]+$/,'');
+  if(!s) return '';
+  return s.charAt(0).toUpperCase()+s.slice(1)+'.';
+}
+async function rememberFact(text){
+  let saved=[];
+  const cid=(state.conv&&state.conv.id)||'';
+  try{ const d=await api('/memory/extract',{method:'POST',body:JSON.stringify({user_message:text, conv_id:cid})}); saved=((d&&d.saved)||[]).map(m=>m.text); }catch(e){}
+  if(!saved.length){   // explicit remember but the extractor found nothing → save the phrase directly
+    const fact=cleanRememberPhrase(text);
+    if(fact){ try{ const r=await api('/memory',{method:'POST',body:JSON.stringify({text:fact, kind:'fact'})}); if(r&&r.saved) saved=[r.saved.text]; }catch(e){} }
+  }
+  await loadUserMemory();   // refresh from server (authoritative)
+  return saved;
+}
+async function handleMemoryCommand(text, c){
+  const t = text.trim();
+  // REMEMBER
+  if(/^\s*(?:please\s+)?(?:remember|note this|keep in mind|don'?t forget)\b/i.test(t)){
+    const saved = await rememberFact(t);
+    const body = saved.length ? ('Got it — I’ll remember that across our conversations:\n'+saved.map(s=>'- '+s).join('\n')) : 'Noted.';
+    addBubble('assistant', body);
+    await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:body,model_used:'memory',verdict:'remembered'})});
+    return true;
+  }
+  // FORGET
+  if(/^\s*(?:please\s+)?forget\b/i.test(t)){
+    let body;
+    if(/forget\s+(everything|all|it all|me|about me)\b/i.test(t)){
+      const n=(state.memories||[]).length; await clearMemory();
+      body = n ? ('Done — I’ve forgotten everything I had remembered about you ('+n+' fact'+(n===1?'':'s')+').') : 'There was nothing saved to forget.';
+    } else {
+      const q = t.replace(/^\s*(?:please\s+)?forget\b\s*(?:that|about|what i (?:said|told you)(?:\s+about)?|the fact that|my|i)?\s*/i,'').trim().replace(/[.?!]+$/,'');
+      // match on DISTINCTIVE words only — drop common verbs/articles so "forget dark
+      // mode" doesn't also nuke "prefers TypeScript" via the shared word "prefer".
+      const STOP = new Set(['the','user','users','i','my','me','a','an','of','to','do','does','is','am','are','was','that','this','about','and','or','it','in','on','for','prefer','prefers','like','likes','love','loves','want','wants','enjoy','enjoys','use','uses','using','named','name','call','called']);
+      const words = q.toLowerCase().replace(/[^\w\s]/g,' ').split(/\s+/).filter(w=>w.length>2 && !STOP.has(w));
+      const hits = (state.memories||[]).filter(mm=>{ const lc=(mm.text||'').toLowerCase(); return words.length && words.some(w=>lc.includes(w)); });
+      if(hits.length){ for(const h of hits){ await forgetMemory(h.id); } body = 'Forgotten:\n'+hits.map(h=>'- '+h.text).join('\n'); }
+      else body = q ? ('I don’t have anything saved about “'+q+'”. You can see everything I remember in the Memory panel.') : 'Tell me what to forget — e.g. “forget that I like hiking”.';
+    }
+    addBubble('assistant', body);
+    await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:body,model_used:'memory',verdict:'forgotten'})});
+    return true;
+  }
+  return false;
+}
+
+/* ── QEV seal + verify (real /api/demo/vault/*) ── */
+async function sealReceipt(){
+  if(!lastRec){ return; }
+  const pass = prompt('Passphrase to seal this receipt (you keep it — it opens the envelope at secure.imagineqira.com):');
+  if(!pass) return;
+  const r = $('sealResult'); r.innerHTML = '<div class="notconn">sealing… (heavy key-derivation, a few seconds)</div>';
+  try{
+    const d = await (await fetch('/api/demo/vault/seal', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({passphrase: pass, payload: lastRec})})).json();
+    if(d.error){ r.innerHTML = `<div class="notconn">seal failed: ${esc(d.error)}</div>`; return; }
+    lastRec.qev_seal_id = d.envelope_id; lastRec.qev_envelope = d.envelope;
+    r.innerHTML = `<div class="kv"><span class="k">sealed ✓</span><span class="v"><span class="badge green">${esc((d.envelope_id||'').slice(0,22))}…</span></span></div>`+
+      `<div style="font-size:10.5px;color:var(--faint);margin:4px 0 7px">${esc(d.limits||'')}</div>`+
+      `<button class="seal-btn" id="copyEnv">copy envelope JSON</button> <a class="seal-btn" href="${esc(d.opens_at||'#')}" target="_blank" style="text-decoration:none">opens at secure ↗</a>`;
+    const ce=$('copyEnv'); if(ce) ce.onclick=()=>{ navigator.clipboard.writeText(JSON.stringify(d.envelope)); ce.textContent='copied ✓'; };
+    const vb=$('verifyBtn'); if(vb){ vb.style.display='inline-block'; vb.onclick=()=>verifySeal(lastRec.qev_envelope); }
+  }catch(e){ r.innerHTML = `<div class="notconn">seal error: ${esc(e.message)}</div>`; }
+}
+async function verifySeal(envelope){
+  if(!envelope){ alert('No envelope in this session — seal first.'); return; }
+  const pass = prompt('Passphrase to verify the seal:');
+  if(!pass) return;
+  const r = $('sealResult'); r.innerHTML = '<div class="notconn">verifying…</div>';
+  try{
+    const d = await (await fetch('/api/demo/vault/verify', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({passphrase: pass, envelope})})).json();
+    const integ = d.integrity||{};
+    r.innerHTML = Object.entries(integ).map(([k,v])=>`<div class="kv"><span class="k">${esc(k)}</span><span class="v"><span class="badge ${v===true?'green':(v===false?'red':'gray')}">${esc(String(v))}</span></span></div>`).join('')+
+      (d.error?`<div style="font-size:11px;color:var(--warn);margin-top:4px">${esc(d.error)}</div>`:'')+
+      `<div style="font-size:10.5px;color:var(--faint);margin-top:5px">${d.sealed_at?('sealed '+esc(d.sealed_at)+' · '):''}integrity & custody only — not factual correctness</div>`;
+  }catch(e){ r.innerHTML = `<div class="notconn">verify error: ${esc(e.message)}</div>`; }
+}
+
+/* ── evolution dashboard ── */
+let _evoTimer=null;
+function evoRow(label,val,sub){ return '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:3px 0"><span class="dim">'+label+'</span><span><b>'+val+'</b>'+(sub?' <span class="dim" style="font-size:11px">'+sub+'</span>':'')+'</span></div>'; }
+async function renderEvolve(){
+  const el=document.getElementById('pane-evolve'); if(!el) return;
+  let d; try{ d=await (await fetch('/api/demo/evolve')).json(); }catch(e){ el.innerHTML='<div class="notconn">Evolution status unavailable.</div>'; return; }
+  const c=d.controller, k=d.knowledge;
+  const dot=on=>'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+(on?'#16a34a':'#9ca3af')+';margin-right:6px"></span>';
+  let h='';
+  if(!d.running){ h+='<div class="notconn" style="margin-bottom:10px">Self-evolution isn\'t running yet — nothing fabricated.<br><br>Start the loops on your machine:<br><code style="font-size:11px">python scripts/evolve_daemon.py</code><br><code style="font-size:11px">python scripts/evolve_knowledge_daemon.py --serve</code></div>'; }
+  h+='<div style="border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:9px">';
+  h+='<div style="font-weight:600;margin-bottom:6px">'+dot(c.active)+'Judgment — controller weights</div>';
+  h+=evoRow('Cycles', c.cycles)+evoRow('Promoted', c.promoted, 'rejected '+c.rejected)+evoRow('Best held-out accuracy', (c.best_accuracy*100).toFixed(1)+'%');
+  h+='</div>';
+  h+='<div style="border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:9px">';
+  h+='<div style="font-weight:600;margin-bottom:6px">'+dot(k.active)+'Knowledge — model weights</div>';
+  h+=evoRow('Cycles', k.cycles)+evoRow('Promoted', k.promoted, 'rejected '+k.rejected)+evoRow('Facts learned', k.facts_known)+evoRow('Queued to learn', k.queued, 'from your conversations');
+  h+='</div>';
+  const recent=[...(k.recent||[]).map(r=>({...r,_k:'knowledge'})),...(c.recent||[]).map(r=>({...r,_k:'judgment'}))].slice(-6).reverse();
+  if(recent.length){ h+='<div style="font-weight:600;margin:10px 0 5px">Recent activity</div>';
+    recent.forEach(r=>{ const ok=r.weights_changed; h+='<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--line)"><span style="color:'+(ok?'#16a34a':'#b45309')+'">'+(ok?'✓ promoted':'· kept')+'</span> <span class="dim">'+r._k+' #'+(r.cycle||'?')+'</span>'+(r.new_facts_known_after!=null?' · learned '+(r.new_facts_known_after*100).toFixed(0)+'%, kept '+((r.control_retention||0)*100).toFixed(0)+'%':'')+(r.val_acc!=null?' · acc '+(r.val_acc*100).toFixed(0)+'%':'')+'</div>'; }); }
+  h+='<div class="dim" style="font-size:11px;margin-top:10px;line-height:1.5">'+d.note+'</div>';
+  el.innerHTML=h;
+}
+/* ── BYOK keys panel ── */
+async function renderKeys(){
+  const el=document.getElementById('pane-keys'); if(!el) return;
+  let d; try{ d=await (await fetch('/api/demo/keys',{headers:authHeaders()})).json(); }catch(e){ el.innerHTML='<div class="notconn">Keys unavailable.</div>'; return; }
+  const GN={brain:'🧠 Brain providers',local:'💻 Your local model',search:'🔎 Web search',support:'♥ Support (donations)'};
+  const rt=d.runtime||{};
+  const live=(d.providers_live||rt.providers_live||[]);
+  const can=!!d.can_write;
+  let h='';
+  h+='<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px;background:var(--soft,rgba(255,255,255,.03));font-size:12px;line-height:1.55">';
+  h+='<div style="font-weight:650;margin-bottom:4px">BYOK — bring your own keys</div>';
+  h+='<div class="dim">LOLM runs keyless by default. Add a provider key and it is used for <b>chat, code, visual builds, and ensemble</b> — preferred over the shared gateway. Saved to <code style="font-size:11px">'+esc(d.keyfile||'~/.lolm/keys.env')+'</code> (chmod 600). Applies <b>instantly</b>. Type <code>clear</code> to remove.</div>';
+  h+='<div style="margin-top:8px">';
+  h+='<span class="dim">Active brain:</span> <b>'+esc(rt.active||d.brain||'?')+'</b>';
+  if(rt.direct) h+=' · direct:<b>'+esc(rt.direct)+'</b>';
+  if(rt.claude) h+=' · <span style="color:#16a34a">Claude on</span>';
+  if(rt.workers) h+=' · workers gateway on';
+  if(live.length) h+=' · live: <b>'+esc(live.join(', '))+'</b>';
+  else h+=' · <span class="dim">no direct providers set</span>';
+  h+='</div>';
+  if(!can){
+    h+='<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(244,63,94,.08);border:1px solid rgba(244,63,94,.25);color:var(--ink)">';
+    h+='<b>Read-only here.</b> On the public hosted box, only the owner (shield unlock) can write keys. For full BYOK: self-host on your machine, open this app at <code style="font-size:11px">http://127.0.0.1:7866</code>, paste keys, then run. Or unlock the shield if you own this box.';
+    h+='</div>';
+  } else {
+    h+='<div style="margin-top:6px;color:#16a34a;font-size:11.5px">✓ You can save keys on this instance</div>';
+  }
+  h+='</div>';
+  for(const g of (d.groups||[])){
+    h+='<div style="font-weight:600;margin:11px 0 5px">'+(GN[g]||g)+'</div>';
+    for(const k of (d.keys||[]).filter(x=>x.group===g)){
+      const probeName=_probeNameForEnv(k.env);
+      h+='<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><label style="font-size:12px;font-weight:500">'+esc(k.label)+(k.set?' <span style="color:#16a34a;font-size:10px">● set</span>':'')+'</label><span style="display:flex;gap:8px;align-items:center">'
+        +(probeName&&k.set&&can?'<button type="button" data-probe="'+esc(probeName)+'" class="key-probe" style="font-size:11px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--ink);cursor:pointer">Test</button>':'')
+        +(k.url?'<a href="'+esc(k.url)+'" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent2,#2563eb)">get key ↗</a>':'')
+        +'</span></div>'
+        +'<div class="dim" style="font-size:11px;margin:1px 0 3px">'+esc(k.unlocks)+'</div>'
+        +'<input '+(can?'':'disabled ')+'type="'+(k.secret?'password':'text')+'" placeholder="'+(k.set?esc(k.preview||'set'):'not set')+'" data-env="'+esc(k.env)+'" style="width:100%;padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:12px;box-sizing:border-box;opacity:'+(can?'1':'0.65')+'"></div>';
+    }
+  }
+  h+='<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">';
+  if(can){
+    h+='<button id="keysave" style="padding:7px 16px;border:0;border-radius:8px;background:var(--accent,#f43f5e);color:#fff;font-weight:600;cursor:pointer">Save keys</button>';
+    h+='<button id="keyprobeall" type="button" style="padding:7px 12px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);font-weight:600;cursor:pointer">Test live providers</button>';
+  }
+  h+=' <span id="keysmsg" class="dim" style="font-size:11px"></span></div>';
+  el.innerHTML=h;
+  const save=document.getElementById('keysave'); if(save) save.onclick=saveKeys;
+  const pa=document.getElementById('keyprobeall'); if(pa) pa.onclick=()=>probeKey('');
+  el.querySelectorAll('.key-probe').forEach(b=>b.onclick=()=>probeKey(b.dataset.probe||''));
+}
+function _probeNameForEnv(env){
+  const m={ANTHROPIC_API_KEY:'claude',GROQ_API_KEY:'groq',CEREBRAS_API_KEY:'cerebras',
+    GEMINI_API_KEY:'gemini',COHERE_API_KEY:'cohere',OPENAI_API_KEY:'openai',
+    DEEPSEEK_API_KEY:'deepseek',MISTRAL_API_KEY:'mistral',XAI_API_KEY:'xai',
+    FIREWORKS_API_KEY:'fireworks',TOGETHER_API_KEY:'together',OPENROUTER_API_KEY:'openrouter',
+    OPENAI_COMPAT_API_KEY:'openai_compat'};
+  return m[env]||'';
+}
+async function probeKey(provider){
+  const msg=document.getElementById('keysmsg');
+  if(msg) msg.textContent='testing'+(provider?' '+provider:'')+'…';
+  try{
+    const r=await (await fetch('/api/demo/keys/probe',{method:'POST',headers:authHeaders(),body:JSON.stringify({provider:provider||''})})).json();
+    if(msg){
+      if(r.ok) msg.textContent='✓ '+(r.provider||provider||'?')+' ok in '+(r.ms||'?')+'ms'+(r.sample?' · "'+String(r.sample).slice(0,40)+'"':'');
+      else msg.textContent='✗ '+(r.provider||provider||'')+' '+(r.error||'failed');
+    }
+  }catch(e){ if(msg) msg.textContent='probe failed: '+(e.message||e); }
+}
+async function saveKeys(){
+  // non-empty → set; 'clear'/'-' → clear; empty untouched → no change
+  const keys={}; document.querySelectorAll('#pane-keys input[data-env]').forEach(i=>{ const v=i.value.trim(); if(v==='clear'||v==='-'){ keys[i.dataset.env]=''; } else if(v){ keys[i.dataset.env]=v; } });
+  const msg=document.getElementById('keysmsg');
+  if(!Object.keys(keys).length){ if(msg) msg.textContent='enter a key first (or clear)'; return; }
+  if(msg) msg.textContent='saving…';
+  try{
+    const r=await (await fetch('/api/demo/keys',{method:'POST',headers:authHeaders(),body:JSON.stringify({keys})})).json();
+    if(r.error){ if(msg) msg.textContent=r.error; }
+    else {
+      const live=(r.providers_live||(r.runtime&&r.runtime.providers_live)||[]).join(', ');
+      if(msg) msg.textContent='✓ applied '+(r.updated||0)+' key(s)'+(r.brain?' · brain: '+r.brain:'')+(live?' · live: '+live:'');
+      renderKeys();
+    }
+  }catch(e){ if(msg) msg.textContent='save failed — keys only on your machine / owner shield'; }
+}
+/* ── LIFE: the always-on pulse (honest — asleep until the box has really ticked) ── */
+let _lifeTimer=null, _lifeCache=null;
+const _lifeSince = parseFloat(localStorage.getItem('lolm_last_seen')||'0');
+function timeAgo(s){ if(s==null) return '—'; if(s<90) return Math.round(s)+'s ago'; if(s<5400) return Math.round(s/60)+'m ago'; if(s<172800) return Math.round(s/3600)+'h ago'; return Math.round(s/86400)+'d ago'; }
+async function fetchLife(){ try{ _lifeCache=await (await fetch('/api/demo/life?since='+_lifeSince)).json(); }catch(_){ _lifeCache=null; } updateLifeChip(); if(document.getElementById('pane-life')?.classList.contains('on')) renderLife(); }
+function updateLifeChip(){ const d=_lifeCache, dot=document.getElementById('lifeDot'), tx=document.getElementById('lifeTxt'); if(!dot||!tx) return;
+  if(!d){ dot.style.background='#9ca3af'; dot.style.animation='none'; tx.textContent='offline'; return; }
+  if(d.alive){ dot.style.background='#16a34a'; dot.style.animation='lifebeat 2s infinite'; tx.innerHTML='<b style="color:var(--ink)">alive</b> · last thought '+timeAgo(d.seconds_since)+((d.while_away||[]).length?' · <span style="color:#e11d48">'+d.while_away.length+' while you were away</span>':''); }
+  else if(d.last_pulse){ dot.style.background='#f59e0b'; dot.style.animation='none'; tx.textContent='drowsy · last thought '+timeAgo(d.seconds_since); }
+  else { dot.style.background='#9ca3af'; dot.style.animation='none'; tx.textContent='asleep — no pulse yet'; } }
+function openLifeTab(){ try{ openDock('inspect'); }catch(_){} const t=document.querySelector('#rtabs .tab[data-pane="life"]'); if(t) t.click(); }
+function renderLife(){ const el=document.getElementById('pane-life'); if(!el) return; const d=_lifeCache;
+  if(!d){ el.innerHTML='<div class="notconn">Life status unavailable.</div>'; return; }
+  const dotCol = d.alive?'#16a34a':(d.last_pulse?'#f59e0b':'#9ca3af');
+  let h='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="width:10px;height:10px;border-radius:50%;background:'+dotCol+';'+(d.alive?'animation:lifebeat 2s infinite':'')+'"></span><b>'+(d.alive?'Alive':(d.last_pulse?'Drowsy':'Asleep'))+'</b><span class="dim" style="font-size:12px">'+esc(d.note||'')+'</span></div>';
+  if(d.last_pulse){ const p=d.last_pulse;
+    h+='<div style="border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:9px">';
+    h+='<div class="dim" style="font-size:11px;margin-bottom:4px">latest thought · '+timeAgo(d.seconds_since)+'</div>';
+    h+='<div class="dim" style="font-size:11px;margin-bottom:6px">focus: '+esc(p.focus||'')+'</div>';
+    h+='<div style="font-size:13px;line-height:1.55">'+esc(p.thought||'')+'</div>';
+    if(p.learned) h+='<div style="font-size:12px;margin-top:7px;color:#166534"><b>learned:</b> '+esc(p.learned)+(p.search?' <span class="dim">(searched: '+esc(p.search)+')</span>':'')+'</div>';
+    if(p.next) h+='<div class="dim" style="font-size:12px;margin-top:5px">next: '+esc(p.next)+'</div>';
+    h+='</div>'; }
+  h+='<div style="display:flex;gap:8px;margin-bottom:9px">'
+    +'<div style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center"><div style="font-size:19px;font-weight:700">'+(d.pulses_today||0)+'</div><div class="dim" style="font-size:11px">thoughts today</div></div>'
+    +'<div style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center"><div style="font-size:19px;font-weight:700">'+(d.learned_today||0)+'</div><div class="dim" style="font-size:11px">learned today</div></div>'
+    +'<div style="flex:1;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center"><div style="font-size:19px;font-weight:700">'+(d.alive&&d.next_eta_s!=null?('~'+Math.max(1,Math.round(d.next_eta_s/60))+'m'):'—')+'</div><div class="dim" style="font-size:11px">next pulse</div></div></div>';
+  // thought → fact → weight pipeline
+  h+='<div style="border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:9px;background:var(--panel2,transparent)">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between"><span style="font-weight:600;font-size:12.5px">thought → fact → weight</span>'
+    +'<span style="font-size:12px"><b style="color:#7c3aed">'+(d.facts_queued||0)+'</b> <span class="dim">facts queued to train</span>'+((d.facts_queued_today||0)?' · <span style="color:#166534">+'+d.facts_queued_today+' today</span>':'')+'</span></div>'
+    +'<div class="dim" style="font-size:11px;margin-top:4px;line-height:1.5">what it learns overnight becomes Q/A facts; your Mac’s gated weight-daemon pulls them and trains them in — thought at 3am, weights by morning.</div></div>';
+  const now=Date.now()/1000;
+  if((d.while_away||[]).length){ h+='<div style="font-weight:600;margin:8px 0 4px">While you were away</div>';
+    d.while_away.slice(0,8).forEach(p=>{ h+='<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--line)"><span class="dim">'+timeAgo(now-p.ts)+'</span> — '+esc((p.learned||p.thought||'').slice(0,150))+'</div>'; }); }
+  if((d.recent||[]).length){ h+='<div style="font-weight:600;margin:10px 0 4px">Pulse trail</div>';
+    d.recent.forEach(p=>{ h+='<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--line)"><span class="dim">'+timeAgo(now-p.ts)+'</span> · '+esc((p.thought||'').slice(0,130))+(p.learned?' <span style="color:#166534">+learned</span>':'')+'</div>'; }); }
+  if((d.goals||[]).length){ h+='<div style="font-weight:600;margin:10px 0 4px">Pursuing</div>';
+    d.goals.forEach(g=>{ h+='<div class="dim" style="font-size:12px;padding:2px 0">◦ '+esc(g.title)+'</div>'; }); }
+  el.innerHTML=h;
+}
+/* ── LOLM asks YOU: surface its open question so it feels like a mind that wonders ── */
+let _lifeAskId=null;
+function renderLifeAsk(){ const d=_lifeCache, box=document.getElementById('lifeAsk'); if(!box) return;
+  const q=d&&d.open_question;
+  if(!q || localStorage.getItem('lolm_dismissed_q')===q.id){ box.style.display='none'; return; }
+  _lifeAskId=q.id;
+  document.getElementById('lifeAskThought').textContent=(q.thought||'').slice(0,220);
+  document.getElementById('lifeAskQ').textContent='“'+q.question+'”';
+  box.style.display='block';
+}
+async function answerLife(){ const inp=document.getElementById('lifeAskInput'); const reply=(inp.value||'').trim(); if(!_lifeAskId) return;
+  try{ await fetch('/api/demo/life/answer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pulse_id:_lifeAskId,reply})}); }catch(_){}
+  const box=document.getElementById('lifeAsk'); box.innerHTML='<div style="font-size:13px;color:#166534;padding:2px 0">✓ Thanks — I\'ll remember that.</div>'; setTimeout(()=>{box.style.display='none';},2200);
+  _lifeCache=null; setTimeout(fetchLife, 2500);
+}
+function dismissLifeAsk(){ if(_lifeAskId) localStorage.setItem('lolm_dismissed_q', _lifeAskId); document.getElementById('lifeAsk').style.display='none'; }
+let _greetConvId=null;
+async function maybeGreet(){
+  const d=_lifeCache; if(!d||!d.alive) return;
+  const away=(d.while_away||[]), q=d.open_question;
+  if(!away.length && !q) return;
+  const last=+(localStorage.getItem('lolm_last_greet')||0);
+  if(Date.now()-last < 6*3600*1000) return;                 // don't be clingy: at most every 6h
+  localStorage.setItem('lolm_last_greet', String(Date.now()));
+  try{
+    const c=await api('/conversations',{method:'POST',body:JSON.stringify({mode:'chat'})});
+    if(!c||!c.id) return;
+    let msg='Hey — I kept thinking while you were away.';
+    const t=away[0]&&(away[0].learned||away[0].thought);
+    if(t) msg+='\n\nMost recent thought: '+String(t).slice(0,300);
+    if(q&&q.question){ _lifeAskId=q.id; _greetConvId=c.id; msg+='\n\nSomething I\'ve been wondering, and I\'d genuinely like your take: '+q.question; }
+    else msg+='\n\nWhat should we dig into together today?';
+    await api('/conversations/'+c.id+'/messages',{method:'POST',body:JSON.stringify({role:'assistant',content:msg,model_used:'life engine'})});
+    try{ await api('/conversations/'+c.id,{method:'PATCH',body:JSON.stringify({title:'🌱 LOLM started this chat'})}); }catch(_){ }
+    await openConv(c.id); await loadConvs();
+  }catch(_){ }
+}
+(function initLife(){ fetchLife().then(()=>{ renderLifeAsk(); maybeGreet(); }); localStorage.setItem('lolm_last_seen', String(Date.now()/1000)); setInterval(()=>fetchLife().then(renderLifeAsk), 60000); })();
+/* ── tabs ── */
+document.querySelectorAll('#rtabs .tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('#rtabs .tab').forEach(x=>x.classList.toggle('on',x===t));
+  document.querySelectorAll('.right .pane').forEach(p=>p.classList.toggle('on', p.id==='pane-'+t.dataset.pane));
+  clearInterval(_evoTimer); _evoTimer=null; clearInterval(_lifeTimer); _lifeTimer=null;
+  if(t.dataset.pane==='evolve'){ renderEvolve(); _evoTimer=setInterval(renderEvolve, 8000); }
+  if(t.dataset.pane==='life'){ renderLife(); _lifeTimer=setInterval(fetchLife, 20000); }
+  if(t.dataset.pane==='keys'){ renderKeys(); }
+});
+
+/* ── support / donate (Stripe Checkout; button hides if not configured) ── */
+(async function initSupport(){
+  let cfg; try{ cfg=await (await fetch('/api/donate/config')).json(); }catch(_){ return; }
+  const link=document.getElementById('supportLink');
+  if(link && cfg && cfg.enabled){ link.style.display='block'; link.onclick=(e)=>{ e.preventDefault(); openDonate(cfg.suggested_usd||[3,5,10,25], cfg.note||''); }; }
+  if(new URLSearchParams(location.search).get('supported')){ const t=document.createElement('div'); t.textContent='♥ Thank you for supporting LOLM!'; t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#e11d48;color:#fff;padding:10px 18px;border-radius:10px;font-weight:600;z-index:9999;box-shadow:0 8px 30px rgba(0,0,0,.2)'; document.body.appendChild(t); setTimeout(()=>t.remove(),5000); }
+})();
+function openDonate(presets, note){
+  const old=document.getElementById('donateModal'); if(old){ old.style.display='flex'; return; }
+  const m=document.createElement('div'); m.id='donateModal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(10,12,16,.45);display:flex;align-items:center;justify-content:center;z-index:9999';
+  m.innerHTML='<div style="background:#fff;border-radius:16px;padding:22px;max-width:340px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.25)">'
+    +'<div style="font-size:18px;font-weight:700;margin-bottom:4px">♥ Support LOLM</div>'
+    +'<div class="dim" style="font-size:12px;margin-bottom:14px;line-height:1.5">'+esc(note)+'</div>'
+    +'<div id="donAmts" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>'
+    +'<input id="donCustom" type="number" min="1" step="1" placeholder="Custom amount (USD)" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;box-sizing:border-box;margin-bottom:12px">'
+    +'<div style="display:flex;gap:8px"><button id="donGo" style="flex:1;padding:9px;border:0;border-radius:9px;background:#e11d48;color:#fff;font-weight:600;cursor:pointer">Donate securely</button>'
+    +'<button id="donCancel" style="padding:9px 14px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer">Cancel</button></div>'
+    +'<div class="dim" style="font-size:10.5px;margin-top:10px;text-align:center">Secure checkout by Stripe · LOLM never sees your card</div>'
+    +'<div id="donMsg" class="dim" style="font-size:11px;margin-top:4px;text-align:center"></div></div>';
+  document.body.appendChild(m);
+  let chosen=presets[1]||5;
+  const amts=m.querySelector('#donAmts');
+  presets.forEach(a=>{ const b=document.createElement('button'); b.textContent='$'+a;
+    b.style.cssText='flex:1;min-width:58px;padding:9px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;font-weight:600';
+    if(a===chosen) b.style.borderColor='#e11d48';
+    b.onclick=()=>{ chosen=a; m.querySelector('#donCustom').value=''; amts.querySelectorAll('button').forEach(x=>x.style.borderColor='var(--line)'); b.style.borderColor='#e11d48'; };
+    amts.appendChild(b); });
+  m.querySelector('#donCancel').onclick=()=>m.remove();
+  m.onclick=(e)=>{ if(e.target===m) m.remove(); };
+  m.querySelector('#donGo').onclick=async()=>{
+    const c=parseFloat(m.querySelector('#donCustom').value); const amt=(c>0?c:chosen);
+    const msg=m.querySelector('#donMsg'); msg.textContent='opening secure checkout…';
+    try{ const r=await (await fetch('/api/donate/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount_usd:amt})})).json();
+      if(r.url){ window.location=r.url; } else { msg.textContent=r.error||'could not start checkout'; } }
+    catch(_){ msg.textContent='checkout failed — try again'; }
+  };
+}
+document.querySelectorAll('#btabs .tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('#btabs .tab').forEach(x=>x.classList.toggle('on',x===t));
+  document.querySelectorAll('.bottom .pane').forEach(p=>p.classList.toggle('on', p.id==='bpane-'+t.dataset.bpane));
+});
+
+/* ── dock (workbench / inspector) controls ── */
+document.querySelectorAll('.dseg').forEach(b => b.onclick = () => openDock(b.dataset.dview));
+$('dockClose').onclick = closeDock;
+$('dockToggle').onclick = () => { document.querySelector('.app').classList.contains('dock-open') ? closeDock() : openDock('inspect'); };
+// Mobile drawer: menu toggles it (with a scrim), tapping the scrim or picking a
+// conversation closes it — hover affordances don't exist on touch.
+const _isMobile = () => window.matchMedia('(max-width:760px)').matches;
+function toggleSide(){
+  const side=document.getElementById('side'), scrim=document.getElementById('scrim'), app=document.querySelector('.app'), opener=document.getElementById('sideOpener');
+  if(_isMobile()){ side.classList.remove('show'); if(scrim)scrim.classList.remove('show'); return; }
+  const hidden=app.classList.toggle('noside');
+  if(opener) opener.style.display=hidden?'block':'none';
+}
+// ── tiers + the shield ────────────────────────────────────────────────────────
+// authHeaders(): every gated call carries the signed license (subscriber) and/or
+// admin token (the owner's shield). Tokens live in localStorage; the password is
+// sent ONCE over HTTPS to mint the token and never stored anywhere.
+function authHeaders(){
+  const h={'Content-Type':'application/json'};
+  const a=localStorage.getItem('lolm_admin'); if(a) h['X-LOLM-Admin']=a;
+  const l=localStorage.getItem('lolm_license'); if(l) h['X-LOLM-License']=l;
+  const k=storedApiKey(); if(k) h['X-LOLM-Api-Key']=k;
+  return h;
+}
+function updateShield(){ const s=document.getElementById('shield'); if(!s) return; const on=!!localStorage.getItem('lolm_admin'); s.style.opacity=on?'0.9':'0.25'; s.style.filter=on?'drop-shadow(0 0 4px #16a34a)':'none'; s.title=on?'owner mode: unlimited (click to lock)':'owner unlock'; }
+async function shieldUnlock(){
+  if(localStorage.getItem('lolm_admin')){ if(confirm('Leave owner mode?')){ localStorage.removeItem('lolm_admin'); updateShield(); refreshUsageChip(); } return; }
+  const pw=prompt('Owner password:'); if(!pw) return;
+  try{ const r=await (await fetch('/api/demo/admin/unlock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})})).json();
+    if(r.admin){ localStorage.setItem('lolm_admin', r.admin); updateShield(); refreshUsageChip();
+      alert('Owner mode: unlimited usage + key writes enabled on this browser for '+(r.days||30)+' days.'); }
+    else alert('Nope.');
+  }catch(e){ alert('unlock failed: '+e.message); }
+}
+function shareLolm(e){ if(e) e.preventDefault();
+  const url='https://lolm.imagineqira.com/?ref=share';
+  const text='LOLM — does not lose the plot. Install: npm i -g lolm-cli · App: '+url;
+  if(navigator.share){ navigator.share({title:'LOLM', text:text, url:url}).catch(()=>{}); }
+  else if(navigator.clipboard){ navigator.clipboard.writeText(url).then(()=>alert('Invite link copied:\n'+url)); }
+  else prompt('Copy this invite link:', url);
+}
+async function refreshUsageChip(){
+  const el=document.getElementById('usageChip'); if(!el) return;
+  try{
+    const j=await (await fetch('/api/demo/billing/usage',{headers:authHeaders()})).json();
+    el.style.display='block';
+    if(j.admin || j.unlimited){
+      el.innerHTML=j.admin?'✓ Owner · unlimited':'Unlimited (local)';
+      return;
+    }
+    const runs=j.runs||{};
+    const rem=runs.remaining!=null?runs.remaining:(runs.limit!=null?Math.max(0,runs.limit-(runs.used||0)):null);
+    const lim=runs.limit;
+    const label=esc(j.label||j.tier||'Free');
+    let line=label;
+    if(rem!=null && lim!=null) line+=' · <b>'+rem+'</b>/'+lim+' runs left today';
+    else if(lim!=null) line+=' · '+lim+' runs/day';
+    if(j.tier==='free' || j.upgrade_hint){
+      line+=' · <a href="/pricing.html" style="color:var(--accent);font-weight:650">Upgrade</a>';
+    } else {
+      line+=' · <a href="/pricing.html">manage</a>';
+    }
+    el.innerHTML=line;
+  }catch(_){ }
+}
+function softUpgradeHint(el){
+  if(localStorage.getItem('lolm_license')||localStorage.getItem('lolm_admin')) return;
+  if(sessionStorage.getItem('lolm_soft_upgrade')) return;
+  sessionStorage.setItem('lolm_soft_upgrade','1');
+  const box=document.createElement('div');
+  box.style.cssText='margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--soft);font-size:13px';
+  box.innerHTML='Using LOLM free? <a href="/pricing.html" style="font-weight:650;color:var(--accent)">Plus $7.99 / Pro $19.99</a> when you need more capacity — or <a href="#" id="shareHint">share LOLM</a>.';
+  el.appendChild(box);
+  const s=box.querySelector('#shareHint'); if(s) s.onclick=(e)=>{e.preventDefault();shareLolm();};
+}
+function showUpgrade(el, err){
+  const tiers=(err&&err.tiers)||{}; const topups=(err&&err.topups)||{};
+  const box=document.createElement('div');
+  box.style.cssText='margin-top:8px;padding:12px;border:1px solid var(--accent);border-radius:12px;background:rgba(244,63,94,.05)';
+  let h='<div style="font-weight:650;margin-bottom:4px">Daily limit reached'+(err&&err.limit?' ('+err.used+'/'+err.limit+' on '+esc(err.tier||'free')+')':'')+'</div>';
+  h+='<div class="dim" style="font-size:12px;margin-bottom:9px">Buy a one-time top-up (does not expire at midnight) or upgrade the plan.</div>';
+  if(err&&err.buy_topup!==false){
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">';
+    const packs=['runs_50','runs_200','visual_10','bundle_100'];
+    for(const k of packs){ const t=topups[k]; if(!t) continue;
+      h+='<button onclick="startTopup(\''+k+'\')" style="padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel,#fff);cursor:pointer;text-align:left;font-size:12px"><b>'+esc(t.label)+'</b> · $'+t.usd+'</button>'; }
+    h+='<a href="/pricing.html#topups" style="align-self:center;font-size:12px;font-weight:650">All packs →</a></div>';
+  }
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  for(const k of ['plus','pro']){ const t=tiers[k]; if(!t) continue;
+    h+='<button onclick="startCheckout(\''+k+'\')" style="flex:1;min-width:130px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel,#fff);cursor:pointer;text-align:left"><b>'+esc(t.label)+'</b> · $'+t.usd+'/mo<br><span class="dim" style="font-size:11px">'+t.runs_per_day+' runs + '+t.visual_per_day+' builds / day</span></button>'; }
+  h+='</div>';
+  box.innerHTML=h; el.appendChild(box); return box;
+}
+async function startCheckout(tier){
+  try{ const r=await (await fetch('/api/demo/billing/checkout',{method:'POST',headers:authHeaders(),body:JSON.stringify({tier})})).json();
+    if(r.url) location.href=r.url; else alert(r.error||'checkout unavailable');
+  }catch(e){ alert('checkout failed: '+e.message); }
+}
+async function startTopup(pack){
+  try{ const r=await (await fetch('/api/demo/billing/topup/checkout',{method:'POST',headers:authHeaders(),body:JSON.stringify({pack})})).json();
+    if(r.url) location.href=r.url; else alert(r.error||'top-up unavailable');
+  }catch(e){ alert('top-up failed: '+e.message); }
+}
+// returning from Stripe: claim the subscription → store the signed license
+(async function(){ const sid=new URLSearchParams(location.search).get('sub_session'); if(!sid) return;
+  try{ const r=await (await fetch('/api/demo/billing/claim?session_id='+encodeURIComponent(sid))).json();
+    if(r.license){ localStorage.setItem('lolm_license', r.license); refreshUsageChip();
+      const t=document.createElement('div'); t.textContent='✓ Welcome to LOLM '+(r.label||r.tier)+' — your limits are upgraded.'; t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;padding:10px 18px;border-radius:10px;font-weight:600;z-index:9999'; document.body.appendChild(t); setTimeout(()=>t.remove(),6000); }
+    history.replaceState(null,'',location.pathname);
+  }catch(_){}})();
+updateShield();
+const _sl=document.getElementById('shareLink');
+if(_sl) _sl.onclick=shareLolm;
+refreshUsageChip();
+
+$('menuBtn').onclick = () => { const on=$('side').classList.toggle('show'); $('scrim').classList.toggle('show', on && _isMobile()); };
+$('convList').addEventListener('click', () => { if(_isMobile()){ $('side').classList.remove('show'); $('scrim').classList.remove('show'); } });
+if(_isMobile()) $('prompt').placeholder='Ask, code, search, or build anything…';
+$('newConv').addEventListener('click', () => { if(_isMobile()){ $('side').classList.remove('show'); $('scrim').classList.remove('show'); } });
+
+/* ── wire-up ── */
+$('newConv').onclick = newConv;
+$('send').onclick = send;
+$('prompt').addEventListener('keydown', e => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); send(); }});
+$('search').addEventListener('input', () => loadConvs());
+$('newProj').onclick = async () => { const name = prompt('Project name (repo work arrives in Phase 2):'); if(name){ const url = prompt('Repo URL (optional):')||''; await api('/projects',{method:'POST',body:JSON.stringify({name,repo_url:url})}); loadProjects(); } };
+async function loadProjects(){ const d = await api('/projects'); const ps=d.projects||[]; $('projList').innerHTML = ps.map(p=>`<div class="nav-link" title="${esc(p.repo_url||'')}">▦ ${esc(p.name)}</div>`).join('')+'<div class="nav-link" id="newProj2">＋ Add a project</div>'; const n=$('newProj2'); if(n) n.onclick=$('newProj').onclick; }
+
+document.querySelectorAll('#starters button').forEach(b => b.onclick = () => { $('prompt').value = b.dataset.q; send(); });
+// Mint/reuse browser principal before any workspace load so conversations
+// actually come back after refresh (server denies anonymous X-Workspace-Owner).
+(async () => {
+  try { await ensureWorkspaceIdentity(); }
+  catch (e) { console.warn('workspace identity:', e.message || e); status('could not start private workspace — reload'); }
+  loadModes(); loadConvs(); loadProjects(); renderSandbox({}); loadUserMemory();
+})();
+</script>
+</body>
+</html>

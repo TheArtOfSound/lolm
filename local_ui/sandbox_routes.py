@@ -77,7 +77,26 @@ def register_sandbox_routes(app: Any, root: str, secret_env: str = "SANDBOX_SECR
     def write(sid: str, req: WriteReq, authorization: Optional[str] = Header(default=None)):
         _auth(authorization)
         try:
-            return _sb(sid).write_file(req.path, req.content, reason=req.reason)
+            # Privileged HTTP surface: Bearer already verified. Separate receipt
+            # namespace — never a silent CodeAgent gateway bypass.
+            from lolm.privileged_mutation import MutationTrustClass, privileged_write
+            result = privileged_write(
+                _sb(sid),
+                req.path,
+                req.content,
+                trust_class=MutationTrustClass.PRIVILEGED_HTTP_SANDBOX,
+                reason=req.reason or "http_sandbox_write",
+                capability_token_present=True,
+                require_token=True,
+            )
+            fc = result.get("file_change") or {}
+            return {
+                **(fc if isinstance(fc, dict) else {"path": req.path}),
+                "trust_class": MutationTrustClass.PRIVILEGED_HTTP_SANDBOX.value,
+                "privileged_receipt": result.get("privileged_receipt"),
+            }
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e))
         except SandboxError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -215,7 +234,28 @@ def register_public_sandbox_routes(app: Any, root: str) -> None:
     @app.post("/api/demo/sandbox/{sid}/write")
     def pub_write(sid: str, req: WriteReq):
         try:
-            return _get(sid)["sb"].write_file(req.path, req.content, reason=req.reason)
+            # Public demo sandboxes are isolated bwrap sessions — not CodeAgent.
+            # Still emit privileged-namespace receipts so they never look like
+            # gateway-authorized product mutations.
+            from lolm.privileged_mutation import MutationTrustClass, privileged_write
+            result = privileged_write(
+                _get(sid)["sb"],
+                req.path,
+                req.content,
+                trust_class=MutationTrustClass.PRIVILEGED_HTTP_SANDBOX,
+                reason=req.reason or "public_demo_write",
+                capability_token_present=True,  # isolation + rate-limit is the gate
+                require_token=True,
+            )
+            fc = result.get("file_change") or {}
+            return {
+                **(fc if isinstance(fc, dict) else {"path": req.path}),
+                "trust_class": MutationTrustClass.PRIVILEGED_HTTP_SANDBOX.value,
+                "privileged_receipt": result.get("privileged_receipt"),
+                "public_demo": True,
+            }
+        except PermissionError as e:
+            return JSONResponse({"error": str(e)}, status_code=403)
         except SandboxError as e:
             return JSONResponse({"error": str(e)}, status_code=400)
 

@@ -363,14 +363,32 @@ class AgentOperator:
             # ── WRITE ──
             if tool == "write":
                 try:
-                    fc = self.sb.write_file(act["path"], act["content"], reason="operator")
+                    # Privileged trust class — not CodeAgent gateway; separate receipt.
+                    from lolm.privileged_mutation import (
+                        MutationTrustClass,
+                        privileged_write,
+                    )
+                    result = privileged_write(
+                        self.sb,
+                        act["path"],
+                        act["content"],
+                        trust_class=MutationTrustClass.PRIVILEGED_OPERATOR,
+                        reason="operator",
+                        capability_token_present=True,  # operator loop is the privilege surface
+                        require_token=True,
+                    )
+                    fc = result.get("file_change") or {}
                     yield {"event": "tool_call", "data": {"tool": "write", "path": act["path"]}}
                     yield {"event": "file_changed", "data": {"path": act["path"],
                            "diff": (fc.get("diff") or "")[:_DIFF_CAP],
-                           "bytes": len(act["content"])}}
+                           "bytes": len(act["content"]),
+                           "trust_class": MutationTrustClass.PRIVILEGED_OPERATOR.value,
+                           "privileged_receipt_id": (result.get("privileged_receipt") or {}).get("receipt_id")}}
                     self.log.append({"kind": "write", "changed": True,
                                      "summary": f"wrote {act['path']} ({len(act['content'])} bytes)",
-                                     "observation": f"wrote {act['path']}"})
+                                     "observation": f"wrote {act['path']}",
+                                     "trust_class": MutationTrustClass.PRIVILEGED_OPERATOR.value,
+                                     "privileged_receipt": result.get("privileged_receipt")})
                 except Exception as exc:
                     self.log.append({"kind": "write", "summary": f"write {act['path']} failed",
                                      "observation": f"error: {exc}"[:300]})
@@ -407,14 +425,32 @@ class AgentOperator:
                     yield {"event": "agent_note", "data": {"text": f"edit: SEARCH not unique ({n}x) in {path}"}}
                     continue
                 try:
-                    fc = self.sb.write_file(path, content.replace(old, new, 1), reason="operator-edit")
+                    from lolm.privileged_mutation import (
+                        MutationTrustClass,
+                        privileged_write,
+                    )
+                    new_body = content.replace(old, new, 1)
+                    result = privileged_write(
+                        self.sb,
+                        path,
+                        new_body,
+                        trust_class=MutationTrustClass.PRIVILEGED_OPERATOR,
+                        reason="operator-edit",
+                        capability_token_present=True,
+                        require_token=True,
+                    )
+                    fc = result.get("file_change") or {}
                     yield {"event": "tool_call", "data": {"tool": "edit", "path": path}}
                     yield {"event": "file_changed", "data": {"path": path,
-                           "diff": (fc.get("diff") or "")[:_DIFF_CAP], "edit": True}}
+                           "diff": (fc.get("diff") or "")[:_DIFF_CAP], "edit": True,
+                           "trust_class": MutationTrustClass.PRIVILEGED_OPERATOR.value,
+                           "privileged_receipt_id": (result.get("privileged_receipt") or {}).get("receipt_id")}}
                     self.log.append({"kind": "edit", "changed": True,
                                      "summary": f"edited {path} "
                                      f"(-{old.count(chr(10))+1}/+{new.count(chr(10))+1} lines)",
-                                     "observation": f"applied search/replace to {path}"})
+                                     "observation": f"applied search/replace to {path}",
+                                     "trust_class": MutationTrustClass.PRIVILEGED_OPERATOR.value,
+                                     "privileged_receipt": result.get("privileged_receipt")})
                 except Exception as exc:
                     self.log.append({"kind": "edit", "summary": f"edit {path} failed",
                                      "observation": f"error: {exc}"[:300]})

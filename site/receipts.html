@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LOLM Receipts — live audit trail for agentic code &amp; visual builds</title>
-<meta name="description" content="Hash-chained public ledger of LOLM code runs and visual builds. See verdicts, files, verifies, and receipt SHAs — the auditability reason to switch from Claude Code or Codex.">
+<meta name="description" content="Hash-chained public ledger of LOLM code runs and visual builds. Verdicts, files, verifies, receipt SHAs — sealed evidence for task-state control. Not a black box.">
 <meta property="og:title" content="LOLM Receipts — auditable agent runs">
-<meta property="og:description" content="Live sealed receipts for coding and visual builds. Not a black box.">
+<meta property="og:description" content="Live sealed receipts for coding and visual builds. Audit task work and control decisions — not a black box.">
 <meta property="og:url" content="https://lolm.imagineqira.com/receipts.html">
 <meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
 <meta property="og:type" content="website">
@@ -14,67 +14,71 @@
 <link rel="canonical" href="https://lolm.imagineqira.com/receipts.html">
 <meta name="robots" content="index,follow">
 <meta name="theme-color" content="#0a0c10">
+<link rel="stylesheet" href="/lolm-ds.css">
+<script src="/lolm-ds.js" defer></script>
 <style>
-  :root{--bg:#fff;--ink:#0a0c10;--muted:#525c69;--line:#e6e8ec;--soft:#f6f7f9;--accent:#f43f5e;--good:#0f9d6b;--warn:#b8730a;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  /* Tokens come from lolm-ds.css (dark default). Do not re-lock light-only :root. */
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:Inter,system-ui,-apple-system,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
-  a{color:var(--ink)}
+  body{font-family:var(--sans);color:var(--ink);background:var(--bg);line-height:1.5}
+  a{color:var(--accent2)}
   .wrap{max-width:920px;margin:0 auto;padding:28px 18px 64px}
   header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px}
-  .brand{font-weight:700;letter-spacing:-.02em;text-decoration:none}
-  nav a{margin-left:14px;font-size:14px;color:var(--muted);text-decoration:none}
+  .brand{font-weight:700;letter-spacing:-.02em;text-decoration:none;color:var(--ink)}
+  nav a{margin-left:14px;font-size:14px;color:var(--dim);text-decoration:none}
   nav a:hover{color:var(--ink)}
-  h1{font-size:clamp(26px,4vw,36px);letter-spacing:-.03em;margin:0 0 8px}
-  .sub{color:var(--muted);font-size:15px;max-width:42em;margin-bottom:18px}
+  h1{font-size:clamp(26px,4vw,36px);letter-spacing:-.03em;margin:0 0 8px;color:var(--t-hi)}
+  .sub{color:var(--dim);font-size:15px;max-width:42em;margin-bottom:18px}
+  .sub b{color:var(--ink)}
   .stats{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 20px}
-  .pill{border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:6px 12px;font-size:12.5px;color:var(--muted)}
+  .pill{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:6px 12px;font-size:12.5px;color:var(--dim)}
   .pill b{color:var(--ink)}
   .pill.ok b{color:var(--good)}
   .pill.fail b{color:var(--accent)}
-  .row{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:0 0 10px;background:var(--soft)}
-  .row.ok{border-color:rgba(15,157,107,.35)}
-  .row.fail{border-color:rgba(244,63,94,.25)}
+  .row{border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:0 0 10px;background:var(--panel);color:var(--ink)}
+  .row.ok{border-color:rgba(46,217,163,.35)}
+  .row.fail{border-color:rgba(255,82,115,.3)}
   .top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline}
-  .kind{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .kind{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:700}
   .verdict{font-size:13px;font-weight:650}
   .verdict.good{color:var(--good)}
   .verdict.bad{color:var(--accent)}
   .verdict.mid{color:var(--warn)}
-  .task{margin:6px 0 8px;font-size:14.5px}
-  .meta{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all}
+  .task{margin:6px 0 8px;font-size:14.5px;color:var(--ink);line-height:1.45}
+  .meta{font-family:var(--mono);font-size:11px;color:var(--dim);word-break:break-all}
   .meta span{margin-right:12px}
-  .empty{border:1px dashed var(--line);border-radius:14px;padding:28px 18px;text-align:center;color:var(--muted);background:#fafbfc}
+  .empty{border:1px dashed var(--line);border-radius:14px;padding:28px 18px;text-align:center;color:var(--dim);background:var(--panel2)}
   .empty b{color:var(--ink)}
   .btns{margin-top:14px}
-  a.btn{display:inline-block;margin:6px 8px 0 0;padding:11px 14px;border-radius:10px;background:var(--accent);color:#fff;text-decoration:none;font-weight:650;font-size:14px}
-  a.ghost{background:var(--ink)}
-  a.outline{background:#fff;color:var(--ink);border:1px solid var(--line)}
-  .note{margin-top:28px;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px}
+  a.btn{display:inline-block;margin:6px 8px 0 0;padding:11px 14px;border-radius:10px;background:var(--lolm-grad);color:#fff;text-decoration:none;font-weight:650;font-size:14px;border:0}
+  a.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line-2)}
+  a.outline{background:transparent;color:var(--ink);border:1px solid var(--line-2)}
+  .note{margin-top:28px;font-size:13px;color:var(--dim);border-top:1px solid var(--line);padding-top:16px}
   .err{color:var(--accent);font-size:13px;margin:8px 0}
   .filters{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
-  .filters button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--muted)}
-  .filters button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .filters button{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:6px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--dim)}
+  .filters button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 </style>
-<link rel="stylesheet" href="/lolm-ds.css">
-<script src="/lolm-ds.js" defer></script>
 </head>
 <body>
 <div class="wrap">
   <header>
     <a class="brand" href="/">LOLM · Qira</a>
     <nav>
+      <a href="/install.html">Install</a>
+      <a href="/docs.html">Docs</a>
       <a href="/try.html">Try free</a>
       <a href="/why-switch.html">Why switch</a>
       <a href="/pricing.html">Pricing</a>
-      <a href="/">Workspace</a>
+      <a href="/app.html">App</a>
     </nav>
   </header>
 
   <h1>Live receipts. Not vibes.</h1>
   <p class="sub">
     Every public agentic code run and visual build can seal a <b>hash-chained receipt</b>
-    (task, verdict, files, verifies, SHA). This page reads the live ledger —
-    the auditability reason people switch from black-box coding agents.
+    (task, verdict, files, verifies, SHA — often with a compact task-state summary).
+    This page reads the live ledger: evidence that work and control decisions are auditable,
+    not just chat history.
   </p>
 
   <div class="stats" id="stats">
@@ -90,9 +94,9 @@
   <div id="list"></div>
 
   <div class="btns">
-    <a class="btn" href="/">Run code in workspace →</a>
+    <a class="btn" href="/app.html">Open app →</a>
     <a class="btn ghost" href="/try.html">Try free (no account)</a>
-    <a class="btn outline" href="/why-switch.html">Why switch</a>
+    <a class="btn outline" href="/compare/">Compare</a>
     <a class="btn outline" href="/api/demo/code/receipts">JSON API</a>
   </div>
 

@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "updated": "2026-08-02",
+  "product": {
+    "name": "LOLM",
+    "full_name": "LOLM agent workspace",
+    "publisher": "Qira LLC",
+    "publisher_url": "https://imagineqira.com",
+    "tagline": "An agent that does not lose the plot.",
+    "description": "LOLM keeps explicit task state, runs work in a sandbox, verifies completion, and produces a receipt showing what happened.",
+    "url": "https://lolm.imagineqira.com/",
+    "github": "https://github.com/TheArtOfSound/LOLM",
+    "npm_cli": "https://www.npmjs.com/package/lolm-cli",
+    "npm_client": "https://www.npmjs.com/package/lolm-nfet-client"
+  },
+  "hierarchy": {
+    "Qira": "Company and publisher",
+    "LOLM": "Product and agent workspace",
+    "LOLM agent": "User-facing persistent agent with task state, sandbox execution, verification, and receipts",
+    "NFET": "Technical control and telemetry subsystem within LOLM (not a separate consumer product)",
+    "Latent Order Language Model": "Research architecture and model family — see architecture/research pages",
+    "Receipts": "Evidence and audit layer for runs"
+  },
+  "plans": {
+    "free": {
+      "id": "free",
+      "label": "Free",
+      "usd": 0,
+      "runs_per_day": 10,
+      "visual_per_day": 3,
+      "blurb": "Evaluate every day — no card required"
+    },
+    "plus": {
+      "id": "plus",
+      "label": "Plus",
+      "usd": 7.99,
+      "runs_per_day": 300,
+      "visual_per_day": 30,
+      "blurb": "Everyday coding and research"
+    },
+    "pro": {
+      "id": "pro",
+      "label": "Pro",
+      "usd": 19.99,
+      "runs_per_day": 2000,
+      "visual_per_day": 200,
+      "blurb": "Heavy use under a typical $20 AI plan"
+    }
+  },
+  "billing": {
+    "meter": "daily_runs_and_visual_builds",
+    "reset": "UTC midnight",
+    "token_wallet": false,
+    "self_host": "unlimited",
+    "checkout": "Stripe hosted Checkout; server sets prices from plan config",
+    "topups": {
+      "available": false,
+      "note": "One-time top-up packs are not live yet. Upgrade Plus/Pro or self-host for more capacity."
+    },
+    "authority": "local_ui/usage_limits.py TIERS + GET /api/demo/billing/config + GET /api/demo/product-config"
+  },
+  "navigation": {
+    "primary": [
+      { "label": "Product", "href": "/" },
+      { "label": "Developers", "href": "/developers.html" },
+      { "label": "Install", "href": "/install.html" },
+      { "label": "Pricing", "href": "/pricing.html" },
+      { "label": "Docs", "href": "/docs.html" }
+    ],
+    "cta": { "label": "Open app", "href": "/app.html" },
+    "secondary": [
+      { "label": "Demo", "href": "/try.html" },
+      { "label": "Receipts", "href": "/receipts.html" },
+      { "label": "Architecture", "href": "/about.html" },
+      { "label": "Research", "href": "/research.html" },
+      { "label": "Compare", "href": "/compare/" },
+      { "label": "Self-host", "href": "/install.html#self-host" },
+      { "label": "Status", "href": "/api/demo/status" },
+      { "label": "GitHub", "href": "https://github.com/TheArtOfSound/LOLM" },
+      { "label": "npm", "href": "https://www.npmjs.com/package/lolm-cli" }
+    ]
+  },
+  "install": {
+    "package": "lolm-cli",
+    "node": ">=20",
+    "command": "npm install -g lolm-cli",
+    "status": "lolm status",
+    "example": "lolm code \"fizzbuzz to 20\" --save ./out"
+  },
+  "models": {
+    "policy": "Do not hard-code a permanent generator model brand promise. Hosted inference uses a provider cascade that can change with availability.",
+    "controller": "LOLM task-state control, verification, and receipts",
+    "receipts": "When allowed, each run receipt should expose the actual provider and model used",
+    "demo_wording": "Hosted demo uses the current available generator; LOLM provides task control and receipts — not a fixed model size guarantee"
+  },
+  "maturity": {
+    "verified": [
+      "Persistent task state across steps",
+      "Sandboxed code execution path",
+      "Sealed/hash-chained receipts where enabled",
+      "Hosted daily quotas enforced server-side",
+      "Stripe subscription checkout for Plus/Pro"
+    ],
+    "experimental": [
+      "Adaptive routing remains disabled",
+      "Real multi-hour coding superiority is not claimed as proven",
+      "Model quality depends on the selected generator"
+    ]
+  }
+}

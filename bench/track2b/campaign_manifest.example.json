@@ -1,0 +1,12 @@
+{
+  "schema": "lolm.track2b.campaign.v1",
+  "expected_server_sha": "REPLACE_WITH_DEPLOYED_SHA",
+  "expected_deployment_id": "staging-REPLACE",
+  "expected_receipt_key_id": "staging-2026-08",
+  "expected_receipt_public_key_sha256": "REPLACE_WITH_SHA256_OF_PUBLIC_KEY_BYTES",
+  "transport": "lolm-code-sse",
+  "isolation_required": "bwrap",
+  "require_trusted_signature": true,
+  "allow_untrusted_local_receipts": false,
+  "notes": "Private LOLM_RECEIPT_SIGNING_KEYS stay on staging only. Runner uses LOLM_RECEIPT_VERIFY_KEYS public material exclusively."
+}

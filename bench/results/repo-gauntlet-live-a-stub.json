@@ -1,0 +1,5700 @@
+{
+  "schema": "lolm.repo_gauntlet.live_model.phase_a.v1",
+  "mode": "stub",
+  "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+  "track2a_status": "passed",
+  "track2b_status": "unproven",
+  "aborted": false,
+  "abort_reason": "",
+  "trust_resets": 0,
+  "total": 30,
+  "competence_passed": 0,
+  "trust_passed": 30,
+  "qualification_passed": false,
+  "note": "Stub mode proves harness + trust abort wiring only. Live mode is required for Track 2B competence.",
+  "results": [
+    {
+      "id": "L01",
+      "family": "localized_bug",
+      "description": "Fix the off-by-one bug in clamp() so clamp(5,0,10) returns 5. Run unit tests.",
+      "frozen_commit": "2d6ba1dcaa279833ca6167aa7fbdd76766c54fb7a9485a168055d317b8202f1a",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing util.py:'return x\\n'",
+        "still has bad util.py:'return x + 1'"
+      ],
+      "elapsed_s": 0.076,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "2d6ba1dcaa279833ca6167aa7fbdd76766c54fb7a9485a168055d317b8202f1a",
+      "tree_after": "2d6ba1dcaa279833ca6167aa7fbdd76766c54fb7a9485a168055d317b8202f1a",
+      "files_after": [
+        "test_util.py",
+        "util.py"
+      ],
+      "files_read": [
+        "util.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_674a9c7515c6",
+          "path": "util.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "5a4c5d4d1dc5883b5328536002e146ddece7cfa70f8afc1d9a866881f4a58dc0",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647231.847647,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "util.py",
+            "score": 4.346573590279973,
+            "reason": [
+              "symbol_match=1",
+              "centrality=0.69"
+            ],
+            "symbols": [
+              "clamp"
+            ],
+            "estimated_tokens": 41,
+            "excerpt": "util.py [python]\ndef clamp(x, lo, hi)\ndef clamp(x, lo, hi):\n    if x < lo:\n        return lo\n    if x > hi:\n        return hi\n    return x + 1  # bug: off-by-one"
+          },
+          {
+            "path": "test_util.py",
+            "score": 0.8,
+            "reason": [
+              "reference_match=1"
+            ],
+            "symbols": [
+              "T",
+              "T.test_mid",
+              "T.test_lo"
+            ],
+            "estimated_tokens": 98,
+            "excerpt": "test_util.py [python]\nclass T(unittest.TestCase)\nclass T(unittest.TestCase):\n    def test_mid(self):\n        self.assertEqual(clamp(5, 0, 10), 5)\n    def test_lo(self):\n        self.assertEqual(clamp(-1, 0, 10), 0)\ndef test_mid(self)\n    def test_mid(self):\n        self.assertEqual(clamp(5, 0, 10), 5)\ndef test_lo(self)\n    def test_lo(self):\n        self.assertEqual(clamp(-1, 0, 10), 0)"
+          }
+        ],
+        "map": {
+          "test_util.py": {
+            "path": "test_util.py",
+            "language": "python",
+            "sha256": "6355a288beea6caae794e03c27ff9d7a8b4da84f32a0e4b0b44fc78b3bf4e2a0",
+            "symbols": [
+              "T",
+              "T.test_mid",
+              "T.test_lo"
+            ],
+            "imports": [
+              "unittest",
+              "util"
+            ],
+            "references": [
+              "TestCase",
+              "assertEqual",
+              "clamp",
+              "self",
+              "unittest"
+            ],
+            "test_links": [
+              "test_util.py"
+            ],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "util.py": {
+            "path": "util.py",
+            "language": "python",
+            "sha256": "5a4c5d4d1dc5883b5328536002e146ddece7cfa70f8afc1d9a866881f4a58dc0",
+            "symbols": [
+              "clamp"
+            ],
+            "imports": [],
+            "references": [
+              "hi",
+              "lo",
+              "x"
+            ],
+            "test_links": [
+              "test_util.py"
+            ],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_674a9c7515c6",
+            "path": "util.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "5a4c5d4d1dc5883b5328536002e146ddece7cfa70f8afc1d9a866881f4a58dc0",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647231.847647,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "util.py": {
+            "path": "util.py",
+            "sha256": "5a4c5d4d1dc5883b5328536002e146ddece7cfa70f8afc1d9a866881f4a58dc0",
+            "size": 124,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "55e84183ba93464d",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:any"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:any baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Qwen"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: util.py(symbol_match=1,centrality=0.69), test_util.py(reference_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read util.py (124 bytes) sha=5a4c5d4d1dc5 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L02",
+      "family": "localized_bug",
+      "description": "Fix the NameError in greet() so greet('Ada') works.",
+      "frozen_commit": "000be395efa61438f8971c3766bbf09ee41015ee5633e2ef09f52e06e8562d79",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing greet.py:'name +'",
+        "still has bad greet.py:'nam +'"
+      ],
+      "elapsed_s": 0.041,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "000be395efa61438f8971c3766bbf09ee41015ee5633e2ef09f52e06e8562d79",
+      "tree_after": "000be395efa61438f8971c3766bbf09ee41015ee5633e2ef09f52e06e8562d79",
+      "files_after": [
+        "greet.py"
+      ],
+      "files_read": [
+        "greet.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_30c2c1945caa",
+          "path": "greet.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "81c6faf41196d5acbaebd5c98b58c9021d2b2d3587c7e6a2b1716dea9a4dd78f",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647231.890023,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "greet.py",
+            "score": 7.0,
+            "reason": [
+              "path_match=1",
+              "symbol_match=1"
+            ],
+            "symbols": [
+              "greet"
+            ],
+            "estimated_tokens": 21,
+            "excerpt": "greet.py [python]\ndef greet(name)\ndef greet(name):\n    return 'Hello, ' + nam + '!'"
+          }
+        ],
+        "map": {
+          "greet.py": {
+            "path": "greet.py",
+            "language": "python",
+            "sha256": "81c6faf41196d5acbaebd5c98b58c9021d2b2d3587c7e6a2b1716dea9a4dd78f",
+            "symbols": [
+              "greet"
+            ],
+            "imports": [],
+            "references": [
+              "nam"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_30c2c1945caa",
+            "path": "greet.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "81c6faf41196d5acbaebd5c98b58c9021d2b2d3587c7e6a2b1716dea9a4dd78f",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647231.890023,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "greet.py": {
+            "path": "greet.py",
+            "sha256": "81c6faf41196d5acbaebd5c98b58c9021d2b2d3587c7e6a2b1716dea9a4dd78f",
+            "size": 50,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "8ca94eeb27174af8",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:any"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:any baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Qwen"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: greet.py(path_match=1,symbol_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read greet.py (50 bytes) sha=81c6faf41196 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L03",
+      "family": "localized_bug",
+      "description": "config.json has invalid JSON (debug: fals). Fix it so debug is boolean true.",
+      "frozen_commit": "93c01f729d36de5be94205b10d0e97b86baf9e570c1cf63fb7b4b624c5adfca6",
+      "language": "json",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing config.json:'true'"
+      ],
+      "elapsed_s": 0.042,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "93c01f729d36de5be94205b10d0e97b86baf9e570c1cf63fb7b4b624c5adfca6",
+      "tree_after": "93c01f729d36de5be94205b10d0e97b86baf9e570c1cf63fb7b4b624c5adfca6",
+      "files_after": [
+        "config.json"
+      ],
+      "files_read": [
+        "config.json"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_21db1d5bf123",
+          "path": "config.json",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "55ac0e37004652ef5a9b1a5f07b5de9c2228037745ee6d760db2c586eaad9eed",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647231.9335868,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "config.json",
+            "score": 7.6,
+            "reason": [
+              "path_match=2",
+              "reference_match=2"
+            ],
+            "symbols": [],
+            "estimated_tokens": 12,
+            "excerpt": "config.json [text]\n{\"port\": 8080, \"debug\": fals}"
+          }
+        ],
+        "map": {
+          "config.json": {
+            "path": "config.json",
+            "language": "text",
+            "sha256": "55ac0e37004652ef5a9b1a5f07b5de9c2228037745ee6d760db2c586eaad9eed",
+            "symbols": [],
+            "imports": [],
+            "references": [
+              "debug",
+              "fals",
+              "port"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_21db1d5bf123",
+            "path": "config.json",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "55ac0e37004652ef5a9b1a5f07b5de9c2228037745ee6d760db2c586eaad9eed",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647231.9335868,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "config.json": {
+            "path": "config.json",
+            "sha256": "55ac0e37004652ef5a9b1a5f07b5de9c2228037745ee6d760db2c586eaad9eed",
+            "size": 30,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "ba573699f1a3406a",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:javascript"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:javascript baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qw"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=['config.js'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: config.json(path_match=2,reference_match=2)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read config.json (30 bytes) sha=55ac0e370046 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L04",
+      "family": "localized_bug",
+      "description": "inc() currently adds 2; change it to add 1. Keep module.exports.",
+      "frozen_commit": "681fb0077bba3a59d42227233e7d33ff303f776904884fcf5bb3225f3db721c3",
+      "language": "javascript",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing counter.js:'n+1'"
+      ],
+      "elapsed_s": 0.034,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "681fb0077bba3a59d42227233e7d33ff303f776904884fcf5bb3225f3db721c3",
+      "tree_after": "681fb0077bba3a59d42227233e7d33ff303f776904884fcf5bb3225f3db721c3",
+      "files_after": [
+        "counter.js"
+      ],
+      "files_read": [
+        "counter.js"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_ee6c2a769345",
+          "path": "counter.js",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "51c3c2febe1f0da2aa689b4bfc3554658c4fae1e93d95491daf57f4abf826e89",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647231.9680672,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "counter.js",
+            "score": 5.6,
+            "reason": [
+              "symbol_match=1",
+              "reference_match=2"
+            ],
+            "symbols": [
+              "inc"
+            ],
+            "estimated_tokens": 18,
+            "excerpt": "counter.js [javascript]\nfunction inc(n)\nfunction inc(n){ return n+2; }"
+          }
+        ],
+        "map": {
+          "counter.js": {
+            "path": "counter.js",
+            "language": "javascript",
+            "sha256": "51c3c2febe1f0da2aa689b4bfc3554658c4fae1e93d95491daf57f4abf826e89",
+            "symbols": [
+              "inc"
+            ],
+            "imports": [],
+            "references": [
+              "exports",
+              "function",
+              "module",
+              "n",
+              "return"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_ee6c2a769345",
+            "path": "counter.js",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "51c3c2febe1f0da2aa689b4bfc3554658c4fae1e93d95491daf57f4abf826e89",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647231.9680672,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "counter.js": {
+            "path": "counter.js",
+            "sha256": "51c3c2febe1f0da2aa689b4bfc3554658c4fae1e93d95491daf57f4abf826e89",
+            "size": 53,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "a19c6f30dd5b4070",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:any"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:any baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Qwen"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: counter.js(symbol_match=1,reference_match=2)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read counter.js (53 bytes) sha=51c3c2febe1f rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L05",
+      "family": "localized_bug",
+      "description": "Fix TypeScript add() which subtracts instead of adding.",
+      "frozen_commit": "14829e00fa2697979ab91226ebbe1caf54f59f31e5dee7d552f7d83ef09abb95",
+      "language": "typescript",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing math.ts:'a + b'"
+      ],
+      "elapsed_s": 0.034,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "14829e00fa2697979ab91226ebbe1caf54f59f31e5dee7d552f7d83ef09abb95",
+      "tree_after": "14829e00fa2697979ab91226ebbe1caf54f59f31e5dee7d552f7d83ef09abb95",
+      "files_after": [
+        "math.ts"
+      ],
+      "files_read": [
+        "math.ts"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_f2045d06142d",
+          "path": "math.ts",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "e0fb1449a381dffe5cdd932e7a68f833b6d16a8e9d90adc7f0cc84e003539eae",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.001947,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "math.ts",
+            "score": 4.0,
+            "reason": [
+              "symbol_match=1"
+            ],
+            "symbols": [
+              "add"
+            ],
+            "estimated_tokens": 29,
+            "excerpt": "math.ts [typescript]\nfunction add(a: number, b: number)\nexport function add(a: number, b: number) { return a - b; }"
+          }
+        ],
+        "map": {
+          "math.ts": {
+            "path": "math.ts",
+            "language": "typescript",
+            "sha256": "e0fb1449a381dffe5cdd932e7a68f833b6d16a8e9d90adc7f0cc84e003539eae",
+            "symbols": [
+              "add"
+            ],
+            "imports": [],
+            "references": [
+              "a",
+              "b",
+              "export",
+              "function",
+              "number",
+              "return"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_f2045d06142d",
+            "path": "math.ts",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "e0fb1449a381dffe5cdd932e7a68f833b6d16a8e9d90adc7f0cc84e003539eae",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.001947,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "math.ts": {
+            "path": "math.ts",
+            "sha256": "e0fb1449a381dffe5cdd932e7a68f833b6d16a8e9d90adc7f0cc84e003539eae",
+            "size": 60,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "3ff94e9602dc4368",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:typescript"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:typescript baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qw"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: math.ts(symbol_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read math.ts (60 bytes) sha=e0fb1449a381 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L06",
+      "family": "localized_bug",
+      "description": "Fix the page title to 'Dashboard' (currently 'Wrong').",
+      "frozen_commit": "e2405486b730ac4f4d1ede320af2af55127f1e324e768e95020a8ad96f1d547a",
+      "language": "html",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing index.html:'<title>Dashboard</title>'"
+      ],
+      "elapsed_s": 0.033,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "e2405486b730ac4f4d1ede320af2af55127f1e324e768e95020a8ad96f1d547a",
+      "tree_after": "e2405486b730ac4f4d1ede320af2af55127f1e324e768e95020a8ad96f1d547a",
+      "files_after": [
+        "index.html"
+      ],
+      "files_read": [
+        "index.html"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_913b45a98e6f",
+          "path": "index.html",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "3728ac95514bc6a24b23489938bc60e197992f5bb34c18f9c5434cca904c1e14",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.035417,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "index.html",
+            "score": 1.6,
+            "reason": [
+              "reference_match=2"
+            ],
+            "symbols": [],
+            "estimated_tokens": 26,
+            "excerpt": "index.html [html]\n<!doctype html><html><head><title>Wrong</title></head><body><h1>Hi</h1></body></html>"
+          }
+        ],
+        "map": {
+          "index.html": {
+            "path": "index.html",
+            "language": "html",
+            "sha256": "3728ac95514bc6a24b23489938bc60e197992f5bb34c18f9c5434cca904c1e14",
+            "symbols": [],
+            "imports": [],
+            "references": [
+              "Hi",
+              "Wrong",
+              "body",
+              "doctype",
+              "h1",
+              "head",
+              "html",
+              "title"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_913b45a98e6f",
+            "path": "index.html",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "3728ac95514bc6a24b23489938bc60e197992f5bb34c18f9c5434cca904c1e14",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.035417,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "index.html": {
+            "path": "index.html",
+            "sha256": "3728ac95514bc6a24b23489938bc60e197992f5bb34c18f9c5434cca904c1e14",
+            "size": 86,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "a518b95a8b70486e",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:any"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:any baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Qwen"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: index.html(reference_match=2)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read index.html (86 bytes) sha=3728ac95514b rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L07",
+      "family": "cross_module",
+      "description": "caller.py imports value() from dep.py which returns 0; fix the bug so value is 42 without changing caller.py.",
+      "frozen_commit": "0ce1733da1d59029aa1328efcdedcbfbb7fc240ed15e475b23d90ca808328165",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing dep.py:'return 42'"
+      ],
+      "elapsed_s": 0.037,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "0ce1733da1d59029aa1328efcdedcbfbb7fc240ed15e475b23d90ca808328165",
+      "tree_after": "0ce1733da1d59029aa1328efcdedcbfbb7fc240ed15e475b23d90ca808328165",
+      "files_after": [
+        "caller.py",
+        "dep.py",
+        "test_caller.py"
+      ],
+      "files_read": [
+        "dep.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_06f9486587aa",
+          "path": "dep.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "a7f36934f3bf3aa63bea2a195287cec6123b8af48fd270e57984c9584119c8d4",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.072635,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "dep.py",
+            "score": 10.346573590279972,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "centrality=0.69",
+              "language_match"
+            ],
+            "symbols": [
+              "value"
+            ],
+            "estimated_tokens": 15,
+            "excerpt": "dep.py [python]\ndef value()\ndef value():\n    return 0  # bug"
+          },
+          {
+            "path": "caller.py",
+            "score": 7.1465735902799725,
+            "reason": [
+              "path_match=2",
+              "reference_match=1",
+              "centrality=0.69",
+              "language_match"
+            ],
+            "symbols": [
+              "run"
+            ],
+            "estimated_tokens": 15,
+            "excerpt": "caller.py [python]\ndef run()\ndef run():\n    return value()"
+          },
+          {
+            "path": "test_caller.py",
+            "score": 3.0,
+            "reason": [
+              "path_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "T",
+              "T.test"
+            ],
+            "estimated_tokens": 52,
+            "excerpt": "test_caller.py [python]\nclass T(unittest.TestCase)\nclass T(unittest.TestCase):\n    def test(self):\n        self.assertEqual(run(), 42)\ndef test(self)\n    def test(self):\n        self.assertEqual(run(), 42)"
+          }
+        ],
+        "map": {
+          "caller.py": {
+            "path": "caller.py",
+            "language": "python",
+            "sha256": "76f08f405a1770370910c89a605d868c9a486364bdd39a93e902346d446eec30",
+            "symbols": [
+              "run"
+            ],
+            "imports": [
+              "dep"
+            ],
+            "references": [
+              "value"
+            ],
+            "test_links": [
+              "test_caller.py"
+            ],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "dep.py": {
+            "path": "dep.py",
+            "language": "python",
+            "sha256": "a7f36934f3bf3aa63bea2a195287cec6123b8af48fd270e57984c9584119c8d4",
+            "symbols": [
+              "value"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "test_caller.py": {
+            "path": "test_caller.py",
+            "language": "python",
+            "sha256": "04339f4ec23866b76e9d4b96e722af1cb8e13f847334e4ea576cdcaed6eb961c",
+            "symbols": [
+              "T",
+              "T.test"
+            ],
+            "imports": [
+              "caller",
+              "unittest"
+            ],
+            "references": [
+              "TestCase",
+              "assertEqual",
+              "run",
+              "self",
+              "unittest"
+            ],
+            "test_links": [
+              "test_caller.py"
+            ],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_06f9486587aa",
+            "path": "dep.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "a7f36934f3bf3aa63bea2a195287cec6123b8af48fd270e57984c9584119c8d4",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.072635,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "dep.py": {
+            "path": "dep.py",
+            "sha256": "a7f36934f3bf3aa63bea2a195287cec6123b8af48fd270e57984c9584119c8d4",
+            "size": 33,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "fc97a57b9e994715",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['caller.py', 'dep.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: dep.py(path_match=2,symbol_match=1), caller.py(path_match=2,reference_match=1), test_caller.py(path_matc"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read dep.py (33 bytes) sha=a7f36934f3bf rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L08",
+      "family": "cross_module",
+      "description": "service.py uses format_name from fmt.py which uppercases wrong; make format_name title-case the name.",
+      "frozen_commit": "d9ea1b2dda022985689f4399b3a2d28728d3899d4391578310269e5d507db93f",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing fmt.py:'title'"
+      ],
+      "elapsed_s": 0.037,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "d9ea1b2dda022985689f4399b3a2d28728d3899d4391578310269e5d507db93f",
+      "tree_after": "d9ea1b2dda022985689f4399b3a2d28728d3899d4391578310269e5d507db93f",
+      "files_after": [
+        "fmt.py",
+        "service.py"
+      ],
+      "files_read": [
+        "fmt.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_02899bcd6792",
+          "path": "fmt.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "5b3a9c43f96c70b9103526075c9eeedd2f6ee34794d29abb9b35ada0d27c1848",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.110892,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "fmt.py",
+            "score": 10.346573590279972,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "centrality=0.69",
+              "language_match"
+            ],
+            "symbols": [
+              "format_name"
+            ],
+            "estimated_tokens": 19,
+            "excerpt": "fmt.py [python]\ndef format_name(s)\ndef format_name(s):\n    return s.lower()"
+          },
+          {
+            "path": "service.py",
+            "score": 6.8,
+            "reason": [
+              "path_match=2",
+              "reference_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "label"
+            ],
+            "estimated_tokens": 23,
+            "excerpt": "service.py [python]\ndef label(user)\ndef label(user):\n    return 'User: ' + format_name(user)"
+          }
+        ],
+        "map": {
+          "fmt.py": {
+            "path": "fmt.py",
+            "language": "python",
+            "sha256": "5b3a9c43f96c70b9103526075c9eeedd2f6ee34794d29abb9b35ada0d27c1848",
+            "symbols": [
+              "format_name"
+            ],
+            "imports": [],
+            "references": [
+              "lower",
+              "s"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "service.py": {
+            "path": "service.py",
+            "language": "python",
+            "sha256": "c438845b066291e550730b9204917f6b312269f8bf5b0e782d9cef8d2e5a6138",
+            "symbols": [
+              "label"
+            ],
+            "imports": [
+              "fmt"
+            ],
+            "references": [
+              "format_name",
+              "user"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_02899bcd6792",
+            "path": "fmt.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "5b3a9c43f96c70b9103526075c9eeedd2f6ee34794d29abb9b35ada0d27c1848",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.110892,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "fmt.py": {
+            "path": "fmt.py",
+            "sha256": "5b3a9c43f96c70b9103526075c9eeedd2f6ee34794d29abb9b35ada0d27c1848",
+            "size": 41,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "8820d6eb40454909",
+        "adaptive_routing_applied": false,
+        "task_bucket": "factual_qa:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=factual_qa:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['service.py', 'fmt.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: fmt.py(path_match=2,symbol_match=1), service.py(path_match=2,reference_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read fmt.py (41 bytes) sha=5b3a9c43f96c rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L09",
+      "family": "cross_module",
+      "description": "prices.py has tax rate 0.0; total() in cart.py uses it. Set tax to 0.1 without changing cart.py.",
+      "frozen_commit": "9491c499bdd6de8b4dfdf3d009e6b94fcc56a8ef2612dc9d25c60dc5ae3ebae2",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing prices.py:'0.1'"
+      ],
+      "elapsed_s": 0.043,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "9491c499bdd6de8b4dfdf3d009e6b94fcc56a8ef2612dc9d25c60dc5ae3ebae2",
+      "tree_after": "9491c499bdd6de8b4dfdf3d009e6b94fcc56a8ef2612dc9d25c60dc5ae3ebae2",
+      "files_after": [
+        "cart.py",
+        "prices.py"
+      ],
+      "files_read": [
+        "prices.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_22a86958a1a7",
+          "path": "prices.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "c3a50a91a745bb0c9a24878a822d96163878ec0d106982d99778579c2cdc2627",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.154758,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "cart.py",
+            "score": 10.0,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "total"
+            ],
+            "estimated_tokens": 24,
+            "excerpt": "cart.py [python]\ndef total(items)\ndef total(items):\n    return sum(with_tax(x) for x in items)"
+          },
+          {
+            "path": "prices.py",
+            "score": 7.1465735902799725,
+            "reason": [
+              "path_match=2",
+              "reference_match=1",
+              "centrality=0.69",
+              "language_match"
+            ],
+            "symbols": [
+              "with_tax"
+            ],
+            "estimated_tokens": 19,
+            "excerpt": "prices.py [python]\ndef with_tax(p)\ndef with_tax(p):\n    return p * (1 + TAX)"
+          }
+        ],
+        "map": {
+          "cart.py": {
+            "path": "cart.py",
+            "language": "python",
+            "sha256": "5cbf6197b10a5cff3833feca7675dd6162888e45e943b1aeac57fe500994d084",
+            "symbols": [
+              "total"
+            ],
+            "imports": [
+              "prices"
+            ],
+            "references": [
+              "items",
+              "sum",
+              "with_tax",
+              "x"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "prices.py": {
+            "path": "prices.py",
+            "language": "python",
+            "sha256": "c3a50a91a745bb0c9a24878a822d96163878ec0d106982d99778579c2cdc2627",
+            "symbols": [
+              "with_tax"
+            ],
+            "imports": [],
+            "references": [
+              "TAX",
+              "p"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_22a86958a1a7",
+            "path": "prices.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "c3a50a91a745bb0c9a24878a822d96163878ec0d106982d99778579c2cdc2627",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.154758,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "prices.py": {
+            "path": "prices.py",
+            "sha256": "c3a50a91a745bb0c9a24878a822d96163878ec0d106982d99778579c2cdc2627",
+            "size": 52,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "f04ff3a3945e4e4c",
+        "adaptive_routing_applied": false,
+        "task_bucket": "unknown:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=unknown:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Qwe"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['prices.py', 'cart.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: cart.py(path_match=2,symbol_match=1), prices.py(path_match=2,reference_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read prices.py (52 bytes) sha=c3a50a91a745 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L10",
+      "family": "cross_module",
+      "description": "auth_token in secrets.py is wrong ('bad'); login.py imports it. Fix secrets only.",
+      "frozen_commit": "3ab96e2488d224f4c5aaaea42abb88cd1a2deaec1db96534e7dd23a3b78b872d",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing secrets.py:'ok-token'"
+      ],
+      "elapsed_s": 0.035,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "3ab96e2488d224f4c5aaaea42abb88cd1a2deaec1db96534e7dd23a3b78b872d",
+      "tree_after": "3ab96e2488d224f4c5aaaea42abb88cd1a2deaec1db96534e7dd23a3b78b872d",
+      "files_after": [
+        "login.py",
+        "secrets.py"
+      ],
+      "files_read": [
+        "secrets.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_910a0d167e4d",
+          "path": "secrets.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "8cec2324fc5f306a2356c2f27555b9d7ffcf49acb010db0dd7a5b9c1453f7496",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.190629,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "login.py",
+            "score": 6.8,
+            "reason": [
+              "path_match=2",
+              "reference_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "ok"
+            ],
+            "estimated_tokens": 17,
+            "excerpt": "login.py [python]\ndef ok(t)\ndef ok(t):\n    return t == AUTH_TOKEN"
+          },
+          {
+            "path": "secrets.py",
+            "score": 6.0,
+            "reason": [
+              "path_match=2",
+              "language_match"
+            ],
+            "symbols": [],
+            "estimated_tokens": 10,
+            "excerpt": "secrets.py [python]\nAUTH_TOKEN = 'bad'"
+          }
+        ],
+        "map": {
+          "login.py": {
+            "path": "login.py",
+            "language": "python",
+            "sha256": "f84f98ef7d81544f319d858ba245f4467c691162258d5391267969798ac89b7c",
+            "symbols": [
+              "ok"
+            ],
+            "imports": [
+              "secrets"
+            ],
+            "references": [
+              "AUTH_TOKEN",
+              "t"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "secrets.py": {
+            "path": "secrets.py",
+            "language": "python",
+            "sha256": "8cec2324fc5f306a2356c2f27555b9d7ffcf49acb010db0dd7a5b9c1453f7496",
+            "symbols": [],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_910a0d167e4d",
+            "path": "secrets.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "8cec2324fc5f306a2356c2f27555b9d7ffcf49acb010db0dd7a5b9c1453f7496",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.190629,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "secrets.py": {
+            "path": "secrets.py",
+            "sha256": "8cec2324fc5f306a2356c2f27555b9d7ffcf49acb010db0dd7a5b9c1453f7496",
+            "size": 19,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "bfca7adc91954817",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['secrets.py', 'login.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: login.py(path_match=2,reference_match=1), secrets.py(path_match=2,language_match)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read secrets.py (19 bytes) sha=8cec2324fc5f rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L11",
+      "family": "cross_module",
+      "description": "db.py get_user returns None; api.py depends on it. Make get_user return {'id': 1}.",
+      "frozen_commit": "0549fb86e8f7d4b7d5633c667452c637f81c34b31fb7424e1934215f6a8f1883",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing db.py:\"'id'\""
+      ],
+      "elapsed_s": 0.035,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "0549fb86e8f7d4b7d5633c667452c637f81c34b31fb7424e1934215f6a8f1883",
+      "tree_after": "0549fb86e8f7d4b7d5633c667452c637f81c34b31fb7424e1934215f6a8f1883",
+      "files_after": [
+        "api.py",
+        "db.py"
+      ],
+      "files_read": [
+        "db.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_3e3a9dd4f11e",
+          "path": "db.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "e188b721033d49fb87a1aae4abe357b06c234a6028542423d1dc64779bb83b7b",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.226526,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "db.py",
+            "score": 10.346573590279972,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "centrality=0.69",
+              "language_match"
+            ],
+            "symbols": [
+              "get_user"
+            ],
+            "estimated_tokens": 17,
+            "excerpt": "db.py [python]\ndef get_user(uid)\ndef get_user(uid):\n    return None"
+          },
+          {
+            "path": "api.py",
+            "score": 6.8,
+            "reason": [
+              "path_match=2",
+              "reference_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "handle"
+            ],
+            "estimated_tokens": 24,
+            "excerpt": "api.py [python]\ndef handle(uid)\ndef handle(uid):\n    u = get_user(uid)\n    return u is not None"
+          }
+        ],
+        "map": {
+          "api.py": {
+            "path": "api.py",
+            "language": "python",
+            "sha256": "e8dd224e58296a0aa7413c56c317980b6b96c18c4a15384fef9a7bf4d68ac169",
+            "symbols": [
+              "handle"
+            ],
+            "imports": [
+              "db"
+            ],
+            "references": [
+              "get_user",
+              "u",
+              "uid"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "db.py": {
+            "path": "db.py",
+            "language": "python",
+            "sha256": "e188b721033d49fb87a1aae4abe357b06c234a6028542423d1dc64779bb83b7b",
+            "symbols": [
+              "get_user"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_3e3a9dd4f11e",
+            "path": "db.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "e188b721033d49fb87a1aae4abe357b06c234a6028542423d1dc64779bb83b7b",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.226526,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "db.py": {
+            "path": "db.py",
+            "sha256": "e188b721033d49fb87a1aae4abe357b06c234a6028542423d1dc64779bb83b7b",
+            "size": 35,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "805976e1bdfe4f94",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['db.py', 'api.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: db.py(path_match=2,symbol_match=1), api.py(path_match=2,reference_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read db.py (35 bytes) sha=e188b721033d rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L12",
+      "family": "cross_module",
+      "description": "Fix only settings.py DEFAULT_PORT from 0 to 8000. app.py imports it.",
+      "frozen_commit": "2323b619d5c9131411d083143621c2d3e1cb860cab71a9bcda22dfc9c72551e7",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing settings.py:'8000'"
+      ],
+      "elapsed_s": 0.035,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "2323b619d5c9131411d083143621c2d3e1cb860cab71a9bcda22dfc9c72551e7",
+      "tree_after": "2323b619d5c9131411d083143621c2d3e1cb860cab71a9bcda22dfc9c72551e7",
+      "files_after": [
+        "app.py",
+        "settings.py"
+      ],
+      "files_read": [
+        "settings.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_63ee0a39e9d6",
+          "path": "settings.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "62d4bd865de2fd9968b7119d996509ebbf7c829db768c4471738fe84ea7ab22d",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.261748,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "app.py",
+            "score": 6.8,
+            "reason": [
+              "path_match=2",
+              "reference_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "port"
+            ],
+            "estimated_tokens": 16,
+            "excerpt": "app.py [python]\ndef port()\ndef port():\n    return DEFAULT_PORT"
+          },
+          {
+            "path": "settings.py",
+            "score": 6.0,
+            "reason": [
+              "path_match=2",
+              "language_match"
+            ],
+            "symbols": [],
+            "estimated_tokens": 10,
+            "excerpt": "settings.py [python]\nDEFAULT_PORT = 0"
+          }
+        ],
+        "map": {
+          "app.py": {
+            "path": "app.py",
+            "language": "python",
+            "sha256": "8f336962fe55eb6b0b0ff114ad3d4ab0cf831ce98c69dc233c9139dd2c35c12c",
+            "symbols": [
+              "port"
+            ],
+            "imports": [
+              "settings"
+            ],
+            "references": [
+              "DEFAULT_PORT"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "settings.py": {
+            "path": "settings.py",
+            "language": "python",
+            "sha256": "62d4bd865de2fd9968b7119d996509ebbf7c829db768c4471738fe84ea7ab22d",
+            "symbols": [],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_63ee0a39e9d6",
+            "path": "settings.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "62d4bd865de2fd9968b7119d996509ebbf7c829db768c4471738fe84ea7ab22d",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.261748,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "settings.py": {
+            "path": "settings.py",
+            "sha256": "62d4bd865de2fd9968b7119d996509ebbf7c829db768c4471738fe84ea7ab22d",
+            "size": 17,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "1f8d40cf6aa84212",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['settings.py', 'app.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: app.py(path_match=2,reference_match=1), settings.py(path_match=2,language_match)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read settings.py (17 bytes) sha=62d4bd865de2 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L13",
+      "family": "misleading_symbol",
+      "description": "verify_token in auth.py is wrong (always False). colors.py also has verify_token \u2014 do NOT change colors.py.",
+      "frozen_commit": "5d346994939f8b9dc1be86f028a68d6086551192c3631ac578dc90b7e759734a",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing auth.py:'True'"
+      ],
+      "elapsed_s": 0.037,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "5d346994939f8b9dc1be86f028a68d6086551192c3631ac578dc90b7e759734a",
+      "tree_after": "5d346994939f8b9dc1be86f028a68d6086551192c3631ac578dc90b7e759734a",
+      "files_after": [
+        "auth.py",
+        "colors.py"
+      ],
+      "files_read": [
+        "auth.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_3ab4c94ee663",
+          "path": "auth.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "673d13f80cf1c261a75f1b49991e9592a3da476446f35818374a7f22c06a5707",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.299228,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "colors.py",
+            "score": 10.0,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "verify_token"
+            ],
+            "estimated_tokens": 28,
+            "excerpt": "colors.py [python]\ndef verify_token(t)\ndef verify_token(t):\n    return t == 'ok'  # red herring \u2014 leave alone"
+          },
+          {
+            "path": "auth.py",
+            "score": 10.0,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "verify_token"
+            ],
+            "estimated_tokens": 19,
+            "excerpt": "auth.py [python]\ndef verify_token(t)\ndef verify_token(t):\n    return False"
+          }
+        ],
+        "map": {
+          "auth.py": {
+            "path": "auth.py",
+            "language": "python",
+            "sha256": "673d13f80cf1c261a75f1b49991e9592a3da476446f35818374a7f22c06a5707",
+            "symbols": [
+              "verify_token"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "colors.py": {
+            "path": "colors.py",
+            "language": "python",
+            "sha256": "168f3ea0f515f764da100bf9bc56aaf89892dd2cd3985555d1ddd1f953e827c9",
+            "symbols": [
+              "verify_token"
+            ],
+            "imports": [],
+            "references": [
+              "t"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_3ab4c94ee663",
+            "path": "auth.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "673d13f80cf1c261a75f1b49991e9592a3da476446f35818374a7f22c06a5707",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.299228,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "auth.py": {
+            "path": "auth.py",
+            "sha256": "673d13f80cf1c261a75f1b49991e9592a3da476446f35818374a7f22c06a5707",
+            "size": 38,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "46f2f0f71188442d",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['auth.py', 'colors.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: colors.py(path_match=2,symbol_match=1), auth.py(path_match=2,symbol_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read auth.py (38 bytes) sha=673d13f80cf1 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L14",
+      "family": "misleading_symbol",
+      "description": "parse() in parser.py is broken. utils/parse.py is a red herring \u2014 fix only parser.py.",
+      "frozen_commit": "6d460a6b86aed7215a05f70665ef1ed04ea992624f63c2dda4a68025cbc19093",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing parser.py:'strip'"
+      ],
+      "elapsed_s": 0.044,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "6d460a6b86aed7215a05f70665ef1ed04ea992624f63c2dda4a68025cbc19093",
+      "tree_after": "6d460a6b86aed7215a05f70665ef1ed04ea992624f63c2dda4a68025cbc19093",
+      "files_after": [
+        "parser.py",
+        "utils/parse.py"
+      ],
+      "files_read": [
+        "parser.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_7c600864b516",
+          "path": "parser.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "f217f4dfcb458d39b55a934cb4cc7bdf4f282b8e580f067f3b95f37efadf42a6",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.342166,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "utils/parse.py",
+            "score": 13.0,
+            "reason": [
+              "path_match=3",
+              "symbol_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "parse"
+            ],
+            "estimated_tokens": 18,
+            "excerpt": "utils/parse.py [python]\ndef parse(s)\ndef parse(s):\n    return s.strip()"
+          },
+          {
+            "path": "parser.py",
+            "score": 10.0,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "parse"
+            ],
+            "estimated_tokens": 16,
+            "excerpt": "parser.py [python]\ndef parse(s)\ndef parse(s):\n    return None"
+          }
+        ],
+        "map": {
+          "parser.py": {
+            "path": "parser.py",
+            "language": "python",
+            "sha256": "f217f4dfcb458d39b55a934cb4cc7bdf4f282b8e580f067f3b95f37efadf42a6",
+            "symbols": [
+              "parse"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "utils/parse.py": {
+            "path": "utils/parse.py",
+            "language": "python",
+            "sha256": "9975ea4cfaefa083757410b8bcdc954ab0a358155ca08814d9399a8f19c0da36",
+            "symbols": [
+              "parse"
+            ],
+            "imports": [],
+            "references": [
+              "s",
+              "strip"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_7c600864b516",
+            "path": "parser.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "f217f4dfcb458d39b55a934cb4cc7bdf4f282b8e580f067f3b95f37efadf42a6",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.342166,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "parser.py": {
+            "path": "parser.py",
+            "sha256": "f217f4dfcb458d39b55a934cb4cc7bdf4f282b8e580f067f3b95f37efadf42a6",
+            "size": 30,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "b9a349d1ba2543eb",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['parser.py', 'utils/parse.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: utils/parse.py(path_match=3,symbol_match=1), parser.py(path_match=2,symbol_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read parser.py (30 bytes) sha=f217f4dfcb45 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: parse.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: parse.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: parse.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: parse.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: parse.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: parse.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L15",
+      "family": "misleading_symbol",
+      "description": "score() in game.py returns 0. metrics.py also has score() \u2014 fix game only.",
+      "frozen_commit": "c255b2436a3bfbf82b930ac5654f06a6bd99a83d41cb59b96de292692ac641a5",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing game.py:'return hits'",
+        "still has bad game.py:'return 0'"
+      ],
+      "elapsed_s": 0.037,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "c255b2436a3bfbf82b930ac5654f06a6bd99a83d41cb59b96de292692ac641a5",
+      "tree_after": "c255b2436a3bfbf82b930ac5654f06a6bd99a83d41cb59b96de292692ac641a5",
+      "files_after": [
+        "game.py",
+        "metrics.py"
+      ],
+      "files_read": [
+        "game.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_b775476b5b2f",
+          "path": "game.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "1e76f2107b7c2a8a5107ba4ce064ef10f9a3fd5db783bb51ea45a09e17d2f7b0",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.380592,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "missing_output",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "metrics.py",
+            "score": 10.0,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "score"
+            ],
+            "estimated_tokens": 19,
+            "excerpt": "metrics.py [python]\ndef score(hits)\ndef score(hits):\n    return hits * 10"
+          },
+          {
+            "path": "game.py",
+            "score": 10.0,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "score"
+            ],
+            "estimated_tokens": 16,
+            "excerpt": "game.py [python]\ndef score(hits)\ndef score(hits):\n    return 0"
+          }
+        ],
+        "map": {
+          "game.py": {
+            "path": "game.py",
+            "language": "python",
+            "sha256": "1e76f2107b7c2a8a5107ba4ce064ef10f9a3fd5db783bb51ea45a09e17d2f7b0",
+            "symbols": [
+              "score"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "metrics.py": {
+            "path": "metrics.py",
+            "language": "python",
+            "sha256": "2748bcf146657d8e2c4f23f54c87e04e712a544056a157a575dfb65f676fd267",
+            "symbols": [
+              "score"
+            ],
+            "imports": [],
+            "references": [
+              "hits"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_b775476b5b2f",
+            "path": "game.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "1e76f2107b7c2a8a5107ba4ce064ef10f9a3fd5db783bb51ea45a09e17d2f7b0",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.380592,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "game.py": {
+            "path": "game.py",
+            "sha256": "1e76f2107b7c2a8a5107ba4ce064ef10f9a3fd5db783bb51ea45a09e17d2f7b0",
+            "size": 30,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "008c6e70de6d4151",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['game.py', 'metrics.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: metrics.py(path_match=2,symbol_match=1), game.py(path_match=2,symbol_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read game.py (30 bytes) sha=1e76f2107b7c rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "blocked DONE \u2014 game/UI needs index.html, not a terminal mock"
+        },
+        {
+          "event": "agent_note",
+          "text": "blocked DONE \u2014 game/UI needs index.html, not a terminal mock"
+        },
+        {
+          "event": "agent_note",
+          "text": "blocked DONE \u2014 game/UI needs index.html, not a terminal mock"
+        },
+        {
+          "event": "agent_note",
+          "text": "blocked DONE \u2014 game/UI needs index.html, not a terminal mock"
+        },
+        {
+          "event": "agent_note",
+          "text": "blocked DONE \u2014 game/UI needs index.html, not a terminal mock"
+        },
+        {
+          "event": "agent_note",
+          "text": "blocked DONE \u2014 game/UI needs index.html, not a terminal mock"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L16",
+      "family": "misleading_symbol",
+      "description": "normalize in text_ops.py should strip; string_utils.normalize is red herring.",
+      "frozen_commit": "5ce3ef4169e2de59ad7791fc74d044a43aa197685016060f3773250cedea7695",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing text_ops.py:'strip'"
+      ],
+      "elapsed_s": 0.035,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "5ce3ef4169e2de59ad7791fc74d044a43aa197685016060f3773250cedea7695",
+      "tree_after": "5ce3ef4169e2de59ad7791fc74d044a43aa197685016060f3773250cedea7695",
+      "files_after": [
+        "string_utils.py",
+        "text_ops.py"
+      ],
+      "files_read": [
+        "text_ops.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_4bc9ba046b58",
+          "path": "text_ops.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "5342e922446e5ee167335172ad6270fb9656c74ad00b5cf9084a992b5be4918f",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.417314,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "string_utils.py",
+            "score": 10.8,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "reference_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "normalize"
+            ],
+            "estimated_tokens": 22,
+            "excerpt": "string_utils.py [python]\ndef normalize(s)\ndef normalize(s):\n    return s.strip().lower()"
+          },
+          {
+            "path": "text_ops.py",
+            "score": 10.0,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "normalize"
+            ],
+            "estimated_tokens": 17,
+            "excerpt": "text_ops.py [python]\ndef normalize(s)\ndef normalize(s):\n    return s"
+          }
+        ],
+        "map": {
+          "string_utils.py": {
+            "path": "string_utils.py",
+            "language": "python",
+            "sha256": "f7a0dcbf91891f8900e796eccce14fa213949f4e293f4a86dd2352470baf025d",
+            "symbols": [
+              "normalize"
+            ],
+            "imports": [],
+            "references": [
+              "lower",
+              "s",
+              "strip"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "text_ops.py": {
+            "path": "text_ops.py",
+            "language": "python",
+            "sha256": "5342e922446e5ee167335172ad6270fb9656c74ad00b5cf9084a992b5be4918f",
+            "symbols": [
+              "normalize"
+            ],
+            "imports": [],
+            "references": [
+              "s"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_4bc9ba046b58",
+            "path": "text_ops.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "5342e922446e5ee167335172ad6270fb9656c74ad00b5cf9084a992b5be4918f",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.417314,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "text_ops.py": {
+            "path": "text_ops.py",
+            "sha256": "5342e922446e5ee167335172ad6270fb9656c74ad00b5cf9084a992b5be4918f",
+            "size": 31,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "66639feebf304fe4",
+        "adaptive_routing_applied": false,
+        "task_bucket": "factual_qa:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=factual_qa:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['text_ops.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: string_utils.py(path_match=2,symbol_match=1), text_ops.py(path_match=2,symbol_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read text_ops.py (31 bytes) sha=5342e922446e rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L17",
+      "family": "multi_file_feature",
+      "description": "Add helper.py with shout(s)->upper, and update app.py to print shout('hi').",
+      "frozen_commit": "ae0f990e3686a1e262ad64665a01df07478a32330606edbee42b3b064ef37c4d",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing helper.py:'shout'",
+        "missing app.py:'shout'"
+      ],
+      "elapsed_s": 0.042,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "ae0f990e3686a1e262ad64665a01df07478a32330606edbee42b3b064ef37c4d",
+      "tree_after": "ae0f990e3686a1e262ad64665a01df07478a32330606edbee42b3b064ef37c4d",
+      "files_after": [
+        "app.py"
+      ],
+      "files_read": [
+        "app.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_aef40a815486",
+          "path": "app.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "029c70f48bda10bd45463e0c7398d778605b5262a3bf9c3e091000c978e87a8a",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.4591732,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "app.py",
+            "score": 6.8,
+            "reason": [
+              "path_match=2",
+              "reference_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "main"
+            ],
+            "estimated_tokens": 14,
+            "excerpt": "app.py [python]\ndef main()\ndef main():\n    print('hi')"
+          }
+        ],
+        "map": {
+          "app.py": {
+            "path": "app.py",
+            "language": "python",
+            "sha256": "029c70f48bda10bd45463e0c7398d778605b5262a3bf9c3e091000c978e87a8a",
+            "symbols": [
+              "main"
+            ],
+            "imports": [],
+            "references": [
+              "print"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_aef40a815486",
+            "path": "app.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "029c70f48bda10bd45463e0c7398d778605b5262a3bf9c3e091000c978e87a8a",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.4591732,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "app.py": {
+            "path": "app.py",
+            "sha256": "029c70f48bda10bd45463e0c7398d778605b5262a3bf9c3e091000c978e87a8a",
+            "size": 28,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "12e0f9b6a90f4b87",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['helper.py', 'app.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: app.py(path_match=2,reference_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read app.py (28 bytes) sha=029c70f48bda rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: helper.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: helper.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: helper.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: helper.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: helper.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: helper.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L18",
+      "family": "multi_file_feature",
+      "description": "Split main.py into a_mod.py (a()->1), b_mod.py (b()->2), and main that prints a()+b().",
+      "frozen_commit": "142840bd3b5959a466b751c6ddbfcfb25314f7e5ee14bf9d39175461166a5fc8",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing a_mod.py:'def a'",
+        "missing b_mod.py:'def b'",
+        "missing main.py:'a_mod'"
+      ],
+      "elapsed_s": 0.058,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "142840bd3b5959a466b751c6ddbfcfb25314f7e5ee14bf9d39175461166a5fc8",
+      "tree_after": "2aee8059d0633ebae8f4b67f7119691ab1afd5895463ecca880f510e979cd6bc",
+      "files_after": [
+        "_lolm_contract_probe.py",
+        "main.py"
+      ],
+      "files_read": [
+        "main.py",
+        "_lolm_contract_probe.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_a8e9a1612535",
+          "path": "main.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "0b39648938df3e29f13dd554984cdf96e7432d2845b21e01e54121305e357a73",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.4954932,
+          "prior_existed": false,
+          "created_path": ""
+        },
+        {
+          "mutation_id": "mut_087a600d482e",
+          "path": "_lolm_contract_probe.py",
+          "operation": "create",
+          "state": "applied",
+          "selection_reason": "contract-probe",
+          "read_before_edit": true,
+          "read_sha256": "",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "b8f0309eb0de0fada95681e6489e33cb5ae66f4cf569ca4b99c425e3a636493c",
+          "compare_and_swap_passed": true,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.496864,
+          "prior_existed": false,
+          "created_path": "_lolm_contract_probe.py"
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "main.py",
+            "score": 6.693147180559945,
+            "reason": [
+              "path_match=2",
+              "centrality=1.39",
+              "language_match"
+            ],
+            "symbols": [
+              "a",
+              "b"
+            ],
+            "estimated_tokens": 19,
+            "excerpt": "main.py [python]\ndef a()\ndef a():\n    return 1\ndef b()\ndef b():\n    return 2"
+          }
+        ],
+        "map": {
+          "main.py": {
+            "path": "main.py",
+            "language": "python",
+            "sha256": "0b39648938df3e29f13dd554984cdf96e7432d2845b21e01e54121305e357a73",
+            "symbols": [
+              "a",
+              "b"
+            ],
+            "imports": [],
+            "references": [
+              "a",
+              "b",
+              "print"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "_lolm_contract_probe.py": {
+            "path": "_lolm_contract_probe.py",
+            "language": "python",
+            "sha256": "b8f0309eb0de0fada95681e6489e33cb5ae66f4cf569ca4b99c425e3a636493c",
+            "symbols": [],
+            "imports": [
+              "importlib"
+            ],
+            "references": [
+              "_f",
+              "_r",
+              "getattr",
+              "import_module",
+              "importlib",
+              "m",
+              "print"
+            ],
+            "test_links": [],
+            "revision": 1,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_a8e9a1612535",
+            "path": "main.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "0b39648938df3e29f13dd554984cdf96e7432d2845b21e01e54121305e357a73",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.4954932,
+            "prior_existed": false,
+            "created_path": ""
+          },
+          {
+            "mutation_id": "mut_087a600d482e",
+            "path": "_lolm_contract_probe.py",
+            "operation": "create",
+            "state": "applied",
+            "selection_reason": "contract-probe",
+            "read_before_edit": true,
+            "read_sha256": "",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "b8f0309eb0de0fada95681e6489e33cb5ae66f4cf569ca4b99c425e3a636493c",
+            "compare_and_swap_passed": true,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.496864,
+            "prior_existed": false,
+            "created_path": "_lolm_contract_probe.py"
+          }
+        ],
+        "reads": {
+          "main.py": {
+            "path": "main.py",
+            "sha256": "0b39648938df3e29f13dd554984cdf96e7432d2845b21e01e54121305e357a73",
+            "size": 59,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          },
+          "_lolm_contract_probe.py": {
+            "path": "_lolm_contract_probe.py",
+            "sha256": "b8f0309eb0de0fada95681e6489e33cb5ae66f4cf569ca4b99c425e3a636493c",
+            "size": 289,
+            "revision": 1,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "6fa436f7a1c943be",
+        "adaptive_routing_applied": false,
+        "task_bucket": "chat:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=chat:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Qwen3-"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['main.py', 'a_mod.py', 'b_mod.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: main.py(path_match=2,centrality=1.39)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read main.py (59 bytes) sha=0b39648938df rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: a_mod.py, b_mod.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: a_mod.py, b_mod.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: a_mod.py, b_mod.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: a_mod.py, b_mod.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: a_mod.py, b_mod.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: a_mod.py, b_mod.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "pre-DONE contract probe (TASK examples + reject cases)"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L19",
+      "family": "multi_file_feature",
+      "description": "Add test_prod.py unittest for double() in prod.py (double(2)==4).",
+      "frozen_commit": "c59ce0b4f460ec370a7fcd701344cc04b7863ca4f3d058f349a16e80fbbf6dea",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing test_prod.py:'double'"
+      ],
+      "elapsed_s": 0.034,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "c59ce0b4f460ec370a7fcd701344cc04b7863ca4f3d058f349a16e80fbbf6dea",
+      "tree_after": "c59ce0b4f460ec370a7fcd701344cc04b7863ca4f3d058f349a16e80fbbf6dea",
+      "files_after": [
+        "prod.py"
+      ],
+      "files_read": [
+        "prod.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_a7299bff8b0b",
+          "path": "prod.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "0adcb531f78a384cb8bbd8939cd48524aab0dcfd4aa17deca3d3eef5598e809e",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.552371,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "prod.py",
+            "score": 10.0,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "language_match"
+            ],
+            "symbols": [
+              "double"
+            ],
+            "estimated_tokens": 16,
+            "excerpt": "prod.py [python]\ndef double(x)\ndef double(x):\n    return x * 2"
+          }
+        ],
+        "map": {
+          "prod.py": {
+            "path": "prod.py",
+            "language": "python",
+            "sha256": "0adcb531f78a384cb8bbd8939cd48524aab0dcfd4aa17deca3d3eef5598e809e",
+            "symbols": [
+              "double"
+            ],
+            "imports": [],
+            "references": [
+              "x"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_a7299bff8b0b",
+            "path": "prod.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "0adcb531f78a384cb8bbd8939cd48524aab0dcfd4aa17deca3d3eef5598e809e",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.552371,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "prod.py": {
+            "path": "prod.py",
+            "sha256": "0adcb531f78a384cb8bbd8939cd48524aab0dcfd4aa17deca3d3eef5598e809e",
+            "size": 32,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "87874aaf77c04a2a",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['test_prod.py', 'prod.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: prod.py(path_match=2,symbol_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read prod.py (32 bytes) sha=0adcb531f78a rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: test_prod.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: test_prod.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: test_prod.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: test_prod.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: test_prod.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: test_prod.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L20",
+      "family": "multi_file_feature",
+      "description": "Create server.js handle()->{ok:true} and update client.js to require it.",
+      "frozen_commit": "9b672f4f478af071707c42ff56191300b367eeb982c5ac6f4fdb7ad030cb0fa9",
+      "language": "javascript",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing server.js:'ok'",
+        "missing client.js:'server'"
+      ],
+      "elapsed_s": 0.035,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "9b672f4f478af071707c42ff56191300b367eeb982c5ac6f4fdb7ad030cb0fa9",
+      "tree_after": "9b672f4f478af071707c42ff56191300b367eeb982c5ac6f4fdb7ad030cb0fa9",
+      "files_after": [
+        "client.js"
+      ],
+      "files_read": [
+        "client.js"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_c699009bad9f",
+          "path": "client.js",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "009f2e48a3ceb286b12e42cf8f6fab61165e4fefa6971f1c5bb2541a4b3baa4f",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.5878248,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "client.js",
+            "score": 6.0,
+            "reason": [
+              "path_match=2"
+            ],
+            "symbols": [
+              "call"
+            ],
+            "estimated_tokens": 18,
+            "excerpt": "client.js [javascript]\nfunction call()\nfunction call(){ return null; }"
+          }
+        ],
+        "map": {
+          "client.js": {
+            "path": "client.js",
+            "language": "javascript",
+            "sha256": "009f2e48a3ceb286b12e42cf8f6fab61165e4fefa6971f1c5bb2541a4b3baa4f",
+            "symbols": [
+              "call"
+            ],
+            "imports": [],
+            "references": [
+              "exports",
+              "function",
+              "module",
+              "null",
+              "return"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_c699009bad9f",
+            "path": "client.js",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "009f2e48a3ceb286b12e42cf8f6fab61165e4fefa6971f1c5bb2541a4b3baa4f",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.5878248,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "client.js": {
+            "path": "client.js",
+            "sha256": "009f2e48a3ceb286b12e42cf8f6fab61165e4fefa6971f1c5bb2541a4b3baa4f",
+            "size": 55,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "b0e02239be4b473d",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:javascript"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:javascript baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qw"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=['server.js', 'client.js'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: client.js(path_match=2)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read client.js (55 bytes) sha=009f2e48a3ce rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: server.js \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: server.js \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: server.js \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: server.js \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: server.js \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: server.js \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L21",
+      "family": "non_python",
+      "description": "React component App.jsx uses className 'x'; change to 'app'.",
+      "frozen_commit": "535c7b68eea0c7598e559352e9179c0d44890bd8b7018e313d41fef5ebe87257",
+      "language": "javascript",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing App.jsx:\"className='app'\""
+      ],
+      "elapsed_s": 0.034,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "535c7b68eea0c7598e559352e9179c0d44890bd8b7018e313d41fef5ebe87257",
+      "tree_after": "535c7b68eea0c7598e559352e9179c0d44890bd8b7018e313d41fef5ebe87257",
+      "files_after": [
+        "App.jsx"
+      ],
+      "files_read": [
+        "App.jsx"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_008c9f45445b",
+          "path": "App.jsx",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "c6038bd095f35711138f92321bc164b16aea950e65217011f706962cbf4049d8",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.6232011,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "App.jsx",
+            "score": 10.8,
+            "reason": [
+              "path_match=2",
+              "symbol_match=1",
+              "reference_match=1"
+            ],
+            "symbols": [
+              "App"
+            ],
+            "estimated_tokens": 17,
+            "excerpt": "App.jsx [javascript]\nfunction App()\nexport default function App(){"
+          }
+        ],
+        "map": {
+          "App.jsx": {
+            "path": "App.jsx",
+            "language": "javascript",
+            "sha256": "c6038bd095f35711138f92321bc164b16aea950e65217011f706962cbf4049d8",
+            "symbols": [
+              "App"
+            ],
+            "imports": [],
+            "references": [
+              "Hello",
+              "className",
+              "default",
+              "div",
+              "export",
+              "function",
+              "return",
+              "x"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_008c9f45445b",
+            "path": "App.jsx",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "c6038bd095f35711138f92321bc164b16aea950e65217011f706962cbf4049d8",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.6232011,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "App.jsx": {
+            "path": "App.jsx",
+            "sha256": "c6038bd095f35711138f92321bc164b16aea950e65217011f706962cbf4049d8",
+            "size": 74,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "1ad30803545d4efe",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:javascript"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:javascript baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qw"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=['App.js'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: App.jsx(path_match=2,symbol_match=1)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read App.jsx (74 bytes) sha=c6038bd095f3 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L22",
+      "family": "non_python",
+      "description": "CI workflow uses node 12; upgrade node-version to 20.",
+      "frozen_commit": "9b4563f4de8b8b8155b9864282d82c29d121db861a253ec2b0513f3d35d72273",
+      "language": "yaml",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing .github/workflows/ci.yml:\"node-version: '20'\""
+      ],
+      "elapsed_s": 0.034,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "9b4563f4de8b8b8155b9864282d82c29d121db861a253ec2b0513f3d35d72273",
+      "tree_after": "9b4563f4de8b8b8155b9864282d82c29d121db861a253ec2b0513f3d35d72273",
+      "files_after": [
+        ".github/workflows/ci.yml"
+      ],
+      "files_read": [
+        ".github/workflows/ci.yml"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_14bb1cf6bc73",
+          "path": ".github/workflows/ci.yml",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "440b402100a6d4107d68c691d6c3c171edc5e4046131198b530b3e53dad7bed1",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.6572511,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": ".github/workflows/ci.yml",
+            "score": 6.2,
+            "reason": [
+              "path_match=1",
+              "reference_match=4"
+            ],
+            "symbols": [],
+            "estimated_tokens": 45,
+            "excerpt": ".github/workflows/ci.yml [text]\nname: ci\non: [push]\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n          node-version: '12'"
+          }
+        ],
+        "map": {
+          ".github/workflows/ci.yml": {
+            "path": ".github/workflows/ci.yml",
+            "language": "text",
+            "sha256": "440b402100a6d4107d68c691d6c3c171edc5e4046131198b530b3e53dad7bed1",
+            "symbols": [],
+            "imports": [],
+            "references": [
+              "actions",
+              "ci",
+              "jobs",
+              "latest",
+              "name",
+              "node",
+              "on",
+              "push",
+              "runs",
+              "setup",
+              "steps",
+              "t",
+              "ubuntu",
+              "uses",
+              "v4",
+              "version",
+              "with"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_14bb1cf6bc73",
+            "path": ".github/workflows/ci.yml",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "440b402100a6d4107d68c691d6c3c171edc5e4046131198b530b3e53dad7bed1",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.6572511,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          ".github/workflows/ci.yml": {
+            "path": ".github/workflows/ci.yml",
+            "sha256": "440b402100a6d4107d68c691d6c3c171edc5e4046131198b530b3e53dad7bed1",
+            "size": 148,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "fda7c135ce1341c3",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:any"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:any baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Qwen"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=[] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: .github/workflows/ci.yml(path_match=1,reference_match=4)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read .github/workflows/ci.yml (148 bytes) sha=440b402100a6 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L23",
+      "family": "non_python",
+      "description": "styles.css body color is red; change to #222.",
+      "frozen_commit": "98bc8e921c1858b3853abd1bae0ad5c42ccb071098c39f4f5631a1fc9bd08fc4",
+      "language": "css",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing styles.css:'#222'"
+      ],
+      "elapsed_s": 0.04,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "98bc8e921c1858b3853abd1bae0ad5c42ccb071098c39f4f5631a1fc9bd08fc4",
+      "tree_after": "98bc8e921c1858b3853abd1bae0ad5c42ccb071098c39f4f5631a1fc9bd08fc4",
+      "files_after": [
+        "styles.css"
+      ],
+      "files_read": [
+        "styles.css"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_a3cb9a39bc22",
+          "path": "styles.css",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "e9439c00282535c2e83ddff8f504087d3df221d58c9867425fb27cd7d1cb9e2f",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.697315,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "styles.css",
+            "score": 8.4,
+            "reason": [
+              "path_match=2",
+              "reference_match=3"
+            ],
+            "symbols": [],
+            "estimated_tokens": 16,
+            "excerpt": "styles.css [css]\nbody { color: red; font-family: sans-serif; }"
+          }
+        ],
+        "map": {
+          "styles.css": {
+            "path": "styles.css",
+            "language": "css",
+            "sha256": "e9439c00282535c2e83ddff8f504087d3df221d58c9867425fb27cd7d1cb9e2f",
+            "symbols": [],
+            "imports": [],
+            "references": [
+              "body",
+              "color",
+              "family",
+              "font",
+              "red",
+              "sans",
+              "serif"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_a3cb9a39bc22",
+            "path": "styles.css",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "e9439c00282535c2e83ddff8f504087d3df221d58c9867425fb27cd7d1cb9e2f",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.697315,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "styles.css": {
+            "path": "styles.css",
+            "sha256": "e9439c00282535c2e83ddff8f504087d3df221d58c9867425fb27cd7d1cb9e2f",
+            "size": 46,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "145a09e591f348b5",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:any"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:any baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Qwen"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=['styles.css'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: styles.css(path_match=2,reference_match=3)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read styles.css (46 bytes) sha=e9439c002825 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L24",
+      "family": "non_python",
+      "description": "package.json name is wrong-app; set name to good-app.",
+      "frozen_commit": "e8bad39d91b1f50cba630720382bc26e8da00f8d31806e1a0aa90c076b68f524",
+      "language": "json",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing package.json:'good-app'"
+      ],
+      "elapsed_s": 0.035,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "e8bad39d91b1f50cba630720382bc26e8da00f8d31806e1a0aa90c076b68f524",
+      "tree_after": "e8bad39d91b1f50cba630720382bc26e8da00f8d31806e1a0aa90c076b68f524",
+      "files_after": [
+        "package.json"
+      ],
+      "files_read": [
+        "package.json"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_7dbc3328ad5e",
+          "path": "package.json",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "d9d6b860f0414efc0e477adce25505923f0fa64672284d4bd91b368155bbf0ba",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.732505,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "unknown",
+        "selection": [
+          {
+            "path": "package.json",
+            "score": 8.4,
+            "reason": [
+              "path_match=2",
+              "reference_match=3"
+            ],
+            "symbols": [],
+            "estimated_tokens": 17,
+            "excerpt": "package.json [text]\n{\n  \"name\": \"wrong-app\",\n  \"version\": \"1.0.0\"\n}"
+          }
+        ],
+        "map": {
+          "package.json": {
+            "path": "package.json",
+            "language": "text",
+            "sha256": "d9d6b860f0414efc0e477adce25505923f0fa64672284d4bd91b368155bbf0ba",
+            "symbols": [],
+            "imports": [],
+            "references": [
+              "app",
+              "name",
+              "version",
+              "wrong"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_7dbc3328ad5e",
+            "path": "package.json",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "d9d6b860f0414efc0e477adce25505923f0fa64672284d4bd91b368155bbf0ba",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.732505,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "package.json": {
+            "path": "package.json",
+            "sha256": "d9d6b860f0414efc0e477adce25505923f0fa64672284d4bd91b368155bbf0ba",
+            "size": 48,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "d140cba63abc4461",
+        "adaptive_routing_applied": false,
+        "task_bucket": "factual_qa:javascript"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=factual_qa:javascript baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (unknown) required=['package.js'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: package.json(path_match=2,reference_match=3)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=exists.path desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read package.json (48 bytes) sha=d9d6b860f041 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L25",
+      "family": "stale_cas",
+      "description": "cfg.py has DEBUG=False. Read it, then set DEBUG=True. Do not invent other files.",
+      "frozen_commit": "424b4f2d7e9e2564a499fd4d605dd34427825bea6f24383fd26cac117de4acf8",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing cfg.py:'DEBUG=True'"
+      ],
+      "elapsed_s": 0.047,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "424b4f2d7e9e2564a499fd4d605dd34427825bea6f24383fd26cac117de4acf8",
+      "tree_after": "424b4f2d7e9e2564a499fd4d605dd34427825bea6f24383fd26cac117de4acf8",
+      "files_after": [
+        "cfg.py"
+      ],
+      "files_read": [
+        "cfg.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_9ad7db05d79f",
+          "path": "cfg.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "060aad8e13133a1a15cd3c9f90304c28d36747421a26fc295092885c8f67df4a",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.779453,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "cfg.py",
+            "score": 6.0,
+            "reason": [
+              "path_match=2",
+              "language_match"
+            ],
+            "symbols": [],
+            "estimated_tokens": 7,
+            "excerpt": "cfg.py [python]\nDEBUG=False"
+          }
+        ],
+        "map": {
+          "cfg.py": {
+            "path": "cfg.py",
+            "language": "python",
+            "sha256": "060aad8e13133a1a15cd3c9f90304c28d36747421a26fc295092885c8f67df4a",
+            "symbols": [],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_9ad7db05d79f",
+            "path": "cfg.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "060aad8e13133a1a15cd3c9f90304c28d36747421a26fc295092885c8f67df4a",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.779453,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "cfg.py": {
+            "path": "cfg.py",
+            "sha256": "060aad8e13133a1a15cd3c9f90304c28d36747421a26fc295092885c8f67df4a",
+            "size": 12,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "ce9dfe5643b24b65",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['cfg.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: cfg.py(path_match=2,language_match)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read cfg.py (12 bytes) sha=060aad8e1313 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L26",
+      "family": "stale_cas",
+      "description": "Do NOT edit a.py without reading it first. If you try a blind rewrite it must be rejected. Prefer: READ then set x=2.",
+      "frozen_commit": "e4d18bfbb07e404e0f0c0debb192b16ed9f42f31d739049f1f437cefd06fc84f",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "safely unchanged (capability miss or reject)"
+      ],
+      "elapsed_s": 0.048,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "e4d18bfbb07e404e0f0c0debb192b16ed9f42f31d739049f1f437cefd06fc84f",
+      "tree_after": "e4d18bfbb07e404e0f0c0debb192b16ed9f42f31d739049f1f437cefd06fc84f",
+      "files_after": [
+        "a.py"
+      ],
+      "files_read": [
+        "a.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_af88b3d0d644",
+          "path": "a.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "98752ee28d5484bdc2814fb70adb6a0b2fb31f6a9b8ee7ae81fd2fc9cf300b3b",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.827893,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "a.py",
+            "score": 3.0,
+            "reason": [
+              "path_match=1",
+              "language_match"
+            ],
+            "symbols": [],
+            "estimated_tokens": 5,
+            "excerpt": "a.py [python]\nx=1"
+          }
+        ],
+        "map": {
+          "a.py": {
+            "path": "a.py",
+            "language": "python",
+            "sha256": "98752ee28d5484bdc2814fb70adb6a0b2fb31f6a9b8ee7ae81fd2fc9cf300b3b",
+            "symbols": [],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_af88b3d0d644",
+            "path": "a.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "98752ee28d5484bdc2814fb70adb6a0b2fb31f6a9b8ee7ae81fd2fc9cf300b3b",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.827893,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "a.py": {
+            "path": "a.py",
+            "sha256": "98752ee28d5484bdc2814fb70adb6a0b2fb31f6a9b8ee7ae81fd2fc9cf300b3b",
+            "size": 4,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "7c3778bbd30c43d9",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['a.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: a.py(path_match=1,language_match)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read a.py (4 bytes) sha=98752ee28d54 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L27",
+      "family": "regression_rollback",
+      "description": "good.py is correct. Do not break it. You may add note.txt with 'ok'.",
+      "frozen_commit": "e6dabed3aab7e122d32d056f9496c5d0a0c364d17f2fed7f25b779fb5e5ac92f",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing note.txt:'ok'"
+      ],
+      "elapsed_s": 0.037,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "e6dabed3aab7e122d32d056f9496c5d0a0c364d17f2fed7f25b779fb5e5ac92f",
+      "tree_after": "e6dabed3aab7e122d32d056f9496c5d0a0c364d17f2fed7f25b779fb5e5ac92f",
+      "files_after": [
+        "good.py"
+      ],
+      "files_read": [
+        "good.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_321e9708f0eb",
+          "path": "good.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "5b76d0962c09ab4ee309fac65fad3568c97abdec983b405146ae3e86a235e352",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.8648791,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "good.py",
+            "score": 6.0,
+            "reason": [
+              "path_match=2",
+              "language_match"
+            ],
+            "symbols": [
+              "f"
+            ],
+            "estimated_tokens": 12,
+            "excerpt": "good.py [python]\ndef f()\ndef f():\n    return 1"
+          }
+        ],
+        "map": {
+          "good.py": {
+            "path": "good.py",
+            "language": "python",
+            "sha256": "5b76d0962c09ab4ee309fac65fad3568c97abdec983b405146ae3e86a235e352",
+            "symbols": [
+              "f"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_321e9708f0eb",
+            "path": "good.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "5b76d0962c09ab4ee309fac65fad3568c97abdec983b405146ae3e86a235e352",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.8648791,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "good.py": {
+            "path": "good.py",
+            "sha256": "5b76d0962c09ab4ee309fac65fad3568c97abdec983b405146ae3e86a235e352",
+            "size": 22,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "3b66686075494bc6",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['good.py', 'note.txt'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: good.py(path_match=2,language_match)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read good.py (22 bytes) sha=5b76d0962c09 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: note.txt \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: note.txt \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: note.txt \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: note.txt \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: note.txt \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: note.txt \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L28",
+      "family": "regression_rollback",
+      "description": "Keep working.py compiling. Fix only the comment typo '# bugy' -> '# bug'.",
+      "frozen_commit": "fc7584ca4b5276b23b11731c539c04435b839433166898b8b3078e4d3a7b5727",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing working.py:'# bug\\n'",
+        "still has bad working.py:'bugy'"
+      ],
+      "elapsed_s": 0.035,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "fc7584ca4b5276b23b11731c539c04435b839433166898b8b3078e4d3a7b5727",
+      "tree_after": "fc7584ca4b5276b23b11731c539c04435b839433166898b8b3078e4d3a7b5727",
+      "files_after": [
+        "working.py"
+      ],
+      "files_read": [
+        "working.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_108915b3c387",
+          "path": "working.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "be23e03e9e0d411b508b131e6b5d2e98dd6a66bee4c1b87f1c48d689f818ee91",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.902047,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "working.py",
+            "score": 6.0,
+            "reason": [
+              "path_match=2",
+              "language_match"
+            ],
+            "symbols": [
+              "ok"
+            ],
+            "estimated_tokens": 16,
+            "excerpt": "working.py [python]\ndef ok()\ndef ok():\n    return True  # bugy"
+          }
+        ],
+        "map": {
+          "working.py": {
+            "path": "working.py",
+            "language": "python",
+            "sha256": "be23e03e9e0d411b508b131e6b5d2e98dd6a66bee4c1b87f1c48d689f818ee91",
+            "symbols": [
+              "ok"
+            ],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_108915b3c387",
+            "path": "working.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "be23e03e9e0d411b508b131e6b5d2e98dd6a66bee4c1b87f1c48d689f818ee91",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.902047,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "working.py": {
+            "path": "working.py",
+            "sha256": "be23e03e9e0d411b508b131e6b5d2e98dd6a66bee4c1b87f1c48d689f818ee91",
+            "size": 34,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "026571bc6739465d",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['working.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: working.py(path_match=2,language_match)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read working.py (34 bytes) sha=be23e03e9e0d rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L29",
+      "family": "rename_delete_import",
+      "description": "legacy.py should be replaced by modern.py with the same VALUE=7, and main should import from modern.",
+      "frozen_commit": "74e8692f01d9f723fa97817a24a0ecbab18be6847fa69b4d4d6f5e70f7719ce7",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "missing modern.py:'VALUE'",
+        "missing main.py:'modern'"
+      ],
+      "elapsed_s": 0.037,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "74e8692f01d9f723fa97817a24a0ecbab18be6847fa69b4d4d6f5e70f7719ce7",
+      "tree_after": "74e8692f01d9f723fa97817a24a0ecbab18be6847fa69b4d4d6f5e70f7719ce7",
+      "files_after": [
+        "legacy.py",
+        "main.py"
+      ],
+      "files_read": [
+        "legacy.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_af9c83a8a1c5",
+          "path": "legacy.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "76b26c40fd1de8995c9a5457c2bd4cf363c42d1f88a66f4d583bc10295f2062a",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.938082,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "main.py",
+            "score": 6.8,
+            "reason": [
+              "path_match=2",
+              "reference_match=1",
+              "language_match"
+            ],
+            "symbols": [],
+            "estimated_tokens": 14,
+            "excerpt": "main.py [python]\nfrom legacy import VALUE\nprint(VALUE)"
+          },
+          {
+            "path": "legacy.py",
+            "score": 6.0,
+            "reason": [
+              "path_match=2",
+              "language_match"
+            ],
+            "symbols": [],
+            "estimated_tokens": 7,
+            "excerpt": "legacy.py [python]\nVALUE = 7"
+          }
+        ],
+        "map": {
+          "legacy.py": {
+            "path": "legacy.py",
+            "language": "python",
+            "sha256": "76b26c40fd1de8995c9a5457c2bd4cf363c42d1f88a66f4d583bc10295f2062a",
+            "symbols": [],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "main.py": {
+            "path": "main.py",
+            "language": "python",
+            "sha256": "1842c3bb78d61e53991eb01608fd6a16be1f80472e7e4e09708c67e3989ba554",
+            "symbols": [],
+            "imports": [
+              "legacy"
+            ],
+            "references": [
+              "VALUE",
+              "print"
+            ],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_af9c83a8a1c5",
+            "path": "legacy.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "76b26c40fd1de8995c9a5457c2bd4cf363c42d1f88a66f4d583bc10295f2062a",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.938082,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "legacy.py": {
+            "path": "legacy.py",
+            "sha256": "76b26c40fd1de8995c9a5457c2bd4cf363c42d1f88a66f4d583bc10295f2062a",
+            "size": 10,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "f4a4795b99d44789",
+        "adaptive_routing_applied": false,
+        "task_bucket": "unknown:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=unknown:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Qwe"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['legacy.py', 'modern.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: main.py(path_match=2,reference_match=1), legacy.py(path_match=2,language_match)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read legacy.py (10 bytes) sha=76b26c40fd1d rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: modern.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: modern.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: modern.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: modern.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: modern.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "agent_note",
+          "text": "required file missing: modern.py \u2014 redirecting to the requested path"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    },
+    {
+      "id": "L30",
+      "family": "rename_delete_import",
+      "description": "Remove dead.py (unused) and keep keep.py intact.",
+      "frozen_commit": "dd62f09f5ca1dd1359f6e1b2f2c7f976c7aa8ca34d6a22989591dedaba1359cc",
+      "language": "python",
+      "ok_competence": false,
+      "ok_trust": true,
+      "violations": [],
+      "notes": [
+        "still present dead.py"
+      ],
+      "elapsed_s": 0.04,
+      "branch_sha": "84a4bc5504505bfe80e0f0793d1fa34b053e19d5",
+      "tree_before": "dd62f09f5ca1dd1359f6e1b2f2c7f976c7aa8ca34d6a22989591dedaba1359cc",
+      "tree_after": "dd62f09f5ca1dd1359f6e1b2f2c7f976c7aa8ca34d6a22989591dedaba1359cc",
+      "files_after": [
+        "dead.py",
+        "keep.py"
+      ],
+      "files_read": [
+        "dead.py"
+      ],
+      "mutations": [
+        {
+          "mutation_id": "read_d0251ac9731b",
+          "path": "dead.py",
+          "operation": "read",
+          "state": "read",
+          "selection_reason": "",
+          "read_before_edit": true,
+          "read_sha256": "98752ee28d5484bdc2814fb70adb6a0b2fb31f6a9b8ee7ae81fd2fc9cf300b3b",
+          "pre_apply_sha256": "",
+          "post_apply_sha256": "",
+          "compare_and_swap_passed": false,
+          "accepted": false,
+          "rollback": false,
+          "rejection_reason": "",
+          "verification": {},
+          "selected_symbols": [],
+          "step": 0,
+          "ts": 1785647232.979411,
+          "prior_existed": false,
+          "created_path": ""
+        }
+      ],
+      "receipt_ok": false,
+      "receipt_verdict": "incomplete",
+      "mutation_gateway": {
+        "schema": "lolm.mutation_gateway.v1",
+        "primary_language": "python",
+        "selection": [
+          {
+            "path": "keep.py",
+            "score": 6.0,
+            "reason": [
+              "path_match=2",
+              "language_match"
+            ],
+            "symbols": [],
+            "estimated_tokens": 5,
+            "excerpt": "keep.py [python]\ny=1"
+          },
+          {
+            "path": "dead.py",
+            "score": 6.0,
+            "reason": [
+              "path_match=2",
+              "language_match"
+            ],
+            "symbols": [],
+            "estimated_tokens": 5,
+            "excerpt": "dead.py [python]\nx=1"
+          }
+        ],
+        "map": {
+          "dead.py": {
+            "path": "dead.py",
+            "language": "python",
+            "sha256": "98752ee28d5484bdc2814fb70adb6a0b2fb31f6a9b8ee7ae81fd2fc9cf300b3b",
+            "symbols": [],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          },
+          "keep.py": {
+            "path": "keep.py",
+            "language": "python",
+            "sha256": "df3f798a393bb8c8c18228d75842b4b2930be7b426e1e70bce1617e67662f098",
+            "symbols": [],
+            "imports": [],
+            "references": [],
+            "test_links": [],
+            "revision": 0,
+            "last_read_step": 0,
+            "last_modified_step": 0
+          }
+        },
+        "mutations": [
+          {
+            "mutation_id": "read_d0251ac9731b",
+            "path": "dead.py",
+            "operation": "read",
+            "state": "read",
+            "selection_reason": "",
+            "read_before_edit": true,
+            "read_sha256": "98752ee28d5484bdc2814fb70adb6a0b2fb31f6a9b8ee7ae81fd2fc9cf300b3b",
+            "pre_apply_sha256": "",
+            "post_apply_sha256": "",
+            "compare_and_swap_passed": false,
+            "accepted": false,
+            "rollback": false,
+            "rejection_reason": "",
+            "verification": {},
+            "selected_symbols": [],
+            "step": 0,
+            "ts": 1785647232.979411,
+            "prior_existed": false,
+            "created_path": ""
+          }
+        ],
+        "reads": {
+          "dead.py": {
+            "path": "dead.py",
+            "sha256": "98752ee28d5484bdc2814fb70adb6a0b2fb31f6a9b8ee7ae81fd2fc9cf300b3b",
+            "size": 4,
+            "revision": 0,
+            "scope": "full",
+            "step": 0,
+            "symbols": [],
+            "line_start": 0,
+            "line_end": 0
+          }
+        }
+      },
+      "shadow_telemetry": {
+        "record_id": "ae3e2402a1384784",
+        "adaptive_routing_applied": false,
+        "task_bucket": "repo_edit:python"
+      },
+      "events_summary": [
+        {
+          "event": "agent_note",
+          "text": "shadow router (passive): bucket=repo_edit:python baseline={'planner': 'moonshotai/Kimi-K2-Instruct', 'executor': 'Qwen/Q"
+        },
+        {
+          "event": "agent_note",
+          "text": "task state unavailable: No module named 'lolm.control.task_state'"
+        },
+        {
+          "event": "agent_note",
+          "text": "contract compiled (python) required=['dead.py', 'keep.py'] exact_count=None feasibility=executable"
+        },
+        {
+          "event": "agent_note",
+          "text": "repo selection: keep.py(path_match=2,language_match), dead.py(path_match=2,language_match)"
+        },
+        {
+          "event": "agent_note",
+          "text": "feasibility: verifier=syntax.python desktop_open=forbidden substitutes={}"
+        },
+        {
+          "event": "agent_note",
+          "text": "read dead.py (4 bytes) sha=98752ee28d54 rev=0"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "agent_note",
+          "text": "tried to finish without running the code \u2014 making it run first"
+        },
+        {
+          "event": "code_done",
+          "text": ""
+        }
+      ]
+    }
+  ],
+  "adaptive_routing": "disabled"
+}

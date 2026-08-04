@@ -164,6 +164,7 @@ const FLAG_DEFS = {
   "--help": ["help", "boolean"], "-h": ["help", "boolean"],
   "--version": ["version", "boolean"], "-V": ["version", "boolean"],
   "--all": ["all", "boolean"],
+  "--yes": ["yes", "boolean"], "-y": ["yes", "boolean"],
   "--fetch": ["fetch", "boolean"], "--stdout": ["stdout", "boolean"],
   "--base": ["base", "value"], "--timeout": ["timeout", "value"],
   "--idle-timeout": ["idleTimeout", "value"], "--save": ["save", "value"],
@@ -185,6 +186,9 @@ const COMMAND_FLAGS = {
   receipt: [...COMMON, "fetch"],
   memory: [...COMMON, "all", "id"],
   inspect: [...COMMON, "id", "conversation"],
+  last: [...COMMON, "id", "conversation"],
+  retry: [...COMMON, "yes", "id", "conversation", "quiet", "idleTimeout", "save", "receipt", "maxSteps"],
+  resume: [...COMMON, "yes", "id", "conversation", "quiet", "idleTimeout", "save", "receipt", "maxSteps"],
   config: ["json", "help"],
   whoami: ["json", "help"],
   help: ["help"],
@@ -292,6 +296,9 @@ ${bold("COMMANDS")}
   code <task...>        Agentic coding loop (jail). Fail-closed ship gate.
   ask <question...>     Agent answer + control stream. --fail-on red exits 1.
   build <app...>        Visual HTML app build.
+  last                  Session intent ledger (last ask/run/artifact/checkpoint).
+  retry [--yes]         Retry last failed/code run (session referent).
+  resume [--yes]        Resume terminated run from last checkpoint pointer.
   receipts              Recent sealed code receipts.
   receipt verify <file> Local hash + Ed25519 signature verification.
   status                API / model status + usage when available.
@@ -311,6 +318,7 @@ ${bold("FLAGS")}
   --fail-on red         ask: exit nonzero on red/incomplete proof
   --receipt <path>      write raw receipt JSON after code
   --max-steps <n>       code step cap
+  --yes                 confirm retry/resume without interactive prompt
   --json                machine-readable stdout
   --quiet, -q           less progress
 
@@ -436,10 +444,57 @@ async function receiptPublicKeys(flags) {
   ).map((key) => [key.key_id, key.public_key]));
 }
 
+async function persistLocalSessionFromReceipt(task, done, receipt, flags = {}) {
+  /** Write hosted run events into ~/.lolm/sessions so last/retry/resume work offline. */
+  try {
+    const dir = sessionDir();
+    await mkdir(dir, { recursive: true });
+    const sidRaw = receipt?.session_id || flags.conversation || done?.run_id || receipt?.run_id || `local_${Date.now()}`;
+    // Sanitize like the Python ledger (opaque / hashed)
+    let sid = String(sidRaw).replace(/[^A-Za-z0-9_.-]/g, "");
+    if (!sid || sid.includes("..") || sid.startsWith(".")) {
+      const { createHash } = await import("node:crypto");
+      sid = "sess_" + createHash("sha256").update(String(sidRaw)).digest("hex").slice(0, 16);
+    }
+    const path = join(dir, `${sid}.json`);
+    let prev = {};
+    try { prev = JSON.parse(await readFile(path, "utf8")); } catch { /* new */ }
+    const status = receipt?.verdict || (receipt?.ok ? "shipped" : "incomplete");
+    const resume = receipt?.resume_package || prev.resume_package || null;
+    const next = {
+      ...prev,
+      session_id: sid,
+      last_code_run_id: receipt?.run_id || done?.run_id || prev.last_code_run_id || "",
+      last_run_task: task || prev.last_run_task || "",
+      last_run_status: status,
+      last_failed_run_id: receipt?.ok ? (prev.last_failed_run_id || "") : (receipt?.run_id || done?.run_id || ""),
+      last_checkpoint_id: resume?.checkpoint_id || receipt?.last_known_green?.checkpoint_id || prev.last_checkpoint_id || "",
+      resume_token: resume?.resume_token || prev.resume_token || "",
+      workspace_snapshot: resume?.workspace_snapshot || prev.workspace_snapshot || {},
+      reliability_snapshot: resume?.reliability_snapshot || prev.reliability_snapshot || {},
+      failure_ledger: resume?.failure_ledger || prev.failure_ledger || {},
+      contract_snapshot: resume?.contract_snapshot || prev.contract_snapshot || {},
+      checkpoint_payload: resume?.checkpoint_payload || prev.checkpoint_payload || {},
+      artifact_ids: receipt?.files || done?.files || prev.artifact_ids || [],
+      updated_ts: Date.now() / 1000,
+      history: [
+        ...((prev.history || []).slice(-49)),
+        { kind: "code_run", run_id: receipt?.run_id || done?.run_id, task: String(task || "").slice(0, 300), status, ts: Date.now() / 1000 },
+      ],
+    };
+    await writeFile(path, JSON.stringify(next, null, 2), "utf8");
+    return next;
+  } catch {
+    return null;
+  }
+}
+
 async function cmdCode(task, flags) {
   let lastStep = -1;
   let manifest = null;
+  let sessionLedger = null;
   const opts = clientOpts(flags);
+  const resumePackage = flags.resumePackage || null;
 
   const result = await runCode({
     task,
@@ -448,9 +503,12 @@ async function cmdCode(task, flags) {
     apiKey: opts.apiKey,
     license: opts.license,
     conversationId: flags.conversation || "",
+    resumePackage: resumePackage || undefined,
+    resumeToken: flags.resumeToken || resumePackage?.resume_token || undefined,
     onEvent(ev) {
       const d = ev.data || {};
       if (ev.event === "artifact_manifest") manifest = d;
+      if (ev.event === "session_ledger") sessionLedger = d;
       if (JSON_MODE) { if (!flags.quiet) err(dim(ev.event)); return; }
       switch (ev.event) {
         case "code_start":
@@ -496,10 +554,38 @@ async function cmdCode(task, flags) {
 
   // runCode returns { done, receipt }
   const done = result?.done || result || {};
+  // Never mutate the sealed receipt object — hash/signature must verify as shipped.
   const r = result?.receipt || done.receipt || {};
+  // Session transport is a sibling event, not part of the receipt seal
+  const sessionForLedger = sessionLedger || {
+    session_id: r.session_id,
+    resume_package: r.resume_package,
+  };
+  // Persist hosted run into local session ledger for last/retry/resume
+  await persistLocalSessionFromReceipt(task, done, {
+    ...r,
+    session_id: sessionForLedger.session_id || r.session_id,
+    resume_package: sessionForLedger.resume_package || r.resume_package,
+  }, flags);
   let publicKeys = {};
   try { publicKeys = await receiptPublicKeys(flags); } catch { /* fail closed below */ }
-  const integrity = verifyCodeReceipt(r, { publicKeys });
+  // Verify a clean receipt (strip any client-only fields if a buggy server added them)
+  const rForVerify = { ...r };
+  delete rForVerify.resume_package;
+  delete rForVerify.session_id;
+  let integrity = verifyCodeReceipt(rForVerify, { publicKeys });
+  if (!integrity?.integrity?.verified && (r.resume_package || r.session_id)) {
+    // Keep original attempt recorded; ship gate uses stripped verification
+  } else if (integrity?.integrity?.verified) {
+    // prefer stripped verify when it matches
+  }
+  // If stripped verifies and raw does not, use stripped for the gate
+  const integrityRaw = verifyCodeReceipt(r, { publicKeys });
+  if (!integrityRaw?.integrity?.verified && integrity?.receipt_hash_match) {
+    /* keep integrity from stripped */
+  } else if (integrityRaw?.integrity?.verified) {
+    integrity = integrityRaw;
+  }
   let manifestBound = false;
   if (manifest) {
     try {
@@ -717,6 +803,202 @@ async function cmdReceiptVerify(target, flags) {
 }
 
 
+// ── Session Intent Ledger (local, cross-process referents) ───────────────────
+
+function sessionDir() {
+  return process.env.LOLM_SESSION_DIR || join(homedir(), ".lolm", "sessions");
+}
+
+async function loadLatestSession(selector = "") {
+  const { readdir, stat } = await import("node:fs/promises");
+  const dir = sessionDir();
+  let files = [];
+  try {
+    files = (await readdir(dir)).filter((f) => f.endsWith(".json"));
+  } catch {
+    return null;
+  }
+  if (!files.length) return null;
+  const ranked = [];
+  for (const f of files) {
+    try {
+      const st = await stat(join(dir, f));
+      ranked.push({ f, mtime: st.mtimeMs });
+    } catch { /* skip */ }
+  }
+  ranked.sort((a, b) => b.mtime - a.mtime);
+  const wanted = String(selector || "").trim();
+  for (const candidate of ranked) {
+    try {
+      const parsed = JSON.parse(await readFile(join(dir, candidate.f), "utf8"));
+      if (!wanted) return parsed;
+      const identities = [
+        parsed.session_id,
+        parsed.last_code_run_id,
+        parsed.last_failed_run_id,
+      ].filter(Boolean).map(String);
+      if (identities.includes(wanted)) return parsed;
+    } catch { /* skip malformed/disappeared session */ }
+  }
+  return null;
+}
+
+/** Resolve bare follow-ups the way SessionIntentLedger does server-side. */
+function resolveFollowupLocal(text, pointers) {
+  const t = String(text || "").trim();
+  if (!pointers) {
+    return { action: "clarify", prompt: "No session ledger found. Run a code task or ask first." };
+  }
+  if (/^(try\s+again|retry|again|once\s+more|same\s+as\s+before|redo|re-?run)\s*[.!]?\s*$/i.test(t)) {
+    const rid = pointers.last_failed_run_id || pointers.last_code_run_id;
+    if (rid) {
+      return {
+        action: "retry",
+        run_id: rid,
+        task: pointers.last_run_task,
+        checkpoint_id: pointers.last_checkpoint_id,
+        status: pointers.last_run_status,
+      };
+    }
+    if (pointers.last_ask) {
+      return { action: "retry_ask", ask: pointers.last_ask };
+    }
+    return { action: "clarify", prompt: "Nothing to retry in session ledger." };
+  }
+  if (/^(continue|go\s+on|keep\s+going|resume|pick\s+up)\s*[.!]?\s*$/i.test(t)) {
+    if (pointers.last_code_run_id && pointers.last_run_status === "terminated") {
+      return {
+        action: "resume",
+        run_id: pointers.last_code_run_id,
+        task: pointers.last_run_task,
+        checkpoint_id: pointers.last_checkpoint_id,
+      };
+    }
+    return { action: "clarify", prompt: "No terminated run to resume." };
+  }
+  return { action: "passthrough", text: t };
+}
+
+async function cmdLast(flags) {
+  const p = await loadLatestSession(flags.id || flags.conversation || "");
+  if (!p) {
+    if (JSON_MODE) return emit({ ok: false, error: "no_session" });
+    out(dim("no session ledger yet — run `lolm code` or `lolm ask` first"));
+    return 0;
+  }
+  if (JSON_MODE) return emit({ schema: "lolm.session.last.v1", ...p });
+  out(`${bold("session")}   ${p.session_id || "?"}`);
+  if (p.last_ask) out(`${bold("last ask")}  ${String(p.last_ask).slice(0, 200)}`);
+  if (p.last_code_run_id) {
+    out(`${bold("last run")}  ${p.last_code_run_id}  ${dim(p.last_run_status || "")}`);
+    if (p.last_run_task) out(`${bold("task")}      ${String(p.last_run_task).slice(0, 160)}`);
+  }
+  if (p.last_failed_run_id) out(`${bold("failed")}    ${p.last_failed_run_id}`);
+  if (p.last_checkpoint_id) out(`${bold("checkpoint")} ${p.last_checkpoint_id}`);
+  if (p.artifact_ids?.length) out(`${bold("artifacts")} ${(p.artifact_ids || []).slice(-5).join(", ")}`);
+  if (p.open_question) out(`${bold("open Q")}    ${String(p.open_question).slice(0, 160)}`);
+  if (p.option_set?.length) {
+    out(`${bold("options")}`);
+    for (let i = 0; i < Math.min(p.option_set.length, 8); i++) {
+      out(dim(`  ${i + 1}. `) + p.option_set[i]);
+    }
+  }
+  return 0;
+}
+
+async function cmdRetry(args, flags) {
+  const p = await loadLatestSession(flags.id || flags.conversation || "");
+  const text = args.join(" ").trim() || "try again";
+  const resolved = resolveFollowupLocal(text, p);
+  if (resolved.action === "clarify") {
+    if (JSON_MODE) { emit({ ok: false, ...resolved }); return 2; }
+    out(yellow(resolved.prompt || "cannot resolve retry referent"));
+    return 2;
+  }
+  if (resolved.action === "retry_ask") {
+    if (!flags.yes && !JSON_MODE) {
+      out(`${bold("retry ask")} ${String(resolved.ask).slice(0, 120)}`);
+      out(dim("re-run with: lolm retry --yes   (or lolm ask \"…\")"));
+      return 0;
+    }
+    return await cmdAsk(resolved.ask, flags);
+  }
+  if (resolved.action === "retry" || resolved.action === "resume") {
+    const task = resolved.task;
+    if (!task) {
+      fail("session has a run id but no task text to retry", 1);
+    }
+    // Prefer full resume package from session file (workspace + checkpoint)
+    let pkg = resolved.resume_package || null;
+    if (!pkg && p) {
+      pkg = {
+        resume_token: p.resume_token || "",
+        run_id: p.last_code_run_id || resolved.run_id,
+        task: p.last_run_task || task,
+        status: p.last_run_status,
+        checkpoint_id: p.last_checkpoint_id || resolved.checkpoint_id,
+        workspace_snapshot: p.workspace_snapshot || {},
+        reliability_snapshot: p.reliability_snapshot || {},
+        failure_ledger: p.failure_ledger || {},
+        contract_snapshot: p.contract_snapshot || {},
+        checkpoint_payload: p.checkpoint_payload || {},
+        event_cursor: p.event_cursor || 0,
+        session_id: p.session_id,
+      };
+      if (!Object.keys(pkg.workspace_snapshot || {}).length && !pkg.checkpoint_id) {
+        pkg = null;
+      }
+    }
+    if (!flags.yes && !JSON_MODE) {
+      out(`${bold(resolved.action)}  run=${resolved.run_id || "?"} status=${resolved.status || "?"}`);
+      out(`${bold("task")}   ${String(task).slice(0, 160)}`);
+      if (resolved.checkpoint_id) out(`${bold("ckpt")}   ${resolved.checkpoint_id}`);
+      if (pkg?.resume_token) out(`${bold("token")}  ${dim("present")}`);
+      if (pkg?.workspace_snapshot) {
+        out(`${bold("files")}  ${Object.keys(pkg.workspace_snapshot).slice(0, 8).join(", ")}`);
+      } else {
+        out(yellow("warning: no workspace snapshot — will restart task without restored tree"));
+      }
+      out(dim(`confirm: lolm ${resolved.action} --yes`));
+      return 0;
+    }
+    flags.conversation = flags.conversation || resolved.run_id || p?.session_id || "";
+    if (pkg) {
+      flags.resumePackage = pkg;
+      flags.resumeToken = pkg.resume_token || "";
+    }
+    return await cmdCode(task, flags);
+  }
+  if (JSON_MODE) return emit(resolved);
+  out(dim(JSON.stringify(resolved)));
+  return 0;
+}
+
+async function cmdResume(args, flags) {
+  // Force resume semantics with full package transport
+  const p = await loadLatestSession(flags.id || flags.conversation || "");
+  if (!p?.last_code_run_id) {
+    if (JSON_MODE) { emit({ ok: false, error: "no_run" }); return 2; }
+    out(yellow("no code run to resume — try `lolm last`"));
+    return 2;
+  }
+  if (p.last_run_status && p.last_run_status !== "terminated" && !flags.yes) {
+    out(dim(`last status is "${p.last_run_status}" (not terminated). Use --yes to force resume/retry.`));
+  }
+  const hasTransport = !!(
+    p.resume_token || p.last_checkpoint_id
+    || (p.workspace_snapshot && Object.keys(p.workspace_snapshot).length)
+  );
+  if (!hasTransport) {
+    out(yellow("session has no checkpoint/workspace transport — resume would only re-prompt the task."));
+    if (!flags.yes) {
+      out(dim("re-run after a code receipt that embeds resume_package, or pass --yes to retry task text only."));
+      return 2;
+    }
+  }
+  return await cmdRetry(["resume"], { ...flags, yes: flags.yes || false });
+}
+
 async function cmdInspect(sub, args, flags) {
   if (sub === "task" || !sub) {
     let path;
@@ -837,8 +1119,28 @@ async function main() {
       break;
     case "inspect":  return await cmdInspect(args[0], args.slice(1), flags);
     case "memory":   return (await cmdMemory(args[0], args.slice(1), flags)) ?? 0;
+    case "last":
+      if (args.length) fail("last accepts no positional arguments", 2);
+      return (await cmdLast(flags)) ?? 0;
+    case "retry":
+      return (await cmdRetry(args, flags)) ?? 0;
+    case "resume":
+      return (await cmdResume(args, flags)) ?? 0;
     case "help":     out(HELP); return 0;
     default:
+      // Bare natural-language follow-ups: try session referent before hard-fail
+      if (cmd && !cmd.startsWith("-")) {
+        const p = await loadLatestSession();
+        const joined = [cmd, ...args].join(" ").trim();
+        const resolved = resolveFollowupLocal(joined, p);
+        if (resolved.action === "retry" || resolved.action === "resume" || resolved.action === "retry_ask") {
+          return (await cmdRetry([joined], flags)) ?? 0;
+        }
+        if (resolved.action === "clarify" && p) {
+          out(yellow(resolved.prompt || "ambiguous follow-up — try `lolm last`"));
+          return 2;
+        }
+      }
       fail(`unknown command "${cmd}" (try: lolm --help)`, 2);
   }
 }

@@ -1,13 +1,16 @@
 {
   "name": "lolm-cli",
-  "version": "0.3.0-beta.1",
-  "description": "LOLM control console: fail-closed code shipping, path-safe --save, independent receipt verification, task-state inspect, and sealed artifact install.",
+  "version": "0.3.0-beta.2",
+  "description": "LOLM control console with fail-closed code shipping, verified local artifact delivery, deterministic cross-command continuity, and sealed receipts.",
   "type": "module",
   "bin": {
-    "lolm": "bin/lolm.mjs"
+    "lolm": "bin/lolm-delivery.mjs"
   },
   "files": [
+    "bin/lolm-delivery.mjs",
     "bin/lolm.mjs",
+    "lib/continuity.mjs",
+    "lib/delivery.mjs",
     "lib/diff.mjs",
     "lib/artifacts.mjs",
     "lib/paths.mjs",
@@ -19,7 +22,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node test/run.mjs",
+    "test": "node test/run.mjs && node test/delivery.mjs && node test/continuity.mjs && node test/continuity_receipt.mjs",
     "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {
@@ -38,6 +41,7 @@
     "code-execution",
     "receipts",
     "uncertainty",
+    "continuity",
     "lolm"
   ],
   "author": "Qira LLC (Bryan Leonard & Brandyn Leonard)",

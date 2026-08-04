@@ -538,7 +538,8 @@ export async function buildVisual({ task, baseUrl = "https://lolm.imagineqira.co
 export async function runCode(opts) {
   const { task, baseUrl = "https://lolm.imagineqira.com", maxSteps, history, signal,
     timeoutMs = DEFAULT_TIMEOUT_MS, idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS,
-    webhookUrl, conversationId, fetch: fetchImpl = globalThis.fetch } = opts;
+    webhookUrl, conversationId, resumePackage, resumeToken,
+    fetch: fetchImpl = globalThis.fetch } = opts;
   if (!task || !task.trim()) throw new AgentRunError("task is required");
   if (!fetchImpl) throw new AgentRunError("no fetch available; pass opts.fetch");
   const scope = networkScope({ signal, timeoutMs, idleTimeoutMs });
@@ -552,6 +553,8 @@ export async function runCode(opts) {
         ...(history ? { history } : {}),
         ...(webhookUrl ? { webhook_url: webhookUrl } : {}),
         ...(conversationId ? { conversation_id: conversationId } : {}),
+        ...(resumePackage ? { resume_package: resumePackage } : {}),
+        ...(resumeToken ? { resume_token: resumeToken } : {}),
       }), signal: scope.signal,
     });
     if (!resp.ok) {

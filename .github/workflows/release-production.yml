@@ -1,0 +1,70 @@
+name: release-production
+
+# Ordered production release from the integration branch:
+#   merge -> deploy + rollback-protected live PDF smoke -> publish CLI if changed.
+# Publication can never race ahead of the backend it depends on.
+
+on:
+  push:
+    branches:
+      - grok/grand-audit-remediation
+    paths:
+      - 'local_ui/**'
+      - 'lolm/**'
+      - 'site/**'
+      - 'sitecustomize.py'
+      - 'scripts/**'
+      - 'deploy/**'
+      - 'clients/cli/**'
+      - 'clients/js/**'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-production.yml'
+      - '.github/workflows/publish-npm-cli.yml'
+      - '.github/workflows/release-production.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      cli: ${{ steps.diff.outputs.cli }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - name: Determine whether the CLI package changed
+        id: diff
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "cli=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          FILES="$(git diff --name-only HEAD^ HEAD)"
+          printf '%s\n' "$FILES"
+          if printf '%s\n' "$FILES" | grep -Eq '^(clients/cli/|clients/js/|package-lock\.json$|\.github/workflows/publish-npm-cli\.yml$)'; then
+            echo "cli=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "cli=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: changes
+    uses: ./.github/workflows/deploy-production.yml
+    secrets: inherit
+
+  publish-cli:
+    needs: [changes, deploy]
+    if: ${{ needs.changes.outputs.cli == 'true' }}
+    uses: ./.github/workflows/publish-npm-cli.yml
+    with:
+      dry_run: false
+    secrets: inherit

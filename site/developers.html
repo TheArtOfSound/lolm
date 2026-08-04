@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Integrate LOLM anywhere — API, npm, CLI, curl, Python</title>
+<meta name="description" content="Integrate the LOLM coding agent into any platform: npm client, CLI, raw HTTP + SSE, Python, browser. Public API map, receipts, task state, daily quotas.">
+<meta property="og:title" content="Integrate LOLM anywhere">
+<meta property="og:description" content="One base URL. npm · CLI · curl · Python · browser. Sandboxed code runs, visual builds, sealed receipts.">
+<meta property="og:url" content="https://lolm.imagineqira.com/developers.html">
+<meta property="og:image" content="https://lolm.imagineqira.com/og-card.png">
+<link rel="canonical" href="https://lolm.imagineqira.com/developers.html">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#07080b">
+<meta name="keywords" content="LOLM API, coding agent API, integrate AI agent, npm lolm-nfet-client, SSE agent, sandboxed code execution">
+<link rel="stylesheet" href="/lolm-ds.css">
+<script src="/lolm-ds.js" defer></script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Integrate LOLM anywhere",
+  "description": "HTTP + SSE agent API with npm client and CLI for any platform.",
+  "url": "https://lolm.imagineqira.com/developers.html",
+  "author": {"@type": "Organization", "name": "Qira LLC"}
+}
+</script>
+<style>
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
+  a{color:var(--accent2);text-decoration:none} a:hover{color:var(--ink)}
+  .shell{max-width:860px;margin:0 auto;padding:0 20px 80px}
+  .top{display:flex;align-items:center;gap:14px;height:54px;border-bottom:1px solid var(--line);margin:0 -20px 28px;padding:0 20px;position:sticky;top:0;background:rgba(7,8,11,.9);backdrop-filter:blur(10px);z-index:10}
+  .mark{font-weight:750;color:var(--ink)}.mark em{font-style:normal;background:var(--lolm-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .top nav{display:flex;gap:12px;flex:1;font-size:13px;flex-wrap:wrap}
+  .top nav a{color:var(--dim)}
+  .btn{display:inline-flex;align-items:center;border-radius:10px;padding:10px 14px;font:inherit;font-weight:650;font-size:13.5px;text-decoration:none;border:1px solid var(--line-2);background:var(--panel2);color:var(--ink)}
+  .btn-primary{background:var(--lolm-grad);border:0;color:#fff}
+  h1{font-size:clamp(28px,4.5vw,40px);letter-spacing:-.03em;margin:0 0 10px;color:var(--t-hi)}
+  .lede{font-size:17px;color:var(--dim);max-width:40em;margin:0 0 22px}
+  h2{font-size:20px;letter-spacing:-.02em;margin:36px 0 10px;color:var(--t-hi)}
+  h3{font-size:15px;margin:20px 0 8px;color:var(--t-hi)}
+  p,li{color:var(--dim);font-size:15px}
+  b,strong{color:var(--ink)}
+  ul,ol{padding-left:1.2em}
+  li{margin:6px 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+  @media(max-width:700px){.grid{grid-template-columns:1fr}.top nav{display:none}}
+  .card{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:16px 18px}
+  .card h3{margin:0 0 6px}
+  .card p{margin:0;font-size:13.5px}
+  .card .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+  pre{font-family:var(--mono);font-size:12.5px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow:auto;color:var(--good);white-space:pre-wrap;word-break:break-word;margin:0 0 12px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:12px 0}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+  td{color:var(--dim)} td code{font-family:var(--mono);font-size:12px;color:var(--good)}
+  .note{border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:12px 14px;font-size:13.5px;color:var(--dim);margin:16px 0}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+  .tabs button{border:1px solid var(--line);background:var(--panel2);color:var(--dim);border-radius:999px;padding:6px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+  .tabs button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .panel-ex{display:none}.panel-ex.on{display:block}
+  .cta{display:flex;flex-wrap:wrap;gap:10px;margin:24px 0}
+  footer{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <a class="mark" href="/">LO<em>LM</em></a>
+    <nav>
+      <a href="/developers.html">Developers</a>
+      <a href="/install.html">Install</a>
+      <a href="/pricing.html">Pricing</a>
+      <a href="/docs.html">Docs</a>
+      <a href="/app.html">App</a>
+    </nav>
+    <a class="btn btn-primary" href="#quickstart">Quickstart</a>
+  </header>
+
+  <h1>Integrate LOLM into any platform</h1>
+  <p class="lede">
+    LOLM is an <b>HTTP + SSE agent API</b> with an npm client and a CLI.
+    Use the hosted base URL or point at your own self-hosted instance — same routes, same receipts.
+  </p>
+
+  <div class="grid">
+    <div class="card">
+      <div class="tag">1 · npm</div>
+      <h3>Node / browsers</h3>
+      <p><code style="font-family:var(--mono);color:var(--good)">lolm-nfet-client</code> — zero deps, works with fetch.</p>
+    </div>
+    <div class="card">
+      <div class="tag">2 · CLI</div>
+      <h3>Scripts &amp; CI</h3>
+      <p><code style="font-family:var(--mono);color:var(--good)">lolm-cli</code> — exit non-zero unless code ran.</p>
+    </div>
+    <div class="card">
+      <div class="tag">3 · HTTP</div>
+      <h3>Any language</h3>
+      <p>curl, Python, Go, Ruby… POST JSON, read SSE events.</p>
+    </div>
+    <div class="card">
+      <div class="tag">4 · Self-host</div>
+      <h3>Your base URL</h3>
+      <p>Same API shape. Unlimited when not on the shared box.</p>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>Machine-readable catalog:</b>
+    <a href="/api/demo/integrate"><code>GET /api/demo/integrate</code></a>
+    · <a href="/api/demo/integrate/openapi.json"><code>openapi.json</code></a>
+    · Live usage: <a href="/api/demo/billing/usage"><code>/api/demo/billing/usage</code></a>
+  </div>
+
+  <h2 id="quickstart">Quickstart (3 minutes)</h2>
+  <div class="tabs" id="langTabs">
+    <button type="button" class="on" data-p="js">JavaScript</button>
+    <button type="button" data-p="cli">CLI</button>
+    <button type="button" data-p="curl">curl</button>
+    <button type="button" data-p="py">Python</button>
+  </div>
+
+  <div class="panel-ex on" id="ex-js">
+    <pre>npm install lolm-nfet-client
+
+import { runCode, buildVisual, getStatus } from "lolm-nfet-client";
+
+// optional: process.env.LOLM_BASE_URL || default public host
+const baseUrl = "https://lolm.imagineqira.com";
+
+console.log(await getStatus({ baseUrl }));
+
+const done = await runCode({
+  baseUrl,
+  task: "write fizzbuzz to 20 in solution.py and run it",
+  onEvent: (ev) => console.log(ev.event),
+});
+console.log(done?.receipt_sha || done?.receipt?.receipt_sha);
+
+const vis = await buildVisual({ baseUrl, task: "a tiny counter app" });
+// vis.html → render in iframe sandbox</pre>
+  </div>
+  <div class="panel-ex" id="ex-cli">
+    <pre>npm install -g lolm-cli
+
+lolm status
+lolm code "write fizzbuzz to 20 in solution.py and run it" --save ./out
+lolm build "a snake game" -o snake.html
+
+# your own instance
+lolm code "…" --base http://127.0.0.1:7866</pre>
+  </div>
+  <div class="panel-ex" id="ex-curl">
+    <pre># health
+curl -sS https://lolm.imagineqira.com/api/demo/code/health | jq .
+
+# usage remaining (no auth on free)
+curl -sS https://lolm.imagineqira.com/api/demo/billing/usage | jq .
+
+# coding agent (SSE stream)
+curl -sSN -X POST https://lolm.imagineqira.com/api/demo/code/run \
+  -H 'Content-Type: application/json' \
+  -d '{"task":"print hello from main.py and run it"}'
+
+# paid tier (after Stripe claim)
+curl -sS https://lolm.imagineqira.com/api/demo/billing/usage \
+  -H "X-LOLM-License: $LOLM_LICENSE"</pre>
+  </div>
+  <div class="panel-ex" id="ex-py">
+    <pre>import json, urllib.request
+
+BASE = "https://lolm.imagineqira.com"
+
+def get(path):
+    with urllib.request.urlopen(BASE + path) as r:
+        return json.loads(r.read().decode())
+
+print(get("/api/demo/integrate")["endpoints"][:3])
+print(get("/api/demo/billing/usage")["runs"])
+
+# Streaming code run: use requests + iter_lines, or httpx,
+# and parse SSE blocks (event: / data:). See JS parseSSEStream for the shape.</pre>
+  </div>
+
+  <h2>What you can call (public)</h2>
+  <p>Nginx only exposes <code style="font-family:var(--mono);font-size:12.5px;color:var(--good)">/api/demo/*</code> on the public host. That is the stable integration surface.</p>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Use for</th></tr>
+    <tr><td>GET</td><td><code>/api/demo/status</code></td><td>Ready?</td></tr>
+    <tr><td>GET</td><td><code>/api/demo/billing/usage</code></td><td>Quota left</td></tr>
+    <tr><td>GET</td><td><code>/api/demo/integrate</code></td><td>This catalog (JSON)</td></tr>
+    <tr><td>POST</td><td><code>/api/demo/run/stream</code></td><td>Chat agent SSE</td></tr>
+    <tr><td>POST</td><td><code>/api/demo/code/run</code></td><td>Coding jail loop SSE</td></tr>
+    <tr><td>POST</td><td><code>/api/demo/code/visual</code></td><td>HTML/app build</td></tr>
+    <tr><td>GET</td><td><code>/api/demo/code/receipts</code></td><td>Audit ledger</td></tr>
+    <tr><td>GET</td><td><code>/api/demo/code/task_state</code></td><td>Resume z_t by conversation_id</td></tr>
+  </table>
+
+  <h2>Integration patterns</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>SaaS backend</h3>
+      <p>Your server calls <code>runCode</code> with a license header for Plus/Pro. Map your user id → <code>conversation_id</code> for task state continuity.</p>
+    </div>
+    <div class="card">
+      <h3>CI / scripts</h3>
+      <p><code>lolm code "$TASK" --save ./out --json</code> — non-zero exit if code didn’t run. Gate PRs on receipts.</p>
+    </div>
+    <div class="card">
+      <h3>Product UI</h3>
+      <p>Stream SSE to show write→run→fix live. Seal ends with <code>code_receipt</code> for your audit log.</p>
+    </div>
+    <div class="card">
+      <h3>Self-host / VPC</h3>
+      <p>Deploy the demo server; set <code>baseUrl</code> / <code>--base</code> / <code>LOLM_BASE_URL</code>. Unlimited local quotas.</p>
+    </div>
+  </div>
+
+  <h2>Auth &amp; money (for your product)</h2>
+  <ul>
+    <li><b>Free:</b> no key — IP daily caps (10 runs / 3 visuals).</li>
+    <li><b>Plus $7.99 / Pro $19.99:</b> Stripe checkout → license token → send <code>X-LOLM-License</code> on every request.</li>
+    <li><b>Memory scoping:</b> optional <code>X-Workspace-Owner: your-user-id</code>.</li>
+    <li><b>402:</b> daily quota exhausted — error body includes <code>tiers</code>. Offer plan upgrade via <code>POST /api/demo/billing/checkout</code> (server sets price). One-time top-up routes are not live yet. Canonical plans: <a href="/product-config.json">product-config.json</a> / <code>GET /api/demo/billing/config</code>.</li>
+  </ul>
+
+  <h2>SSE shape (coding)</h2>
+  <pre>event: agent_note
+data: {"text":"task state z_t opened…"}
+
+event: command_started
+data: {"cmd":"python3 solution.py"}
+
+event: code_done
+data: {"ok":true,"files":["solution.py"],…}
+
+event: code_receipt
+data: {"receipt_sha":"…","ok":true,"task":"…"}</pre>
+
+  <h2>Self-host base URL</h2>
+  <pre># same client code — only base changes
+const baseUrl = process.env.LOLM_BASE_URL || "http://127.0.0.1:7866";
+await runCode({ baseUrl, task: "…" });</pre>
+  <p>See <a href="/install.html#self-host">install → self-host</a>. CORS is open on the workspace app for browser demos; production backends should call from your server.</p>
+
+  <div class="cta">
+    <a class="btn btn-primary" href="https://www.npmjs.com/package/lolm-nfet-client" target="_blank" rel="noopener">npm client</a>
+    <a class="btn" href="https://www.npmjs.com/package/lolm-cli" target="_blank" rel="noopener">npm CLI</a>
+    <a class="btn" href="/api/demo/integrate">JSON catalog</a>
+    <a class="btn" href="/pricing.html">Pricing</a>
+    <a class="btn" href="/receipts.html">Live receipts</a>
+  </div>
+
+  
+  <h2 id="api-keys">API keys (product identity)</h2>
+  <p>Stable identity for integrators (better than IP free tier). Store the secret once — it is not shown again. This is <b>not</b> provider BYOK — those live on self-host under the Keys panel / <code>/api/demo/keys</code>.</p>
+  <pre>curl -sS -X POST https://lolm.imagineqira.com/api/demo/api-keys \
+  -H 'Content-Type: application/json' \
+  -d '{"tier":"free","label":"my-app"}'
+
+# use it
+curl -sS https://lolm.imagineqira.com/api/demo/billing/usage \
+  -H "X-LOLM-Api-Key: lolm_…"
+
+# paid tiers: send X-LOLM-License from Stripe claim, then mint tier=plus|pro</pre>
+
+  <h2 id="byok">BYOK (your model providers)</h2>
+  <p>Self-host or loopback: paste Anthropic / OpenAI / Groq / Gemini / DeepSeek / Mistral / xAI / Fireworks / OpenRouter / Together / any OpenAI-compatible base URL. Keys apply instantly to chat, code, and visual builds. Your keys are preferred over the shared gateway.</p>
+  <pre># on your box (localhost)
+curl -sS -X POST http://127.0.0.1:7866/api/demo/keys \
+  -H 'Content-Type: application/json' \
+  -d '{"keys":{"OPENAI_API_KEY":"sk-…","OPENAI_MODEL":"gpt-4o-mini"}}'
+
+# prove it works
+curl -sS -X POST http://127.0.0.1:7866/api/demo/keys/probe \
+  -H 'Content-Type: application/json' \
+  -d '{"provider":"openai"}'</pre>
+
+  <h2 id="webhooks">Webhooks</h2>
+  <p>Optional <code style="font-family:var(--mono);font-size:12px;color:var(--good)">webhook_url</code> on code runs — public HTTPS only (SSRF-guarded). Fired when the run completes with receipt summary.</p>
+  <pre>curl -sSN -X POST https://lolm.imagineqira.com/api/demo/code/run \
+  -H 'Content-Type: application/json' \
+  -H "X-LOLM-Api-Key: $LOLM_API_KEY" \
+  -d '{"task":"print 1 and run it","webhook_url":"https://your.app/hooks/lolm"}'</pre>
+
+  <h2 id="python">Python (stdlib)</h2>
+  <pre>from lolm_client import LOLM
+c = LOLM(api_key="lolm_…")   # or LOLM() free IP
+print(c.usage())
+r = c.run_code_collect("write fizzbuzz to 20 in solution.py and run it")
+print(r["done"], r["receipt"])</pre>
+  <p>Module path: <code style="font-family:var(--mono);font-size:12px">clients/python/lolm_client.py</code> in the repo (<code>PYTHONPATH=clients/python</code>).</p>
+
+  <footer>
+    Qira LLC · Integrate-first: HTTP is the product surface; web app and CLI are clients of the same API.
+    <a href="/llms.txt">llms.txt</a>
+  </footer>
+</div>
+<script>
+(function(){
+  var tabs=document.getElementById('langTabs');
+  if(!tabs) return;
+  tabs.addEventListener('click', function(e){
+    var b=e.target.closest('button[data-p]'); if(!b) return;
+    tabs.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', x===b); });
+    document.querySelectorAll('.panel-ex').forEach(function(p){
+      p.classList.toggle('on', p.id==='ex-'+b.getAttribute('data-p'));
+    });
+  });
+})();
+</script>
+</body>
+</html>
