@@ -85,6 +85,12 @@ def append(receipt: Dict[str, Any], *, source: str = "code_run") -> Dict[str, An
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    # Evolution plane: dual-write full training trajectories (best-effort).
+    try:
+        from lolm.evolution.trajectory_log import dual_write_receipt
+        dual_write_receipt(row, source=source)
+    except Exception:
+        pass
     return row
 
 

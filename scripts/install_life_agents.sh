@@ -42,24 +42,31 @@ $args  </array>
 PL
 }
 
-for label in com.qira.lolm-evolved-serve com.qira.lolm-knowledge; do
+for label in com.qira.lolm-evolved-serve com.qira.lolm-knowledge com.qira.lolm-evolution; do
   launchctl unload "$LA/$label.plist" 2>/dev/null || true
 done
 
 if [ "$1" = "--uninstall" ]; then
-  rm -f "$LA/com.qira.lolm-evolved-serve.plist" "$LA/com.qira.lolm-knowledge.plist"
+  rm -f "$LA/com.qira.lolm-evolved-serve.plist" "$LA/com.qira.lolm-knowledge.plist" \
+        "$LA/com.qira.lolm-evolution.plist"
   echo "✓ LOLM life agents removed."
   exit 0
 fi
 
-plist com.qira.lolm-evolved-serve scripts/serve_evolved.py --port 11435
+plist com.qira.lolm-evolved-serve scripts/serve_evolved.py --port 11435 --repo "$REPO"
+# Product evolution plane (skills from verified trajectories) — primary learning path
+plist com.qira.lolm-evolution scripts/evolution_daemon.py \
+      --interval 1800 --force --canary 0.05
+# Optional fact LoRA still available but volatile pricing filtered in train_improve_loop
 plist com.qira.lolm-knowledge scripts/evolve_knowledge_daemon.py \
-      --interval 1800 --batch 4 --pull-url "$PULL"
+      --interval 3600 --batch 4 --pull-url "$PULL"
 
 launchctl load "$LA/com.qira.lolm-evolved-serve.plist"
+launchctl load "$LA/com.qira.lolm-evolution.plist"
 launchctl load "$LA/com.qira.lolm-knowledge.plist"
 sleep 3
 echo "✓ Installed. LOLM now learns while you sleep:"
-launchctl list | grep -E "lolm-evolved-serve|lolm-knowledge" | awk '{print "   "$3" (pid "$1")"}'
+launchctl list | grep -E "lolm-evolved-serve|lolm-evolution|lolm-knowledge" | awk '{print "   "$3" (pid "$1")"}'
 echo "   evolved weights served → http://127.0.0.1:11435 · logs → ~/.lolm/"
+echo "   evolution plane + canary promote · retrieval facts for pricing/URLs"
 echo "   point the sovereign brain at them: LOLM_LOCAL_API=openai LOLM_LOCAL_URL=http://127.0.0.1:11435 LOLM_LOCAL_MODEL=lolm-evolved"

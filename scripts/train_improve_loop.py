@@ -49,20 +49,29 @@ ANCHOR_PROBES = [
     ("What is the capital of Japan?", "tokyo"),
 ]
 
-# Product + agent curriculum — short targets, high learnability
+# Skills/policies only — NEVER train volatile pricing/quotas/URLs into weights.
+# Those belong in retrieval/config (see lolm/evolution/).
 CURRICULUM: List[Dict[str, str]] = [
     {"q": "What does LOLM stand for?", "a": "LOLM stands for Latent Order Language Model.", "target": "latent"},
     {"q": "Who builds LOLM?", "a": "LOLM is built by Qira LLC.", "target": "qira"},
     {"q": "What is NFET in LOLM?", "a": "NFET is Noise-Driven Functional Emergence Theory, the control loop that measures uncertainty.", "target": "noise"},
-    {"q": "Where can I try LOLM online?", "a": "You can try LOLM at https://lolm.imagineqira.com.", "target": "imagineqira"},
     {"q": "What does a LOLM receipt show?", "a": "A LOLM receipt shows controls, evidence, and the verdict for a run.", "target": "verdict"},
-    {"q": "What is the LOLM free tier daily run limit?", "a": "The free tier allows 10 agent runs per day.", "target": "10"},
-    {"q": "What is LOLM Plus priced at?", "a": "LOLM Plus costs $7.99 per month.", "target": "7.99"},
-    {"q": "What is LOLM Pro priced at?", "a": "LOLM Pro costs $19.99 per month.", "target": "19.99"},
     {"q": "Name one NFET control action.", "a": "One NFET control action is retrieve.", "target": "retrieve"},
     {"q": "Name another NFET control action.", "a": "One NFET control action is verify.", "target": "verify"},
     {"q": "What sandbox isolation does LOLM code use?", "a": "LOLM code runs in a network-isolated bwrap jail.", "target": "bwrap"},
     {"q": "What is QEV related to Qira?", "a": "QEV creates portable signed evidence dossiers for digital artifacts and AI models.", "target": "dossier"},
+    {"q": "Before editing a repository file, what should you do?", "a": "READ the file first, then plan the edit, then verify.", "target": "read"},
+    {"q": "Tests failed after your patch and the last checkpoint was green. What next?", "a": "ROLLBACK to the last green checkpoint and replan.", "target": "rollback"},
+    {"q": "May you claim DONE: verified when tests failed?", "a": "No. Do not claim DONE when verification failed.", "target": "not"},
+    {"q": "Evidence is insufficient for a claim. What should you do?", "a": "ABSTAIN rather than invent or overclaim.", "target": "abstain"},
+]
+
+# Volatile product facts — retrieval/config only (never LoRA weights).
+RETRIEVAL_ONLY_FACTS: List[Dict[str, str]] = [
+    {"q": "Where can I try LOLM online?", "a": "You can try LOLM at https://lolm.imagineqira.com.", "target": "imagineqira"},
+    {"q": "What is the LOLM free tier daily run limit?", "a": "The free tier allows 10 agent runs per day.", "target": "10"},
+    {"q": "What is LOLM Plus priced at?", "a": "LOLM Plus costs $7.99 per month.", "target": "7.99"},
+    {"q": "What is LOLM Pro priced at?", "a": "LOLM Pro costs $19.99 per month.", "target": "19.99"},
 ]
 
 
@@ -232,13 +241,41 @@ def restart_serve() -> None:
     subprocess.Popen(
         [sys.executable, str(ROOT / "scripts" / "serve_evolved.py"), "--port", "11435"],
         cwd=str(ROOT),
+        env={**dict(os.environ), "PYTHONPATH": str(ROOT)},
         stdout=open(log, "a"),
         stderr=subprocess.STDOUT,
         start_new_session=True,
     )
 
 
+def _is_volatile_fact(d: Dict[str, Any]) -> bool:
+    q = (d.get("q") or "").lower()
+    a = (d.get("a") or "").lower()
+    blob = q + " " + a
+    volatile = (
+        "priced at", "costs $", "per month", "daily run limit", "quota",
+        "https://", "http://", ".com/", "per day",
+    )
+    return any(v in blob for v in volatile)
+
+
+def write_retrieval_facts() -> int:
+    """Persist volatile facts for retrieval — never into LoRA."""
+    path = ROOT / "runs" / "retrieval_facts.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = {d.get("q") for d in _read_jsonl(path)}
+    n = 0
+    with path.open("a", encoding="utf-8") as fh:
+        for f in RETRIEVAL_ONLY_FACTS:
+            if f["q"] in existing:
+                continue
+            fh.write(json.dumps({**f, "store": "retrieval", "ts": time.time()}, ensure_ascii=False) + "\n")
+            n += 1
+    return n
+
+
 def main() -> int:
+    import os
     ap = argparse.ArgumentParser()
     ap.add_argument("--iters", type=int, default=160)
     ap.add_argument("--batch", type=int, default=4)
@@ -247,12 +284,21 @@ def main() -> int:
     ap.add_argument("--pull-url", default="https://lolm.imagineqira.com/api/demo/life/facts")
     ap.add_argument("--skip-ingest", action="store_true")
     ap.add_argument("--no-serve-restart", action="store_true")
+    ap.add_argument("--skip-evolution", action="store_true",
+                    help="Skip product evolution plane (skills SFT/DPO path)")
+    ap.add_argument("--evolution-only", action="store_true",
+                    help="Only run evolution plane, skip fact LoRA")
+    ap.add_argument("--evolution-force", action="store_true")
+    ap.add_argument("--evolution-dry-run", action="store_true")
     args = ap.parse_args()
 
     SCORE.mkdir(parents=True, exist_ok=True)
     KROOT.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     report: Dict[str, Any] = {"ts": time.time(), "steps": {}}
+
+    # 0) Volatile facts → retrieval store (never weights)
+    report["steps"]["retrieval_facts"] = {"added": write_retrieval_facts()}
 
     # 1) HF ingest (metadata + candidates + memory) — no weights
     if not args.skip_ingest:
@@ -266,7 +312,47 @@ def main() -> int:
         }
         print(f"[train] ingest: {json.dumps(report['steps']['hf_ingest'])}", flush=True)
 
-    # 2) Build / refresh queue
+    # 2) PRIMARY: product evolution plane (verified trajectories → gated adapters)
+    if not args.skip_evolution:
+        print("[train] evolution plane cycle…", flush=True)
+        try:
+            from lolm.evolution.cycle import run_evolution_cycle
+            evo = run_evolution_cycle(
+                ROOT,
+                dry_run=args.evolution_dry_run or None,
+                force=args.evolution_force or True,  # bootstrap until Gold mass accumulates
+                canary_pct=0.05,
+                require_shadow=True,
+            )
+            report["steps"]["evolution"] = {
+                "decision": evo.get("decision"),
+                "seconds": evo.get("seconds"),
+                "gold": (evo.get("steps") or {}).get("gold", {}).get("gold_count"),
+                "sft": (evo.get("steps") or {}).get("sft", {}).get("train_count"),
+                "offline_ok": ((evo.get("steps") or {}).get("evaluate") or {}).get("offline_ok"),
+            }
+            print(f"[train] evolution: {json.dumps(report['steps']['evolution'])}", flush=True)
+            # Restart serve only on real (non-dry) canary/promote
+            if (
+                not args.no_serve_restart
+                and evo.get("decision") in ("canary", "promoted")
+                and not (evo.get("steps") or {}).get("train", {}).get("dry_run")
+            ):
+                restart_serve()
+                print("[train] serve_evolved restarted after evolution promote", flush=True)
+        except Exception as e:
+            report["steps"]["evolution"] = {"error": str(e)[:300]}
+            print(f"[train] evolution ERROR: {e}", flush=True)
+
+    if args.evolution_only:
+        report["seconds"] = round(time.time() - t0, 1)
+        (SCORE / "latest.json").write_text(json.dumps(report, indent=2, default=str))
+        with (SCORE / "receipts.jsonl").open("a") as f:
+            f.write(json.dumps(report, default=str) + "\n")
+        print(json.dumps(report["steps"].get("evolution") or report, indent=2, default=str))
+        return 0
+
+    # 3) Build / refresh skill fact queue (no volatile pricing/URLs)
     consumed = set()
     try:
         consumed = set(json.loads((KROOT / "consumed.json").read_text()))
@@ -274,26 +360,34 @@ def main() -> int:
         pass
     n_cur = seed_curriculum(QUEUE, consumed)
     remote = pull_remote_facts(args.pull_url) if args.pull_url else []
+    remote = [f for f in remote if not _is_volatile_fact(f)]
     minted = mint_from_hf_memory(10) + mint_from_candidates(6) + remote
+    minted = [f for f in minted if not _is_volatile_fact(f)]
     have = {d.get("q") for d in _read_jsonl(QUEUE)} | consumed
     added = 0
     with QUEUE.open("a", encoding="utf-8") as fh:
         for f in minted:
             if f["q"] in have:
                 continue
-            # skip absurdly long targets
             if len(f.get("target") or "") < 2:
+                continue
+            if _is_volatile_fact(f):
                 continue
             fh.write(json.dumps(f, ensure_ascii=False) + "\n")
             have.add(f["q"])
             added += 1
+    # Drop any volatile rows already sitting in the queue
+    cleaned_q = [d for d in _read_jsonl(QUEUE) if not _is_volatile_fact(d)]
+    if len(cleaned_q) != len(_read_jsonl(QUEUE)):
+        _write_jsonl(QUEUE, cleaned_q)
     report["steps"]["queue"] = {"curriculum_added": n_cur, "minted_added": added,
-                                "queue_size": len(_read_jsonl(QUEUE))}
+                                "queue_size": len(cleaned_q),
+                                "volatile_filtered": True}
     print(f"[train] queue: {report['steps']['queue']}", flush=True)
 
-    # 3) Drop chronically failing facts
+    # 4) Drop chronically failing facts
     attempts = _attempts()
-    pending = _read_jsonl(QUEUE)
+    pending = cleaned_q
     kept, dropped = [], []
     for d in pending:
         q = d.get("q") or ""
@@ -309,8 +403,8 @@ def main() -> int:
     if not pending:
         report["steps"]["train"] = {"skipped": "empty_queue"}
         report["seconds"] = round(time.time() - t0, 1)
-        (SCORE / "latest.json").write_text(json.dumps(report, indent=2))
-        print("[train] nothing to train", flush=True)
+        (SCORE / "latest.json").write_text(json.dumps(report, indent=2, default=str))
+        print("[train] nothing left for fact LoRA (evolution may still have run)", flush=True)
         return 0
 
     batch = pending[: args.batch]
@@ -318,7 +412,7 @@ def main() -> int:
     probes = [(d["q"], (d.get("target") or _pick_target(d["a"])).lower()) for d in batch]
     cand_ids = [d["candidate_id"] for d in batch if d.get("candidate_id")]
 
-    print(f"[train] LoRA cycle on {len(batch)} facts, iters={args.iters}…", flush=True)
+    print(f"[train] skill fact LoRA on {len(batch)} facts, iters={args.iters}…", flush=True)
     try:
         receipt = run_knowledge_cycle(
             KROOT,
@@ -329,19 +423,18 @@ def main() -> int:
             control_probes=ANCHOR_PROBES,
             iters=args.iters,
             lr=8e-5,
-            learn_threshold=0.5,  # slightly more permissive for real progress; still gated
+            learn_threshold=0.5,
             keep_threshold=0.75,
         )
     except Exception as e:
         report["steps"]["train"] = {"error": str(e)[:300]}
         report["seconds"] = round(time.time() - t0, 1)
-        (SCORE / "latest.json").write_text(json.dumps(report, indent=2))
+        (SCORE / "latest.json").write_text(json.dumps(report, indent=2, default=str))
         with (SCORE / "receipts.jsonl").open("a") as f:
-            f.write(json.dumps(report) + "\n")
+            f.write(json.dumps(report, default=str) + "\n")
         print(f"[train] cycle ERROR: {e}", flush=True)
         return 1
 
-    # attempt bookkeeping
     for d in batch:
         q = d["q"]
         if receipt.get("weights_changed"):
@@ -359,25 +452,30 @@ def main() -> int:
             mark_candidates_trained(cand_ids)
         if not args.no_serve_restart:
             restart_serve()
-            print("[train] serve_evolved restarted with promoted adapter", flush=True)
+            print("[train] serve_evolved restarted with promoted knowledge adapter", flush=True)
 
     report["steps"]["train"] = receipt
     report["seconds"] = round(time.time() - t0, 1)
     report["promoted"] = bool(receipt.get("weights_changed"))
     report["learn"] = receipt.get("new_facts_known_after")
     report["keep"] = receipt.get("control_retention")
-    (SCORE / "latest.json").write_text(json.dumps(report, indent=2))
+    (SCORE / "latest.json").write_text(json.dumps(report, indent=2, default=str))
     with (SCORE / "receipts.jsonl").open("a") as f:
-        f.write(json.dumps(report) + "\n")
+        f.write(json.dumps(report, default=str) + "\n")
 
     tag = "PROMOTED" if report["promoted"] else "rejected"
     print(
-        f"[train] cycle {receipt.get('cycle')}: learn={receipt.get('new_facts_known_after')} "
+        f"[train] fact cycle {receipt.get('cycle')}: learn={receipt.get('new_facts_known_after')} "
         f"keep={receipt.get('control_retention')} {tag} ({receipt.get('seconds')}s)",
         flush=True,
     )
-    print(json.dumps({"promoted": report["promoted"], "learn": report["learn"],
-                      "keep": report["keep"], "seconds": report["seconds"]}, indent=2))
+    print(json.dumps({
+        "evolution": report["steps"].get("evolution"),
+        "promoted": report["promoted"],
+        "learn": report["learn"],
+        "keep": report["keep"],
+        "seconds": report["seconds"],
+    }, indent=2, default=str))
     return 0 if not receipt.get("error") else 1
 
 

@@ -1,0 +1,2043 @@
+{
+ "schema": "lolm.oort_flows.v1",
+ "flow_count": 140,
+ "tactic_count": 741,
+ "categories": {
+  "App Builder": 47,
+  "Agent Architecture": 13,
+  "Agent QA & Security": 13,
+  "Harness Engineering": 13,
+  "QA": 12,
+  "Launch": 12,
+  "Memory & Context": 11,
+  "Debugging": 10,
+  "MCP & Tooling": 9
+ },
+ "flows": [
+  {
+   "slug": "accessibility-qa",
+   "title": "Accessibility QA",
+   "category": "QA",
+   "description": "Make your app usable by everyone: keyboard, contrast, labels, focus, and screen-reader basics.",
+   "tags": [
+    "accessibility",
+    "a11y",
+    "keyboard",
+    "contrast",
+    "aria"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "activity-feed-timeline",
+   "title": "Add Activity Feed Feature",
+   "category": "App Builder",
+   "description": "Implement a persistent activity timeline with backend storage, API, and UI integration",
+   "tags": [
+    "activity",
+    "feed",
+    "timeline",
+    "backend",
+    "frontend",
+    "generated",
+    "Realtime & comms"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "add-database-persistence",
+   "title": "Add Database Persistence",
+   "category": "Debugging",
+   "description": "Your app forgets everything on refresh: move state into a real database with working CRUD.",
+   "tags": [
+    "persistence",
+    "database",
+    "crud",
+    "state",
+    "refresh"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "add-file-based-persistent-memory",
+   "title": "Add File-Based Persistent Memory",
+   "category": "Memory & Context",
+   "description": "Give your agent durable memory with plain files - the radical-minimalism approach production practitioners keep converging on.",
+   "tags": [
+    "memory",
+    "files",
+    "markdown",
+    "persistence",
+    "minimalism"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "add-invite-to-saas-app",
+   "title": "Add a Working Team Invite System to a SaaS App",
+   "category": "App Builder",
+   "description": "Build a real invite flow for a SaaS app so existing users can invite teammates by email, store invite records, validate tokens, accept invitations, and join the correct workspace with proper permissions.",
+   "tags": [
+    "saas",
+    "invite",
+    "auth",
+    "workspace",
+    "email",
+    "backend",
+    "membership"
+   ],
+   "step_count": 9
+  },
+  {
+   "slug": "add-loading-error-states",
+   "title": "Add Loading/Error States",
+   "category": "Debugging",
+   "description": "Eliminate silent failures and frozen screens: add loading, empty, and error states across the whole app.",
+   "tags": [
+    "loading",
+    "errors",
+    "empty-states",
+    "ux",
+    "polish"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "add-plan-todo-system-agent",
+   "title": "Add a Plan/Todo System to Your Agent",
+   "category": "Agent Architecture",
+   "description": "Give your agent the planning discipline of the leading harnesses: an explicit, model-visible todo list that survives long tasks.",
+   "tags": [
+    "planning",
+    "todo",
+    "agent-loop",
+    "task-management",
+    "harness"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "add-real-time-presence-indicators-websockets-chat-app",
+   "title": "Add Real-Time Presence Indicators to a Chat App with WebSockets",
+   "category": "App Builder",
+   "description": "A step-by-step flow for implementing real-time online, offline, and typing presence in a chat app using WebSockets, including backend presence tracking, frontend updates, reconnect handling, and verification.",
+   "tags": [
+    "websockets",
+    "chat",
+    "presence",
+    "realtime",
+    "backend",
+    "frontend",
+    "state",
+    "testing"
+   ],
+   "step_count": 10
+  },
+  {
+   "slug": "add-team-invites-to-saas-app",
+   "title": "Add Team Invites to a SaaS App",
+   "category": "App Builder",
+   "description": "Build a real team invitation system for a SaaS app, including invite creation, email/share flow, acceptance, membership creation, role assignment, validation, and end-to-end testing.",
+   "tags": [
+    "saas",
+    "teams",
+    "invites",
+    "auth",
+    "roles",
+    "membership",
+    "email",
+    "backend"
+   ],
+   "step_count": 10
+  },
+  {
+   "slug": "admin-dashboard",
+   "title": "Admin Dashboard",
+   "category": "App Builder",
+   "description": "Build a real admin dashboard with live data tables, stats, filters, and actions that actually mutate data.",
+   "tags": [
+    "admin",
+    "dashboard",
+    "tables",
+    "stats",
+    "crud"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "adversarial-verification-agent-verdict",
+   "title": "Stand Up an Adversarial Verification Agent",
+   "category": "Agent QA & Security",
+   "description": "Stop trusting your agent's own 'it works': dispatch a read-only verifier that must run real commands, probe adversarially, and return an evidence-backed PASS/FAIL verdict.",
+   "tags": [
+    "verification",
+    "adversarial",
+    "sub-agents",
+    "qa",
+    "verdict"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "agent-orchestration-patterns-playbook",
+   "title": "Implement the Six Core Orchestration Patterns",
+   "category": "Agent Architecture",
+   "description": "Worker pool, pipeline, supervisor-worker, adversarial, fork-join, resume chain - build the reusable orchestration patterns every serious multi-agent system converges on.",
+   "tags": [
+    "orchestration",
+    "multi-agent",
+    "patterns",
+    "lifecycle",
+    "coordination"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "agent-to-agent-protocols-a2a",
+   "title": "Agent-to-Agent Protocols (A2A)",
+   "category": "Agent Architecture",
+   "description": "Connect two agents over an explicit protocol - task handoff, acknowledgment, and failure handling - instead of hoping chat works out.",
+   "tags": [
+    "a2a",
+    "protocols",
+    "multi-agent",
+    "messaging",
+    "coordination"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "ai-affiliate-marketing-agent",
+   "title": "Build an AI Affiliate Marketing Agent That Finds, Publishes, and Tracks Revenue Opportunities",
+   "category": "App Builder",
+   "description": "Create a working AI agent system that discovers affiliate opportunities, generates compliant content, publishes or prepares campaign assets, and tracks clicks, conversions, and revenue in a usable dashboard.",
+   "tags": [
+    "affiliate",
+    "ai-agent",
+    "marketing",
+    "automation",
+    "tracking",
+    "content",
+    "dashboard",
+    "monetization"
+   ],
+   "step_count": 11
+  },
+  {
+   "slug": "ai-chatbot-feature",
+   "title": "AI Chatbot Feature",
+   "category": "App Builder",
+   "description": "Add a real AI chat feature with streaming responses, conversation history, and graceful failure handling.",
+   "tags": [
+    "ai",
+    "chatbot",
+    "llm",
+    "chat",
+    "streaming"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "api-error-handling-qa",
+   "title": "API/Error Handling QA",
+   "category": "QA",
+   "description": "Verify every API contract and failure path: status codes, error shapes, timeouts, and frontend recovery.",
+   "tags": [
+    "api",
+    "errors",
+    "resilience",
+    "contracts",
+    "backend"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "assemble-system-prompt-pros",
+   "title": "Assemble a System Prompt Like the Pros",
+   "category": "Agent Architecture",
+   "description": "Structure your agent's system prompt the way leading harnesses do: layered sections, dynamic context, and enforceable rules.",
+   "tags": [
+    "system-prompt",
+    "prompt-assembly",
+    "context",
+    "harness",
+    "claude-code"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "audit-trails-tool-calls",
+   "title": "Audit Trails for Tool Calls",
+   "category": "Agent QA & Security",
+   "description": "Record an immutable, queryable trail of every action your agent takes - who, what, when, why, and outcome - for security and accountability.",
+   "tags": [
+    "audit-trail",
+    "logging",
+    "accountability",
+    "compliance",
+    "forensics"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "auth-flow-qa",
+   "title": "Auth Flow QA",
+   "category": "QA",
+   "description": "Dedicated auth testing: signup, login, sessions, guards, reset, and the edge cases that expose fake auth.",
+   "tags": [
+    "auth",
+    "qa",
+    "sessions",
+    "security",
+    "login"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "background-jobs-queues",
+   "title": "Integrate Background Jobs & Queue System",
+   "category": "App Builder",
+   "description": "Add a real background job queue with persistence to the existing app.",
+   "tags": [
+    "background",
+    "jobs",
+    "queue",
+    "redis",
+    "worker",
+    "generated",
+    "Data & database"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "booking-system",
+   "title": "Booking System",
+   "category": "App Builder",
+   "description": "Build a real booking system with availability, slot selection, and double-booking prevention.",
+   "tags": [
+    "booking",
+    "appointments",
+    "calendar",
+    "scheduling",
+    "slots"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "build-a-habit-tracker-app-react",
+   "title": "Build a Habit Tracker App in React",
+   "category": "App Builder",
+   "description": "Create a working React habit tracker app with habit creation, completion toggles, streak tracking, local persistence, validation, and basic QA checks.",
+   "tags": [
+    "react",
+    "habit-tracker",
+    "productivity",
+    "localstorage",
+    "state-management",
+    "forms"
+   ],
+   "step_count": 9
+  },
+  {
+   "slug": "build-a-habit-tracker-react-app",
+   "title": "Build a Habit Tracker React App",
+   "category": "App Builder",
+   "description": "A step-by-step flow for building a real habit tracker app in React with working habit creation, daily check-ins, streak tracking, persistence, validation, and basic testing.",
+   "tags": [
+    "react",
+    "habit-tracker",
+    "productivity",
+    "frontend",
+    "localstorage",
+    "state",
+    "forms",
+    "beginner"
+   ],
+   "step_count": 9
+  },
+  {
+   "slug": "build-first-mcp-server",
+   "title": "Build Your First MCP Server",
+   "category": "MCP & Tooling",
+   "description": "Stand up a working MCP server exposing your own tools, connect a client, and validate the full call loop.",
+   "tags": [
+    "mcp",
+    "server",
+    "tools",
+    "protocol",
+    "integration"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "build-functional-coffee-shop-website",
+   "title": "Build a Functional Coffee Shop Website",
+   "category": "App Builder",
+   "description": "A step-by-step flow to build a real, working coffee shop website with menu, location, hours, contact form, and mobile-friendly pages using AI app builders.",
+   "tags": [
+    "coffee-shop",
+    "website",
+    "restaurant",
+    "frontend",
+    "contact-form",
+    "responsive",
+    "menu"
+   ],
+   "step_count": 9
+  },
+  {
+   "slug": "build-login-page-auth-metrics-tracking",
+   "title": "Build a Login Page with Auth Metrics Tracking",
+   "category": "App Builder",
+   "description": "Create a real login page with working authentication and instrument it to capture useful investment-app auth metrics such as signups, login attempts, success rate, failures, and drop-off.",
+   "tags": [
+    "authentication",
+    "login",
+    "metrics",
+    "analytics",
+    "tracking",
+    "dashboard",
+    "emergent",
+    "investment"
+   ],
+   "step_count": 9
+  },
+  {
+   "slug": "build-playable-2d-browser-game",
+   "title": "Build a Playable 2D Browser Game",
+   "category": "App Builder",
+   "description": "A step-by-step flow to create a real, playable 2D browser game with movement, collisions, scoring, win/lose states, and basic polish using an AI app builder.",
+   "tags": [
+    "game",
+    "2d",
+    "browser",
+    "canvas",
+    "gameplay",
+    "collision",
+    "score",
+    "emergent"
+   ],
+   "step_count": 9
+  },
+  {
+   "slug": "build-real-authentication-with-sessions-and-protected-routes",
+   "title": "Build Real Web App Authentication with Sessions and Protected Routes",
+   "category": "App Builder",
+   "description": "A step-by-step flow to implement real signup, login, logout, session persistence, password reset, validation, and protected routes with visible UI states and mobile responsiveness.",
+   "tags": [
+    "authentication",
+    "signup",
+    "login",
+    "sessions",
+    "protected-routes",
+    "validation",
+    "password-reset",
+    "responsive"
+   ],
+   "step_count": 9
+  },
+  {
+   "slug": "build-repo-map-code-navigation",
+   "title": "Build a Repo Map for Code Navigation",
+   "category": "MCP & Tooling",
+   "description": "Give your agent compressed, ranked codebase awareness - the tree-sitter repo-map pattern that beats raw file dumps.",
+   "tags": [
+    "repo-map",
+    "tree-sitter",
+    "code-navigation",
+    "context",
+    "aider"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "build-scary-first-person-horror-game",
+   "title": "Build a Scary First-Person Horror Game",
+   "category": "App Builder",
+   "description": "A step-by-step flow to create a real playable first-person horror game with movement, interactions, enemy behavior, atmosphere, objectives, fail states, and testing.",
+   "tags": [
+    "horror",
+    "first-person",
+    "game",
+    "atmosphere",
+    "enemy-ai",
+    "unity",
+    "prototype"
+   ],
+   "step_count": 10
+  },
+  {
+   "slug": "choose-dispatch-strategy-spawn-fork-direct",
+   "title": "Choose the Right Dispatch: Spawn, Fork, or Direct",
+   "category": "Agent Architecture",
+   "description": "Three ways to hand work to a sub-agent - fresh-context spawn, cache-sharing fork, or just doing it yourself - and the decision matrix for picking per task.",
+   "tags": [
+    "sub-agents",
+    "dispatch",
+    "spawn",
+    "fork",
+    "orchestration"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "cli-harness-to-product",
+   "title": "From CLI Harness to Product",
+   "category": "Agent Architecture",
+   "description": "Grow a working agent loop into a product: sessions, config, resumability, and the packaging polish the successful terminal agents share.",
+   "tags": [
+    "cli",
+    "product",
+    "sessions",
+    "packaging",
+    "terminal-agent"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "command-security-pipeline-agent",
+   "title": "Build a Command Security Pipeline for Your Agent",
+   "category": "Agent QA & Security",
+   "description": "Replace scattered if-else safety checks with a layered validator pipeline: single-purpose checks, an allow/ask/deny/passthrough contract, and severity-aware ordering.",
+   "tags": [
+    "command-validation",
+    "security-pipeline",
+    "shell",
+    "validators",
+    "agent-security"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "comments-threads",
+   "title": "Add Persistent Comment Threads",
+   "category": "App Builder",
+   "description": "Integrate a full‑stack commenting and threading feature into the existing app with real database persistence and UI.",
+   "tags": [
+    "comments",
+    "threads",
+    "app",
+    "feature",
+    "backend",
+    "frontend",
+    "generated",
+    "Realtime & comms"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "cost-control-model-routing-effort-tiers",
+   "title": "Cost Control: Model Routing and Effort Tiers",
+   "category": "Harness Engineering",
+   "description": "Route work to the cheapest model that can do it and match reasoning effort to task difficulty - with quality guardrails.",
+   "tags": [
+    "cost",
+    "model-routing",
+    "effort-tiers",
+    "optimization",
+    "budgets"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "creator-marketplace-launch",
+   "title": "Creator Marketplace Launch",
+   "category": "Launch",
+   "description": "Launch a creator marketplace: solve the cold-start, seed supply, launch demand, and prove the loop.",
+   "tags": [
+    "marketplace",
+    "creators",
+    "launch",
+    "cold-start",
+    "growth"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "cross-session-project-state",
+   "title": "Cross-Session Project State",
+   "category": "Memory & Context",
+   "description": "Keep long-horizon work coherent across many sessions: externalized project state that any session can load, advance, and hand off.",
+   "tags": [
+    "project-state",
+    "long-horizon",
+    "handoff",
+    "continuity",
+    "external-memory"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "customer-support-inbox",
+   "title": "Customer Support Inbox",
+   "category": "App Builder",
+   "description": "Build an in-app support system: ticket submission, status tracking, and an admin reply inbox.",
+   "tags": [
+    "support",
+    "tickets",
+    "inbox",
+    "helpdesk",
+    "messages"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "dark-mode-toggle",
+   "title": "Add Dark Mode Toggle",
+   "category": "App Builder",
+   "description": "Implement a persistent dark mode switch in the existing app.",
+   "tags": [
+    "dark mode",
+    "theme",
+    "toggle",
+    "persistence",
+    "generated",
+    "UI & UX patterns"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "defend-command-obfuscation-attacks",
+   "title": "Detect Command Obfuscation and Parser-Mismatch Attacks",
+   "category": "Agent QA & Security",
+   "description": "Catch the attacks your parser cannot see: quote-concatenation flags, ANSI-C quoting, brace expansion, and escaped operators that make bash execute something your checks never inspected.",
+   "tags": [
+    "obfuscation",
+    "parser-mismatch",
+    "quoting",
+    "shell-security",
+    "attack-detection"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "deferred-tool-loading",
+   "title": "Deferred Tool Loading",
+   "category": "MCP & Tooling",
+   "description": "Stop paying context for tools the task never needs: load a core set eagerly and expand the toolset on demand.",
+   "tags": [
+    "deferred-loading",
+    "context-budget",
+    "tool-management",
+    "scaling",
+    "mcp"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "demo-video-script",
+   "title": "Demo Video Script",
+   "category": "Launch",
+   "description": "Script a tight product demo video: hook, narrative arc, screen directions, and CTA - ready to record.",
+   "tags": [
+    "demo",
+    "video",
+    "script",
+    "walkthrough",
+    "pitch"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "dependency-supply-chain-scanning-agents",
+   "title": "Dependency and Supply-Chain Scanning for Agents",
+   "category": "Agent QA & Security",
+   "description": "Guard against the dependencies your agent adds: vulnerability scanning, hallucinated-package detection, and gated installs.",
+   "tags": [
+    "supply-chain",
+    "dependencies",
+    "scanning",
+    "slopsquatting",
+    "security"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "design-agent-computer-interface",
+   "title": "Design the Agent-Computer Interface (ACI)",
+   "category": "Agent Architecture",
+   "description": "Apply SWE-agent's key finding: agents perform dramatically better when their commands, viewers, and feedback are designed for models, not humans.",
+   "tags": [
+    "aci",
+    "swe-agent",
+    "tools",
+    "feedback",
+    "interface-design"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "design-memory-index-every-session",
+   "title": "Design a Memory Index Loaded Every Session",
+   "category": "Memory & Context",
+   "description": "Build the pattern behind minimalist memory systems: a compact index file the agent always loads, pointing to detail files it loads on demand.",
+   "tags": [
+    "memory-index",
+    "context-budget",
+    "lazy-loading",
+    "organization",
+    "minimalism"
+   ],
+   "step_count": 3
+  },
+  {
+   "slug": "design-permission-approval-ux",
+   "title": "Design the Permission Approval UX",
+   "category": "Harness Engineering",
+   "description": "Design approval prompts users actually read: diffs, risk framing, scoped grants, and pacing that prevents approval fatigue.",
+   "tags": [
+    "approval-ux",
+    "permissions",
+    "diffs",
+    "human-in-the-loop",
+    "trust"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "design-single-loop-agent",
+   "title": "Design a Single-Loop Agent",
+   "category": "Agent Architecture",
+   "description": "Build the core agent loop the leading coding agents use: one model, one loop, tools in, results folded back into context.",
+   "tags": [
+    "agent-loop",
+    "architecture",
+    "tools",
+    "harness",
+    "claude-code"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "design-tool-schemas-agents",
+   "title": "Design Tool Schemas for Agents",
+   "category": "MCP & Tooling",
+   "description": "Write tool schemas that constrain model behavior: tight types, enums over strings, and parameters that make misuse hard.",
+   "tags": [
+    "tool-schemas",
+    "json-schema",
+    "tool-design",
+    "validation",
+    "constraints"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "deslop-audit",
+   "title": "DeSlop Audit",
+   "category": "QA",
+   "description": "The anti-AI-slop audit: find and fix everything that makes your app look and feel like a generic AI build.",
+   "tags": [
+    "deslop",
+    "audit",
+    "polish",
+    "quality",
+    "design"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "direct-messages-chat",
+   "title": "Add Direct Messaging Feature",
+   "category": "App Builder",
+   "description": "Implement a real, persistent one‑to‑one chat system in the existing app",
+   "tags": [
+    "direct-messaging",
+    "chat",
+    "app-builder",
+    "intermediate",
+    "generated",
+    "Realtime & comms"
+   ],
+   "step_count": 7
+  },
+  {
+   "slug": "dual-layer-defense-prompt-code",
+   "title": "Pair Every Prompt Rule with a Code Backstop",
+   "category": "Harness Engineering",
+   "description": "Prompts guide, code enforces: inventory your agent's soft rules, back each critical one with an independent deterministic check, and define the allow/ask/deny escalation.",
+   "tags": [
+    "dual-defense",
+    "guardrails",
+    "enforcement",
+    "safety",
+    "harness"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "dynamic-prompt-assembly-environment",
+   "title": "Assemble Tool Prompts Dynamically per Environment",
+   "category": "Harness Engineering",
+   "description": "Stop shipping one static mega-prompt: generate tool prompts from environment conditions, inject blocks only when features are on, and dedupe config to save tokens.",
+   "tags": [
+    "prompt-assembly",
+    "token-budget",
+    "conditional-prompts",
+    "harness",
+    "configuration"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "email-sending-transactional",
+   "title": "Add Transactional Email Sending",
+   "category": "App Builder",
+   "description": "Integrate real transactional email capability into the existing app using SendGrid (or similar) with persistent templates and an API endpoint.",
+   "tags": [
+    "email",
+    "transactional",
+    "backend",
+    "api",
+    "sendgrid",
+    "generated",
+    "Realtime & comms"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "episodic-semantic-procedural-stores",
+   "title": "Episodic, Semantic, and Procedural Stores",
+   "category": "Memory & Context",
+   "description": "Organize agent memory by kind - what happened, what is true, and how to do things - instead of one undifferentiated pile.",
+   "tags": [
+    "episodic",
+    "semantic",
+    "procedural",
+    "memory-taxonomy",
+    "architecture"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "error-recovery-retry-policy-loop",
+   "title": "Error Recovery and Retry Policy for the Agent Loop",
+   "category": "Agent Architecture",
+   "description": "Design the retry, backoff, and give-up behavior that separates production agents from demos that loop forever.",
+   "tags": [
+    "error-recovery",
+    "retries",
+    "resilience",
+    "agent-loop",
+    "failure-handling"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "evals-for-your-harness",
+   "title": "Evals for Your Harness",
+   "category": "Harness Engineering",
+   "description": "Build the eval suite that tells you whether harness changes help: task sets, graded rubrics, and regression discipline.",
+   "tags": [
+    "evals",
+    "benchmarks",
+    "regression",
+    "quality",
+    "measurement"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "evidence-checklist",
+   "title": "Evidence Checklist",
+   "category": "QA",
+   "description": "Prove your app works with evidence: build a claim-by-claim verification pack with receipts.",
+   "tags": [
+    "evidence",
+    "verification",
+    "claims",
+    "proof",
+    "qa"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "file-upload-system",
+   "title": "File Upload System",
+   "category": "App Builder",
+   "description": "Build real file uploads with validation, progress, storage, and display - files must survive refresh.",
+   "tags": [
+    "upload",
+    "files",
+    "images",
+    "storage",
+    "media"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "fix-app-looks-good-not-working",
+   "title": "Fix App That Looks Good But Does Not Work",
+   "category": "Debugging",
+   "description": "The systematic recovery flow for beautiful-but-broken AI builds: audit honestly, then fix by functional priority.",
+   "tags": [
+    "broken",
+    "audit",
+    "fake-ui",
+    "recovery",
+    "fix"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "fix-broken-buttons",
+   "title": "Fix Broken Buttons",
+   "category": "Debugging",
+   "description": "Hunt down every dead button in your AI-built app and wire each one to real, verified behavior.",
+   "tags": [
+    "buttons",
+    "handlers",
+    "dead-ui",
+    "click",
+    "fix"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "fix-broken-form-submission",
+   "title": "Fix Broken Form Submission",
+   "category": "Debugging",
+   "description": "Forms that validate, submit, persist, and recover: repair every broken form in your app end to end.",
+   "tags": [
+    "forms",
+    "validation",
+    "submit",
+    "inputs",
+    "fix"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "fix-fake-auth",
+   "title": "Fix Fake Auth",
+   "category": "Debugging",
+   "description": "Your login 'works' but nothing is real: convert visual-only auth into persisted users, sessions, and guards.",
+   "tags": [
+    "auth",
+    "fake",
+    "sessions",
+    "login",
+    "security"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "fix-routing-navigation",
+   "title": "Fix Routing/Navigation",
+   "category": "Debugging",
+   "description": "Repair broken links, 404s, back-button traps, and guard gaps so navigation works like users expect.",
+   "tags": [
+    "routing",
+    "navigation",
+    "links",
+    "404",
+    "spa"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "fluxo-de-inscricao-funcional",
+   "title": "Fluxo de inscrição funcional",
+   "category": "App Builder",
+   "description": "Crie um fluxo de inscrição realmente funcional com formulário, validação, persistência, prevenção de duplicidade, estados de sucesso/erro e testes de ponta a ponta.",
+   "tags": [
+    "inscricao",
+    "formulario",
+    "backend",
+    "validacao",
+    "persistencia",
+    "ux",
+    "teste"
+   ],
+   "step_count": 8
+  },
+  {
+   "slug": "founder-outreach-campaign",
+   "title": "Founder Outreach Campaign",
+   "category": "Launch",
+   "description": "Get your first users by hand: build a target list, write outreach that gets replies, and run the follow-up loop.",
+   "tags": [
+    "outreach",
+    "sales",
+    "first-users",
+    "cold-email",
+    "dms"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "full-text-search",
+   "title": "Add Persistent Full‑Text Search to Existing App",
+   "category": "App Builder",
+   "description": "Integrate a real, searchable index into the current app with a backend API and UI component.",
+   "tags": [
+    "full-text search",
+    "search",
+    "backend",
+    "frontend",
+    "database",
+    "generated",
+    "Data & database"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "github-readme-generator",
+   "title": "GitHub README Generator",
+   "category": "Launch",
+   "description": "Write a README that makes people use your project: hook, quickstart, visuals, and honest docs.",
+   "tags": [
+    "readme",
+    "github",
+    "docs",
+    "open-source",
+    "documentation"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "guard-memory-writes-injection",
+   "title": "Guard Memory Writes Against Injection",
+   "category": "Agent QA & Security",
+   "description": "Stop poisoned data from becoming persistent agent beliefs: validate, attribute, and quarantine memory writes as untrusted input.",
+   "tags": [
+    "memory-poisoning",
+    "injection",
+    "validation",
+    "provenance",
+    "security"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "hackathon-judge-report",
+   "title": "Hackathon Judge Report",
+   "category": "QA",
+   "description": "Evaluate a hackathon project like a rigorous judge: criteria scoring, evidence checks, and structured feedback.",
+   "tags": [
+    "judging",
+    "hackathon",
+    "evaluation",
+    "scoring",
+    "feedback"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "hackathon-submission",
+   "title": "Hackathon Submission",
+   "category": "Launch",
+   "description": "Package your hackathon project to win: narrative, demo plan, submission copy, and judge-proofing.",
+   "tags": [
+    "hackathon",
+    "submission",
+    "judges",
+    "demo",
+    "pitch"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "hook-permission-layer-dangerous-tools",
+   "title": "Hook a Permission Layer onto Dangerous Tools",
+   "category": "Harness Engineering",
+   "description": "Intercept dangerous tool calls with a hook layer: pattern rules, approval gates, and blocks that the model cannot talk its way past.",
+   "tags": [
+    "permissions",
+    "hooks",
+    "safety",
+    "dangerous-tools",
+    "interception"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "image-upload-resizing",
+   "title": "Add Image Upload & Resizing Feature",
+   "category": "App Builder",
+   "description": "Integrate a backend image upload endpoint that resizes images and stores them, plus a front‑end component to use it.",
+   "tags": [
+    "image",
+    "upload",
+    "resize",
+    "backend",
+    "frontend",
+    "generated",
+    "Files & media"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "implement-context-compaction",
+   "title": "Implement Context Compaction",
+   "category": "Memory & Context",
+   "description": "Keep long agent sessions alive by compacting old conversation into structured summaries before the context window fills.",
+   "tags": [
+    "compaction",
+    "context-window",
+    "summarization",
+    "long-sessions",
+    "claude-code"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "improve-mobile-responsiveness",
+   "title": "Improve Mobile Responsiveness",
+   "category": "Debugging",
+   "description": "Make your app genuinely usable on phones: audit at real widths, fix layouts, and verify touch targets.",
+   "tags": [
+    "mobile",
+    "responsive",
+    "layout",
+    "touch",
+    "viewport"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "incident-response-runbook-agent-mishaps",
+   "title": "Incident Response Runbook for Agent Mishaps",
+   "category": "Agent QA & Security",
+   "description": "Prepare for the day your agent does damage: detection, containment, rollback, investigation, and prevention - written before you need it.",
+   "tags": [
+    "incident-response",
+    "runbook",
+    "containment",
+    "rollback",
+    "postmortem"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "internationalization-i18n",
+   "title": "Add Internationalization (i18n) to Existing App",
+   "category": "App Builder",
+   "description": "Integrate multilingual support with language selection and persisted user preference.",
+   "tags": [
+    "i18n",
+    "multilingual",
+    "react",
+    "intermediate",
+    "generated",
+    "Platform & ops"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "investor-pitch-script",
+   "title": "Investor Pitch Script",
+   "category": "Launch",
+   "description": "Write a tight investor pitch: narrative arc, numbers that matter, deck structure, and Q&A prep.",
+   "tags": [
+    "pitch",
+    "investors",
+    "fundraising",
+    "deck",
+    "storytelling"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "jailbreak-regression-suite",
+   "title": "Jailbreak Regression Suite",
+   "category": "Agent QA & Security",
+   "description": "Turn every jailbreak you find into a permanent regression test, so safety boundaries never silently erode across model and prompt changes.",
+   "tags": [
+    "jailbreak",
+    "regression",
+    "safety",
+    "testing",
+    "ci"
+   ],
+   "step_count": 3
+  },
+  {
+   "slug": "landing-page-copy",
+   "title": "Landing Page Copy",
+   "category": "Launch",
+   "description": "Write conversion-focused landing page copy: headline, sections, social proof, CTAs, and objection handling.",
+   "tags": [
+    "copywriting",
+    "landing-page",
+    "conversion",
+    "headlines",
+    "cta"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "layered-tool-prompt-preference-chains",
+   "title": "Design Layered Tool Prompts with Preference Chains",
+   "category": "Harness Engineering",
+   "description": "Structure your tool prompts the way the leading harness does: preference chains up front, usage constraints in the middle, NEVER-guarded safety protocols at the end.",
+   "tags": [
+    "prompt-engineering",
+    "tool-prompts",
+    "preference-chains",
+    "safety",
+    "harness"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "local-service-booking-website",
+   "title": "Local Service Booking Website",
+   "category": "App Builder",
+   "description": "A complete website for a local service business: services, trust, working booking requests, and local SEO basics.",
+   "tags": [
+    "local-business",
+    "booking",
+    "website",
+    "services",
+    "leads"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "magic-link-passwordless-login",
+   "title": "Add Magic‑Link Passwordless Login",
+   "category": "App Builder",
+   "description": "Integrate a secure email‑based magic‑link authentication flow into the existing Node/Express app.",
+   "tags": [
+    "magic-link",
+    "passwordless",
+    "authentication",
+    "node",
+    "express",
+    "email",
+    "generated",
+    "Auth & accounts"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "make-ui-less-generic",
+   "title": "Make UI Less Generic",
+   "category": "Debugging",
+   "description": "Escape the default-AI look: define a real visual identity and apply it systematically across your app.",
+   "tags": [
+    "design",
+    "ui",
+    "branding",
+    "polish",
+    "deslop"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "marketplace-buyer-seller-flow",
+   "title": "Marketplace Buyer/Seller Flow",
+   "category": "App Builder",
+   "description": "Build a two-sided marketplace core: listings, browsing, and a real transaction/request flow between buyers and sellers.",
+   "tags": [
+    "marketplace",
+    "listings",
+    "two-sided",
+    "transactions",
+    "orders"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "memory-consolidation-pruning-schedule",
+   "title": "Memory Consolidation and Pruning Schedule",
+   "category": "Memory & Context",
+   "description": "Keep agent memory healthy over months: scheduled consolidation, decay, promotion between layers, and safe pruning.",
+   "tags": [
+    "consolidation",
+    "pruning",
+    "decay",
+    "memory-lifecycle",
+    "maintenance"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "memory-recall-ranking-relevance",
+   "title": "Memory Recall: Ranking and Relevance",
+   "category": "Memory & Context",
+   "description": "Make recall surface the right memories: hybrid lexical+semantic search, rank fusion, and explainable retrieval.",
+   "tags": [
+    "recall",
+    "retrieval",
+    "ranking",
+    "hybrid-search",
+    "bm25"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "memory-write-policies",
+   "title": "Memory Write Policies",
+   "category": "Memory & Context",
+   "description": "Decide what gets remembered: write gates, provenance, confidence, and validation - because memory quality is set at write time.",
+   "tags": [
+    "memory",
+    "write-policy",
+    "validation",
+    "provenance",
+    "quality"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "mobile-qa-checklist",
+   "title": "Mobile QA Checklist",
+   "category": "QA",
+   "description": "A rigorous mobile QA pass: layouts, touch, keyboards, and the full core journey on phone-sized screens.",
+   "tags": [
+    "mobile",
+    "qa",
+    "responsive",
+    "touch",
+    "viewport"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "mongodb-data-model-plan",
+   "title": "MongoDB Data Model Plan",
+   "category": "App Builder",
+   "description": "Design a MongoDB data model that fits your queries: embed vs reference, indexes, and validation.",
+   "tags": [
+    "mongodb",
+    "database",
+    "schema",
+    "modeling",
+    "indexes"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "notification-system",
+   "title": "Notification System",
+   "category": "App Builder",
+   "description": "Build an in-app notification system with real triggers, unread counts, and a working notification center.",
+   "tags": [
+    "notifications",
+    "alerts",
+    "unread",
+    "activity",
+    "realtime"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "oauth-social-login-google-github",
+   "title": "Add Google and GitHub OAuth Social Login",
+   "category": "App Builder",
+   "description": "Integrate real Google and GitHub OAuth flows into the existing Node/Express app with persistent user records and session handling.",
+   "tags": [
+    "oauth",
+    "social-login",
+    "google",
+    "github",
+    "intermediate",
+    "generated",
+    "Auth & accounts"
+   ],
+   "step_count": 8
+  },
+  {
+   "slug": "observability-agent-runs",
+   "title": "Observability for Agent Runs",
+   "category": "Harness Engineering",
+   "description": "Instrument your agent like production software: traces, session replay, cost tracking, and failure analysis on open standards.",
+   "tags": [
+    "observability",
+    "tracing",
+    "replay",
+    "cost-tracking",
+    "opentelemetry"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "payment-flow-qa",
+   "title": "Payment Flow QA",
+   "category": "QA",
+   "description": "Trust-level testing for payments: success, decline, cancel, idempotency, and state consistency.",
+   "tags": [
+    "payments",
+    "stripe",
+    "qa",
+    "checkout",
+    "billing"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "press-announcement-page",
+   "title": "Press/Announcement Page",
+   "category": "Launch",
+   "description": "Create an announcement page and press kit that makes your launch easy to cover and share.",
+   "tags": [
+    "press",
+    "announcement",
+    "media",
+    "pr",
+    "launch"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "pricing-page-builder",
+   "title": "Pricing Page Builder",
+   "category": "App Builder",
+   "description": "Design and build a pricing page that converts: plan structure, value anchoring, FAQs, and a working upgrade path.",
+   "tags": [
+    "pricing",
+    "plans",
+    "conversion",
+    "billing",
+    "saas"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "product-hunt-launch",
+   "title": "Product Hunt Launch",
+   "category": "Launch",
+   "description": "Plan and execute a Product Hunt launch: positioning, assets, launch-day playbook, and follow-through.",
+   "tags": [
+    "product-hunt",
+    "launch",
+    "marketing",
+    "positioning",
+    "assets"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "production-readiness-review",
+   "title": "Production Readiness Review",
+   "category": "QA",
+   "description": "The pre-ship gate: environment, errors, data safety, performance, and the go/no-go checklist.",
+   "tags": [
+    "production",
+    "readiness",
+    "deploy",
+    "checklist",
+    "shipping"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "prompt-cache-aware-conversation-design",
+   "title": "Prompt-Cache-Aware Conversation Design",
+   "category": "Memory & Context",
+   "description": "Structure your agent's context for prefix caching: stable prefixes, append-only history, and cache-friendly dynamic content.",
+   "tags": [
+    "prompt-caching",
+    "cost",
+    "latency",
+    "context-layout",
+    "optimization"
+   ],
+   "step_count": 3
+  },
+  {
+   "slug": "prompt-cache-friendly-forking",
+   "title": "Make Parallel Sub-Agents Share the Prompt Cache",
+   "category": "Agent Architecture",
+   "description": "Byte-identical request prefixes are why forked workers cost a fraction of spawned ones - engineer your dispatch so every parallel child hits the same cache entry.",
+   "tags": [
+    "prompt-cache",
+    "forking",
+    "cost-optimization",
+    "parallelism",
+    "sub-agents"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "prompt-injection-defense-checklist",
+   "title": "Prompt Injection Defense Checklist",
+   "category": "Agent QA & Security",
+   "description": "Systematically defend your agent against prompt injection: trust boundaries, content isolation, and defense-in-depth that assumes injection will happen.",
+   "tags": [
+    "prompt-injection",
+    "security",
+    "trust-boundaries",
+    "defense",
+    "llm-security"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "push-notifications",
+   "title": "Add Push Notifications to Existing App",
+   "category": "App Builder",
+   "description": "Integrate Firebase Cloud Messaging so users receive real push notifications and tokens are persisted in the backend.",
+   "tags": [
+    "push",
+    "notifications",
+    "mobile",
+    "firebase",
+    "generated",
+    "Realtime & comms"
+   ],
+   "step_count": 7
+  },
+  {
+   "slug": "rate-blast-radius-limits-destructive-tools",
+   "title": "Rate and Blast-Radius Limits for Destructive Tools",
+   "category": "Harness Engineering",
+   "description": "Cap how much damage any window of agent activity can do: rate limits, change budgets, checkpoints, and undo.",
+   "tags": [
+    "blast-radius",
+    "rate-limits",
+    "checkpoints",
+    "undo",
+    "safety"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "rate-limiting",
+   "title": "Add Persistent Rate Limiting to Existing App",
+   "category": "App Builder",
+   "description": "Integrate a real, persistent rate limiting system into the current application.",
+   "tags": [
+    "rate limiting",
+    "persistence",
+    "middleware",
+    "backend",
+    "generated",
+    "Platform & ops"
+   ],
+   "step_count": 8
+  },
+  {
+   "slug": "red-team-agent-adversarial-prompts",
+   "title": "Red-Team Your Agent with Adversarial Prompts",
+   "category": "Agent QA & Security",
+   "description": "Systematically attack your own agent using red-teaming frameworks: vulnerability probes, attack methods, and a repeatable adversarial suite.",
+   "tags": [
+    "red-teaming",
+    "adversarial",
+    "security-testing",
+    "vulnerabilities",
+    "jailbreak"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "reddit-launch-plan",
+   "title": "Reddit Launch Plan",
+   "category": "Launch",
+   "description": "Launch on Reddit without getting banned: subreddit research, value-first posts, and comment strategy.",
+   "tags": [
+    "reddit",
+    "launch",
+    "community",
+    "marketing",
+    "organic"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "refactor-messy-ai-code",
+   "title": "Refactor Messy AI Code",
+   "category": "Debugging",
+   "description": "Clean up AI-generated spaghetti safely: dedupe, extract, and organize without breaking working features.",
+   "tags": [
+    "refactor",
+    "cleanup",
+    "code-quality",
+    "components",
+    "architecture"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "release-gates-agent-generated-code",
+   "title": "Release Gates for Agent-Generated Code",
+   "category": "Agent QA & Security",
+   "description": "Put agent output through a real merge gate: automated review, tests, security scans, and human sign-off proportional to risk.",
+   "tags": [
+    "release-gates",
+    "ci",
+    "code-review",
+    "agent-code",
+    "quality"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "research-questions-vs-contributions",
+   "title": "صياغة الفرق بين الأسئلة البحثية والمساهمات في ورقة أو مشروع بحثي",
+   "category": "QA",
+   "description": "تدفق عملي لمساعدة المستخدم على التمييز بوضوح بين الأسئلة البحثية والمساهمات، ثم صياغتهما بشكل صحيح وقابل للاستخدام في مقترح أو ورقة بحثية.",
+   "tags": [
+    "research",
+    "academic",
+    "writing",
+    "questions",
+    "contributions",
+    "chatgpt"
+   ],
+   "step_count": 9
+  },
+  {
+   "slug": "role-based-access-control",
+   "title": "Role-Based Access Control",
+   "category": "App Builder",
+   "description": "Add real roles and permissions: enforced on backend endpoints and reflected honestly in the UI.",
+   "tags": [
+    "rbac",
+    "roles",
+    "permissions",
+    "admin",
+    "security"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "rule-file-code-review-gates",
+   "title": "Rule-File Code Review Gates",
+   "category": "Harness Engineering",
+   "description": "Run deterministic policy checks on everything your agent produces: rule files reviewing plans, diffs, and evidence before anything merges.",
+   "tags": [
+    "rules",
+    "policy-as-code",
+    "review-gates",
+    "deterministic",
+    "guardrails"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "saas-mvp-builder",
+   "title": "SaaS MVP Builder",
+   "category": "App Builder",
+   "description": "Go from idea to a working SaaS MVP: auth, core feature, billing readiness, and a landing page that converts.",
+   "tags": [
+    "saas",
+    "mvp",
+    "startup",
+    "auth",
+    "landing-page"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "sandbox-untrusted-code-execution",
+   "title": "Sandbox Untrusted Code Execution",
+   "category": "Harness Engineering",
+   "description": "Contain what your agent runs: isolated execution environments with resource limits, network policy, and workspace mounting done right.",
+   "tags": [
+    "sandbox",
+    "docker",
+    "isolation",
+    "security",
+    "execution"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "search-over-your-data",
+   "title": "Add Search Functionality to Existing App",
+   "category": "App Builder",
+   "description": "Implement a real, persistent search feature across the app’s primary data list.",
+   "tags": [
+    "search",
+    "persistence",
+    "frontend",
+    "backend",
+    "integration",
+    "generated",
+    "Data & database"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "secrets-hygiene-agent-logs",
+   "title": "Secrets Hygiene in Agent Logs",
+   "category": "Agent QA & Security",
+   "description": "Keep credentials out of prompts, tool outputs, logs, and traces: detection, redaction, and safe handling across the whole agent pipeline.",
+   "tags": [
+    "secrets",
+    "redaction",
+    "logging",
+    "credentials",
+    "security"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "security-basics-review",
+   "title": "Security Basics Review",
+   "category": "QA",
+   "description": "The essential security pass for AI-built apps: secrets, auth enforcement, input handling, and data exposure.",
+   "tags": [
+    "security",
+    "auth",
+    "secrets",
+    "validation",
+    "exposure"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "seo-essentials",
+   "title": "Add Core SEO Features to Existing App",
+   "category": "App Builder",
+   "description": "Integrate dynamic meta tags, Open Graph, sitemap.xml, and robots.txt with real persistence",
+   "tags": [
+    "seo",
+    "meta tags",
+    "sitemap",
+    "robots.txt",
+    "react",
+    "generated",
+    "Platform & ops"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "session-summaries-survive-compaction",
+   "title": "Session Summaries That Survive Compaction",
+   "category": "Memory & Context",
+   "description": "Write durable session summaries at the right moments so knowledge outlives compaction and process restarts.",
+   "tags": [
+    "session-summary",
+    "compaction",
+    "persistence",
+    "memory",
+    "continuity"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "settings-billing-page",
+   "title": "Settings/Billing Page",
+   "category": "App Builder",
+   "description": "Build a real settings area: profile edits that persist, password change, plan display, and danger zone.",
+   "tags": [
+    "settings",
+    "profile",
+    "billing",
+    "account",
+    "preferences"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "single-agent-vs-multi-agent",
+   "title": "Single-Agent vs Multi-Agent: Decide and Design",
+   "category": "Agent Architecture",
+   "description": "A decision flow for the most expensive architecture choice in agent systems - grounded in what actually ships versus what demos well.",
+   "tags": [
+    "multi-agent",
+    "architecture",
+    "decision",
+    "orchestration",
+    "crews"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "streaming-partial-result-ux",
+   "title": "Streaming and Partial-Result UX",
+   "category": "Agent Architecture",
+   "description": "Stream model output and tool progress so users see the agent think and act - the UX baseline every serious terminal agent has set.",
+   "tags": [
+    "streaming",
+    "ux",
+    "sse",
+    "terminal",
+    "progress"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "stripe-checkout-flow",
+   "title": "Stripe Checkout Flow",
+   "category": "App Builder",
+   "description": "Add real Stripe payments with checkout, webhooks, and payment status - not a button that pretends to charge.",
+   "tags": [
+    "stripe",
+    "payments",
+    "checkout",
+    "subscriptions",
+    "webhooks"
+   ],
+   "step_count": 7
+  },
+  {
+   "slug": "structured-output-tools",
+   "title": "Structured Output from Tools",
+   "category": "MCP & Tooling",
+   "description": "Make every tool and agent output validate against a schema: typed results, repair loops, and safe fallbacks.",
+   "tags": [
+    "structured-output",
+    "schemas",
+    "validation",
+    "typed-pipelines",
+    "reliability"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "sub-agent-delegation-context-isolation",
+   "title": "Sub-Agent Delegation with Context Isolation",
+   "category": "Agent Architecture",
+   "description": "Delegate bounded work to sub-agents that run in fresh context and return only distilled results - the pattern behind scalable long tasks.",
+   "tags": [
+    "sub-agents",
+    "delegation",
+    "context-isolation",
+    "architecture",
+    "claude-code"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "supabase-schema-plan",
+   "title": "Supabase Schema Plan",
+   "category": "App Builder",
+   "description": "Design a correct Supabase schema: tables, relationships, RLS policies, and verification queries.",
+   "tags": [
+    "supabase",
+    "database",
+    "schema",
+    "postgres",
+    "rls"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "test-every-user-path",
+   "title": "Test Every User Path",
+   "category": "QA",
+   "description": "Systematically walk every path a user can take and verify each works - the complete functional test pass.",
+   "tags": [
+    "testing",
+    "user-paths",
+    "qa",
+    "verification",
+    "coverage"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "testing-mcp-tools",
+   "title": "Testing MCP Tools",
+   "category": "MCP & Tooling",
+   "description": "Bring TDD discipline to MCP servers: unit-test handlers, protocol-test the surface, and contract-test against a real host.",
+   "tags": [
+    "testing",
+    "mcp",
+    "tdd",
+    "contract-tests",
+    "protocol"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "threat-model-mcp-server",
+   "title": "Threat-Model Your MCP Server",
+   "category": "Agent QA & Security",
+   "description": "Systematically threat-model an MCP server before it is exploited: assets, entry points, trust boundaries, and mitigations documented and tested.",
+   "tags": [
+    "threat-model",
+    "mcp",
+    "security",
+    "trust-boundaries",
+    "mitigations"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "tiktok-content-system",
+   "title": "TikTok Content System",
+   "category": "Launch",
+   "description": "A repeatable short-video system for your product: hooks, formats, scripts, and a 2-week content calendar.",
+   "tags": [
+    "tiktok",
+    "shorts",
+    "content",
+    "video",
+    "marketing"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "tool-descriptions-steer-model",
+   "title": "Tool Descriptions That Steer the Model",
+   "category": "MCP & Tooling",
+   "description": "Treat tool descriptions as prompt engineering: when-to-use guidance, negative cases, and worked examples that fix tool-choice errors.",
+   "tags": [
+    "tool-descriptions",
+    "prompt-engineering",
+    "tool-choice",
+    "mcp",
+    "guidance"
+   ],
+   "step_count": 3
+  },
+  {
+   "slug": "tool-permissioning-tiers",
+   "title": "Tool Permissioning Tiers",
+   "category": "MCP & Tooling",
+   "description": "Classify tools by risk and enforce tiered permissions: auto-allow, session-allow, always-ask, and never - enforced in the harness.",
+   "tags": [
+    "permissions",
+    "tiers",
+    "safety",
+    "tool-governance",
+    "mcp"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "tool-result-size-management",
+   "title": "Tool Result Size Management",
+   "category": "MCP & Tooling",
+   "description": "Stop tool outputs from flooding context: budgets per tool, smart truncation, pagination, and reference-based results.",
+   "tags": [
+    "tool-results",
+    "truncation",
+    "context-budget",
+    "pagination",
+    "output-management"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "two-factor-auth-2fa",
+   "title": "Add Time‑Based One‑Time Password (TOTP) 2FA",
+   "category": "App Builder",
+   "description": "Integrate real TOTP two‑factor authentication into an existing app with full persistence and verification.",
+   "tags": [
+    "2fa",
+    "totp",
+    "authentication",
+    "security",
+    "backend",
+    "generated",
+    "Auth & accounts"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "usage-based-metered-billing",
+   "title": "Add Usage‑Based Metered Billing",
+   "category": "App Builder",
+   "description": "Integrate real usage tracking, billing calculations, and Stripe metered billing into the existing app.",
+   "tags": [
+    "billing",
+    "usage",
+    "stripe",
+    "metered",
+    "backend",
+    "generated",
+    "Payments & billing"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "user-onboarding-flow",
+   "title": "User Onboarding Flow",
+   "category": "App Builder",
+   "description": "Build a multi-step onboarding that captures real user data, persists progress, and lands users in a personalized app.",
+   "tags": [
+    "onboarding",
+    "wizard",
+    "signup",
+    "activation",
+    "profile"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "vector-vs-markdown-memory-decision",
+   "title": "Vector vs Markdown Memory: Make the Decision",
+   "category": "Memory & Context",
+   "description": "Choose your memory backend on evidence: when plain files win, when vectors earn their complexity, and how to test it on your own data.",
+   "tags": [
+    "vector-db",
+    "markdown",
+    "memory-backend",
+    "decision",
+    "benchmarking"
+   ],
+   "step_count": 3
+  },
+  {
+   "slug": "verification-loops-never-trust-unrun-edit",
+   "title": "Verification Loops: Never Trust an Unrun Edit",
+   "category": "Harness Engineering",
+   "description": "Wire verification into your agent so every edit is checked by machines - syntax, tests, behavior - before it counts as done.",
+   "tags": [
+    "verification",
+    "testing",
+    "edits",
+    "harness",
+    "trust"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "version-your-harness-track-behavior",
+   "title": "Version Your Harness and Track Behavior",
+   "category": "Harness Engineering",
+   "description": "Treat prompts, tools, and loop logic as versioned, changelogged artifacts - so behavior changes are decisions, not surprises.",
+   "tags": [
+    "versioning",
+    "changelog",
+    "behavior-tracking",
+    "prompts",
+    "regression"
+   ],
+   "step_count": 4
+  },
+  {
+   "slug": "waitlist-launch",
+   "title": "Waitlist Launch",
+   "category": "Launch",
+   "description": "Launch a waitlist that actually converts: page, incentives, referral loop, and the nurture sequence.",
+   "tags": [
+    "waitlist",
+    "prelaunch",
+    "email",
+    "referral",
+    "landing"
+   ],
+   "step_count": 5
+  },
+  {
+   "slug": "webhooks-you-emit",
+   "title": "Add Persistent Webhook Emission to Existing App",
+   "category": "App Builder",
+   "description": "Integrate configurable, signed webhooks that fire on key app events with reliable persistence and retry.",
+   "tags": [
+    "webhooks",
+    "backend",
+    "node",
+    "api",
+    "persistence",
+    "generated",
+    "Platform & ops"
+   ],
+   "step_count": 6
+  },
+  {
+   "slug": "working-signup-auth-system",
+   "title": "Working Signup/Auth System",
+   "category": "App Builder",
+   "description": "Build a real signup, login, session, and protected route flow - not a form that only looks functional.",
+   "tags": [
+    "auth",
+    "signup",
+    "login",
+    "sessions",
+    "protected-routes",
+    "validation"
+   ],
+   "step_count": 13
+  }
+ ]
+}
