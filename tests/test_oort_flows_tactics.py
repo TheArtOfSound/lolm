@@ -53,8 +53,9 @@ def test_tactics_prompt_block_nonempty():
 def test_plan_steps_from_playbook_into_task_state(tmp_path, monkeypatch):
     monkeypatch.setenv("LOLM_TASK_STATE_DIR", str(tmp_path / "ts"))
     # Force task-state store under tmp if supported; still works with default.
-    z = ts.init_task_state(
-        "Design a single-loop agent with tool registry and result folding"
+    z = ts.load_or_init(
+        "Design a single-loop agent with tool registry and result folding",
+        resume=False,
     )
     plan_text = " ".join(p.text for p in z.P).lower()
     # Either flow-derived steps or default plan — both valid; prefer flow when matched.
