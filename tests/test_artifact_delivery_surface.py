@@ -32,5 +32,5 @@ def test_workspace_surfaces_server_safety_refusal_without_executing_tools():
 
 def test_service_worker_precaches_new_artifact_surface_and_bumps_version():
     sw = (ROOT / "site" / "sw.js").read_text(encoding="utf-8")
-    assert "lolm-v20-artifact-delivery" in sw
+    assert "lolm-v21-workspace-identity" in sw  # v21+ supersedes v20 artifact-delivery cache name
     assert '"/artifact-delivery-ui.js"' in sw
