@@ -54,6 +54,23 @@ def test_service_worker_caches_docs_but_never_api_or_agent_pages():
     assert "/try.html" not in sw
 
 
+def test_public_pages_mount_the_canonical_qira_apps_launcher():
+    design_script = (SITE / "lolm-ds.js").read_text(encoding="utf-8")
+    design_css = (SITE / "lolm-ds.css").read_text(encoding="utf-8")
+    launcher_url = "https://imagineqira.com/assets/qira-apps/qira-product-launcher.js"
+
+    assert launcher_url in design_script
+    assert 'launcher.setAttribute("current-product", "lolm")' in design_script
+    assert 'launcher.setAttribute("theme", effective())' in design_script
+    assert "qira-product-launcher" in design_css
+
+    for path in SITE.rglob("*.html"):
+        if path == SITE / "media" / "render_cast.html":
+            continue
+        html = path.read_text(encoding="utf-8")
+        assert "/lolm-ds.js" in html, f"{path.relative_to(SITE)} bypasses the shared launcher layer"
+
+
 def test_public_server_has_no_execution_enable_switch():
     server = (ROOT / "local_ui" / "server_public_demo.py").read_text(encoding="utf-8")
     assert "LOLM_PUBLIC_WEB_EXECUTION" not in server

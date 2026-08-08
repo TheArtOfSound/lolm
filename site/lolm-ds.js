@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 Qira LLC. All rights reserved.
- * LOLM design system — theme persistence + toggle.
+ * LOLM design system — theme persistence, toggle, and Qira Apps launcher.
  *
  * Deliberately tiny, dependency-free, and safe to run before the rest of the page:
  * the stylesheet already themes off prefers-color-scheme, so this only has to
@@ -10,6 +10,7 @@
   "use strict";
 
   var KEY = "lolm-theme";          // "dark" | "light" | absent = follow the OS
+  var LAUNCHER_SRC = "https://imagineqira.com/assets/qira-apps/qira-product-launcher.js?v=20260807portal";
   var root = document.documentElement;
 
   function stored() {
@@ -53,6 +54,9 @@
       btn.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
       btn.setAttribute("title", btn.getAttribute("aria-label"));
     }
+    document.querySelectorAll("qira-product-launcher").forEach(function (launcher) {
+      launcher.setAttribute("theme", effective());
+    });
   }
 
   // Apply the stored choice before first paint where possible (this script is
@@ -71,6 +75,64 @@
       document.body.appendChild(btn);
       apply(stored(), false);
     }
+    mountQiraLauncher();
+  }
+
+  function launcherTarget() {
+    return document.querySelector("header nav") ||
+      document.querySelector("header") ||
+      document.querySelector("main.shell > nav, .shell > nav");
+  }
+
+  function mountQiraLauncher() {
+    if (document.querySelector("qira-product-launcher")) return;
+
+    var slot = document.createElement("span");
+    slot.className = "lolm-qira-apps-slot";
+    slot.setAttribute("aria-label", "Qira Apps");
+
+    var target = launcherTarget();
+    if (target) {
+      var isHeaderNav = Boolean(target.closest("header"));
+      if (!isHeaderNav && target.lastElementChild) {
+        slot.classList.add("lolm-qira-apps-slot--end-group");
+        target.insertBefore(slot, target.lastElementChild);
+      } else {
+        target.appendChild(slot);
+      }
+    } else {
+      slot.classList.add("lolm-qira-apps-slot--floating");
+      document.body.appendChild(slot);
+    }
+
+    function renderLauncher() {
+      if (!customElements.get("qira-product-launcher")) return;
+      var launcher = document.createElement("qira-product-launcher");
+      launcher.setAttribute("current-product", "lolm");
+      launcher.setAttribute("theme", effective());
+      slot.replaceChildren(launcher);
+    }
+
+    if (customElements.get("qira-product-launcher")) {
+      renderLauncher();
+      return;
+    }
+
+    var script = document.querySelector('script[data-qira-product-launcher]');
+    if (!script) {
+      script = document.createElement("script");
+      script.src = LAUNCHER_SRC;
+      script.async = true;
+      script.dataset.qiraProductLauncher = "";
+      script.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+      document.head.appendChild(script);
+    }
+    script.addEventListener("load", renderLauncher, { once: true });
+    script.addEventListener("error", function () {
+      // Progressive enhancement: keep LOLM navigation usable if the shared
+      // ecosystem asset is temporarily unavailable.
+      slot.remove();
+    }, { once: true });
   }
 
   if (document.readyState === "loading") {
