@@ -1,0 +1,160 @@
+name: organic-snake-retest
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/organic-snake-retest.yml'
+      - 'clients/cli/**'
+      - 'clients/js/**'
+      - 'local_ui/**'
+      - 'lolm/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: organic-snake-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  packaged-organic-snake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Pack and clean-install published surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          mkdir -p "$RUNNER_TEMP/packs" "$RUNNER_TEMP/clean-install"
+          npm pack ./clients/js --pack-destination "$RUNNER_TEMP/packs" | tee "$RUNNER_TEMP/js-pack.txt"
+          npm pack ./clients/cli --pack-destination "$RUNNER_TEMP/packs" | tee "$RUNNER_TEMP/cli-pack.txt"
+          cd "$RUNNER_TEMP/clean-install"
+          npm init -y >/dev/null
+          npm install "$RUNNER_TEMP"/packs/lolm-nfet-client-*.tgz --ignore-scripts --no-audit --no-fund
+          npm install "$RUNNER_TEMP"/packs/lolm-cli-*.tgz --ignore-scripts --no-audit --no-fund
+          ./node_modules/.bin/lolm --version | tee "$RUNNER_TEMP/installed-version.txt"
+
+      - name: Run exact organic Snake acceptance task
+        id: snake
+        shell: bash
+        working-directory: ${{ runner.temp }}/clean-install
+        run: |
+          set -uo pipefail
+          rm -rf "$RUNNER_TEMP/snake-game" "$RUNNER_TEMP/snake-game.receipt.json" "$RUNNER_TEMP/snake-run.log"
+          set +e
+          ./node_modules/.bin/lolm code "Build a complete playable Snake game as a single index.html file. Use browser-native HTML, CSS, and JavaScript only. Verify JavaScript syntax and browser rendering. Do not create Python files." \
+            --save "$RUNNER_TEMP/snake-game" \
+            --max-steps 12 \
+            --idle-timeout 120000 \
+            --timeout 300000 \
+            --receipt "$RUNNER_TEMP/snake-game.receipt.json" \
+            2>&1 | tee "$RUNNER_TEMP/snake-run.log"
+          cli_exit=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$cli_exit" | tee "$RUNNER_TEMP/cli-exit-code.txt"
+          echo "cli_exit=$cli_exit" >> "$GITHUB_OUTPUT"
+
+      - name: Inventory and machine-readable observations
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          {
+            echo "head_sha=${GITHUB_SHA}"
+            echo "cli_exit=${{ steps.snake.outputs.cli_exit }}"
+            echo
+            echo "=== output tree ==="
+            if test -d "$RUNNER_TEMP/snake-game"; then
+              find "$RUNNER_TEMP/snake-game" -mindepth 1 -printf '%P\t%y\t%s bytes\n' | sort
+            else
+              echo "<no saved output directory>"
+            fi
+            echo
+            echo "=== Python files ==="
+            if test -d "$RUNNER_TEMP/snake-game"; then
+              find "$RUNNER_TEMP/snake-game" -type f -name '*.py' -printf '%P\n' | sort
+            fi
+            echo
+            echo "=== potentially relevant transcript lines ==="
+            if test -f "$RUNNER_TEMP/snake-run.log"; then
+              grep -Ein 'main\.py|py_compile|xdg-open|html\.render|force_branch|branch|verify|checkpoint|stuck|broken|shipped|receipt|step' "$RUNNER_TEMP/snake-run.log" || true
+            fi
+          } | tee "$RUNNER_TEMP/snake-observations.txt"
+
+          node <<'NODE' | tee "$RUNNER_TEMP/snake-analysis.json"
+          const fs = require('fs');
+          const path = require('path');
+          const root = process.env.RUNNER_TEMP;
+          const outDir = path.join(root, 'snake-game');
+          const receiptPath = path.join(root, 'snake-game.receipt.json');
+          const logPath = path.join(root, 'snake-run.log');
+          const log = fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8') : '';
+          let receipt = null;
+          let receiptParseError = null;
+          if (fs.existsSync(receiptPath)) {
+            try { receipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8')); }
+            catch (e) { receiptParseError = String(e); }
+          }
+          const files = [];
+          function walk(dir, prefix='') {
+            if (!fs.existsSync(dir)) return;
+            for (const ent of fs.readdirSync(dir, {withFileTypes:true})) {
+              const rel = path.join(prefix, ent.name);
+              const full = path.join(dir, ent.name);
+              if (ent.isDirectory()) walk(full, rel);
+              else files.push({path: rel.replaceAll('\\\\','/'), bytes: fs.statSync(full).size});
+            }
+          }
+          walk(outDir);
+          const relevantLines = log.split(/\r?\n/).filter(line =>
+            /main\.py|py_compile|xdg-open|html\.render|force_branch|checkpoint|stuck|broken|shipped|receipt/i.test(line)
+          );
+          const result = {
+            receipt_exists: fs.existsSync(receiptPath),
+            receipt_parse_error: receiptParseError,
+            receipt,
+            output_dir_exists: fs.existsSync(outDir),
+            files,
+            python_files: files.filter(x => x.path.toLowerCase().endsWith('.py')),
+            index_html_exists: files.some(x => x.path === 'index.html' && x.bytes > 0),
+            log_bytes: Buffer.byteLength(log),
+            raw_token_counts: {
+              main_py: (log.match(/main\.py/gi) || []).length,
+              py_compile: (log.match(/py_compile/gi) || []).length,
+              xdg_open: (log.match(/xdg-open/gi) || []).length,
+              html_render: (log.match(/html\.render/gi) || []).length,
+              force_branch: (log.match(/force_branch/gi) || []).length,
+              shipped: (log.match(/shipped/gi) || []).length,
+              stuck: (log.match(/stuck/gi) || []).length,
+              broken: (log.match(/broken/gi) || []).length
+            },
+            relevant_lines: relevantLines
+          };
+          console.log(JSON.stringify(result, null, 2));
+          NODE
+
+      - name: Upload complete forensic bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: organic-snake-ecc9
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/snake-run.log
+            ${{ runner.temp }}/snake-game.receipt.json
+            ${{ runner.temp }}/snake-game/**
+            ${{ runner.temp }}/snake-observations.txt
+            ${{ runner.temp }}/snake-analysis.json
+            ${{ runner.temp }}/cli-exit-code.txt
+            ${{ runner.temp }}/installed-version.txt
+            ${{ runner.temp }}/js-pack.txt
+            ${{ runner.temp }}/cli-pack.txt
