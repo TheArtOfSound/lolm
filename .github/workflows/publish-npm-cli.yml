@@ -93,13 +93,16 @@ jobs:
           V="$(node -p "require('./package.json').version")"
           cd "$RUNNER_TEMP"
           mkdir cli-smoke && cd cli-smoke && npm init -y >/dev/null
-          # the registry needs a moment to serve a brand-new version
-          installed=0
-          for i in 1 2 3 4 5 6; do
-            if npm install "lolm-cli@$V"; then installed=1; break; fi
+          # npm's publish endpoint can acknowledge before every read replica
+          # serves the immutable tarball. Poll the registry document first and
+          # allow three minutes before treating propagation as a release error.
+          available=0
+          for i in {1..18}; do
+            if curl -fsS "https://registry.npmjs.org/lolm-cli/$V" >/dev/null; then available=1; break; fi
             sleep 10
           done
-          [ "$installed" -eq 1 ]
+          [ "$available" -eq 1 ]
+          npm install "lolm-cli@$V" --prefer-online --no-audit --no-fund
           ./node_modules/.bin/lolm --version | grep -qx "$V"
           ./node_modules/.bin/lolm --help | grep -q "COMMANDS"
           ./node_modules/.bin/lolm providers --json > providers.json
