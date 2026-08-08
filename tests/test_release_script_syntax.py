@@ -49,3 +49,11 @@ def test_deploy_enforces_docs_only_product_and_retired_execution_boundary():
     assert 'run_code" = "410"' in deploy
     assert "'plans' not in config and 'billing' not in config" in deploy
     assert "smoke_pdf_delivery.py" not in deploy
+
+
+def test_deploy_independently_proves_the_live_qira_launcher_bytes():
+    deploy = (ROOT / "deploy" / "deploy_box.sh").read_text(encoding="utf-8")
+    assert 'check "shared design system"' in deploy
+    assert 'cmp -s site/lolm-ds.js "$live_design_tmp"' in deploy
+    assert "qira-product-launcher" in deploy
+    assert 'current-product", "lolm"' in deploy

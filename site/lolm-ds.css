@@ -807,7 +807,38 @@ td, th { border-color: var(--line); }
 .qira-eco-links a:hover { color: var(--ink) !important; }
 .qira-eco-all { color: var(--ink) !important; }
 
-/* ── 11. theme toggle ──────────────────────────────────────────────────────── */
+/* ── 11. Qira Apps + theme controls ───────────────────────────────────────── */
+
+.lolm-qira-apps-slot {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  position: relative;
+  z-index: 60;
+}
+
+/* The compact guide pages use a two-ended nav. Keep the existing destination
+   at the right edge and place Apps immediately before it. */
+.lolm-qira-apps-slot--end-group { margin-left: auto; }
+.lolm-qira-apps-slot--end-group + a { margin-left: 8px; }
+
+/* Documentation and retired compatibility pages intentionally have no header.
+   They still need a visible way back into the product family. */
+.lolm-qira-apps-slot--floating {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+  box-shadow: var(--ring), var(--shadow-md);
+  backdrop-filter: blur(12px);
+}
+
+qira-product-launcher { display: inline-flex; }
 
 .lolm-theme-toggle {
   position: fixed;
@@ -833,6 +864,14 @@ td, th { border-color: var(--line); }
    sticky wordmark owns the top. Sit just above the composer on the left, where
    the feed is empty, and stay out of the thumb zone. */
 @media (max-width: 640px) {
+  /* The homepage used to keep the final GitHub link visible. Once the launcher
+     becomes the final nav child, keep the task-oriented Install link instead. */
+  header .nav > a:first-child { display: inline-flex !important; }
+  header nav .links a:not(:first-child) { display: none; }
+  .lolm-qira-apps-slot--floating {
+    top: max(8px, env(safe-area-inset-top, 0px));
+    right: max(8px, env(safe-area-inset-right, 0px));
+  }
   .lolm-theme-toggle {
     right: auto;
     left: 10px;

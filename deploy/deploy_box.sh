@@ -110,6 +110,7 @@ echo "[deploy] smoke + health + critical routes"
 check "homepage"       "$BASE/"                         200
 check "install docs"   "$BASE/install.html"             200
 check "CLI docs"       "$BASE/docs.html"                200
+check "shared design system" "$BASE/lolm-ds.js"          200
 check "static contract" "$BASE/product-config.json"     200
 check "health"         "$BASE/api/demo/health"          200
 check "API contract"   "$BASE/api/demo/product-config"  200
@@ -129,6 +130,18 @@ if [ "$fail" -ne 0 ]; then
   echo "[deploy] FAILED health/smoke"
   exit 1
 fi
+
+live_design_tmp=$(mktemp)
+curl -fsS --max-time 20 "$BASE/lolm-ds.js" > "$live_design_tmp"
+if ! cmp -s site/lolm-ds.js "$live_design_tmp"; then
+  echo "[smoke] FAIL live design system does not match this release checkout"
+  rm -f "$live_design_tmp"
+  exit 1
+fi
+grep -q 'current-product", "lolm"' "$live_design_tmp"
+grep -q 'qira-product-launcher' "$live_design_tmp"
+rm -f "$live_design_tmp"
+echo "[smoke] OK   exact live design system includes the LOLM Qira Apps identity"
 
 product_tmp=$(mktemp)
 curl -fsS --max-time 20 "$BASE/api/demo/product-config" > "$product_tmp"
