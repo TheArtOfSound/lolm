@@ -40,10 +40,12 @@ def test_deploy_script_arms_and_executes_automatic_rollback_after_snapshot():
     assert deploy.index("ROLLBACK_ARMED=1") < deploy.index("syncing code")
 
 
-def test_deploy_requires_generated_artifact_task_state_bridge():
+def test_deploy_enforces_docs_only_product_and_retired_execution_boundary():
     deploy = (ROOT / "deploy" / "deploy_box.sh").read_text(encoding="utf-8")
-    assert "_task_state_artifact_patch" in deploy
-    assert "observe_workspace_artifacts" in deploy
-    assert "allow_finalize_from_state(st) is False" in deploy
-    assert "allow_finalize_from_state(st) is True" in deploy
-    assert "generated-artifact task state OK" in deploy
+    assert "config['product']['mode'] == 'open_source_cli'" in deploy
+    assert "{'website': False, 'cli': True, 'hosted_api': False}" in deploy
+    assert "config['commercial_license']['public_prices'] is False" in deploy
+    assert 'check "old status retired"' in deploy
+    assert 'run_code" = "410"' in deploy
+    assert "'plans' not in config and 'billing' not in config" in deploy
+    assert "smoke_pdf_delivery.py" not in deploy
