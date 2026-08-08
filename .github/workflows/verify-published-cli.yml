@@ -75,7 +75,7 @@ jobs:
             curl -fsS http://127.0.0.1:18181/v1/models >/dev/null && break
             sleep 1
           done
-          ./node_modules/.bin/lolm ask 'hello' --provider custom \
+          ./node_modules/.bin/lolm ask 'identify the selected model' --provider custom \
             --base-url http://127.0.0.1:18181/v1 --model publish-smoke \
             --api-key local-test --no-nfet --json > result.json
           node -e "const x=require('./result.json'); if(!x.ok || x.response !== 'published local answer from publish-smoke')process.exit(1)"
