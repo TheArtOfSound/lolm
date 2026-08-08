@@ -128,3 +128,107 @@ export function nfetLine(result) {
   const paint = colors[d.label] || ui.dim;
   return `${ui.violet("NFET")} ${paint(String(d.label || "unknown").toUpperCase())} ${ui.dim(`· ${d.source || ""} · H ${result.telemetry?.avg_entropy ?? "–"} · Δ ${result.telemetry?.avg_hidden_drift ?? "–"} · gate ${result.telemetry?.avg_gate ?? "–"}`)}`;
 }
+
+export function nfetSummary(result, { verbose = false } = {}) {
+  if (verbose) return nfetLine(result);
+  if (!result?.available) return `${ui.dim("Quality controller offline")} ${ui.dim(`· ${result?.reason || "not loaded"}`)}`;
+  const label = result.decision?.label || "continue";
+  const summaries = {
+    continue: ["Trajectory stable", ui.green],
+    retrieve: ["Gathering better evidence", ui.amber],
+    verify: ["Checking the result", ui.cyan],
+    branch: ["Comparing another approach", ui.violet],
+    finalize: ["Result checked", ui.green],
+  };
+  const [message, paint] = summaries[label] || ["Quality pass complete", ui.dim];
+  return `${ui.violet("NFET")} ${paint("◆")} ${message}`;
+}
+
+export function createConsoleSurface({ version = "", provider = "", model = "", nfet = "" } = {}) {
+  let alternate = false;
+  let closed = false;
+  let progressVisible = false;
+  let progressTimer = null;
+  let progressStarted = 0;
+  let progressLabel = "Working";
+  let progressFrame = 0;
+  let verbose = false;
+  const drawProgress = () => {
+    if (!progressVisible) return;
+    const frames = ["◐", "◓", "◑", "◒"];
+    const elapsed = Math.max(0, Math.floor((Date.now() - progressStarted) / 1000));
+    output.write(`\r\x1b[2K  ${ui.violet(frames[progressFrame++ % frames.length])} ${ui.dim(`${progressLabel} · ${elapsed}s`)}`);
+  };
+  const startProgress = (label) => {
+    progressLabel = label || "Working";
+    if (!progressVisible) {
+      progressVisible = true;
+      progressStarted = Date.now();
+      progressTimer = setInterval(drawProgress, 120);
+    }
+    drawProgress();
+  };
+  const clearProgress = () => {
+    if (!progressVisible) return;
+    clearInterval(progressTimer);
+    progressTimer = null;
+    output.write("\r\x1b[2K");
+    progressVisible = false;
+  };
+  const writeLine = (value = "") => {
+    clearProgress();
+    output.write(`${value}\n`);
+  };
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    clearProgress();
+    output.write("\x1b[?25h");
+    if (alternate) output.write("\x1b[?1049l");
+  };
+  return {
+    open() {
+      alternate = Boolean(output.isTTY && process.env.LOLM_NO_ALT_SCREEN !== "1");
+      if (alternate) output.write("\x1b[?1049h");
+      output.write("\x1b[2J\x1b[H\x1b[?25h");
+      writeLine(`${wordmark()}  ${ui.bold("PERSONAL AGENT")}`);
+      writeLine(ui.dim("Local intelligence that works on your computer"));
+      writeLine();
+      writeLine(`${ui.green("●")} ${provider} ${ui.dim(`· ${model}`)}   ${ui.violet("◆")} ${nfet}   ${ui.dim(`v${version}`)}`);
+      writeLine(ui.dim("Talk normally. I remember the conversation and unfinished work."));
+      writeLine(ui.dim("/help for controls  ·  /debug for NFET details  ·  /exit when done"));
+      writeLine(ui.dim("─".repeat(Math.min(96, Math.max(48, (output.columns || 80) - 2)))));
+      process.once("exit", close);
+    },
+    close,
+    setVerbose(value) { verbose = Boolean(value); },
+    get verbose() { return verbose; },
+    user(message) {
+      writeLine();
+      writeLine(`${ui.indigo("YOU")}  ${String(message || "").trim()}`);
+    },
+    phase(label, detail = "") {
+      clearProgress();
+      const suffix = detail ? ` ${ui.dim(`· ${detail}`)}` : "";
+      writeLine(`${ui.violet("◆")} ${ui.bold(label)}${suffix}`);
+      startProgress("Working locally");
+    },
+    progress({ chars = 0, thinking = false } = {}) {
+      const label = thinking ? "Reasoning locally" : chars ? `Writing · ${chars} characters` : "Working";
+      startProgress(label);
+    },
+    tool(label) { writeLine(`  ${ui.cyan("↳")} ${label}`); },
+    nfet(result) { writeLine(`  ${nfetSummary(result, { verbose })}`); },
+    assistant(message) {
+      clearProgress();
+      writeLine();
+      writeLine(`${wordmark()}  ${renderMarkdown(message)}`);
+    },
+    success(message) { writeLine(`${ui.green("✓")} ${message}`); },
+    warning(message) { writeLine(`${ui.amber("!")} ${message}`); },
+    error(message, { retry = false } = {}) {
+      writeLine(`${ui.red("×")} ${message}`);
+      if (retry) writeLine(ui.dim("  I saved the request. Type “try again” and I’ll resume it."));
+    },
+  };
+}

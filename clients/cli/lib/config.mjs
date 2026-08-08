@@ -161,7 +161,10 @@ export function resolveRuntime(config = {}, flags = {}) {
     apiKey,
     keySource,
     keyRequired: !provider.noKey,
-    timeoutMs: Number(flags.timeout || config.timeoutMs || 120_000),
+    // For streaming local models this is an inactivity timeout, not a total
+    // generation deadline. A large local model may work for several minutes as
+    // long as it keeps producing data.
+    timeoutMs: Number(flags.timeout || config.timeoutMs || (providerName === "ollama" ? 600_000 : 120_000)),
   };
 }
 

@@ -9,8 +9,12 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { documentIssues } from "../lib/agent.mjs";
 import { createPdf } from "../lib/pdf.mjs";
 import { PROVIDERS, resolveRuntime } from "../lib/config.mjs";
+import { chat } from "../lib/providers.mjs";
+import { isRetryPhrase } from "../lib/session.mjs";
+import { nfetSummary, stripAnsi } from "../lib/tui.mjs";
 
 const exec = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
@@ -50,7 +54,7 @@ test("help and version describe the local open-source command surface", async ()
   assert.match(help.stdout, /lolm "update yourself"/);
   assert.match(help.stdout, /nfet status\|test/);
   const version = await exec(process.execPath, [bin, "--version"]);
-  assert.equal(version.stdout.trim(), "1.0.0");
+  assert.equal(version.stdout.trim(), "1.1.0");
 });
 
 test("JSON providers output is one stable document", async () => {
@@ -70,8 +74,8 @@ test("OpenAI-compatible ask works without any LOLM hosted credential", async (t)
   }));
   t.after(() => server.close());
   const root = await temp("ask");
-  const result = await exec(process.execPath, [bin, "ask", "hello", "--provider", "custom", "--base-url", address(server), "--model", "test-model", "--api-key", "test", "--no-nfet", "--json"], {
-    env: { ...process.env, LOLM_CONFIG: join(root, "config.json") },
+  const result = await exec(process.execPath, [bin, "ask", "tell me the selected model", "--provider", "custom", "--base-url", address(server), "--model", "test-model", "--api-key", "test", "--no-nfet", "--json"], {
+    env: { ...process.env, LOLM_CONFIG: join(root, "config.json"), LOLM_LAST_TASK: join(root, "last-task.json") },
   });
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
@@ -90,7 +94,9 @@ test("code tool loop writes locally and reports exact path", async (t) => {
   });
   t.after(() => server.close());
   const root = await temp("code");
-  const result = await exec(process.execPath, [bin, "code", "create hello.html", "--cwd", root, "--yes", "--provider", "custom", "--base-url", address(server), "--model", "test", "--api-key", "test", "--no-nfet", "--json"]);
+  const result = await exec(process.execPath, [bin, "code", "create hello.html", "--cwd", root, "--yes", "--provider", "custom", "--base-url", address(server), "--model", "test", "--api-key", "test", "--no-nfet", "--json"], {
+    env: { ...process.env, LOLM_LAST_TASK: join(root, "last-task.json") },
+  });
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.changes.length, 1);
@@ -101,11 +107,29 @@ test("code tool loop writes locally and reports exact path", async (t) => {
 test("PDF writer creates a valid multi-object PDF", async () => {
   const root = await temp("pdf");
   const out = join(root, "report.pdf");
-  const result = await createPdf("# Report\n\n- one\n- two\n\nA useful paragraph.", out);
+  const result = await createPdf("# Report\n\n- **one:** useful\n- two\n\nA useful paragraph.", out);
   const body = await readFile(out);
   assert.equal(body.subarray(0, 5).toString(), "%PDF-");
   assert.match(body.toString("ascii"), /\/Type \/Catalog/);
+  assert.doesNotMatch(body.toString("ascii"), /\*\*/);
   assert.ok(result.bytes > 500);
+});
+
+test("customer comparison documents reject framework substitutions and unsupported claims", () => {
+  const sources = [
+    { url: "https://github.com/openai/codex" },
+    { url: "https://code.claude.com/docs/en/overview" },
+    { url: "https://github.com/google-gemini/gemini-cli" },
+  ];
+  const padded = "Useful detail. ".repeat(140);
+  const bad = `# Agent comparison\n\nLangChain, AutoGPT, and ReAct are alternatives. NFET prevents malicious behavior.\n\n## Limitations\n${padded}\n\n## Sources\nhttps://github.com/openai/codex\nhttps://code.claude.com/docs/en/overview`;
+  const issues = documentIssues(bad, { comparison: true, sources });
+  assert.ok(issues.includes("missing Gemini CLI"));
+  assert.ok(issues.includes("substituted frameworks for customer agents"));
+  assert.ok(issues.includes("contains an unsupported security or competitor claim"));
+
+  const good = `# LOLM compared with coding agents\n\n## Executive summary\nLOLM, OpenAI Codex, Anthropic Claude Code, and Google Gemini CLI have different strengths.\n\n## Capability table\n| Agent | Best fit |\n|---|---|\n| LOLM | Local-first workflows |\n| OpenAI Codex | OpenAI-integrated coding |\n| Claude Code | Anthropic-integrated coding |\n| Gemini CLI | Google-integrated coding |\n\n## Where LOLM is stronger\nProvider choice and local execution.\n\n## Where competitors are stronger\nMature ecosystems and hosted integrations.\n\n## Limitations and trade-offs\nNFET does not prevent malicious behavior. NFET can require more checking, but it does not guarantee correctness or security. ${padded}\n\n## Best fit\nChoose based on privacy, provider, and workflow needs.\n\n## Sources\n- https://github.com/openai/codex\n- https://code.claude.com/docs/en/overview\n- https://github.com/google-gemini/gemini-cli`;
+  assert.deepEqual(documentIssues(good, { comparison: true, sources }), []);
 });
 
 test("natural PDF request routes to local PDF creation", async (t) => {
@@ -113,9 +137,70 @@ test("natural PDF request routes to local PDF creation", async (t) => {
   t.after(() => server.close());
   const root = await temp("natural-pdf");
   const out = join(root, "made.pdf");
-  const result = await exec(process.execPath, [bin, "make", "me", "a", "PDF", "about", "LOLM", "--out", out, "--yes", "--provider", "custom", "--base-url", address(server), "--model", "test", "--api-key", "test", "--no-nfet", "--json"]);
+  const result = await exec(process.execPath, [bin, "make", "me", "a", "PDF", "about", "LOLM", "--out", out, "--yes", "--provider", "custom", "--base-url", address(server), "--model", "test", "--api-key", "test", "--no-nfet", "--json"], {
+    env: { ...process.env, LOLM_LAST_TASK: join(root, "last-task.json") },
+  });
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.kind, "pdf");
   assert.equal(payload.path, out);
   assert.equal((await readFile(out)).subarray(0, 5).toString(), "%PDF-");
+});
+
+test("Ollama streaming keeps working while the local model produces chunks", async (t) => {
+  let requestBody = "";
+  const server = createServer(async (req, res) => {
+    for await (const chunk of req) requestBody += chunk;
+    res.writeHead(200, { "content-type": "application/x-ndjson" });
+    res.write(`${JSON.stringify({ message: { content: "local " }, done: false })}\n`);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 30));
+    res.write(`${JSON.stringify({ message: { content: "stream" }, done: false })}\n`);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 30));
+    res.end(`${JSON.stringify({ message: {}, done: true, prompt_eval_count: 4, eval_count: 2 })}\n`);
+  });
+  await new Promise((resolvePromise) => server.listen(0, "127.0.0.1", resolvePromise));
+  t.after(() => server.close());
+  const tokens = [];
+  const result = await chat({
+    protocol: "ollama",
+    keyRequired: false,
+    baseUrl: `http://127.0.0.1:${server.address().port}`,
+    model: "test",
+    timeoutMs: 1_000,
+  }, [{ role: "user", content: "hello" }], { onToken: (token) => tokens.push(token), reasoning: false, maxTokens: 321 });
+  assert.equal(result.content, "local stream");
+  assert.deepEqual(tokens, ["local ", "stream"]);
+  assert.equal(result.usage.completion_tokens, 2);
+  assert.equal(JSON.parse(requestBody).options.num_predict, 321);
+});
+
+test("natural retry restores the previous task instead of prompting with try again", async (t) => {
+  const prompts = [];
+  const server = await startServer((_req, payload) => {
+    const last = payload.messages.filter((message) => message.role === "user").at(-1)?.content;
+    prompts.push(last);
+    return { body: { choices: [{ message: { role: "assistant", content: `answered: ${last}` } }] } };
+  });
+  t.after(() => server.close());
+  const root = await temp("retry");
+  const env = { ...process.env, LOLM_CONFIG: join(root, "config.json"), LOLM_LAST_TASK: join(root, "last-task.json") };
+  const common = ["--provider", "custom", "--base-url", address(server), "--model", "test", "--api-key", "test", "--no-nfet", "--json"];
+  await exec(process.execPath, [bin, "ask", "remember this exact request", ...common], { env });
+  const retried = await exec(process.execPath, [bin, "try", "again", ...common], { env });
+  assert.equal(JSON.parse(retried.stdout).response, "answered: remember this exact request");
+  assert.deepEqual(prompts, ["remember this exact request", "remember this exact request"]);
+  assert.equal(JSON.parse(await readFile(join(root, "last-task.json"), "utf8")).prompt, "remember this exact request");
+});
+
+test("retry language and customer NFET summaries are human-readable", () => {
+  assert.equal(isRetryPhrase("try again"), true);
+  assert.equal(isRetryPhrase("retry the last task"), true);
+  const result = { available: true, decision: { label: "finalize", source: "verified_result" }, telemetry: { avg_entropy: 1.2, avg_hidden_drift: 3.4, avg_gate: 0.5 } };
+  assert.match(stripAnsi(nfetSummary(result)), /Result checked/);
+  assert.doesNotMatch(stripAnsi(nfetSummary(result)), /entropy|H 1\.2|gate 0\.5/i);
+  assert.match(stripAnsi(nfetSummary(result, { verbose: true })), /H 1\.2/);
+});
+
+test("Ollama receives a local-model inactivity budget by default", () => {
+  const runtime = resolveRuntime({ provider: "ollama", providers: { ollama: { model: "qwen3:14b" } } });
+  assert.equal(runtime.timeoutMs, 600_000);
 });

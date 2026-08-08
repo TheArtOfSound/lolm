@@ -45,6 +45,60 @@ async function request(url, runtime, { method = "POST", body, headers = {} } = {
   }
 }
 
+async function streamJsonLines(url, runtime, { body, headers = {}, onValue = () => {} } = {}) {
+  const controller = new AbortController();
+  let timer;
+  const armTimeout = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(new Error("provider stream became inactive")), runtime.timeoutMs);
+  };
+  armTimeout();
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      let payload = {};
+      try { payload = text ? JSON.parse(text) : {}; } catch { payload = { raw: text.slice(0, 1000) }; }
+      const message = payload?.error?.message || payload?.error || payload?.message || `Provider returned HTTP ${response.status}`;
+      throw new ProviderError(String(message), { status: response.status, code: payload?.error?.code || "HTTP_ERROR", body: payload });
+    }
+    if (!response.body) throw new ProviderError("Provider response did not contain a stream", { code: "MALFORMED_RESPONSE" });
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      armTimeout();
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try { onValue(JSON.parse(line)); }
+        catch { throw new ProviderError("Provider returned malformed streaming JSON", { code: "MALFORMED_RESPONSE" }); }
+      }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) onValue(JSON.parse(buffer));
+  } catch (error) {
+    if (error instanceof ProviderError) throw error;
+    const timeout = error?.name === "AbortError" || /inactive|timed out/i.test(error?.message || "");
+    throw new ProviderError(timeout
+      ? `The provider stopped responding for ${Math.round(runtime.timeoutMs / 1000)} seconds.`
+      : `Provider request failed: ${error.message}`, {
+      code: timeout ? "TIMEOUT" : "NETWORK_ERROR",
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function parseArguments(value) {
   if (value && typeof value === "object") return value;
   try { return JSON.parse(String(value || "{}")); } catch { return {}; }
@@ -70,7 +124,7 @@ function openAiMessages(messages) {
   });
 }
 
-async function openAiChat(runtime, messages, tools = []) {
+async function openAiChat(runtime, messages, tools = [], { maxTokens } = {}) {
   const suffix = runtime.baseUrl.endsWith("/v1") || runtime.baseUrl.includes("/api/v1")
     ? "/chat/completions" : "/v1/chat/completions";
   const payload = await request(endpoint(runtime.baseUrl, suffix), runtime, {
@@ -78,6 +132,7 @@ async function openAiChat(runtime, messages, tools = []) {
     body: {
       model: runtime.model,
       messages: openAiMessages(messages),
+      ...(maxTokens ? { max_tokens: maxTokens } : {}),
       ...(tools.length ? { tools, tool_choice: "auto" } : {}),
     },
   });
@@ -116,13 +171,13 @@ function anthropicMessages(messages) {
   return out;
 }
 
-async function anthropicChat(runtime, messages, tools = []) {
+async function anthropicChat(runtime, messages, tools = [], { maxTokens } = {}) {
   const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
   const payload = await request(endpoint(runtime.baseUrl, "/v1/messages"), runtime, {
     headers: { "x-api-key": runtime.apiKey, "anthropic-version": "2023-06-01" },
     body: {
       model: runtime.model,
-      max_tokens: 8192,
+      max_tokens: maxTokens || 8192,
       ...(system ? { system } : {}),
       messages: anthropicMessages(messages),
       ...(tools.length ? { tools: tools.map((tool) => ({
@@ -162,13 +217,14 @@ function geminiContents(messages) {
   return contents;
 }
 
-async function geminiChat(runtime, messages, tools = []) {
+async function geminiChat(runtime, messages, tools = [], { maxTokens } = {}) {
   const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
   const url = endpoint(runtime.baseUrl, `/v1beta/models/${encodeURIComponent(runtime.model)}:generateContent`);
   const payload = await request(url, runtime, {
     headers: { "x-goog-api-key": runtime.apiKey },
     body: {
       contents: geminiContents(messages),
+      ...(maxTokens ? { generationConfig: { maxOutputTokens: maxTokens } } : {}),
       ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
       ...(tools.length ? { tools: [{ functionDeclarations: tools.map((tool) => tool.function) }] } : {}),
     },
@@ -200,31 +256,58 @@ function ollamaMessages(messages) {
   });
 }
 
-async function ollamaChat(runtime, messages, tools = []) {
-  const payload = await request(endpoint(runtime.baseUrl, "/api/chat"), runtime, {
-    body: { model: runtime.model, messages: ollamaMessages(messages), stream: false, ...(tools.length ? { tools } : {}) },
+async function ollamaChat(runtime, messages, tools = [], { onToken = () => {}, reasoning, maxTokens } = {}) {
+  let content = "", thinking = "", usage = null;
+  const toolCalls = [];
+  await streamJsonLines(endpoint(runtime.baseUrl, "/api/chat"), runtime, {
+    body: {
+      model: runtime.model,
+      messages: ollamaMessages(messages),
+      stream: true,
+      keep_alive: "30m",
+      ...(maxTokens ? { options: { num_predict: maxTokens } } : {}),
+      ...(typeof reasoning === "boolean" ? { think: reasoning } : {}),
+      ...(tools.length ? { tools } : {}),
+    },
+    onValue(payload) {
+      const message = payload.message || {};
+      if (message.content) {
+        content += message.content;
+        onToken(message.content, { content, thinking: false });
+      }
+      if (message.thinking) {
+        thinking += message.thinking;
+        onToken("", { content, thinking: true, thinkingChars: thinking.length });
+      }
+      for (const call of message.tool_calls || []) toolCalls.push(call);
+      if (payload.done) {
+        usage = { prompt_tokens: payload.prompt_eval_count, completion_tokens: payload.eval_count };
+      }
+    },
   });
-  const message = payload.message || {};
+  if (!content && !toolCalls.length) {
+    throw new ProviderError("Provider response did not contain text or a tool call", { code: "MALFORMED_RESPONSE" });
+  }
   return {
-    content: message.content || "",
-    toolCalls: (message.tool_calls || []).map((call, index) => ({
+    content,
+    toolCalls: toolCalls.map((call, index) => ({
       id: `ollama_${index}_${Date.now()}`,
       name: call.function?.name || "",
       arguments: parseArguments(call.function?.arguments),
     })),
-    usage: { prompt_tokens: payload.prompt_eval_count, completion_tokens: payload.eval_count },
-    raw: payload,
+    usage,
+    raw: { streamed: true, thinking_chars: thinking.length },
   };
 }
 
-export async function chat(runtime, messages, { tools = [] } = {}) {
+export async function chat(runtime, messages, { tools = [], onToken = () => {}, reasoning, maxTokens } = {}) {
   if (runtime.keyRequired && !runtime.apiKey) {
     throw new ProviderError(`No API key found for ${runtime.label}. Run 'lolm setup' or set the provider environment variable.`, { code: "AUTH_MISSING" });
   }
-  if (runtime.protocol === "anthropic") return anthropicChat(runtime, messages, tools);
-  if (runtime.protocol === "gemini") return geminiChat(runtime, messages, tools);
-  if (runtime.protocol === "ollama") return ollamaChat(runtime, messages, tools);
-  return openAiChat(runtime, messages, tools);
+  if (runtime.protocol === "anthropic") return anthropicChat(runtime, messages, tools, { maxTokens });
+  if (runtime.protocol === "gemini") return geminiChat(runtime, messages, tools, { maxTokens });
+  if (runtime.protocol === "ollama") return ollamaChat(runtime, messages, tools, { onToken, reasoning, maxTokens });
+  return openAiChat(runtime, messages, tools, { maxTokens });
 }
 
 export async function listModels(runtime) {

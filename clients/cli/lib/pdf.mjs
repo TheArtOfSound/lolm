@@ -30,13 +30,13 @@ function layout(markdown, title) {
     const heading = raw.match(/^(#{1,3})\s+(.*)$/);
     if (heading) {
       const size = heading[1].length === 1 ? 18 : heading[1].length === 2 ? 15 : 12;
-      blocks.push({ text: heading[2], size, leading: size + 6, bold: true, gap: 7 });
+      blocks.push({ text: heading[2].replace(/\*\*/g, "").replace(/`/g, ""), size, leading: size + 6, bold: true, gap: 7, keepNext: true });
       continue;
     }
     const bullet = raw.match(/^\s*[-*]\s+(.*)$/);
-    if (bullet) blocks.push({ text: `- ${bullet[1]}`, size: 10.5, leading: 15, indent: 12, gap: 2 });
-    else if (!raw.trim()) blocks.push({ text: "", size: 10.5, leading: 10, gap: 0 });
-    else blocks.push({ text: raw.replace(/\*\*/g, "").replace(/`/g, ""), size: 10.5, leading: 15, gap: 3 });
+    if (bullet) blocks.push({ text: `- ${bullet[1].replace(/\*\*/g, "").replace(/`/g, "")}`, size: 10, leading: 14, indent: 12, gap: 1 });
+    else if (!raw.trim()) blocks.push({ text: "", size: 10, leading: 8, gap: 0 });
+    else blocks.push({ text: raw.replace(/\*\*/g, "").replace(/`/g, ""), size: 10, leading: 14, gap: 2 });
   }
   return blocks;
 }
@@ -45,11 +45,23 @@ export async function createPdf(markdown, outPath, { title = "" } = {}) {
   const width = 612, height = 792, margin = 54;
   const pages = [[]];
   let y = height - margin;
-  for (const block of layout(markdown, title)) {
+  const blocks = layout(markdown, title);
+  const dimensions = (block) => {
     const chars = Math.max(24, Math.floor((width - margin * 2 - (block.indent || 0)) / (block.size * 0.52)));
     const lines = wrap(block.text, chars);
-    const needed = lines.length * block.leading + block.gap;
-    if (y - needed < margin) { pages.push([]); y = height - margin; }
+    return { lines, needed: lines.length * block.leading + block.gap };
+  };
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index];
+    const { lines, needed } = dimensions(block);
+    let nextNeeded = 0;
+    if (block.keepNext) {
+      for (let next = index + 1; next < blocks.length; next++) {
+        nextNeeded += dimensions(blocks[next]).needed;
+        if (blocks[next].text.trim()) break;
+      }
+    }
+    if (y - needed - nextNeeded < margin) { pages.push([]); y = height - margin; }
     for (const line of lines) {
       pages.at(-1).push({ ...block, text: line, y });
       y -= block.leading;

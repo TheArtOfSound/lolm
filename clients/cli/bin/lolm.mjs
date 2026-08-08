@@ -14,14 +14,15 @@ import { CONFIG_PATH, PROVIDERS, loadConfig, publicRuntime, resolveRuntime, save
 import { listModels, rawGet, ProviderError } from "../lib/providers.mjs";
 import { NfetMonitor, inspectNfet } from "../lib/nfet.mjs";
 import { createPdf } from "../lib/pdf.mjs";
-import { banner, confirm, failure, nfetLine, note, prompt as askPrompt, renderMarkdown, secretPrompt, section, spinner, success, ui, warning, wordmark } from "../lib/tui.mjs";
+import { isRetryPhrase, loadLastTask, saveLastTask } from "../lib/session.mjs";
+import { banner, confirm, createConsoleSurface, failure, nfetLine, note, prompt as askPrompt, renderMarkdown, secretPrompt, section, spinner, success, ui, warning, wordmark } from "../lib/tui.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const VERSION = pkg.version;
 
 const VALUE_FLAGS = new Set(["--provider", "--model", "--api-key", "--base-url", "--cwd", "--out", "-o", "--timeout", "--max-steps"]);
-const BOOLEAN_FLAGS = new Set(["--json", "--yes", "-y", "--dry-run", "--check", "--open", "--help", "-h", "--version", "-V", "--no-nfet"]);
+const BOOLEAN_FLAGS = new Set(["--json", "--yes", "-y", "--dry-run", "--check", "--open", "--help", "-h", "--version", "-V", "--no-nfet", "--once"]);
 
 function parse(argv) {
   const flags = { cwd: process.cwd(), maxSteps: 12 };
@@ -36,7 +37,7 @@ function parse(argv) {
       const key = ({ "--provider": "provider", "--model": "model", "--api-key": "apiKey", "--base-url": "baseUrl", "--cwd": "cwd", "--out": "out", "-o": "out", "--timeout": "timeout", "--max-steps": "maxSteps" })[token];
       flags[key] = value;
     } else if (!literal && BOOLEAN_FLAGS.has(token)) {
-      const key = ({ "--json": "json", "--yes": "yes", "-y": "yes", "--dry-run": "dryRun", "--check": "check", "--open": "open", "--help": "help", "-h": "help", "--version": "version", "-V": "version", "--no-nfet": "noNfet" })[token];
+      const key = ({ "--json": "json", "--yes": "yes", "-y": "yes", "--dry-run": "dryRun", "--check": "check", "--open": "open", "--help": "help", "-h": "help", "--version": "version", "-V": "version", "--no-nfet": "noNfet", "--once": "once" })[token];
       flags[key] = true;
     } else if (!literal && token.startsWith("-")) {
       throw Object.assign(new Error(`unknown flag ${token}`), { exitCode: 2 });
@@ -53,7 +54,7 @@ function parse(argv) {
     }
     return parsed;
   };
-  flags.timeout = integerFlag("--timeout", flags.timeout, 120_000, 1_000, 3_600_000);
+  flags.timeout = integerFlag("--timeout", flags.timeout, undefined, 1_000, 3_600_000);
   flags.maxSteps = integerFlag("--max-steps", flags.maxSteps, 12, 1, 40);
   return { flags, words };
 }
@@ -92,9 +93,20 @@ ${ui.bold("GLOBAL OPTIONS")}
   --yes              approve requested file writes and commands
   --dry-run          preview writes and commands
   --json             stable machine-readable output
+  --once             answer once and return to the shell
   --no-nfet          explicitly run without the local NFET monitor
 
 Flags override environment, then config, then defaults. Keys are never printed. Run ${ui.cyan("lolm setup")} first.`;
+
+const CONSOLE_HELP = `Just describe the outcome you want. Examples:
+
+  Make a PDF comparing local and cloud agents and put it on my Desktop
+  Fix the failing tests in this project
+  Build a polished HTML page here
+  Explain this error and tell me what to do next
+  Try again
+
+Conversation controls: /clear · /provider NAME · /model NAME · /cwd PATH · /debug · /exit`;
 
 function emit(flags, payload, human = "") {
   if (flags.json) process.stdout.write(`${JSON.stringify(payload)}\n`);
@@ -103,6 +115,7 @@ function emit(flags, payload, human = "") {
 
 function taskRoute(text) {
   const value = String(text || "").trim();
+  if (isRetryPhrase(value)) return "retry";
   if (/\b(update|upgrade)\s+(yourself|lolm|the cli)\b/i.test(value)) return "update";
   if (/\b(pdf)\b/i.test(value) && /\b(make|create|write|generate|build|turn|convert)\b/i.test(value)) return "pdf";
   if (/\b(html|web\s?page|landing page|website)\b/i.test(value) && /\b(make|create|code|build|write|design)\b/i.test(value)) return "html";
@@ -229,80 +242,173 @@ async function updateSelf(flags) {
   return 0;
 }
 
-function monitorFor(config, flags) {
+function monitorFor(config, flags, surface = null) {
   if (flags.noNfet) return null;
-  return new NfetMonitor(config, { onStatus: (message) => { if (!flags.json) note(message); } });
+  return new NfetMonitor(config, { onStatus: (message) => {
+    if (flags.json) return;
+    if (!surface) return note(message);
+    if (/^loading/i.test(message)) surface.progress({ thinking: true });
+    else surface.tool("Local NFET quality controller ready");
+  } });
 }
 
-async function executeTask(command, text, config, flags, sharedMonitor = null, history = []) {
+async function executeTask(command, text, config, flags, sharedMonitor = null, history = [], surface = null) {
   const runtime = resolveRuntime(config, flags);
-  const monitor = sharedMonitor || monitorFor(config, flags);
-  const onNfet = (result) => { if (!flags.json) process.stderr.write(`  ${nfetLine(result)}\n`); };
-  const onPhase = ({ label, step, maxSteps }) => { if (!flags.json) section(label, step ? `${step}/${maxSteps}` : `${runtime.label} · ${runtime.model}`); };
-  const onTool = (label) => { if (!flags.json) note(label); };
+  const monitor = sharedMonitor || monitorFor(config, flags, surface);
+  const resolvedOut = ["pdf", "html"].includes(command)
+    ? resolve(flags.out || inferredOut(text, command, flags.cwd)) : "";
+  const taskRecord = { command, prompt: text, cwd: flags.cwd, out: resolvedOut, status: "running" };
+  await saveLastTask(taskRecord).catch(() => {});
+  const onNfet = (result) => {
+    if (flags.json) return;
+    if (surface) surface.nfet(result);
+    else process.stderr.write(`  ${nfetLine(result)}\n`);
+  };
+  const onPhase = ({ label, step, maxSteps }) => {
+    if (flags.json) return;
+    const customerLabel = command === "pdf" && label === "Thinking" ? "Building your document"
+      : command === "html" && label === "Thinking" ? "Designing your page"
+        : label === "Thinking" ? "Working on it" : label === "Continuing" ? "Improving the result" : label;
+    const detail = step ? `${step}/${maxSteps}` : `${runtime.label} · ${runtime.model}`;
+    if (surface) surface.phase(customerLabel, detail);
+    else section(label, detail);
+  };
+  const onTool = (label) => {
+    if (flags.json) return;
+    if (surface) surface.tool(label);
+    else note(label);
+  };
+  const onProgress = (progress) => { if (!flags.json && surface) surface.progress(progress); };
+  // Warm the trained NFET model while the provider works. The first request no
+  // longer pays those two startup costs serially, and a shared interactive
+  // monitor remains hot for the rest of the conversation.
+  const deterministicGreeting = command === "ask"
+    && /^(hi|hey|hello|yo|good (morning|afternoon|evening))[!.?\s]*$/i.test(text.trim());
+  if (monitor && !deterministicGreeting) void monitor.start().catch(() => {});
   try {
     if (command === "pdf") {
-      const out = resolve(flags.out || inferredOut(text, "pdf", flags.cwd));
+      const out = resolvedOut;
       if (await access(out).then(() => true).catch(() => false) && !flags.yes && !await confirm(`Replace ${out}?`)) return 0;
-      const generated = await generateDocument({ prompt: text, runtime, monitor, onPhase, onNfet });
+      const generated = await generateDocument({
+        prompt: text,
+        runtime,
+        monitor,
+        cwd: flags.cwd,
+        maxSteps: Math.min(flags.maxSteps, 8),
+        history,
+        onPhase,
+        onTool,
+        onNfet,
+        onProgress,
+      });
       if (!generated.text) throw new Error("The provider returned an empty document.");
       const result = await createPdf(generated.text, out, { title: "" });
       if (flags.open) await openLocal(result.path);
-      emit(flags, { ok: true, kind: "pdf", ...result, provider: runtime.provider, model: runtime.model, nfet: generated.nfet },
-        `${successText("Created PDF")}\n${result.path}\n${ui.dim(`${result.pages} page${result.pages === 1 ? "" : "s"} · ${result.bytes} bytes`)}`);
+      const payload = { ok: true, kind: "pdf", ...result, provider: runtime.provider, model: runtime.model, nfet: generated.nfet,
+        response: `Created the PDF at ${result.path}.` };
+      if (typeof flags.captureResult === "function") flags.captureResult(payload);
+      if (surface) {
+        surface.success("PDF created");
+        surface.assistant(`${result.path}\n\n${result.pages} page${result.pages === 1 ? "" : "s"} · ${result.bytes} bytes`);
+      } else {
+        emit(flags, payload, `${successText("Created PDF")}\n${result.path}\n${ui.dim(`${result.pages} page${result.pages === 1 ? "" : "s"} · ${result.bytes} bytes`)}`);
+      }
+      await saveLastTask({ ...taskRecord, status: "complete", result_path: result.path }).catch(() => {});
       return 0;
     }
     if (command === "html") {
-      const out = resolve(flags.out || inferredOut(text, "html", flags.cwd));
+      const out = resolvedOut;
       if (await access(out).then(() => true).catch(() => false) && !flags.yes && !await confirm(`Replace ${out}?`)) return 0;
-      const generated = await generateHtml({ prompt: text, runtime, monitor, onPhase, onNfet });
+      const generated = await generateHtml({ prompt: text, runtime, monitor, onPhase, onNfet, onProgress });
       if (!/^<!doctype html>|<html[\s>]/i.test(generated.html)) throw new Error("The provider did not return a complete HTML document.");
       await mkdir(dirname(out), { recursive: true });
       await writeFile(out, `${generated.html}\n`);
       if (flags.open) await openLocal(out);
-      emit(flags, { ok: true, kind: "html", path: out, bytes: Buffer.byteLength(generated.html), provider: runtime.provider, model: runtime.model, nfet: generated.nfet },
-        `${successText("Created HTML")}\n${out}`);
+      const payload = { ok: true, kind: "html", path: out, bytes: Buffer.byteLength(generated.html), provider: runtime.provider, model: runtime.model, nfet: generated.nfet,
+        response: `Created the HTML page at ${out}.` };
+      if (typeof flags.captureResult === "function") flags.captureResult(payload);
+      if (surface) { surface.success("HTML page created"); surface.assistant(out); }
+      else emit(flags, payload, `${successText("Created HTML")}\n${out}`);
+      await saveLastTask({ ...taskRecord, status: "complete", result_path: out }).catch(() => {});
       return 0;
     }
-    const result = await runAgent({ prompt: text, mode: command, runtime, monitor, cwd: flags.cwd, yes: flags.yes, dryRun: flags.dryRun, maxSteps: flags.maxSteps, history, onPhase, onTool, onNfet });
+    const result = await runAgent({ prompt: text, mode: command, runtime, monitor, cwd: flags.cwd, yes: flags.yes, dryRun: flags.dryRun, maxSteps: flags.maxSteps, history, onPhase, onTool, onNfet, onProgress });
     if (typeof flags.captureResult === "function") flags.captureResult(result);
-    emit(flags, result, renderMarkdown(result.response || result.error));
+    if (surface) surface.assistant(result.response || result.error);
+    else emit(flags, result, renderMarkdown(result.response || result.error));
+    await saveLastTask({ ...taskRecord, status: result.ok ? "complete" : "incomplete", error: result.error }).catch(() => {});
     return result.ok ? 0 : 1;
+  } catch (error) {
+    error.retryAvailable = true;
+    await saveLastTask({ ...taskRecord, status: "failed", error: error.message }).catch(() => {});
+    throw error;
   } finally { if (!sharedMonitor) await monitor?.close(); }
 }
 
-async function interactive(config, flags) {
+async function interactive(config, flags, { seed = null } = {}) {
   let runtime = resolveRuntime(config, flags);
   const info = await inspectNfet(config);
-  process.stdout.write(`${banner({ version: VERSION, provider: runtime.label, model: runtime.model, nfet: info.available && info.enabled ? "NFET ready" : "NFET setup needed" })}\n`);
-  process.stdout.write(`${ui.dim("Ask anything. I can inspect files, write code, run tests, and create PDFs.")}\n${ui.dim("/help · /clear · /provider NAME · /model NAME · /cwd PATH · /exit")}\n\n`);
+  const surface = createConsoleSurface({
+    version: VERSION,
+    provider: runtime.label,
+    model: runtime.model,
+    nfet: info.available && info.enabled ? "NFET active" : "NFET setup needed",
+  });
+  surface.open();
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, historySize: 500 });
-  const monitor = monitorFor(config, flags);
+  const monitor = monitorFor(config, flags, surface);
   let history = [];
+  let queued = seed;
   try {
     while (true) {
-      const line = (await rl.question(`${wordmark()} ${ui.violet("›")} `)).trim();
+      let line, seededCommand = "";
+      if (queued) {
+        line = String(queued.text || "").trim();
+        seededCommand = queued.command || "";
+        queued = null;
+        surface.user(line);
+      } else {
+        try { line = (await rl.question(`\n${ui.indigo("YOU")} ${ui.violet("›")} `)).trim(); }
+        catch { break; }
+      }
       if (!line) continue;
       if (["/exit", "/quit"].includes(line)) break;
-      if (line === "/help") { process.stdout.write(`${HELP}\n`); continue; }
-      if (line === "/clear") { history = []; process.stdout.write("\x1b[2J\x1b[H"); continue; }
-      if (line.startsWith("/provider ")) { flags.provider = normalizeProvider(line.slice(10)); runtime = resolveRuntime(config, flags); success(`${runtime.label} selected`); continue; }
-      if (line.startsWith("/model ")) { flags.model = line.slice(7).trim(); runtime = resolveRuntime(config, flags); success(`${runtime.model} selected`); continue; }
-      if (line.startsWith("/cwd ")) { flags.cwd = resolve(line.slice(5).trim()); success(`Working directory: ${flags.cwd}`); continue; }
+      if (line === "/help") { surface.assistant(CONSOLE_HELP); continue; }
+      if (line === "/clear") { history = []; process.stdout.write("\x1b[2J\x1b[H"); surface.success("Conversation cleared"); continue; }
+      if (line === "/debug") { surface.setVerbose(!surface.verbose); surface.success(`NFET details ${surface.verbose ? "shown" : "hidden"}`); continue; }
+      if (line.startsWith("/provider ")) { flags.provider = normalizeProvider(line.slice(10)); runtime = resolveRuntime(config, flags); surface.success(`${runtime.label} selected`); continue; }
+      if (line.startsWith("/model ")) { flags.model = line.slice(7).trim(); runtime = resolveRuntime(config, flags); surface.success(`${runtime.model} selected`); continue; }
+      if (line.startsWith("/cwd ")) { flags.cwd = resolve(line.slice(5).trim()); surface.success(`Working directory: ${flags.cwd}`); continue; }
       try {
-        const command = taskRoute(line);
+        let command = seededCommand || taskRoute(line);
+        let taskText = line;
+        if (command === "retry") {
+          const previous = await loadLastTask();
+          if (!previous) {
+            surface.error("There isn’t an unfinished or recent task to retry.");
+            continue;
+          }
+          command = previous.command;
+          taskText = previous.prompt;
+          if (previous.cwd) flags.cwd = resolve(previous.cwd);
+          if (previous.out) flags.out = previous.out;
+          surface.phase("Resuming your last request", command === "pdf" ? "PDF" : command);
+        }
         let captured = null;
         flags.captureResult = (value) => { captured = value; };
-        const code = command === "update" ? await updateSelf(flags) : await executeTask(command, line, config, flags, monitor, history);
+        const code = command === "update" ? await updateSelf(flags) : await executeTask(command, taskText, config, flags, monitor, history, surface);
+        if (code) surface.warning("I couldn’t finish that cleanly. You can say “try again”.");
+        if (captured?.response) {
+          history.push({ role: "user", content: taskText }, { role: "assistant", content: captured.response });
+          history = history.slice(-20);
+        }
+      } catch (error) {
+        surface.error(error.message, { retry: Boolean(error.retryAvailable) });
+      } finally {
         delete flags.captureResult;
-        if (code) warning(`Task ended with exit code ${code}`);
-        if (command === "ask" && captured?.response) history.push(
-          { role: "user", content: line }, { role: "assistant", content: captured.response },
-        );
-      } catch (error) { failure(error.message); }
-      process.stdout.write("\n");
+      }
     }
-  } finally { rl.close(); await monitor?.close(); }
+  } finally { rl.close(); await monitor?.close(); surface.close(); }
   return 0;
 }
 
@@ -349,7 +455,18 @@ async function main() {
     }
     throw Object.assign(new Error("usage: lolm nfet status|test [text]"), { exitCode: 2 });
   }
+  if (command === "retry") {
+    const previous = await loadLastTask();
+    if (!previous) throw Object.assign(new Error("There isn’t a recent LOLM task to retry."), { exitCode: 2 });
+    command = previous.command;
+    text = previous.prompt;
+    if (previous.cwd) flags.cwd = resolve(previous.cwd);
+    if (previous.out && !flags.out) flags.out = previous.out;
+  }
   if (!text) throw Object.assign(new Error(`${command} requires a task or question`), { exitCode: 2 });
+  if (process.stdin.isTTY && !flags.json && !flags.once && ["ask", "code", "pdf", "html"].includes(command)) {
+    return interactive(config, flags, { seed: { command, text } });
+  }
   return executeTask(command, text, config, flags);
 }
 

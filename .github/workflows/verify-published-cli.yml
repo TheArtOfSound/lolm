@@ -6,7 +6,7 @@ on:
       version:
         description: 'Published lolm-cli version to verify'
         required: true
-        default: '1.0.0'
+        default: '1.1.0'
 
 permissions:
   contents: read

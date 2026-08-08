@@ -14,6 +14,13 @@ lolm
 No LOLM account, hosted API key, service credential, or browser app is
 required.
 
+In a real terminal, `lolm` and natural requests open the persistent customer
+console. Keep talking normally; use `/provider`, `/model`, `/cwd`, `/clear`,
+`/debug`, and `/exit` only when you want explicit control. Add `--once` for a
+single command response. After a failed task, `lolm try again` restores the
+saved prompt, output path, and working directory instead of asking the model
+what “try again” means.
+
 ## Natural commands
 
 ```bash
@@ -71,6 +78,9 @@ Successful commands use `{ "ok": true, ... }`. Errors use:
 
 Credentials are never included. Provider diagnostics report only whether a key
 exists and whether it came from a flag, environment, config, or was not needed.
+Local file operations and commands stay on the machine. A selected remote
+provider still receives the prompt and context sent for inference; choose
+Ollama when the inference itself must remain local.
 
 ## License
 

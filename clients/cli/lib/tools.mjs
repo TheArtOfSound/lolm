@@ -85,7 +85,7 @@ async function fetchText(url, timeoutMs = 20_000) {
     let current = await publicUrl(url);
     let response;
     for (let redirects = 0; redirects <= 5; redirects++) {
-      response = await fetch(current, { redirect: "manual", headers: { "user-agent": "LOLM-CLI/1.0" }, signal: controller.signal });
+      response = await fetch(current, { redirect: "manual", headers: { "user-agent": "LOLM-CLI/1.1" }, signal: controller.signal });
       if (![301, 302, 303, 307, 308].includes(response.status)) break;
       const location = response.headers.get("location");
       if (!location) throw new Error("redirect response did not include a location");

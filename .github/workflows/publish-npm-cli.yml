@@ -104,7 +104,7 @@ jobs:
           ./node_modules/.bin/lolm --help | grep -q "COMMANDS"
           ./node_modules/.bin/lolm providers --json > providers.json
           node -e "const x=require('./providers.json'); if(!x.ok || x.providers.length < 10)process.exit(1)"
-          for item in LICENSE README.md package.json scripts/postinstall.mjs bin/lolm.mjs lib/agent.mjs lib/config.mjs lib/nfet.mjs lib/nfet_bridge.py lib/pdf.mjs lib/providers.mjs lib/tools.mjs lib/tui.mjs; do
+          for item in LICENSE README.md package.json scripts/postinstall.mjs bin/lolm.mjs lib/agent.mjs lib/config.mjs lib/nfet.mjs lib/nfet_bridge.py lib/pdf.mjs lib/providers.mjs lib/session.mjs lib/tools.mjs lib/tui.mjs; do
             diff -q "$GITHUB_WORKSPACE/clients/cli/$item" "node_modules/lolm-cli/$item"
           done
           # The public package must not depend on the retired LOLM hosted API.

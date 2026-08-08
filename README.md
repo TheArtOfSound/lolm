@@ -2,8 +2,10 @@
 
 LOLM is an open-source, local-first AI agent with its own terminal interface,
 provider-agnostic API keys, local coding tools, artifact creation, and a real
-NFET control loop. The public website is documentation only; your prompts,
-files, commands, and provider credentials stay on your computer.
+NFET control loop. The public website is documentation only. File operations,
+commands, configuration, and credentials stay on your computer; when you pick
+a remote model provider, that provider receives the prompt and selected
+context under its own policies.
 
 ```bash
 npm install -g lolm-cli
@@ -19,6 +21,11 @@ lolm "make me a PDF project brief and put it on my Desktop"
 lolm "code a polished HTML page here" --cwd ./my-project
 lolm "update yourself"
 ```
+
+Natural requests open the persistent customer console in a real terminal, so
+conversation and task context continue without returning to a shell prompt.
+Use `--once` for a single non-interactive run. If work fails, say `try again`:
+LOLM restores the exact request, destination, and working directory it saved.
 
 Explicit commands are available when you want predictable scripting:
 
