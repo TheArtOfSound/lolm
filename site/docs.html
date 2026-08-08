@@ -1,148 +1,28 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LOLM Docs — install, architecture, receipts, research</title>
-<meta name="description" content="Documentation hub for LOLM: install, pricing, architecture, task-state control, receipts, research, operator, and CLI.">
-<link rel="canonical" href="https://lolm.imagineqira.com/docs.html">
-<meta name="robots" content="index,follow">
-<meta name="theme-color" content="#07080b">
-<link rel="stylesheet" href="/lolm-ds.css">
-<script src="/lolm-ds.js" defer></script>
-<style>
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55}
-  a{color:var(--accent2);text-decoration:none} a:hover{color:var(--ink)}
-  .shell{max-width:900px;margin:0 auto;padding:0 20px 72px}
-  .top{display:flex;align-items:center;gap:14px;height:54px;border-bottom:1px solid var(--line);margin:0 -20px 28px;padding:0 20px}
-  .mark{font-weight:750;color:var(--ink)} .mark em{font-style:normal;background:var(--lolm-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .top nav{display:flex;gap:14px;flex:1;font-size:13.5px}
-  .top nav a{color:var(--dim)}
-  .btn{display:inline-flex;border-radius:10px;padding:9px 14px;font:inherit;font-weight:650;font-size:13.5px;text-decoration:none;background:var(--lolm-grad);color:#fff}
-  h1{font-size:clamp(28px,4vw,36px);letter-spacing:-.03em;margin:0 0 8px;color:var(--t-hi)}
-  .lede{color:var(--dim);margin:0 0 28px;max-width:36em}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  @media(max-width:700px){.grid{grid-template-columns:1fr}}
-  .card{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:16px 18px}
-  .card .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
-  .card h3{margin:0 0 6px;font-size:15.5px;color:var(--t-hi)}
-  .card p{margin:0;font-size:13.5px;color:var(--dim);line-height:1.5}
-  .card a.more{display:inline-block;margin-top:10px;font-size:13px;font-weight:600}
-  h2{font-size:13px;font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin:36px 0 12px}
-</style>
-</head>
-<body>
-<div class="shell">
-  <header class="top">
-    <a class="mark" href="/">LO<em>LM</em></a>
-    <nav>
-      <a href="/install.html">Install</a>
-      <a href="/pricing.html">Pricing</a>
-      <a href="/docs.html">Docs</a>
-      <a href="/app.html">App</a>
-    </nav>
-    <a class="btn" href="/app.html">Open app</a>
-  </header>
-
-  <h1>Docs</h1>
-  <p class="lede">Everything that used to live as scattered pages — grouped for humans. Product first, research secondary.</p>
-
-  <h2>Start here</h2>
-  <div class="grid">
-    <div class="card">
-      <div class="tag">Developers</div>
-      <h3>Integrate anywhere</h3>
-      <p>HTTP + SSE API, npm client, CLI, curl/Python — the focus path for platforms.</p>
-      <a class="more" href="/developers.html">Developers →</a>
-    </div>
-    <div class="card">
-      <div class="tag">Product</div>
-      <h3>Install</h3>
-      <p>CLI one-liner, web app, self-host. Same UI after install.</p>
-      <a class="more" href="/install.html">Open install →</a>
-    </div>
-    <div class="card">
-      <div class="tag">Product</div>
-      <h3>Pricing &amp; usage</h3>
-      <p>Free · Plus $7.99 · Pro $19.99. Daily runs/visuals — sustainable caps, not token wallets.</p>
-      <a class="more" href="/pricing.html">Open pricing →</a>
-    </div>
-    <div class="card">
-      <div class="tag">SEO · sales</div>
-      <h3>Compare competitors</h3>
-      <p>Detailed guides vs Claude Code, Cursor, Codex, Copilot, Devin, ChatGPT.</p>
-      <a class="more" href="/compare/">Compare hub →</a>
-    </div>
-    <div class="card">
-      <div class="tag">Product</div>
-      <h3>Workspace app</h3>
-      <p>Full UI: code jail, visual builder, memory, receipts, task state.</p>
-      <a class="more" href="/app.html">Open app →</a>
-    </div>
-    <div class="card">
-      <div class="tag">Product</div>
-      <h3>Quick demo</h3>
-      <p>No-account public demo of control + receipts.</p>
-      <a class="more" href="/try.html">Open demo →</a>
-    </div>
-  </div>
-
-  <h2>Architecture &amp; trust</h2>
-  <div class="grid">
-    <div class="card">
-      <div class="tag">Core claim</div>
-      <h3>How it works</h3>
-      <p>Task state z_t, π(z), sandbox, NFET as infrastructure — honest scope.</p>
-      <a class="more" href="/about.html">Architecture →</a>
-    </div>
-    <div class="card">
-      <div class="tag">Compare</div>
-      <h3>Why switch</h3>
-      <p>What LOLM is for vs typical context-driven agents. No fake win-rate claims.</p>
-      <a class="more" href="/why-switch.html">Why switch →</a>
-    </div>
-    <div class="card">
-      <div class="tag">Audit</div>
-      <h3>Live receipts</h3>
-      <p>Hash-chained public ledger of code and visual runs.</p>
-      <a class="more" href="/receipts.html">Receipts →</a>
-    </div>
-    <div class="card">
-      <div class="tag">Agents</div>
-      <h3>llms.txt</h3>
-      <p>Machine-readable product summary for agents and crawlers.</p>
-      <a class="more" href="/llms.txt">llms.txt →</a>
-    </div>
-  </div>
-
-  <h2>Labs (optional)</h2>
-  <div class="grid">
-    <div class="card">
-      <div class="tag">Lab</div>
-      <h3>Research jobs</h3>
-      <p>Live web research with source-backed memory.</p>
-      <a class="more" href="/research.html">Research →</a>
-    </div>
-    <div class="card">
-      <div class="tag">Lab</div>
-      <h3>Operator</h3>
-      <p>Autonomy loop surface for continuous operation.</p>
-      <a class="more" href="/operator.html">Operator →</a>
-    </div>
-    <div class="card">
-      <div class="tag">Lab</div>
-      <h3>HF daily learning</h3>
-      <p>Hugging Face dataset flywheel dashboard.</p>
-      <a class="more" href="/hf.html">HF learning →</a>
-    </div>
-    <div class="card">
-      <div class="tag">Ecosystem</div>
-      <h3>Oort · Flows</h3>
-      <p>Library + guided playbooks powering LOLM tactics (740+ steps).</p>
-      <a class="more" href="https://oortstack.com" target="_blank" rel="noopener">Oort →</a>
-      · <a class="more" href="https://flows.oortstack.com" target="_blank" rel="noopener">Flows →</a>
-    </div>
-  </div>
-</div>
-</body>
-</html>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LOLM CLI documentation</title><meta name="description" content="Commands, providers, NFET controls, configuration, and safety for the open-source LOLM CLI."><link rel="stylesheet" href="/lolm-ds.css"><script src="/lolm-ds.js" defer></script>
+<style>body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.58}.layout{max-width:1100px;margin:auto;padding:28px 22px 90px;display:grid;grid-template-columns:210px 1fr;gap:58px}aside{position:sticky;top:30px;height:max-content}aside a{display:block;color:var(--dim);text-decoration:none;padding:6px 0}.doc{max-width:760px}h1{font-size:46px;letter-spacing:-.04em}h2{margin-top:56px;border-top:1px solid var(--line);padding-top:26px}pre{background:#050608;border:1px solid var(--line-2);border-radius:12px;padding:16px;overflow:auto;color:#d7deea;font:13px/1.7 var(--mono)}table{width:100%;border-collapse:collapse}td,th{text-align:left;border-bottom:1px solid var(--line);padding:10px}th{color:var(--faint);font-size:12px}code{font-family:var(--mono);color:var(--accent2)}a{color:var(--accent2)}@media(max-width:760px){.layout{display:block}aside{display:none}}</style></head>
+<body><div class="layout"><aside><b><a href="/">LOLM</a></b><a href="#start">Quick start</a><a href="#commands">Commands</a><a href="#providers">Providers</a><a href="#nfet">NFET</a><a href="#safety">Safety</a><a href="#json">JSON</a><a href="#config">Configuration</a></aside><main class="doc">
+<h1>CLI documentation</h1><p>LOLM is a local command-line agent. The website is documentation only.</p>
+<h2 id="start">Quick start</h2><pre>npm install -g lolm-cli
+lolm setup
+lolm doctor
+lolm</pre>
+<h2 id="commands">Commands</h2><table><tr><th>Command</th><th>Purpose</th></tr><tr><td><code>lolm</code></td><td>Interactive terminal with conversation and slash commands.</td></tr><tr><td><code>lolm ask</code></td><td>Answer with read-only file and web tools.</td></tr><tr><td><code>lolm code</code></td><td>Inspect, edit, execute, and verify in a working directory.</td></tr><tr><td><code>lolm pdf</code></td><td>Generate content and write a valid local PDF.</td></tr><tr><td><code>lolm html</code></td><td>Write one self-contained HTML document.</td></tr><tr><td><code>lolm update</code></td><td>Check npm and update the installed CLI.</td></tr><tr><td><code>lolm doctor</code></td><td>Verify runtime, provider, key, model discovery, and NFET assets.</td></tr></table><p>Natural text is routed automatically. Use explicit commands for automation.</p>
+<h2 id="providers">Providers</h2><pre>lolm providers
+lolm setup anthropic
+lolm models
+lolm ask "hello" --provider openai --model MODEL</pre><p>Adapters support OpenAI-compatible APIs, Anthropic Messages, Gemini Generate Content, and Ollama Chat. Presets cover OpenAI, Anthropic, Google, xAI, OpenRouter, Groq, Mistral, DeepSeek, Together, Cerebras, Ollama, and custom endpoints.</p>
+<h2 id="nfet">NFET control</h2><p>The persistent Python bridge loads the frozen local backbone and trained graft once. Candidate output is replayed through the exact model formulas. Rolling calibration and the trained head produce <code>continue</code>, <code>retrieve</code>, <code>verify</code>, <code>branch</code>, or <code>finalize</code>. The agent follows those decisions and displays their source.</p><pre>export LOLM_HOME=/path/to/LOLM
+lolm nfet status
+lolm nfet test "text to monitor"
+lolm config set nfet-profile qwen3_4b_lab
+lolm config set nfet-device mps
+lolm config set nfet-checkpoint runs/nfet_controller/live_qwen4b.pt</pre><p>Use <code>--no-nfet</code> only when you intentionally want provider-only operation.</p>
+<h2 id="safety">Local safety</h2><ul><li>Reads are bounded and exclude common generated directories.</li><li>Writes and shell commands ask first unless <code>--yes</code> is supplied.</li><li>Broad destructive commands remain blocked.</li><li><code>--dry-run</code> previews changes.</li><li>Remote URL fetches reject private and loopback targets.</li><li>API keys are never printed.</li></ul>
+<h2 id="json">JSON mode</h2><pre>lolm doctor --json
+lolm code "run tests" --json --yes</pre><p>Stdout contains exactly one JSON document. Errors use <code>{"ok":false,"error":{"code":"…","message":"…"}}</code>.</p>
+<h2 id="config">Configuration</h2><pre>lolm config show
+lolm config set provider openrouter
+lolm config set model MODEL
+lolm config unset api-key</pre><p>Configuration is stored at <code>~/.lolm/config.json</code> with mode <code>0600</code>. Environment variables take precedence. See the <a href="https://github.com/TheArtOfSound/LOLM">source repository</a> for architecture details and <a href="mailto:bryanleonard237@gmail.com">commercial licensing</a>.</p>
+</main></div></body></html>

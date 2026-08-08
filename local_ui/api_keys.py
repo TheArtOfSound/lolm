@@ -1,13 +1,13 @@
 # Copyright (c) 2026 Qira LLC. All rights reserved.
-"""Developer API keys for integrate-anywhere.
+"""Legacy developer API keys for self-hosted integrations.
 
-Identity for usage quotas when present:
+Identity when present:
   Header:  X-LOLM-Api-Key: lolm_<key_id>_<secret>
   or:      Authorization: Bearer lolm_<key_id>_<secret>
 
 Keys are stored as SHA-256 of the full token (never plaintext after mint).
-Free keys: mint with IP rate limit. Paid keys: require a matching Stripe license
-tier (or higher) on the request.
+Legacy access-class identifiers remain readable, but the public website no
+longer mints keys or offers hosted execution.
 """
 
 from __future__ import annotations

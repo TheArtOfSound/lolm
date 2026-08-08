@@ -1,6 +1,6 @@
 name: deploy-production
 
-# Deploy to the production box + smoke/health/critical-route checks. Auto-rolls
+# Deploy docs + the retired-API boundary, then run live contract checks. Auto-rolls
 # back on a failed deployment check. Called by release-production after PR gates pass.
 
 on:
@@ -35,7 +35,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           # DEPLOY_SSH_HOST is user@host; ssh-keyscan needs the bare host
           ssh-keyscan -H "${DEPLOY_SSH_HOST##*@}" >> ~/.ssh/known_hosts 2>/dev/null || true
-      - name: Deploy + health + real PDF delivery checks
+      - name: Deploy + verify docs and retired execution boundary
         id: deploy
         env:
           DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}

@@ -1,33 +1,30 @@
 {
   "name": "lolm-cli",
-  "version": "0.3.0-beta.2",
-  "description": "LOLM control console with fail-closed code shipping, verified local artifact delivery, deterministic cross-command continuity, and sealed receipts.",
+  "version": "1.0.0",
+  "description": "Open-source local AI agent with a polished terminal UI, provider-agnostic BYOK, real LOLM-NFET control, coding tools, and local artifact creation.",
   "type": "module",
   "bin": {
-    "lolm": "bin/lolm-delivery.mjs"
+    "lolm": "bin/lolm.mjs"
   },
   "files": [
-    "bin/lolm-delivery.mjs",
     "bin/lolm.mjs",
-    "lib/continuity.mjs",
-    "lib/delivery.mjs",
-    "lib/diff.mjs",
-    "lib/artifacts.mjs",
-    "lib/paths.mjs",
-    "lib/shipped.mjs",
-    "lib/receipt.mjs",
-    "lib/terminal.mjs",
+    "lib/agent.mjs",
+    "lib/config.mjs",
+    "lib/nfet.mjs",
+    "lib/nfet_bridge.py",
+    "lib/pdf.mjs",
+    "lib/providers.mjs",
+    "lib/tools.mjs",
+    "lib/tui.mjs",
     "scripts/postinstall.mjs",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "test": "node test/run.mjs && node test/delivery.mjs && node test/continuity.mjs && node test/continuity_receipt.mjs",
+    "test": "node --test test/local-cli.test.mjs",
     "postinstall": "node scripts/postinstall.mjs"
   },
-  "dependencies": {
-    "lolm-nfet-client": "^0.3.0-beta.1"
-  },
+  "dependencies": {},
   "engines": {
     "node": ">=20"
   },
@@ -37,16 +34,15 @@
     "ai",
     "llm",
     "coding-agent",
-    "sandbox",
-    "code-execution",
-    "receipts",
-    "uncertainty",
-    "continuity",
+    "byok",
+    "terminal-ui",
+    "nfet",
+    "local-first",
     "lolm"
   ],
   "author": "Qira LLC (Bryan Leonard & Brandyn Leonard)",
-  "license": "MIT",
-  "homepage": "https://lolm.imagineqira.com",
+  "license": "AGPL-3.0-or-later",
+  "homepage": "https://lolm.imagineqira.com/install.html",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TheArtOfSound/lolm.git",

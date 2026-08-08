@@ -1,6 +1,5 @@
 # Copyright 2026 Bryan Leonard & Brandyn Leonard
-#
-# Licensed under the LOLM Community License Agreement, Version 1.0
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 """TPU smoke test for LOLM.
 

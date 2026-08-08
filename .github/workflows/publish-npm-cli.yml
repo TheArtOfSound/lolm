@@ -84,7 +84,7 @@ jobs:
           fi
           echo "Publishing $V with dist-tag $TAG"
           npm publish --provenance --access public --tag "$TAG"
-      - name: Smoke the published binary in a clean project
+      - name: Smoke the published local binary in a clean project
         if: ${{ !inputs.dry_run }}
         run: |
           V="$(node -p "require('./package.json').version")"
@@ -99,13 +99,11 @@ jobs:
           [ "$installed" -eq 1 ]
           ./node_modules/.bin/lolm --version | grep -qx "$V"
           ./node_modules/.bin/lolm --help | grep -q "USAGE"
-          # local P0 checks must not call production
-          set +e
-          OUT="$(./node_modules/.bin/lolm code 'make a PDF proving I attend ASU and fill in the rest' 2>&1)"
-          RC=$?
-          set -e
-          [ "$RC" -eq 2 ]
-          printf '%s\n' "$OUT" | grep -qi "cannot fabricate official proof"
-          # a real network call against the now-updated hosted API proves compatibility
-          ./node_modules/.bin/lolm status
+          ./node_modules/.bin/lolm providers --json > providers.json
+          node -e "const x=require('./providers.json'); if(!x.ok || x.providers.length < 10)process.exit(1)"
+          # The public package must not depend on the retired LOLM hosted API.
+          if grep -R "lolm.imagineqira.com/api/demo" node_modules/lolm-cli/bin node_modules/lolm-cli/lib; then
+            echo "published CLI contains a hosted execution dependency"
+            exit 1
+          fi
           echo "cli smoke OK"

@@ -278,7 +278,7 @@ h1 { font-weight: 680; }
   border-color: var(--faint);
   color: var(--t-hi);
 }
-/* Solid “ink” secondary (Pro-style) — label must contrast with fill in both themes */
+/* Solid “ink” secondary — label must contrast with fill in both themes */
 .btn-secondary, a.btn-secondary {
   background: var(--ink);
   color: var(--bg);

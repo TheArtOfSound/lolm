@@ -390,7 +390,14 @@ def load_model(req: LoadRequest):
         raise HTTPException(status_code=400, detail=f"Refusing local load of {profile.name} ({profile.approximate_parameters:,} params, role={profile.role}). Use qwen3_0_6b_smoke or qwen3_4b_lab locally.")
     device = pick_device(req.device)
     backend, fallback_reason = live_safe_backend(req.latent_backend)
-    backbone = FrozenHFBackbone.from_registry(req.profile, str(ROOT / req.registry), freeze=True)
+    # An explicit runtime device and Accelerate's registry-level ``device_map=auto``
+    # must not be combined. Under memory pressure Accelerate can leave offloaded
+    # meta tensors, after which ``module.to(device)`` is invalid. Load real CPU
+    # tensors first, then perform the requested move as one coherent operation.
+    backbone = FrozenHFBackbone.from_registry(
+        req.profile, str(ROOT / req.registry), freeze=True,
+        device_map=None if device is not None else profile.device_map,
+    )
     if device is not None:
         try:
             backbone.to(device)

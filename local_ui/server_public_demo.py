@@ -1,11 +1,9 @@
-"""Public demo service for lolm.imagineqira.com.
+"""Documentation boundary service for lolm.imagineqira.com.
 
-Runs the workspace bound to localhost with the NFET agent and the demo gate.
-nginx forwards ONLY `/api/demo/` from the public vhost — every other route
-stays loopback-only. The model and the bootstrapped controller checkpoint
-load in a background thread so the service is responsive immediately;
-`/api/demo/status` reports `model_ready: false` until the load finishes
-(the UI offers replays in the meantime).
+The public product is the open-source, local-first CLI. nginx still forwards
+the historical `/api/demo/` prefix to this process so old links receive an
+explicit 410 migration response instead of silently exposing agent execution.
+Only inert health and product-configuration endpoints remain public.
 
 Env:
     DEMO_PROFILE=qwen3_0_6b_smoke   DEMO_DEVICE=cpu
@@ -52,7 +50,34 @@ PROFILE = os.environ.get("DEMO_PROFILE", "qwen3_0_6b_smoke")
 DEVICE = os.environ.get("DEMO_DEVICE", "cpu")
 GRAFT_CKPT = os.environ.get("DEMO_GRAFT_CKPT", "runs/nfet_controller/bootstrap_qwen06b.pt")
 REPLAYS_DIR = Path(os.environ.get("DEMO_REPLAYS_DIR", str(ROOT / "site" / "replays")))
-usage_limits.init(ROOT / "runs")   # usage tiers: counters live under runs/usage/
+
+# The public product is documentation/install-only. Keep the historical demo
+# routes importable for local tests and private development, but reject public
+# API access except for inert health/config tombstones. The npm CLI
+# talks directly to the user's chosen provider and never needs these endpoints.
+PUBLIC_DOC_ENDPOINTS = {
+    "/api/demo/health",
+    "/api/demo/product-config",
+    "/api/public/product-config",
+}
+
+
+@app.middleware("http")
+async def cli_only_public_surface(request: Request, call_next):
+    isolated_test_client = (os.environ.get("LOLM_TEST_NO_BOOT") == "1"
+                            and getattr(request.client, "host", "") == "testclient")
+    if (request.url.path.startswith("/api/demo/")
+            and request.url.path not in PUBLIC_DOC_ENDPOINTS
+            and not isolated_test_client):
+        return JSONResponse({
+            "error": "PUBLIC_WEB_EXECUTION_RETIRED",
+            "message": "LOLM runs locally from the open-source CLI.",
+            "install": "npm install -g lolm-cli",
+            "docs": "/install.html",
+        }, status_code=410)
+    return await call_next(request)
+
+usage_limits.init(ROOT / "runs")   # compatibility no-op; local CLI is unmetered
 from local_ui import receipt_sign
 receipt_sign.init(ROOT / "runs")
 from local_ui.api_key_routes import register_api_key_routes
@@ -487,11 +512,6 @@ LIFE = LifeEngine(ROOT / "runs", MEMORY,
                   interval_s=int(os.environ.get("LOLM_LIFE_INTERVAL", "1200")))
 register_life_routes(app, LIFE, _life_loopback)
 
-# Optional "Support this project" button — Stripe Checkout, secret key from env only.
-from local_ui.donate_routes import register_donate_routes  # noqa: E402
-register_donate_routes(app)
-
-
 @app.get("/api/demo/brain")
 def brain_status():
     """Which brain is generating — and whether anything leaves the machine.
@@ -622,116 +642,39 @@ def admin_unlock(body: _AdminUnlockBody):
     return {"admin": tok, "days": 30}
 
 
-class _CheckoutBody(_BM):
-    tier: str
-
-
-@app.get("/api/demo/billing/config")
-def billing_config(request: Request):
-    """Public billing snapshot + live remaining budget (does not consume a unit)."""
-    lic = usage_limits.read_license(request.headers.get("x-lolm-license", ""))
-    status = usage_limits.usage_status(request)
-    return {"enabled": bool(os.environ.get("STRIPE_SECRET_KEY", "").strip())
-                       and usage_limits.enforced(),
-            "tiers": usage_limits.public_tiers(),
-            "your_tier": status.get("tier") or (lic or {}).get("tier", "free"),
-            "label": status.get("label"),
-            "admin": bool(status.get("admin")),
-            "unlimited": bool(status.get("unlimited")),
-            "usage": {
-                "runs": status.get("runs"),
-                "visual": status.get("visual"),
-            },
-            "upgrade_hint": bool(status.get("upgrade_hint")),
-            "enforced": bool(status.get("enforced")),
-            # Honest: one-time packs are not implemented on this deployment.
-            "topups_available": False,
-            "authority": "usage_limits.TIERS"}
-
-
 @app.get("/api/demo/product-config")
 @app.get("/api/public/product-config")  # alias; only /api/demo/* is nginx-proxied publicly
 def public_product_config(request: Request):
-    """Safe public product + plan snapshot (no secrets). Prefer static
-    /product-config.json for CDN; this endpoint overlays live tier enforcement.
-
-    Public path: GET /api/demo/product-config (nginx only forwards /api/demo/).
-    """
-    status = usage_limits.usage_status(request)
+    """Safe documentation-only product snapshot (no secrets or execution)."""
     return {
-        "version": 1,
+        "version": 2,
         "product": {
             "name": "LOLM",
-            "tagline": "An agent that does not lose the plot.",
+            "tagline": "Local intelligence, under your control.",
             "publisher": "Qira LLC",
             "url": "https://lolm.imagineqira.com/",
+            "license": "AGPL-3.0-or-later",
         },
-        "plans": usage_limits.public_tiers(),
-        "billing": {
-            "meter": "daily_runs_and_visual_builds",
-            "reset": "UTC midnight",
-            "token_wallet": False,
-            "self_host": "unlimited",
-            "topups_available": False,
-            "checkout_enabled": bool(os.environ.get("STRIPE_SECRET_KEY", "").strip())
-                                and usage_limits.enforced(),
-        },
-        "usage": {
-            "tier": status.get("tier"),
-            "label": status.get("label"),
-            "runs": status.get("runs"),
-            "visual": status.get("visual"),
-            "unlimited": bool(status.get("unlimited")),
-        },
-        "cta": {"primary": "Open app", "href": "/app.html"},
+        "execution": {"website": False, "cli": True, "hosted_api": False},
+        "install": {"command": "npm install -g lolm-cli", "href": "/install.html"},
+        "commercial_license": {"available": True,
+                               "contact": "bryanleonard237@gmail.com"},
         "static_config": "/product-config.json",
     }
 
 
 @app.get("/api/demo/health")
 def public_health():
-    """Simple liveness under the proxied /api/demo/ prefix (distinct from model ready)."""
+    """Simple liveness for the documentation boundary (not model readiness)."""
     return {
         "ok": True,
-        "service": "lolm-demo",
+        "service": "lolm-docs-boundary",
         "ts": int(time.time()),
-        "status_url": "/api/demo/status",
+        "execution": {"website": False, "cli": True, "hosted_api": False},
+        "install": "npm install -g lolm-cli",
         "website": "https://lolm.imagineqira.com/",
     }
 
-
-@app.get("/api/demo/billing/usage")
-def billing_usage(request: Request):
-    """Lightweight remaining-quota peek for chips / pricing UX. Safe to poll."""
-    return usage_limits.usage_status(request)
-
-
-@app.post("/api/demo/billing/checkout")
-def billing_checkout(body: _CheckoutBody, request: Request):
-    out = usage_limits.create_subscription_checkout(
-        (body.tier or "").strip().lower(), str(request.base_url))
-    return JSONResponse(out, status_code=400) if out.get("error") else out
-
-
-@app.get("/api/demo/billing/claim")
-def billing_claim(session_id: str = ""):
-    out = usage_limits.claim_subscription(session_id.strip())
-    return JSONResponse(out, status_code=400) if out.get("error") else out
-
-
-class _StripeSourceBody(_BM):
-    path: str
-
-
-@app.post("/api/demo/keys/stripe_source")
-def keys_stripe_source(body: _StripeSourceBody, request: Request):
-    """Path-only Stripe wiring: point at a file that already holds your sk_ key —
-    the key is resolved into the env but NEVER copied into keys.env or returned.
-    Same trust boundary as key writes (loopback or the owner's admin token)."""
-    if not _key_writer(request):
-        return JSONResponse({"error": "keys can only be set from your own machine (loopback)"},
-                            status_code=403)
-    return byok.set_stripe_source(body.path)
 
 
 @app.get("/api/demo/operator")

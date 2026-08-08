@@ -1,9 +1,9 @@
 {
-  "name": "LOLM — does not lose the plot",
+  "name": "LOLM — local open-source AI agent",
   "short_name": "LOLM",
-  "description": "Persistent task-state control for agents: goals, plan, failures, and verified completion across steps and sessions. Sealed receipts. Honest claims only.",
-  "start_url": "/app.html",
-  "display": "standalone",
+  "description": "Install documentation for the open-source local LOLM command-line agent.",
+  "start_url": "/",
+  "display": "browser",
   "background_color": "#07090d",
   "theme_color": "#07090d",
   "icons": [

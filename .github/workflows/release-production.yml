@@ -1,13 +1,13 @@
 name: release-production
 
-# Ordered production release from the integration branch:
-#   merge -> deploy + rollback-protected live PDF smoke -> publish CLI if changed.
-# Publication can never race ahead of the backend it depends on.
+# Ordered production release from main:
+#   deploy the docs/retired-API boundary -> publish the local CLI if changed.
+# Publication cannot race ahead of the installation site.
 
 on:
   push:
     branches:
-      - grok/grand-audit-remediation
+      - main
     paths:
       - 'local_ui/**'
       - 'lolm/**'

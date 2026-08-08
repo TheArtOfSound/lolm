@@ -264,8 +264,8 @@ def full_report(lolm_log, baseline_log, checkpoint_path=None, config_path=None):
    LLM training pipeline. License the techniques, not just the model.
 
 Patent: US Provisional #64/002,166 (Filed March 10, 2026)
-License: LOLM Community License v1.0 (free for research/education,
-         commercial license required for entities >$5M revenue)
+License: AGPL-3.0-or-later, with separately negotiated commercial terms
+         for organizations that need different source-sharing obligations.
 """)
 
 

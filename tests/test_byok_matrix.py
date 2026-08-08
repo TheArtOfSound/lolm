@@ -33,7 +33,6 @@ _CONSUMERS = {
     "BRAVE_SEARCH_API_KEY": ("local_ui/internet_tools.py",),
     "TAVILY_API_KEY": ("local_ui/internet_tools.py",),
     "SEARXNG_URL": ("local_ui/internet_tools.py",),
-    "STRIPE_SECRET_KEY": ("local_ui/donate_routes.py",),
 }
 
 

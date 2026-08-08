@@ -1,27 +1,14 @@
 #!/usr/bin/env node
-// Copyright (c) 2026 Qira LLC. All rights reserved.
-/** Friendly banner after `npm install -g lolm-cli` (npm is silent by default). */
-import process from "node:process";
+// SPDX-License-Identifier: AGPL-3.0-or-later
+if (process.env.CI || process.env.npm_config_loglevel === "silent") process.exit(0);
+process.stdout.write(`
+LOLM installed — local, open source, and ready for your provider.
 
-const lines = [
-  "",
-  "  ✓ lolm-cli installed — the command is:  lolm",
-  "",
-  "  Next:",
-  '    lolm status',
-  '    lolm code "write fizzbuzz to 20 in solution.py and run it" --save ./out',
-  '    lolm build "a snake game" -o snake.html',
-  "",
-  "  Web app:  https://lolm.imagineqira.com/app.html",
-  "  Help:     lolm --help",
-  "",
-];
+  1. lolm setup
+  2. lolm doctor
+  3. lolm
 
-// Skip noisy output in CI without terminating the host process.
-if (process.env.CI !== "true" && process.env.LOLM_CLI_QUIET !== "1") {
-  try {
-    process.stderr.write(lines.join("\n"));
-  } catch {
-    /* ignore */
-  }
-}
+For real NFET control, clone https://github.com/TheArtOfSound/LOLM and set
+LOLM_HOME to that checkout. No LOLM account or hosted plan is required.
+
+`);

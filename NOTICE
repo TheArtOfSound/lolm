@@ -1,17 +1,12 @@
 LOLM — Latent Order Language Model
-Copyright 2026 Bryan Leonard & Brandyn Leonard — Qira LLC (bryanleonard237@gmail.com)
+Copyright (c) 2026 Bryan Leonard & Brandyn Leonard — Qira LLC
 
-This product includes software developed by Bryan Leonard & Brandyn Leonard (Qira LLC).
+Open-source license: GNU Affero General Public License v3.0 or later.
+See LICENSE for the complete terms.
 
-Licensed under the LOLM Community License Agreement, Version 1.0.
-See the LICENSE file for the full license text.
+Alternative commercial licensing is available for organizations that do not
+want to operate under the AGPL. See COMMERCIAL-LICENSE.md.
 
-This project implements a novel hybrid Transformer-SSM language model
-architecture with discrete regime detection, persistent memory, and
-learned gating between surface and latent representations.
-
-Qira Agent Vault, QEV sealing, run receipts, and related schemas:
-Copyright (c) 2026 Qira LLC. All rights reserved.
-No commercial use, reproduction, hosting, redistribution, derivative product,
-or competing service use is authorized except under a written license signed
-by Qira LLC.
+The software license does not grant trademark rights in LOLM, Latent Order
+Language Model, Qira, NFET, QEV, or associated names and logos. Patent and
+trademark rights not expressly granted are reserved.

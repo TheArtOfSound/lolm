@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2026 Qira LLC. All rights reserved.
-# Deploy LOLM to the production box, then prove it with smoke + health checks.
+# Deploy the LOLM docs site and retired-API boundary, then prove both surfaces.
 # Exits non-zero on any failed check and restores the paired app/web snapshot.
 #
 # Required env:
@@ -73,52 +73,29 @@ rsync -rc --delete --rsync-path="sudo rsync" site/ "$HOST:$WEB/"
 echo "[deploy] pinning application root into the service venv"
 ssh "$HOST" "set -e; SITE=\$('$APP/.venv/bin/python' -c 'import site; print(site.getsitepackages()[0])'); printf '%s\n' '$APP' > \"\$SITE/lolm_app_root.pth\""
 
-echo "[deploy] proving runtime imports and artifact/task-state/contract patches"
-ssh "$HOST" "cd / && '$APP/.venv/bin/python' - <<'PY'
-from lolm.control.task_state import (
-    allow_finalize_from_state,
-    load_or_init,
-    observe_workspace_artifacts,
-    policy_action,
-    update_task_state,
-)
-from lolm.reliability.contract_compiler import compile_contract
-from local_ui.code_agent import CodeAgent
-assert getattr(CodeAgent, '_artifact_delivery_patch', False), 'artifact delivery patch not active'
-assert getattr(CodeAgent, '_credential_safety_patch', False), 'credential safety patch not active'
-assert getattr(CodeAgent, '_task_state_artifact_patch', False), 'task-state artifact bridge not active'
-contract = compile_contract(
-    'Create main.py that generates output.pdf visibly labeled '
-    'UNOFFICIAL LOLM P0 CLOSURE BROWSER TEST'
-)
-assert contract.primary_language == 'pdf'
-assert not any(
-    c.hardness == 'hard' and c.verifier == 'html.render'
-    for c in contract.clauses
-), 'non-HTML task gained an html.render requirement'
-st = load_or_init('create output.pdf', session='deploy-self-test', resume=False)
-st = update_task_state(
-    st,
-    observation='PDF_READY output.pdf',
-    action='run',
-    result={'files': ['main.py'], 'exit_ok': True, 'produced_output': True},
-)
-assert allow_finalize_from_state(st) is False
-observe_workspace_artifacts(st, ['main.py', 'output.pdf'])
-assert allow_finalize_from_state(st) is True
-assert policy_action(st)['block_finalize'] is False
-print('generated-artifact task state OK; contract medium OK')
+echo "[deploy] validating the docs-only product contract on the box"
+ssh "$HOST" "cd '$APP' && '$APP/.venv/bin/python' -m py_compile local_ui/server_public_demo.py && python3 - '$WEB/product-config.json' <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as handle:
+    config = json.load(handle)
+assert config['product']['mode'] == 'open_source_cli'
+assert config['execution'] == {'website': False, 'cli': True, 'hosted_api': False}
+assert config['commercial_license']['available'] is True
+assert config['commercial_license']['public_prices'] is False
+print('docs-only product contract OK')
 PY"
 
 echo "[deploy] clearing stale bytecode + restarting $SVC"
 ssh "$HOST" "find $APP -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null; sudo systemctl restart $SVC; sleep 3; systemctl is-active $SVC"
 
-# The app imports torch + loads the model on boot, so it binds in ~10-15s. Poll
-# for readiness instead of checking once too early.
-echo "[deploy] waiting for the app to become ready (up to 90s)"
+# The compatibility service still imports the legacy runtime before binding.
+# Poll its inert health endpoint without reviving a model-execution route.
+echo "[deploy] waiting for the docs boundary to become ready (up to 90s)"
 ready=0
 for i in $(seq 1 30); do
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$BASE/api/demo/status" || echo 000)
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$BASE/api/demo/health" || echo 000)
   if [ "$code" = "200" ]; then ready=1; echo "[deploy] app ready after ~$((i*3))s"; break; fi
   sleep 3
 done
@@ -130,20 +107,44 @@ check() { # name url expect
   if [ "$code" = "$3" ]; then echo "[smoke] OK   $1 ($code) $2"; else echo "[smoke] FAIL $1 ($code != $3) $2"; fail=1; fi
 }
 echo "[deploy] smoke + health + critical routes"
-check "health"        "$BASE/api/demo/status"          200
-check "lolm_demo"     "$BASE/"                          200
-check "artifact_ui"   "$BASE/artifact-delivery-ui.js"  200
-check "receipt_route" "$BASE/api/demo/hf/dashboard"     200
-check "research"      "$BASE/api/demo/research/jobs"    200
+check "homepage"       "$BASE/"                         200
+check "install docs"   "$BASE/install.html"             200
+check "CLI docs"       "$BASE/docs.html"                200
+check "static contract" "$BASE/product-config.json"     200
+check "health"         "$BASE/api/demo/health"          200
+check "API contract"   "$BASE/api/demo/product-config"  200
+check "old status retired" "$BASE/api/demo/status"      410
+
+run_code=$(curl -s -o /tmp/lolm-retired-run.json -w '%{http_code}' --max-time 20 \
+  -H 'content-type: application/json' -d '{"prompt":"should not run"}' \
+  "$BASE/api/demo/run/stream" || echo 000)
+if [ "$run_code" = "410" ]; then
+  echo "[smoke] OK   hosted execution retired ($run_code) $BASE/api/demo/run/stream"
+else
+  echo "[smoke] FAIL hosted execution retired ($run_code != 410) $BASE/api/demo/run/stream"
+  fail=1
+fi
 
 if [ "$fail" -ne 0 ]; then
   echo "[deploy] FAILED health/smoke"
   exit 1
 fi
 
-echo "[deploy] running real CodeAgent PDF delivery smoke"
-python3 scripts/smoke_pdf_delivery.py --base "$BASE" --attempts 3 --timeout 600
+product_tmp=$(mktemp)
+curl -fsS --max-time 20 "$BASE/api/demo/product-config" > "$product_tmp"
+python3 - "$product_tmp" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as handle:
+    config = json.load(handle)
+assert config['execution'] == {'website': False, 'cli': True, 'hosted_api': False}
+assert config['commercial_license']['available'] is True
+assert 'plans' not in config and 'billing' not in config
+print('[smoke] OK   live API advertises local CLI without public pricing')
+PY
+rm -f "$product_tmp" /tmp/lolm-retired-run.json
 
 ROLLBACK_ARMED=0
 trap - ERR
-echo "[deploy] live at $BASE — all checks and exact-byte PDF delivery green"
+echo "[deploy] live at $BASE — docs, install path, and retired execution boundary green"

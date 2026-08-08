@@ -1,9 +1,9 @@
 # Copyright (c) 2026 Qira LLC. All rights reserved.
-"""Public integration catalog — machine-readable map for “integrate anywhere.”
+"""Retired hosted-integration compatibility routes.
 
 GET /api/demo/integrate
-  Returns base URL, auth model, rate limits shape, and the stable public routes
-  a third-party app should call (Node, Python, curl, browser).
+  Returns the local CLI integration contract. Public execution is disabled by
+  the server boundary in ``server_public_demo.py``.
 """
 
 from __future__ import annotations
@@ -27,117 +27,21 @@ class KeyCreate(BaseModel):
 class KeyRevoke(BaseModel):
     key_id: str
 
-# Stable contract for third parties. Paths under /api/demo/ only (nginx public).
+# Documentation-only contract. Historical route implementations below stay
+# importable for private self-host tests but are blocked on the public surface.
 INTEGRATION_CATALOG: Dict[str, Any] = {
     "product": "LOLM",
-    "version": "integrate-v1",
-    "base_url": PUBLIC_BASE,
-    "auth": {
-        "free": "none (IP daily quota)",
-        "paid": "header X-LOLM-License: <token from Stripe claim>",
-        "owner_optional": "header X-Workspace-Owner: <your-user-id> for memory scoping",
-        "self_host": "no quotas when LOLM_ADMIN_PASS_SHA256 unset",
-    },
+    "version": "cli-only-v2",
+    "hosted_execution": False,
+    "install": "npm install -g lolm-cli",
+    "auth": {"model_provider": "Bring your own provider key with lolm setup"},
     "clients": {
-        "npm": "lolm-nfet-client",
         "cli": "lolm-cli (bin: lolm)",
-        "http": "any language with fetch/HTTP + SSE parser",
     },
-    "billing": {
-        "model": "daily_quotas",
-        "status": "GET /api/demo/billing/usage",
-        "checkout": "POST /api/demo/billing/checkout {tier: plus|pro}",
-        "topup_checkout": "POST /api/demo/billing/topup/checkout {pack: runs_50|runs_200|visual_10|bundle_100}",
-        "topup_claim": "GET /api/demo/billing/topup/claim?session_id=cs_…",
-        "webhook": "POST /api/demo/billing/webhook (Stripe-Signature; credits top-ups)",
-        "note": "Daily quotas reset UTC midnight. Top-up packs do not expire at midnight.",
-    },
-    "endpoints": [
-        {
-            "id": "status",
-            "method": "GET",
-            "path": "/api/demo/status",
-            "purpose": "Health + readiness",
-        },
-        {
-            "id": "usage",
-            "method": "GET",
-            "path": "/api/demo/billing/usage",
-            "purpose": "Remaining runs/visuals + billing glossary",
-        },
-        {
-            "id": "chat_stream",
-            "method": "POST",
-            "path": "/api/demo/run/stream",
-            "purpose": "SSE agent chat with NFET control events",
-            "body": {"command": "string", "history": [], "user_memory": []},
-            "client": "runAgent()",
-        },
-        {
-            "id": "code_run",
-            "method": "POST",
-            "path": "/api/demo/code/run",
-            "purpose": "SSE coding agent: jail write→run→fix + receipt",
-            "body": {"task": "string", "max_steps": 12, "conversation_id": "optional"},
-            "client": "runCode()",
-            "consumes": "runs",
-        },
-        {
-            "id": "code_health",
-            "method": "GET",
-            "path": "/api/demo/code/health",
-            "purpose": "Sandbox + receipt ledger health",
-        },
-        {
-            "id": "code_receipts",
-            "method": "GET",
-            "path": "/api/demo/code/receipts?limit=20",
-            "purpose": "Public hash-chained receipt ledger",
-            "client": "listCodeReceipts()",
-        },
-        {
-            "id": "visual",
-            "method": "POST",
-            "path": "/api/demo/code/visual",
-            "purpose": "Build self-contained HTML app (browser-verified path)",
-            "body": {"task": "string"},
-            "client": "buildVisual()",
-            "consumes": "visual",
-        },
-        {
-            "id": "task_state",
-            "method": "GET",
-            "path": "/api/demo/code/task_state?conversation_id=",
-            "purpose": "Load persistent z_t task state for multi-session resume",
-        },
-        {
-            "id": "tactics",
-            "method": "GET",
-            "path": "/api/demo/code/tactics?q=",
-            "purpose": "Oort/Flows tactic retrieval for a task",
-        },
-        {
-            "id": "techniques",
-            "method": "GET",
-            "path": "/api/demo/code/techniques",
-            "purpose": "Technique library stats",
-        },
-    ],
-    "sse": {
-        "content_type": "text/event-stream",
-        "format": "event: <name>\\ndata: <json>\\n\\n",
-        "code_events": [
-            "code_start", "agent_note", "command_started", "command_finished",
-            "code_done", "code_receipt", "error",
-        ],
-        "chat_events": [
-            "token", "decision", "action", "proof", "phase", "error",
-        ],
-    },
+    "endpoints": [],
     "examples": {
         "docs": f"{PUBLIC_BASE}/developers.html",
-        "cli": "npm install -g lolm-cli && lolm code \"fizzbuzz to 20\" --save ./out",
-        "npm": "npm install lolm-nfet-client",
+        "cli": "npm install -g lolm-cli && lolm code \"build fizzbuzz to 20\"",
     },
 }
 
@@ -146,25 +50,6 @@ def register_integrate_routes(app: Any) -> None:
     @app.get("/api/demo/integrate")
     def integrate_catalog():
         cat = dict(INTEGRATION_CATALOG)
-        try:
-            cat["tiers"] = usage_limits.public_tiers()
-            cat["billing_glossary"] = usage_limits.billing_glossary()
-        except Exception:
-            pass
-        cat["auth"] = {
-            **INTEGRATION_CATALOG["auth"],
-            "api_key": "header X-LOLM-Api-Key: lolm_<id>_<secret> (or Authorization: Bearer …)",
-            "create_key": "POST /api/demo/api-keys  {tier, label}",
-            "list_keys": "GET /api/demo/api-keys",
-            "byok": "GET|POST /api/demo/keys  (provider keys on self-host / owner)",
-            "webhook": "POST /api/demo/code/run  body.webhook_url (public https only)",
-            "task_state": "GET /api/demo/code/task_state?conversation_id=… or /task_state/{id}",
-            "cli": "lolm doctor | code --save | receipt verify | inspect task",
-        }
-        cat["clients"] = {
-            **INTEGRATION_CATALOG["clients"],
-            "python": "pip-installable module clients/python (lolm_client)",
-        }
         return cat
 
     @app.get("/api/demo/integrate/openapi.json")
@@ -179,22 +64,14 @@ def register_integrate_routes(app: Any) -> None:
                 "operationId": ep.get("id"),
                 "responses": {"200": {"description": "OK"}},
             }
-        paths["/api/demo/api-keys"] = {
-            "post": {"summary": "Mint product API key", "operationId": "createApiKey"},
-            "get": {"summary": "List product API key metadata", "operationId": "listApiKeys"},
-        }
-        paths["/api/demo/keys"] = {
-            "get": {"summary": "BYOK provider key status", "operationId": "byokStatus"},
-            "post": {"summary": "Set BYOK provider keys (loopback/owner)", "operationId": "byokSet"},
-        }
         return {
             "openapi": "3.0.3",
             "info": {
-                "title": "LOLM Public Demo API",
-                "version": "1.1.0",
+                "title": "LOLM CLI integration notice",
+                "version": "2.0.0",
                 "description": (
-                    "Integrate the LOLM agent into any platform via HTTP + SSE. "
-                    "Full guide: https://lolm.imagineqira.com/developers.html"
+                    "Public hosted execution is retired. Install the local LOLM CLI. "
+                    "Guide: https://lolm.imagineqira.com/install.html"
                 ),
             },
             "servers": [{"url": PUBLIC_BASE}],

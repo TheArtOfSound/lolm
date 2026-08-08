@@ -66,12 +66,12 @@ CURRICULUM: List[Dict[str, str]] = [
     {"q": "Evidence is insufficient for a claim. What should you do?", "a": "ABSTAIN rather than invent or overclaim.", "target": "abstain"},
 ]
 
-# Volatile product facts — retrieval/config only (never LoRA weights).
+# Volatile distribution facts — retrieval/config only (never LoRA weights).
 RETRIEVAL_ONLY_FACTS: List[Dict[str, str]] = [
-    {"q": "Where can I try LOLM online?", "a": "You can try LOLM at https://lolm.imagineqira.com.", "target": "imagineqira"},
-    {"q": "What is the LOLM free tier daily run limit?", "a": "The free tier allows 10 agent runs per day.", "target": "10"},
-    {"q": "What is LOLM Plus priced at?", "a": "LOLM Plus costs $7.99 per month.", "target": "7.99"},
-    {"q": "What is LOLM Pro priced at?", "a": "LOLM Pro costs $19.99 per month.", "target": "19.99"},
+    {"q": "Where do I install LOLM?", "a": "Install LOLM locally with npm install -g lolm-cli.", "target": "npm"},
+    {"q": "Can LOLM run from its public website?", "a": "No. LOLM execution is local through the CLI.", "target": "local"},
+    {"q": "What open-source license covers LOLM?", "a": "LOLM uses AGPL-3.0-or-later.", "target": "agpl"},
+    {"q": "Is commercial licensing available?", "a": "Yes. Qira offers separately negotiated commercial terms.", "target": "commercial"},
 ]
 
 

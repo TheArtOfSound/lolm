@@ -1,65 +1,32 @@
-# LOLM — agent that does not lose the plot (Qira LLC)
+# LOLM
 
-> An agent that does not lose the plot.
-> LOLM keeps explicit task state, sandboxed execution, verification, and receipts.
-> Install: npm install -g lolm-cli · App: https://lolm.imagineqira.com/app.html
-> Product claim: persistent task-state control — not “smarter than every frontier agent.”
-> Patent pending.
-
-## Product surfaces
-- Home: https://lolm.imagineqira.com/
-- Developers / integrate: https://lolm.imagineqira.com/developers.html
-- Install: https://lolm.imagineqira.com/install.html
-- Web app: https://lolm.imagineqira.com/app.html
-- Pricing: https://lolm.imagineqira.com/pricing.html
-- API catalog (JSON): https://lolm.imagineqira.com/api/demo/integrate
-- OpenAPI lite: https://lolm.imagineqira.com/api/demo/integrate/openapi.json
-- Compare hub (SEO): https://lolm.imagineqira.com/compare/
-- vs Claude Code: https://lolm.imagineqira.com/compare/claude-code.html
-- vs Cursor: https://lolm.imagineqira.com/compare/cursor.html
-- vs Codex: https://lolm.imagineqira.com/compare/codex.html
-- vs GitHub Copilot: https://lolm.imagineqira.com/compare/github-copilot.html
-- vs Devin: https://lolm.imagineqira.com/compare/devin.html
-- vs ChatGPT: https://lolm.imagineqira.com/compare/chatgpt.html
-- Docs: https://lolm.imagineqira.com/docs.html
-- Receipts: https://lolm.imagineqira.com/receipts.html
-
-## Billing (hosted) — daily quotas, NOT tokens
-Canonical config: https://lolm.imagineqira.com/product-config.json
-Live enforcement: GET /api/demo/billing/config and /api/demo/billing/usage
-Reset UTC midnight. No credit wallet. Self-host unlimited.
-
-| Plan | USD/mo | Runs/day | Visual builds/day |
-|------|--------|----------|-------------------|
-| Free | 0      | 10       | 3                 |
-| Plus | 7.99   | 300      | 30                |
-| Pro  | 19.99  | 2000     | 200               |
-| Self-host | 0 | unlimited | unlimited    |
-
-- **run** = one hosted agent task (not an LLM token)
-- **visual** = one browser-verified HTML/app build
-- CLI + web share public-API quotas
-- Stripe Checkout prices are set server-side from the same plan table
-- One-time top-up packs are not live yet
-
-## What LOLM is
-Structured latent task state z_t = {G,P,W,A,U,F,C}; policy π(z); multi-session resume;
-sandbox write→run→fix; sealed receipts; Oort/Flows tactics.
-
-## What we do not claim
-Beating Claude Code / Codex / Cursor / Devin on every multi-hour job or public coding benchmark.
+LOLM is an open-source local AI agent. The public website is documentation
+only and does not execute prompts, code, sandboxes, or artifacts.
 
 ## Install
-```bash
-npm install -g lolm-cli
-lolm status
-lolm code "write fizzbuzz to 20" --save ./out
-```
 
-## Developers
-- npm lolm-cli · lolm-nfet-client
-- GitHub: https://github.com/TheArtOfSound/LOLM
-- Contact: bryanleonard237@gmail.com
+    npm install -g lolm-cli
+    lolm setup
+    lolm
 
-## Company
-Qira LLC (Imagine Qira)
+## Source and documentation
+
+- Source: https://github.com/TheArtOfSound/LOLM
+- Install: https://lolm.imagineqira.com/install.html
+- CLI docs: https://lolm.imagineqira.com/docs.html
+- Research: https://lolm.imagineqira.com/research.html
+- npm: https://www.npmjs.com/package/lolm-cli
+
+## Product boundary
+
+- Execution happens through the local `lolm` command.
+- Users bring their own provider key or use Ollama.
+- The local NFET graft measures entropy, hidden drift, gate balance, regime
+  entropy, and trained control-head logits.
+- The website exposes no public agent execution or purchasing workflow.
+
+## Licensing
+
+LOLM is AGPL-3.0-or-later. Alternative commercial licensing is available for
+organizations that need to operate without AGPL source-sharing obligations.
+Contact: bryanleonard237@gmail.com

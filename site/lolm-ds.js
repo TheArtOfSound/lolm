@@ -23,6 +23,8 @@
   function effective() {
     var s = stored();
     if (s === "dark" || s === "light") return s;
+    var pageDefault = root.getAttribute("data-default-theme");
+    if (pageDefault === "dark" || pageDefault === "light") return pageDefault;
     // The stylesheet's :root default is dark, and light only applies under the
     // prefers-color-scheme:light query — so "no preference" resolves to dark too.
     return systemDark() ? "dark" : "light";
@@ -30,7 +32,11 @@
 
   function apply(theme, persist) {
     if (theme) root.setAttribute("data-theme", theme);
-    else root.removeAttribute("data-theme");
+    else {
+      var pageDefault = root.getAttribute("data-default-theme");
+      if (pageDefault === "dark" || pageDefault === "light") root.setAttribute("data-theme", pageDefault);
+      else root.removeAttribute("data-theme");
+    }
     if (persist) {
       try {
         if (theme) localStorage.setItem(KEY, theme);
@@ -49,17 +55,6 @@
     }
   }
 
-  function loadWorkspaceArtifactDelivery() {
-    var p = location.pathname || "/";
-    if (!(p === "/" || /\/app\.html$/.test(p))) return;
-    if (document.querySelector('script[data-lolm-artifact-delivery]')) return;
-    var script = document.createElement("script");
-    script.src = "/artifact-delivery-ui.js";
-    script.defer = true;
-    script.dataset.lolmArtifactDelivery = "1";
-    document.head.appendChild(script);
-  }
-
   // Apply the stored choice before first paint where possible (this script is
   // loaded in <head>), so a light-theme user never sees a dark flash.
   var initial = stored();
@@ -76,7 +71,6 @@
       document.body.appendChild(btn);
       apply(stored(), false);
     }
-    loadWorkspaceArtifactDelivery();
   }
 
   if (document.readyState === "loading") {

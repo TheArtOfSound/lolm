@@ -93,7 +93,7 @@ model.eval()
 
 ## License
 
-LOLM Community License v1.0 — free for research/education, commercial license required for entities with >$5M revenue.
+AGPL-3.0-or-later. Alternative commercial licensing is available from Qira LLC.
 
 ## Citation
 

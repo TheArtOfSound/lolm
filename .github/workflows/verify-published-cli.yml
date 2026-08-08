@@ -6,7 +6,7 @@ on:
       version:
         description: 'Published lolm-cli version to verify'
         required: true
-        default: '0.3.0-beta.1'
+        default: '1.0.0'
 
 permissions:
   contents: read
@@ -32,11 +32,15 @@ jobs:
           npm install "lolm-cli@${{ inputs.version }}" --ignore-scripts --no-audit --no-fund
           test "$(./node_modules/.bin/lolm --version)" = "${{ inputs.version }}"
           ./node_modules/.bin/lolm --help | grep -q USAGE
-          ./node_modules/.bin/lolm status --json > status.json
-          node -e "const x=require('./status.json'); if(x.model_ready!==true)process.exit(1)"
+          ./node_modules/.bin/lolm providers --json > providers.json
+          node -e "const x=require('./providers.json'); if(!x.ok || x.providers.length < 10)process.exit(1)"
+          if grep -R 'lolm.imagineqira.com/api/demo' node_modules/lolm-cli/bin node_modules/lolm-cli/lib; then
+            echo 'published CLI contains a hosted execution dependency'
+            exit 1
+          fi
 
-  live-signed-save:
-    name: Live signed artifact save
+  local-byok-smoke:
+    name: Local BYOK provider smoke
     needs: clean-install
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -45,30 +49,33 @@ jobs:
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
-      - name: Install public CLI and verify a real hosted artifact
+      - name: Install public CLI and verify a local provider call
         run: |
           mkdir "$RUNNER_TEMP/live"
           cd "$RUNNER_TEMP/live"
           npm init -y >/dev/null
           npm install "lolm-cli@${{ inputs.version }}" --ignore-scripts --no-audit --no-fund
-          ./node_modules/.bin/lolm code \
-            "Create exactly one file named proof.txt containing exactly the text published release verified followed by one newline. Do not create any other file." \
-            --save "$RUNNER_TEMP/live/out" \
-            --receipt "$RUNNER_TEMP/live/receipt.json" \
-            --json --max-steps 5 > result.json
-          node - <<'JS'
-          const fs = require('node:fs');
-          const result = JSON.parse(fs.readFileSync('result.json', 'utf8'));
-          if (result.ok !== true || result.exit_code !== 0 || result.shipped !== true) process.exit(1);
-          if (result.integrity?.integrity?.verified !== true) process.exit(1);
-          if (result.saved?.verified !== true || result.saved?.committed !== true) process.exit(1);
-          const body = fs.readFileSync('out/proof.txt');
-          if (!body.equals(Buffer.from('published release verified\n'))) process.exit(1);
-          console.log(JSON.stringify({
-            version: '${{ inputs.version }}',
-            receipt_sha: result.receipt.receipt_sha,
-            manifest_sha256: result.saved.manifest_sha256,
-            artifact_sha256: result.saved.files[0].sha256,
-            bytes: body.length,
-          }));
+          node - <<'JS' &
+          const { createServer } = require('node:http');
+          createServer((req, res) => {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', () => {
+              const payload = JSON.parse(body || '{}');
+              res.writeHead(200, { 'content-type': 'application/json' });
+              res.end(JSON.stringify({ choices: [{ message: {
+                role: 'assistant', content: `published local answer from ${payload.model}`,
+              } }] }));
+            });
+          }).listen(18181, '127.0.0.1');
           JS
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in 1 2 3 4 5; do
+            curl -fsS http://127.0.0.1:18181/v1/models >/dev/null && break
+            sleep 1
+          done
+          ./node_modules/.bin/lolm ask 'hello' --provider custom \
+            --base-url http://127.0.0.1:18181/v1 --model publish-smoke \
+            --api-key local-test --no-nfet --json > result.json
+          node -e "const x=require('./result.json'); if(!x.ok || x.response !== 'published local answer from publish-smoke')process.exit(1)"

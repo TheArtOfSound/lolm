@@ -26,6 +26,7 @@ _DTYPE_MAP = {
     "bfloat16": torch.bfloat16,
     "bf16": torch.bfloat16,
 }
+_DEFAULT_DEVICE_MAP = object()
 
 
 @dataclass
@@ -44,6 +45,7 @@ class FrozenHFBackbone(nn.Module):
         profile: HFModelProfile,
         freeze: bool = True,
         output_hidden_states: bool = True,
+        device_map: Any = _DEFAULT_DEVICE_MAP,
     ) -> None:
         super().__init__()
         self.profile = profile
@@ -58,8 +60,9 @@ class FrozenHFBackbone(nn.Module):
         }
         if dtype is not None:
             model_kwargs["torch_dtype"] = dtype
-        if profile.device_map:
-            model_kwargs["device_map"] = profile.device_map
+        selected_device_map = profile.device_map if device_map is _DEFAULT_DEVICE_MAP else device_map
+        if selected_device_map:
+            model_kwargs["device_map"] = selected_device_map
 
         self.model = AutoModelForCausalLM.from_pretrained(profile.model_id, **model_kwargs)
         self.hidden_size = int(getattr(self.model.config, "hidden_size", 0) or getattr(self.model.config, "n_embd", 0))
@@ -75,9 +78,10 @@ class FrozenHFBackbone(nn.Module):
         profile_name: Optional[str] = None,
         registry_path: str = "configs/hf_models.yaml",
         freeze: bool = True,
+        device_map: Any = _DEFAULT_DEVICE_MAP,
     ) -> "FrozenHFBackbone":
         registry = HFRegistry.load(registry_path)
-        return cls(registry.get(profile_name), freeze=freeze)
+        return cls(registry.get(profile_name), freeze=freeze, device_map=device_map)
 
     def freeze(self) -> None:
         for param in self.model.parameters():

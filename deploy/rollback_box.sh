@@ -38,10 +38,11 @@ ssh "$HOST" "
   systemctl is-active '$SVC'
 "
 
-# Same readiness poll as deploy — the app needs time to bind after restart.
+# Same readiness poll as deploy — product config is valid on both the prior and
+# current public architectures and does not execute a model.
 code=000
 for i in $(seq 1 30); do
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$BASE/api/demo/status" || echo 000)
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$BASE/api/demo/product-config" || echo 000)
   [ "$code" = "200" ] && break
   sleep 3
 done

@@ -30,7 +30,6 @@ FLOWS = {
     "BRAVE_SEARCH_API_KEY": "every search: chat grounding, research, freshness, operator, life",
     "TAVILY_API_KEY": "same searches (2nd in the fallback chain)",
     "SEARXNG_URL": "same searches via your SearXNG",
-    "STRIPE_SECRET_KEY": "the donate button",
 }
 
 print(f"{'key':26} {'set':4} unlocks")

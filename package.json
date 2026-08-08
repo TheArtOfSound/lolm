@@ -38,5 +38,5 @@
     "node": ">=18"
   },
   "author": "Qira LLC (Bryan Leonard & Brandyn Leonard)",
-  "license": "MIT"
+  "license": "AGPL-3.0-or-later"
 }
