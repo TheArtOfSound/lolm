@@ -59,16 +59,19 @@ jobs:
         run: |
           npm test
           npm pack --dry-run
-      - name: Refuse an already-published version
+      - name: Inspect registry state
+        id: registry
         if: ${{ !inputs.dry_run }}
         run: |
           V="$(node -p "require('./package.json').version")"
           if npm view "lolm-cli@$V" version >/dev/null 2>&1; then
-            echo "lolm-cli@$V already exists; refusing a mutable republish"
-            exit 1
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "lolm-cli@$V already exists; verify it without republishing"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Publish (provenance)
-        if: ${{ !inputs.dry_run }}
+        if: ${{ !inputs.dry_run && steps.registry.outputs.exists != 'true' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -98,9 +101,12 @@ jobs:
           done
           [ "$installed" -eq 1 ]
           ./node_modules/.bin/lolm --version | grep -qx "$V"
-          ./node_modules/.bin/lolm --help | grep -q "USAGE"
+          ./node_modules/.bin/lolm --help | grep -q "COMMANDS"
           ./node_modules/.bin/lolm providers --json > providers.json
           node -e "const x=require('./providers.json'); if(!x.ok || x.providers.length < 10)process.exit(1)"
+          for item in LICENSE README.md package.json scripts/postinstall.mjs bin/lolm.mjs lib/agent.mjs lib/config.mjs lib/nfet.mjs lib/nfet_bridge.py lib/pdf.mjs lib/providers.mjs lib/tools.mjs lib/tui.mjs; do
+            diff -q "$GITHUB_WORKSPACE/clients/cli/$item" "node_modules/lolm-cli/$item"
+          done
           # The public package must not depend on the retired LOLM hosted API.
           if grep -R "lolm.imagineqira.com/api/demo" node_modules/lolm-cli/bin node_modules/lolm-cli/lib; then
             echo "published CLI contains a hosted execution dependency"

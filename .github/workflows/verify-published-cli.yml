@@ -31,7 +31,7 @@ jobs:
           npm init -y >/dev/null
           npm install "lolm-cli@${{ inputs.version }}" --ignore-scripts --no-audit --no-fund
           test "$(./node_modules/.bin/lolm --version)" = "${{ inputs.version }}"
-          ./node_modules/.bin/lolm --help | grep -q USAGE
+          ./node_modules/.bin/lolm --help | grep -q COMMANDS
           ./node_modules/.bin/lolm providers --json > providers.json
           node -e "const x=require('./providers.json'); if(!x.ok || x.providers.length < 10)process.exit(1)"
           if grep -R 'lolm.imagineqira.com/api/demo' node_modules/lolm-cli/bin node_modules/lolm-cli/lib; then

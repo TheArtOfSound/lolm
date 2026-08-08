@@ -77,7 +77,7 @@ jobs:
           npm install "$RUNNER_TEMP"/lolm-packs/lolm-nfet-client-*.tgz --ignore-scripts --no-audit --no-fund
           npm install "$RUNNER_TEMP"/lolm-packs/lolm-cli-*.tgz --ignore-scripts --no-audit --no-fund
           ./node_modules/.bin/lolm --version | grep -Fx '1.0.0'
-          ./node_modules/.bin/lolm --help | grep -q 'USAGE'
+          ./node_modules/.bin/lolm --help | grep -q 'COMMANDS'
           ./node_modules/.bin/lolm providers --json > providers.json
           node -e "const x=require('./providers.json'); if(!x.ok || x.providers.length < 10)process.exit(1)"
           if grep -R 'lolm.imagineqira.com/api/demo' node_modules/lolm-cli/bin node_modules/lolm-cli/lib; then
