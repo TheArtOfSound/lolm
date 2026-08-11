@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAgentToolbox } from "../lib/tools/index.mjs";
+import { createToolRunner } from "../lib/tools.mjs";
 
 async function workspace(label) { return mkdtemp(join(tmpdir(), `lolm-tools-${label}-`)); }
 
@@ -31,6 +32,22 @@ test("filesystem tools inspect, patch, and search exact local content", async ()
   const inspect = await toolbox.registry.execute({ name: "fs.inspect", arguments: { path: "hello.txt" } });
   assert.match(inspect.result.preview, /2: gamma/);
   await toolbox.close();
+});
+
+test("agent runner removes provider tool-envelope metadata before strict validation", async () => {
+  const root = await workspace("envelope");
+  const runner = createToolRunner({ cwd: root, yes: true, mode: "trusted" });
+  try {
+    const result = await runner.execute({
+      name: "fs__write",
+      arguments: { path: "solution.py", content: "VALUE = 7\n", tool: "fs.write" },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(await readFile(join(root, "solution.py"), "utf8"), "VALUE = 7\n");
+    const listed = await runner.execute({ name: "fs__list", arguments: { path: "", depth: 1 } });
+    assert.equal(listed.ok, true);
+    assert.ok(listed.entries.some((entry) => entry.path === "solution.py"));
+  } finally { await runner.close(); }
 });
 
 test("terminal tools execute foreground commands and preserve background process IDs", async () => {

@@ -133,11 +133,13 @@ function emit(flags, payload, human = "") {
 function taskRoute(text) {
   const value = String(text || "").trim();
   const compoundWork = /\b(then|test|tests|script|repository|project|deploy|publish|run (?:it|the|a)|multiple files|and verify|and check)\b/i.test(value);
+  const namedFileWork = /\b(?:make|create|write|build|implement|modify|change|repair|fix|edit)\b/i.test(value)
+    && /(?:^|[\s'"`])(?:\.\.?\/|~\/)?[a-z0-9_.-]+\.[a-z0-9]{1,10}\b/i.test(value);
   if (isRetryPhrase(value)) return "retry";
   if (/\b(update|upgrade)\s+(yourself|lolm|the cli)\b/i.test(value)) return "update";
   if (/\b(pdf)\b/i.test(value) && /\b(make|create|write|generate|build|turn|convert)\b/i.test(value)) return "pdf";
   if (!compoundWork && /\b(html|web\s?page|landing page|website)\b/i.test(value) && /\b(make|create|code|build|write|design)\b/i.test(value)) return "html";
-  if (/\b(code|implement|fix|debug|refactor|edit|file|script|app|component|test)\b/i.test(value)) return "code";
+  if (namedFileWork || /\b(code|implement|fix|debug|refactor|edit|file|script|app|component|test)\b/i.test(value)) return "code";
   return "ask";
 }
 

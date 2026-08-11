@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-codex-semver-argatvhj/_lolm_hidden_check.py", line 2, in <module>
+    import solution as S
+ModuleNotFoundError: No module named 'solution'

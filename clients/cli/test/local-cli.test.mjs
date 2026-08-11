@@ -29,7 +29,7 @@ function startServer(handler) {
       for await (const chunk of req) body += chunk;
       const payload = body ? JSON.parse(body) : {};
       const result = await handler(req, payload);
-      res.writeHead(result.status || 200, { "content-type": "application/json" });
+      res.writeHead(result.status || 200, { "content-type": "application/json", ...(result.headers || {}) });
       res.end(JSON.stringify(result.body));
     });
     server.listen(0, "127.0.0.1", () => resolvePromise(server));
@@ -56,7 +56,7 @@ test("help and version describe the local open-source command surface", async ()
   assert.match(help.stdout, /tools \[group\]/);
   assert.match(help.stdout, /run show\|resume/);
   const version = await exec(process.execPath, [bin, "--version"]);
-  assert.equal(version.stdout.trim(), "1.2.0");
+  assert.equal(version.stdout.trim(), "1.2.1");
 });
 
 test("JSON providers output is one stable document", async () => {
@@ -88,6 +88,21 @@ test("OpenAI-compatible ask works without any LOLM hosted credential", async (t)
   assert.equal(JSON.parse(runs.stdout).runs[0].id, payload.run_id);
   const shown = await exec(process.execPath, [bin, "run", "show", payload.run_id, "--json"], { env: { ...process.env, LOLM_LAST_TASK: join(root, "last-task.json") } });
   assert.ok(JSON.parse(shown.stdout).run.events.some((event) => event.type === "provider.responded"));
+});
+
+test("OpenAI-compatible providers honor 429 retry-after without losing the task", async (t) => {
+  let calls = 0;
+  const server = await startServer(() => {
+    calls++;
+    if (calls === 1) return { status: 429, headers: { "retry-after": "0" }, body: { error: { message: "slow down" } } };
+    return { body: { choices: [{ message: { role: "assistant", content: "recovered" } }] } };
+  });
+  t.after(() => server.close());
+  const result = await chat({
+    protocol: "openai", keyRequired: true, apiKey: "test", baseUrl: address(server), model: "test", timeoutMs: 1_000,
+  }, [{ role: "user", content: "hello" }]);
+  assert.equal(result.content, "recovered");
+  assert.equal(calls, 2);
 });
 
 test("tools command exposes schemas and risk classes without loading a provider", async () => {
@@ -170,6 +185,27 @@ test("compound HTML work stays in the agent loop instead of the artifact shortcu
   assert.equal(payload.kind, undefined);
   assert.equal(payload.verified, true);
   assert.equal(await readFile(join(root, "index.html"), "utf8"), "<h1>Ready</h1>");
+});
+
+test("run routes an explicitly named file task through the write-capable agent", async (t) => {
+  const server = await startServer((_req, payload) => {
+    if (!payload.messages.some((message) => message.role === "tool")) {
+      assert.ok(payload.tools.some((tool) => tool.function.name === "fs__write"));
+      assert.ok(payload.tools.length <= 10, `expected a focused local tool set, got ${payload.tools.length}`);
+      return { body: { choices: [{ message: { role: "assistant", content: null, tool_calls: [{
+        id: "w1", type: "function", function: { name: "fs__write", arguments: JSON.stringify({ path: "solution.py", content: "VALUE = 7\n", tool: "fs.write" }) },
+      }] } }] } };
+    }
+    return { body: { choices: [{ message: { role: "assistant", content: "Created solution.py." } }] } };
+  });
+  t.after(() => server.close());
+  const root = await temp("run-named-file");
+  const result = await exec(process.execPath, [bin, "run", "Create", "solution.py", "defining", "VALUE", "as", "7", "--cwd", root, "--yes", "--provider", "custom", "--base-url", address(server), "--model", "test", "--api-key", "test", "--no-nfet", "--json"], {
+    env: { ...process.env, LOLM_LAST_TASK: join(root, "last-task.json") },
+  });
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(await readFile(join(root, "solution.py"), "utf8"), "VALUE = 7\n");
 });
 
 test("simple named HTML requests preserve the requested filename", async (t) => {

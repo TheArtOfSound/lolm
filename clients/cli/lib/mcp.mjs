@@ -26,7 +26,7 @@ class McpClient {
     this.child.stdout.on("data", (chunk) => this.consume(chunk.toString()));
     this.child.stderr.on("data", (chunk) => { this.stderr = `${this.stderr}${chunk}`.slice(-32_000); });
     this.child.on("exit", (code) => { for (const { reject } of this.pending.values()) reject(Object.assign(new Error(`MCP server ${this.name} exited ${code}: ${this.stderr.trim()}`), { code: "MCP_SERVER_EXITED" })); this.pending.clear(); this.child = null; });
-    await this.request("initialize", { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "lolm-cli", version: "1.2.0" } });
+    await this.request("initialize", { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "lolm-cli", version: "1.2.1" } });
     this.notify("notifications/initialized", {});
   }
 

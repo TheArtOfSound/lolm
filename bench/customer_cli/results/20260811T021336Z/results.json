@@ -1,0 +1,990 @@
+{
+  "schema_version": 1,
+  "run_id": "20260811T021336Z",
+  "created_at": "2026-08-11T02:13:36.753060+00:00",
+  "agents": [
+    "lolm_cerebras",
+    "codex"
+  ],
+  "tasks": [
+    {
+      "id": "iso_duration",
+      "tier": "impl",
+      "instruction_sha256": "fdcccdff8e4fcae8d99f9f7cd7e2f6d6f37e9202f83470f9da9a59cfa8b8f750",
+      "hidden_test_sha256": "4796fe0596f398a87d271c482b67ca27d378236cf23cff86540b6f347818d7ae",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "semver",
+      "tier": "impl",
+      "instruction_sha256": "cb563d12430dd37e1dcec0ddb6b6ad77a1e995d69b0c58aaa95b7bbe2db69462",
+      "hidden_test_sha256": "8e4025cb0093fddf8455274b077d3aa49742cca29687f991b340d9a2af5c2681",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "expr_eval",
+      "tier": "impl",
+      "instruction_sha256": "08aafca8ade59be4452669a90442e2015a7c934dcfd9bcd08b4a33aeb5e88794",
+      "hidden_test_sha256": "498983003a4c5e91a2b7d81ef2dfcb0b728ef09de11afb30f07eb892dbed177b",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "jsonpath",
+      "tier": "impl",
+      "instruction_sha256": "40c14b1b40a29aa06cbfa91c180155444696d6256c065e3c9498b90f72816942",
+      "hidden_test_sha256": "693482138a217036e59ee38aba7bb98e050bb6a66eb08deda4a77c3f69a6f3a5",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "fix_multifile_stats",
+      "tier": "fix",
+      "instruction_sha256": "e73e3dc048fd3620bf2f48aa74a798d532a27a1110ad7e87abb2a36a008cabe6",
+      "hidden_test_sha256": "242ec3e7c8353ffda2fb60e8a76f380081fb4a4e9b4425dbe034635d696fa66b",
+      "seed_sha256": "bc51b541e65237e7cdab955867464a024e596a20226ca0fb5b3d8a5a00474f2c"
+    },
+    {
+      "id": "fix_state_machine",
+      "tier": "fix",
+      "instruction_sha256": "ac4c36ed1f7949ab20f80566e4ae5a45b47bc23cc421220cf976fd87ce198e8d",
+      "hidden_test_sha256": "22868bb32643200afb87af5940c6d16724c014921351099094020e8e34cf7817",
+      "seed_sha256": "b82eff05e506e59a7de31042b933805674e04508642342d2338c2afa0cb8663c"
+    }
+  ],
+  "settings": {
+    "repeat": 1,
+    "timeout_seconds": 480,
+    "lolm_nfet": true,
+    "provider_cooldown_seconds": 20
+  },
+  "environment": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+    "python": "3.14.6",
+    "git_commit": "ff1c42e109c2367920304d64471ec8be9bf48491",
+    "git_dirty": true,
+    "lolm_version": "1.2.0",
+    "codex_version": "codex-cli 0.147.0-alpha.6.5",
+    "lolm_backend": "Ollama qwen3:14b",
+    "lolm_cerebras_backend": "Cerebras gpt-oss-120b via user-owned key",
+    "codex_backend": "gpt-5.6-sol, high reasoning (local config at launch)"
+  },
+  "results": [
+    {
+      "agent": "lolm_cerebras",
+      "task": "iso_duration",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "agent_process": {
+        "started_at": "2026-08-11T02:13:37.306238+00:00",
+        "wall_seconds": 126.497,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/iso_duration-trial-1/agent.stdout.txt",
+          "bytes": 14399,
+          "sha256": "5e0b4f7b25bb220cfb49012fc6e3ceefe7ef12c53af51760bb1deeab5b7e0357"
+        },
+        "stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/iso_duration-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/iso_duration-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/iso_duration-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 5313,
+          "sha256": "518d6e6a7f92cc59307e4868967e89b1b52b00e18ea4efbbfa42fced36f7b954"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 4036,
+          "sha256": "f75c1336a061f932fbdfb03ee9efc135e4cf403fd8625d3dc9dc3dcebe77304f"
+        }
+      ],
+      "artifact_path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/artifacts/lolm_cerebras/iso_duration-trial-1",
+      "agent_receipt": {
+        "parsed": true,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 6,
+        "usage": {
+          "total_tokens": 4825,
+          "completion_tokens": 66,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 4759,
+          "prompt_tokens_details": {
+            "cached_tokens": 4096
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "35535f1cd16106061a2a114bf29f13d3646e58b0184428a0858e39ea04e2536d",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": 0.193,
+              "drift": -0.33,
+              "gate": 0.135,
+              "regime": 0.65
+            },
+            "head_probs": [
+              0.1164,
+              0.1985,
+              0.1759,
+              0.2003,
+              0.309
+            ],
+            "step": 64
+          },
+          "telemetry": {
+            "avg_entropy": 1.822136,
+            "avg_hidden_drift": 5.497763,
+            "avg_gate": 0.767653,
+            "avg_regime_entropy": 1.643112
+          }
+        },
+        "error": null
+      },
+      "scoreable": true
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "semver",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "agent_process": {
+        "started_at": "2026-08-11T02:16:03.938803+00:00",
+        "wall_seconds": 185.115,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/semver-trial-1/agent.stdout.txt",
+          "bytes": 19340,
+          "sha256": "822e3286373ec54f42749bf3b5d76b96bbdc4ec6bc528f5a6328ba8f43d7243f"
+        },
+        "stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/semver-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/semver-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/semver-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 4717,
+          "sha256": "df065afff0400f489ed2ad76ec7b646d896383961ede95484ac063edc8eb1c46"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 3676,
+          "sha256": "c7739071c345aa1b822089b8b3b26932c58d0f1e44689e528a4b4a4706a0a436"
+        }
+      ],
+      "artifact_path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/artifacts/lolm_cerebras/semver-trial-1",
+      "agent_receipt": {
+        "parsed": true,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 10,
+        "usage": {
+          "total_tokens": 6349,
+          "completion_tokens": 79,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 16
+          },
+          "prompt_tokens": 6270,
+          "prompt_tokens_details": {
+            "cached_tokens": 5120
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "d100aa26f96b9927257db3412aff8ffcb3a1886122a4c549a69e8b7bbeafd430",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": 0.083,
+              "drift": 0.032,
+              "gate": 0.155,
+              "regime": 0.548
+            },
+            "head_probs": [
+              0.1391,
+              0.1843,
+              0.2257,
+              0.1489,
+              0.302
+            ],
+            "step": 53
+          },
+          "telemetry": {
+            "avg_entropy": 2.232992,
+            "avg_hidden_drift": 4.678762,
+            "avg_gate": 0.768757,
+            "avg_regime_entropy": 1.572387
+          }
+        },
+        "error": null
+      },
+      "scoreable": true
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "expr_eval",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "agent_process": {
+        "started_at": "2026-08-11T02:19:29.153763+00:00",
+        "wall_seconds": 69.124,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/expr_eval-trial-1/agent.stdout.txt",
+          "bytes": 18390,
+          "sha256": "4af3bccba01c95c5d57e71116b2d6bb9aa68e258996fbafe90cf0fb51dbf9c8e"
+        },
+        "stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/expr_eval-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/expr_eval-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/expr_eval-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 9884,
+          "sha256": "61d428cfe4117b3f66346847d594f35e72bc0d8e763b5e60eaa0c3360f0d9037"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 5506,
+          "sha256": "3f67d958e788ea2c58c0695274ac8c42fae25b01623ee2da5750810a15daff02"
+        }
+      ],
+      "artifact_path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/artifacts/lolm_cerebras/expr_eval-trial-1",
+      "agent_receipt": {
+        "parsed": true,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 6,
+        "usage": {
+          "total_tokens": 5731,
+          "completion_tokens": 110,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 12
+          },
+          "prompt_tokens": 5621,
+          "prompt_tokens_details": {
+            "cached_tokens": 2048
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "b49be94e8ede86527161158845adbaf022db199ca8ed453acac3cf523e2be5db",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": 0.007,
+              "drift": -0.364,
+              "gate": 0.124,
+              "regime": -0.184
+            },
+            "head_probs": [
+              0.1325,
+              0.1485,
+              0.2034,
+              0.1583,
+              0.3573
+            ],
+            "step": 88
+          },
+          "telemetry": {
+            "avg_entropy": 1.625512,
+            "avg_hidden_drift": 5.724712,
+            "avg_gate": 0.769285,
+            "avg_regime_entropy": 1.64369
+          }
+        },
+        "error": null
+      },
+      "scoreable": true
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "jsonpath",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "agent_process": {
+        "started_at": "2026-08-11T02:20:58.404637+00:00",
+        "wall_seconds": 173.571,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/jsonpath-trial-1/agent.stdout.txt",
+          "bytes": 16854,
+          "sha256": "578874715a4dc2387698e40872c52b131a3848836385659bc6c4a124fd5aae85"
+        },
+        "stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/jsonpath-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/jsonpath-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/jsonpath-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 4654,
+          "sha256": "dbe41984f5687140662966ceddee3f5818e6e5adbb9c8dd57153cb990956c3d0"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 3805,
+          "sha256": "ab7affedaf139c8f896791b7aae38f1d34354dd8d0df00840003515e05b37e2e"
+        }
+      ],
+      "artifact_path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/artifacts/lolm_cerebras/jsonpath-trial-1",
+      "agent_receipt": {
+        "parsed": true,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 8,
+        "usage": {
+          "total_tokens": 5191,
+          "completion_tokens": 196,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 86
+          },
+          "prompt_tokens": 4995,
+          "prompt_tokens_details": {
+            "cached_tokens": 2304
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "22d0fbcf8c480bd1d8a06fb89c311f5f248634352e44f0626878053271937f26",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.356,
+              "drift": 1.494,
+              "gate": -0.485,
+              "regime": -0.601
+            },
+            "head_probs": [
+              0.158,
+              0.1548,
+              0.1849,
+              0.1317,
+              0.3706
+            ],
+            "step": 100
+          },
+          "telemetry": {
+            "avg_entropy": 1.665365,
+            "avg_hidden_drift": 6.076957,
+            "avg_gate": 0.767152,
+            "avg_regime_entropy": 1.642759
+          }
+        },
+        "error": null
+      },
+      "scoreable": true
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "fix_multifile_stats",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "agent_process": {
+        "started_at": "2026-08-11T02:24:12.094126+00:00",
+        "wall_seconds": 95.927,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/fix_multifile_stats-trial-1/agent.stdout.txt",
+          "bytes": 13634,
+          "sha256": "df54477c463ac0fcaab2c1e8307b87c716830733e89eb73f161abf6ab3ae0503"
+        },
+        "stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/fix_multifile_stats-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/fix_multifile_stats-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/fix_multifile_stats-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "report.py",
+          "bytes": 413,
+          "sha256": "85e42f9f02fe5812730f8684959432b3d39a11f232f874dbac2d06a3d53b357d"
+        },
+        {
+          "path": "stats.py",
+          "bytes": 1097,
+          "sha256": "4021b598a02e3af99e48a79e1e37b6fe4b5828692270e10aecef54e483398419"
+        }
+      ],
+      "artifact_path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/artifacts/lolm_cerebras/fix_multifile_stats-trial-1",
+      "agent_receipt": {
+        "parsed": true,
+        "ok": false,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": null,
+        "steps": 10,
+        "usage": null,
+        "nfet": {},
+        "error": "Agent reached its 10-step limit before a clean finish."
+      },
+      "scoreable": true
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "fix_state_machine",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "agent_process": {
+        "started_at": "2026-08-11T02:26:08.137037+00:00",
+        "wall_seconds": 135.749,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/fix_state_machine-trial-1/agent.stdout.txt",
+          "bytes": 15225,
+          "sha256": "16ac376b3d46962bc3833d99880b82d6d3bdd4fd45b0810da616e7972e6328f5"
+        },
+        "stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/fix_state_machine-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/fix_state_machine-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/lolm_cerebras/fix_state_machine-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/orders.cpython-314.pyc",
+          "bytes": 1740,
+          "sha256": "041dbbf3b192c6dbb07be0eca499933d85e89c1bd3036a04d466e80835dcba1d"
+        },
+        {
+          "path": "orders.py",
+          "bytes": 929,
+          "sha256": "4fde278f27ee79e1be617533f85829186ff5158aa0c85dfa5c6485c84e86805c"
+        }
+      ],
+      "artifact_path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/artifacts/lolm_cerebras/fix_state_machine-trial-1",
+      "agent_receipt": {
+        "parsed": true,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 7,
+        "usage": {
+          "total_tokens": 4614,
+          "completion_tokens": 68,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 25
+          },
+          "prompt_tokens": 4546,
+          "prompt_tokens_details": {
+            "cached_tokens": 3840
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "8da03528d125148130dbbba60352c255163271a3bee995c4a3791c378d363d53",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.718,
+              "drift": -0.007,
+              "gate": 0.232,
+              "regime": -0.149
+            },
+            "head_probs": [
+              0.1137,
+              0.3863,
+              0.2432,
+              0.0912,
+              0.1657
+            ],
+            "step": 33
+          },
+          "telemetry": {
+            "avg_entropy": 3.381321,
+            "avg_hidden_drift": 3.773525,
+            "avg_gate": 0.767127,
+            "avg_regime_entropy": 1.594912
+          }
+        },
+        "error": null
+      },
+      "scoreable": true
+    },
+    {
+      "agent": "codex",
+      "task": "iso_duration",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "agent_process": {
+        "started_at": "2026-08-11T02:28:44.014483+00:00",
+        "wall_seconds": 5.672,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/iso_duration-trial-1/agent.stdout.txt",
+          "bytes": 835,
+          "sha256": "0003e22ec3b16fac43f4a17931a2c5467f1946b820ec7f707f4a249348d08e0f"
+        },
+        "stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/iso_duration-trial-1/agent.stderr.txt",
+          "bytes": 3793,
+          "sha256": "c60a2af26157ee832feecd3dcd4a51ab02742e610eaf36e69dd1c63db8119abc"
+        },
+        "grader_stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/iso_duration-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/iso_duration-trial-1/grader.stderr.txt",
+          "bytes": 256,
+          "sha256": "2cc16478d296850821d6730bf0583a3b5a856f5a8b647dc54d05f58322cd8373"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/artifacts/codex/iso_duration-trial-1",
+      "agent_receipt": {
+        "parsed": true,
+        "usage": null,
+        "error": "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Aug 17th, 2026 5:21 PM.",
+        "infrastructure_error": "usage_limit"
+      },
+      "scoreable": false
+    },
+    {
+      "agent": "codex",
+      "task": "semver",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "agent_process": {
+        "started_at": "2026-08-11T02:28:49.847417+00:00",
+        "wall_seconds": 6.113,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/semver-trial-1/agent.stdout.txt",
+          "bytes": 835,
+          "sha256": "82b3a18d947105702bed21b644451602b75a6282c0b37311d405ea9568afaaee"
+        },
+        "stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/semver-trial-1/agent.stderr.txt",
+          "bytes": 3793,
+          "sha256": "a52737dd0971d26b8ac87c0f6ba95baf7432e6ddd41cdf600caf6a87e2bcfc2e"
+        },
+        "grader_stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/semver-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/semver-trial-1/grader.stderr.txt",
+          "bytes": 250,
+          "sha256": "def4ac2a05c033ebe867f5a44bf4ca10dc7aea908128bfd3396c7b3379c8fce8"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/artifacts/codex/semver-trial-1",
+      "agent_receipt": {
+        "parsed": true,
+        "usage": null,
+        "error": "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Aug 17th, 2026 5:21 PM.",
+        "infrastructure_error": "usage_limit"
+      },
+      "scoreable": false
+    },
+    {
+      "agent": "codex",
+      "task": "expr_eval",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "agent_process": {
+        "started_at": "2026-08-11T02:28:56.068339+00:00",
+        "wall_seconds": 3.956,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/expr_eval-trial-1/agent.stdout.txt",
+          "bytes": 835,
+          "sha256": "ff8704bbff6cf5cf9309e031091680645be853fec529c3631c5b699f9d8360a2"
+        },
+        "stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/expr_eval-trial-1/agent.stderr.txt",
+          "bytes": 3793,
+          "sha256": "cfb8dab67d8c4b06cf248a0489891420aaafe4de4f7bf50d3e5879ca8ee6d4fb"
+        },
+        "grader_stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/expr_eval-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/expr_eval-trial-1/grader.stderr.txt",
+          "bytes": 262,
+          "sha256": "eb4563bd21d2c72cc72eb50b7d1a078890134e10c5ddd28e73d515249f2d27bb"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/artifacts/codex/expr_eval-trial-1",
+      "agent_receipt": {
+        "parsed": true,
+        "usage": null,
+        "error": "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Aug 17th, 2026 5:21 PM.",
+        "infrastructure_error": "usage_limit"
+      },
+      "scoreable": false
+    },
+    {
+      "agent": "codex",
+      "task": "jsonpath",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "agent_process": {
+        "started_at": "2026-08-11T02:29:00.152148+00:00",
+        "wall_seconds": 4.442,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/jsonpath-trial-1/agent.stdout.txt",
+          "bytes": 835,
+          "sha256": "3813eef0ee87345fc491bb15733ca55b6c474f981918b9770a8803cb4a068287"
+        },
+        "stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/jsonpath-trial-1/agent.stderr.txt",
+          "bytes": 3793,
+          "sha256": "0a11d8330547fb2614327a08d956f5ca93475f9636e537abd2bfd045d8abfac3"
+        },
+        "grader_stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/jsonpath-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/jsonpath-trial-1/grader.stderr.txt",
+          "bytes": 252,
+          "sha256": "d0a92532a8740f583564d516c0ad8fd943f87522036452743f342e688780eed6"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/artifacts/codex/jsonpath-trial-1",
+      "agent_receipt": {
+        "parsed": true,
+        "usage": null,
+        "error": "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Aug 17th, 2026 5:21 PM.",
+        "infrastructure_error": "usage_limit"
+      },
+      "scoreable": false
+    },
+    {
+      "agent": "codex",
+      "task": "fix_multifile_stats",
+      "tier": "fix",
+      "trial": 1,
+      "passed": false,
+      "agent_process": {
+        "started_at": "2026-08-11T02:29:04.706688+00:00",
+        "wall_seconds": 4.283,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/fix_multifile_stats-trial-1/agent.stdout.txt",
+          "bytes": 835,
+          "sha256": "95eaf08f285bc5a0e5151793ee6ef5d1ac3dc7bd396473ac816f3a1e419b5b80"
+        },
+        "stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/fix_multifile_stats-trial-1/agent.stderr.txt",
+          "bytes": 3793,
+          "sha256": "ebf49425d9617ebbd40546bd841986ab042141b5f9595ed404f78f97a11ae001"
+        },
+        "grader_stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/fix_multifile_stats-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/fix_multifile_stats-trial-1/grader.stderr.txt",
+          "bytes": 317,
+          "sha256": "b5bca8c21282f24eba5e013476af1384f9dda5dbe776b8857622ad521e7e74b6"
+        }
+      },
+      "output_files": [
+        {
+          "path": "report.py",
+          "bytes": 166,
+          "sha256": "9e314527b3a5dbddaa240e10fbb3ccc30a5456df7f1a47344a31b03b2d497cb7"
+        },
+        {
+          "path": "stats.py",
+          "bytes": 233,
+          "sha256": "638a97aa21b5b31daca382d08a51bf1639066868a2aab4d31561847803d562be"
+        }
+      ],
+      "artifact_path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/artifacts/codex/fix_multifile_stats-trial-1",
+      "agent_receipt": {
+        "parsed": true,
+        "usage": null,
+        "error": "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Aug 17th, 2026 5:21 PM.",
+        "infrastructure_error": "usage_limit"
+      },
+      "scoreable": false
+    },
+    {
+      "agent": "codex",
+      "task": "fix_state_machine",
+      "tier": "fix",
+      "trial": 1,
+      "passed": false,
+      "agent_process": {
+        "started_at": "2026-08-11T02:29:09.121923+00:00",
+        "wall_seconds": 4.341,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/fix_state_machine-trial-1/agent.stdout.txt",
+          "bytes": 835,
+          "sha256": "3e4055cf5cf2bd4e9654b431ba1a144a13e3a59d2d658d8e5bfdea4e00ab7b24"
+        },
+        "stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/fix_state_machine-trial-1/agent.stderr.txt",
+          "bytes": 3793,
+          "sha256": "e2f56420e06db22d90314b6ce09ad759e100d77db0c1bbf56aa05c08d344c587"
+        },
+        "grader_stdout": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/fix_state_machine-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/raw/codex/fix_state_machine-trial-1/grader.stderr.txt",
+          "bytes": 330,
+          "sha256": "c07be1019f2296c76a02a8750208164ff39b91302f506f383b81b0f34fe643e3"
+        }
+      },
+      "output_files": [
+        {
+          "path": "orders.py",
+          "bytes": 466,
+          "sha256": "2f12143c70928c59a091574663464aec603e30611fc9d5a442417184911023a2"
+        }
+      ],
+      "artifact_path": "/Users/bry/Documents/lolm/agent-runtime/bench/customer_cli/results/20260811T021336Z/artifacts/codex/fix_state_machine-trial-1",
+      "agent_receipt": {
+        "parsed": true,
+        "usage": null,
+        "error": "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at Aug 17th, 2026 5:21 PM.",
+        "infrastructure_error": "usage_limit"
+      },
+      "scoreable": false
+    }
+  ],
+  "summary": {
+    "lolm_cerebras": {
+      "backend": "Cerebras gpt-oss-120b via user-owned key",
+      "passed": 6,
+      "jobs": 6,
+      "scoreable_jobs": 6,
+      "excluded": 0,
+      "pass_rate": 1.0,
+      "median_wall_seconds": 131.123
+    },
+    "codex": {
+      "backend": "gpt-5.6-sol, high reasoning (local config at launch)",
+      "passed": 0,
+      "jobs": 6,
+      "scoreable_jobs": 0,
+      "excluded": 6,
+      "pass_rate": null,
+      "median_wall_seconds": 4.391500000000001
+    }
+  },
+  "completed_at": "2026-08-11T02:29:13.604883+00:00"
+}

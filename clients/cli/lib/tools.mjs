@@ -38,7 +38,16 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
     async execute(call) {
       await ready;
       const tool = toolbox.registry.resolve(call?.name);
-      const result = await toolbox.registry.execute(call, { approved: yes, dryRun, cwd: toolbox.root });
+      // Some OpenAI-compatible providers copy the selected tool name back into
+      // the argument object. It is transport envelope metadata, not a customer
+      // argument, and strict schemas should not waste an autonomous step on it.
+      let normalizedCall = call?.arguments && typeof call.arguments === "object" && !Array.isArray(call.arguments) && Object.hasOwn(call.arguments, "tool")
+        ? { ...call, arguments: Object.fromEntries(Object.entries(call.arguments).filter(([key]) => key !== "tool")) }
+        : call;
+      if (tool?.name === "fs.list" && normalizedCall?.arguments?.path === "") {
+        normalizedCall = { ...normalizedCall, arguments: { ...normalizedCall.arguments, path: "." } };
+      }
+      const result = await toolbox.registry.execute(normalizedCall, { approved: yes, dryRun, cwd: toolbox.root });
       if (!result.ok) return { ok: false, ...result.error, error: result.error?.message, tool: result.tool };
       const canonical = result.tool;
       const value = result.dry_run ? { dry_run: true, permission: result.permission } : (result.result || {});
@@ -46,7 +55,7 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
         changes.push({ action: canonical.slice(3), ...value, dry_run: dryRun });
       }
       if (canonical === "terminal.exec" || canonical === "terminal.spawn") {
-        commands.push({ command: call.arguments?.command, ...value, dry_run: dryRun });
+        commands.push({ command: normalizedCall.arguments?.command, ...value, dry_run: dryRun });
         if (canonical === "terminal.exec" && value.exit_code === 0 && !value.timed_out) verified = true;
       }
       if (tool?.risk === "read" || ["git.status", "git.diff", "terminal.status"].includes(canonical)) evidence++;

@@ -20,20 +20,29 @@ async function request(url, runtime, { method = "POST", body, headers = {} } = {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error("provider request timed out")), runtime.timeoutMs);
   try {
-    const response = await fetch(url, {
-      method,
-      headers: { "content-type": "application/json", ...headers },
-      body: body == null ? undefined : JSON.stringify(body),
-      signal: controller.signal,
-    });
-    const text = await response.text();
-    let payload = {};
-    try { payload = text ? JSON.parse(text) : {}; } catch { payload = { raw: text.slice(0, 1000) }; }
-    if (!response.ok) {
-      const message = payload?.error?.message || payload?.error || payload?.message || `Provider returned HTTP ${response.status}`;
-      throw new ProviderError(String(message), { status: response.status, code: payload?.error?.code || "HTTP_ERROR", body: payload });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const response = await fetch(url, {
+        method,
+        headers: { "content-type": "application/json", ...headers },
+        body: body == null ? undefined : JSON.stringify(body),
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      let payload = {};
+      try { payload = text ? JSON.parse(text) : {}; } catch { payload = { raw: text.slice(0, 1000) }; }
+      if (!response.ok) {
+        if (response.status === 429 && attempt < 2) {
+          const headerSeconds = Number(response.headers.get("retry-after"));
+          const waitMs = Number.isFinite(headerSeconds) ? Math.max(0, headerSeconds * 1_000) : 12_000 * (attempt + 1);
+          await new Promise((resolvePromise) => setTimeout(resolvePromise, Math.min(waitMs, 30_000)));
+          continue;
+        }
+        const message = payload?.error?.message || payload?.error || payload?.message || `Provider returned HTTP ${response.status}`;
+        throw new ProviderError(String(message), { status: response.status, code: payload?.error?.code || "HTTP_ERROR", body: payload });
+      }
+      return payload;
     }
-    return payload;
+    throw new ProviderError("Provider rate limit did not clear after bounded retries", { status: 429, code: "RATE_LIMITED" });
   } catch (error) {
     if (error instanceof ProviderError) throw error;
     const timeout = error?.name === "AbortError" || /timed out/i.test(error?.message || "");
@@ -259,15 +268,19 @@ function ollamaMessages(messages) {
 async function ollamaChat(runtime, messages, tools = [], { onToken = () => {}, reasoning, maxTokens } = {}) {
   let content = "", thinking = "", usage = null;
   const toolCalls = [];
-  await streamJsonLines(endpoint(runtime.baseUrl, "/api/chat"), runtime, {
+  const requestBody = {
+    model: runtime.model,
+    messages: ollamaMessages(messages),
+    stream: true,
+    keep_alive: "30m",
+    ...(maxTokens ? { options: { num_predict: maxTokens } } : {}),
+    ...(typeof reasoning === "boolean" ? { think: reasoning } : {}),
+    ...(tools.length ? { tools } : {}),
+  };
+  let doneReason = "";
+  const consume = () => streamJsonLines(endpoint(runtime.baseUrl, "/api/chat"), runtime, {
     body: {
-      model: runtime.model,
-      messages: ollamaMessages(messages),
-      stream: true,
-      keep_alive: "30m",
-      ...(maxTokens ? { options: { num_predict: maxTokens } } : {}),
-      ...(typeof reasoning === "boolean" ? { think: reasoning } : {}),
-      ...(tools.length ? { tools } : {}),
+      ...requestBody,
     },
     onValue(payload) {
       const message = payload.message || {};
@@ -281,12 +294,25 @@ async function ollamaChat(runtime, messages, tools = [], { onToken = () => {}, r
       }
       for (const call of message.tool_calls || []) toolCalls.push(call);
       if (payload.done) {
+        doneReason = payload.done_reason || "";
         usage = { prompt_tokens: payload.prompt_eval_count, completion_tokens: payload.eval_count };
       }
     },
   });
+  try {
+    await consume();
+  } catch (error) {
+    // A local Ollama runner can restart under memory pressure while the HTTP
+    // daemon stays healthy. One bounded retry makes that recoverable without
+    // hiding a persistent failure or retrying remote billable providers.
+    if (error?.code !== "NETWORK_ERROR") throw error;
+    content = ""; thinking = ""; usage = null; doneReason = ""; toolCalls.length = 0;
+    await consume();
+  }
   if (!content && !toolCalls.length) {
-    throw new ProviderError("Provider response did not contain text or a tool call", { code: "MALFORMED_RESPONSE" });
+    throw new ProviderError("Provider response did not contain text or a tool call", {
+      code: "MALFORMED_RESPONSE", body: { thinking_chars: thinking.length, done_reason: doneReason },
+    });
   }
   return {
     content,

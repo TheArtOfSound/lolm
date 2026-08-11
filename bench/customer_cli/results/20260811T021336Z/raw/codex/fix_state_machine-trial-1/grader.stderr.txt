@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-codex-fix_state_machine-h7rvlp7d/_lolm_hidden_check.py", line 4, in <module>
+    assert o.state == 'new' and o.history() == ['new'], o.history()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: []
