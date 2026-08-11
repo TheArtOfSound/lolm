@@ -22,10 +22,10 @@ const NFET_GUIDANCE = {
   continue: `LOLM-NFET reports a healthy trajectory. Finish the current approach without unnecessary detours.`,
 };
 
-function allowedTools(mode) {
-  if (mode === "code") return TOOL_DEFINITIONS;
-  const safe = new Set(["list_files", "read_file", "search_files", "web_search", "fetch_url"]);
-  return TOOL_DEFINITIONS.filter((tool) => safe.has(tool.function.name));
+function allowedTools(mode, definitions = TOOL_DEFINITIONS) {
+  if (mode === "code") return definitions;
+  const safe = new Set(["fs__list", "fs__read", "fs__inspect", "fs__find", "fs__search", "web__search", "web__fetch", "git__status", "git__diff", "git__log"]);
+  return definitions.filter((tool) => safe.has(tool.function.name));
 }
 
 function isGreeting(prompt) {
@@ -231,7 +231,7 @@ export async function runAgent({
     { role: "user", content: String(prompt || "") },
   ];
   let final = "", usage = null, interventions = 0, nfet = null;
-  const tools = isGreeting(prompt) ? [] : allowedTools(mode);
+  const tools = isGreeting(prompt) ? [] : allowedTools(mode, runner.tools);
 
   for (let step = 1; step <= maxSteps; step++) {
     onPhase({ step, maxSteps, label: step === 1 ? "Thinking" : "Continuing" });
