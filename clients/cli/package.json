@@ -8,21 +8,13 @@
   },
   "files": [
     "bin/lolm.mjs",
-    "lib/agent.mjs",
-    "lib/config.mjs",
-    "lib/nfet.mjs",
-    "lib/nfet_bridge.py",
-    "lib/pdf.mjs",
-    "lib/providers.mjs",
-    "lib/session.mjs",
-    "lib/tools.mjs",
-    "lib/tui.mjs",
+    "lib",
     "scripts/postinstall.mjs",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test test/local-cli.test.mjs",
+    "test": "node --test test/*.test.mjs",
     "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {},
