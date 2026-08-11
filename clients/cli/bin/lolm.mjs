@@ -21,6 +21,7 @@ import { collectDiagnostics } from "../lib/diagnostics.mjs";
 import { createAgentToolbox } from "../lib/tools/index.mjs";
 import { RunStore } from "../lib/runtime/runs.mjs";
 import { PERMISSION_MODES } from "../lib/runtime/permissions.mjs";
+import { readMcpConfig } from "../lib/mcp.mjs";
 import { banner, confirm, createConsoleSurface, failure, nfetLine, note, prompt as askPrompt, renderMarkdown, secretPrompt, section, spinner, success, ui, warning, wordmark } from "../lib/tui.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -90,6 +91,8 @@ ${ui.bold("COMMANDS")}
   doctor                       verify provider, key, model, and NFET runtime
   tools [group]                list typed tools, schemas, and risk classes
   tools inspect NAME           inspect one tool contract
+  plugins                      list enabled local tool plugins
+  mcp list|doctor              inspect or connect configured MCP servers
   runs                         list durable local agent runs
   run show|resume RUN_ID       inspect or resume a durable run
   config show|set|unset        manage ~/.lolm/config.json
@@ -120,7 +123,7 @@ const CONSOLE_HELP = `Just describe the outcome you want. Examples:
   Explain this error and tell me what to do next
   Try again
 
-Conversation controls: /clear · /provider NAME · /model NAME · /cwd PATH · /debug · /exit`;
+Conversation controls: /clear · /provider NAME · /model NAME · /cwd PATH · /mode MODE · /debug · /exit`;
 
 function emit(flags, payload, human = "") {
   if (flags.json) process.stdout.write(`${JSON.stringify(payload)}\n`);
@@ -270,6 +273,28 @@ async function toolsCommand(flags, words) {
   } finally { await toolbox.close(); }
 }
 
+async function extensionsCommand(command, flags, words) {
+  const toolbox = createAgentToolbox({ cwd: flags.cwd, mode: "readonly" });
+  try {
+    if (command === "plugins") {
+      const plugins = await toolbox.plugins.discover();
+      return emit(flags, { ok: true, plugins }, plugins.length ? plugins.map((plugin) => `${plugin.enabled ? ui.green("●") : ui.dim("○")} ${plugin.name || "invalid plugin"} ${ui.dim(plugin.version || "")}  ${plugin.manifest_path}${plugin.error ? `\n  ${ui.red(plugin.error)}` : ""}`).join("\n") : ui.dim("No plugins found. Add an enabled lolm-plugin.json under ~/.lolm/plugins or .lolm/plugins."));
+    }
+    const action = words[1] || "list";
+    const config = await readMcpConfig(flags.cwd);
+    if (action === "list") {
+      const servers = Object.entries(config.mcpServers || {}).map(([name, spec]) => ({ name, enabled: spec.enabled === true, command: spec.command, args: spec.args || [] }));
+      return emit(flags, { ok: true, servers }, servers.length ? servers.map((server) => `${server.enabled ? ui.green("●") : ui.dim("○")} ${ui.cyan(server.name.padEnd(20))} ${server.command} ${server.args.join(" ")}`).join("\n") : ui.dim("No MCP servers configured."));
+    }
+    if (action === "doctor") {
+      const status = await toolbox.mcp.connectEnabled({ includeDisabled: true });
+      const ok = status.every((server) => server.connected);
+      return emit(flags, { ok, servers: status }, status.map((server) => `${server.connected ? ui.green("✓") : ui.red("×")} ${server.name}  ${server.connected ? `${server.tools.length} tools` : server.error || "not connected"}`).join("\n"));
+    }
+    throw Object.assign(new Error("usage: lolm mcp list|doctor"), { exitCode: 2 });
+  } finally { await toolbox.close(); }
+}
+
 function runStore() {
   const root = process.env.LOLM_RUNS_DIR || (process.env.LOLM_LAST_TASK ? join(dirname(process.env.LOLM_LAST_TASK), "runs") : undefined);
   return new RunStore(root ? { root } : undefined);
@@ -330,7 +355,8 @@ async function executeTask(command, text, config, flags, sharedMonitor = null, h
   const run = flags.resumeRunId
     ? (await store.resume(flags.resumeRunId)).meta
     : await store.create({ command, prompt: text, cwd: flags.cwd, mode: flags.permissionMode || (flags.yes ? "developer" : "standard"), provider: runtime.provider, model: runtime.model });
-  const eventSink = store.eventSink(run.id);
+  const persistEvent = store.eventSink(run.id);
+  const eventSink = async (event) => { await persistEvent(event); surface?.activity(event); };
   const monitor = sharedMonitor || monitorFor(config, flags, surface);
   const resolvedOut = ["pdf", "html"].includes(command)
     ? resolve(flags.out || inferredOut(text, command, flags.cwd)) : "";
@@ -438,6 +464,8 @@ async function interactive(config, flags, { seed = null } = {}) {
     provider: runtime.label,
     model: runtime.model,
     nfet: info.available && info.enabled ? "NFET active" : "NFET setup needed",
+    mode: flags.permissionMode || (flags.yes ? "developer" : "standard"),
+    workspace: flags.cwd,
   });
   surface.open();
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, historySize: 500 });
@@ -453,7 +481,7 @@ async function interactive(config, flags, { seed = null } = {}) {
         queued = null;
         surface.user(line);
       } else {
-        try { line = (await rl.question(`\n${ui.indigo("YOU")} ${ui.violet("›")} `)).trim(); }
+        try { line = (await rl.question(`\n${ui.indigo("╭─ YOU")}\n${ui.violet("╰─›")} `)).trim(); }
         catch { break; }
       }
       if (!line) continue;
@@ -464,6 +492,12 @@ async function interactive(config, flags, { seed = null } = {}) {
       if (line.startsWith("/provider ")) { flags.provider = normalizeProvider(line.slice(10)); runtime = resolveRuntime(config, flags); surface.success(`${runtime.label} selected`); continue; }
       if (line.startsWith("/model ")) { flags.model = line.slice(7).trim(); runtime = resolveRuntime(config, flags); surface.success(`${runtime.model} selected`); continue; }
       if (line.startsWith("/cwd ")) { flags.cwd = resolve(line.slice(5).trim()); surface.success(`Working directory: ${flags.cwd}`); continue; }
+      if (line.startsWith("/mode ")) {
+        const mode = line.slice(6).trim().toLowerCase();
+        if (!PERMISSION_MODES.includes(mode)) surface.error(`Mode must be one of: ${PERMISSION_MODES.join(", ")}`);
+        else { flags.permissionMode = mode; surface.success(`${mode} permission mode selected`); }
+        continue;
+      }
       try {
         let command = seededCommand || taskRoute(line);
         let taskText = line;
@@ -500,16 +534,17 @@ async function interactive(config, flags, { seed = null } = {}) {
 async function main() {
   const { flags, words } = parse(process.argv.slice(2));
   if (flags.version) return emit(flags, { ok: true, version: VERSION }, VERSION);
-  if (flags.help) return emit(flags, { ok: true, version: VERSION, commands: ["chat", "agent", "run", "ask", "code", "pdf", "html", "setup", "providers", "models", "nfet", "doctor", "tools", "runs", "config", "request", "update"] }, HELP);
+  if (flags.help) return emit(flags, { ok: true, version: VERSION, commands: ["chat", "agent", "run", "ask", "code", "pdf", "html", "setup", "providers", "models", "nfet", "doctor", "tools", "plugins", "mcp", "runs", "config", "request", "update"] }, HELP);
   let config = await loadConfig();
   if (!words.length) return process.stdin.isTTY ? interactive(config, flags) : emit(flags, { ok: true, help: true }, HELP);
   let command = words[0].toLowerCase();
-  const known = new Set(["chat", "agent", "run", "runs", "ask", "code", "pdf", "html", "setup", "providers", "models", "nfet", "doctor", "tools", "config", "request", "update", "help"]);
+  const known = new Set(["chat", "agent", "run", "runs", "ask", "code", "pdf", "html", "setup", "providers", "models", "nfet", "doctor", "tools", "plugins", "mcp", "config", "request", "update", "help"]);
   let text = words.slice(1).join(" ").trim();
   if (!known.has(command)) { text = words.join(" "); command = taskRoute(text); }
   if (command === "help") return emit(flags, { ok: true, help: true }, HELP);
   if (["chat", "agent"].includes(command)) return interactive(config, flags);
   if (command === "tools") return toolsCommand(flags, words);
+  if (["plugins", "mcp"].includes(command)) return extensionsCommand(command, flags, words);
   if (command === "runs") return runsCommand(flags, ["run"]);
   if (command === "run" && words[1] === "show") return runsCommand(flags, words);
   if (command === "run" && words[1] === "resume") {

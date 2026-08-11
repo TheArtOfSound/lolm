@@ -144,7 +144,7 @@ export function nfetSummary(result, { verbose = false } = {}) {
   return `${ui.violet("NFET")} ${paint("◆")} ${message}`;
 }
 
-export function createConsoleSurface({ version = "", provider = "", model = "", nfet = "" } = {}) {
+export function createConsoleSurface({ version = "", provider = "", model = "", nfet = "", mode = "standard", workspace = process.cwd() } = {}) {
   let alternate = false;
   let closed = false;
   let progressVisible = false;
@@ -195,6 +195,7 @@ export function createConsoleSurface({ version = "", provider = "", model = "", 
       writeLine(ui.dim("Local intelligence that works on your computer"));
       writeLine();
       writeLine(`${ui.green("●")} ${provider} ${ui.dim(`· ${model}`)}   ${ui.violet("◆")} ${nfet}   ${ui.dim(`v${version}`)}`);
+      writeLine(`${ui.cyan("⌂")} ${ui.dim(workspace)}   ${ui.amber("◇")} ${ui.dim(`${mode} permissions`)}`);
       writeLine(ui.dim("Talk normally. I remember the conversation and unfinished work."));
       writeLine(ui.dim("/help for controls  ·  /debug for NFET details  ·  /exit when done"));
       writeLine(ui.dim("─".repeat(Math.min(96, Math.max(48, (output.columns || 80) - 2)))));
@@ -218,6 +219,13 @@ export function createConsoleSurface({ version = "", provider = "", model = "", 
       startProgress(label);
     },
     tool(label) { writeLine(`  ${ui.cyan("↳")} ${label}`); },
+    activity(event) {
+      if (event?.type === "tool.started") writeLine(`  ${ui.violet("◇")} ${event.tool} ${ui.dim("running")}`);
+      else if (event?.type === "tool.completed") {
+        const processId = event.result?.id ? ` · ${event.result.id}` : "";
+        writeLine(`  ${ui.green("✓")} ${event.tool} ${ui.dim(`${event.duration_ms || 0}ms${processId}`)}`);
+      } else if (event?.type === "tool.failed") writeLine(`  ${ui.red("×")} ${event.tool} ${ui.dim(event.error?.message || "failed")}`);
+    },
     nfet(result) { writeLine(`  ${nfetSummary(result, { verbose })}`); },
     assistant(message) {
       clearProgress();

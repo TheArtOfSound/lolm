@@ -24,16 +24,19 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
     eventSink,
     confirm: (request) => yes || confirmPrompt(approvalLabel(request)),
   });
+  const ready = toolbox.loadExtensions();
 
   return {
     changes,
     commands,
     registry: toolbox.registry,
-    tools: toolbox.registry.providerDefinitions(),
+    ready,
+    get tools() { return toolbox.registry.providerDefinitions(); },
     get evidence() { return evidence; },
     get verified() { return verified; },
     close: () => toolbox.close(),
     async execute(call) {
+      await ready;
       const tool = toolbox.registry.resolve(call?.name);
       const result = await toolbox.registry.execute(call, { approved: yes, dryRun, cwd: toolbox.root });
       if (!result.ok) return { ok: false, ...result.error, error: result.error?.message, tool: result.tool };

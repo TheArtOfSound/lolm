@@ -16,6 +16,7 @@ function processView(record) {
     command: record.command,
     cwd: record.cwd,
     status: record.status,
+    ok: record.status === "running" ? null : record.status === "completed",
     pid: record.child.pid || null,
     started_at: record.startedAt,
     finished_at: record.finishedAt || null,

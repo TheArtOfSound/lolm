@@ -11,6 +11,8 @@ import { registerGitHubTools } from "./github.mjs";
 import { registerCloudflareTools } from "./cloudflare.mjs";
 import { BrowserManager, registerBrowserTools, registerComputerTools } from "./browser.mjs";
 import { registerWebTools } from "./web.mjs";
+import { PluginManager } from "../plugins.mjs";
+import { McpManager } from "../mcp.mjs";
 
 export function createAgentToolbox({ cwd = process.cwd(), mode = "standard", confirm, onAction, eventSink } = {}) {
   const root = resolve(cwd);
@@ -26,8 +28,15 @@ export function createAgentToolbox({ cwd = process.cwd(), mode = "standard", con
   registerBrowserTools(registry, shared);
   registerComputerTools(registry, shared);
   registerWebTools(registry, shared);
+  const plugins = new PluginManager({ root, registry });
+  const mcp = new McpManager({ root, registry });
   return {
-    root, registry, processes, browser,
-    async close() { processes.close(); await browser.close().catch(() => {}); },
+    root, registry, processes, browser, plugins, mcp,
+    async loadExtensions({ includeDisabledMcp = false } = {}) {
+      const pluginStatus = await plugins.loadEnabled();
+      const mcpStatus = await mcp.connectEnabled({ includeDisabled: includeDisabledMcp });
+      return { plugins: pluginStatus, mcp: mcpStatus };
+    },
+    async close() { mcp.close(); processes.close(); await browser.close().catch(() => {}); },
   };
 }
