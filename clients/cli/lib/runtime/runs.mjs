@@ -43,6 +43,7 @@ export class RunStore {
     const meta = redact({
       id,
       status: "running",
+      owner_pid: process.pid,
       created_at: now,
       updated_at: now,
       prompt: input.prompt || "",
@@ -102,7 +103,14 @@ export class RunStore {
     const rows = [];
     for (const entry of entries) {
       if (!entry.isDirectory() || !entry.name.startsWith("run_")) continue;
-      try { rows.push(await this.readMeta(entry.name)); } catch {}
+      try {
+        let meta = await this.readMeta(entry.name);
+        if (meta.status === "running" && meta.owner_pid && meta.owner_pid !== process.pid) {
+          let alive = true; try { process.kill(meta.owner_pid, 0); } catch { alive = false; }
+          if (!alive) meta = await this.update(meta.id, { status: "interrupted", finished_at: new Date().toISOString(), interruption: "owner process exited" });
+        }
+        rows.push(meta);
+      } catch {}
     }
     return rows.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, limit);
   }

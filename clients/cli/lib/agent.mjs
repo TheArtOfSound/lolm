@@ -62,9 +62,13 @@ function needsFreshEvidence(prompt) {
   return /\b(current|currently|latest|today|recent|compare|comparison|versus|\bvs\b|price|pricing|release|news|best)\b/i.test(String(prompt || ""));
 }
 
-function reasoningFor(mode, prompt) {
+function reasoningFor(mode, prompt, runtime) {
   if (isGreeting(prompt)) return false;
   if (mode === "document") return false;
+  // Local reasoning models can spend minutes emitting hidden thought before a
+  // simple tool call. NFET already provides LOLM's explicit trajectory control,
+  // so local agent runs default to direct tool use unless the user opts in.
+  if (runtime?.protocol === "ollama") return process.env.LOLM_LOCAL_REASONING === "1";
   return undefined;
 }
 
@@ -83,7 +87,7 @@ function representativeDocumentSample(content) {
 }
 
 function documentContract(prompt) {
-  if (!/\b(compare|comparison|versus|\bvs\b|other agents?)\b/i.test(String(prompt || ""))) return "";
+  if (!isComparisonRequest(prompt)) return "";
   return `This is a customer comparison, not a framework survey.
 - Compare LOLM with OpenAI Codex, Anthropic Claude Code, and Google Gemini CLI.
 - Include: executive summary, capability table, where LOLM is stronger, where competitors are stronger, honest LOLM limitations, best-fit recommendations, and Sources.
@@ -93,8 +97,12 @@ function documentContract(prompt) {
 - Aim for a focused 400-500 words. Complete every required section before adding detail.`;
 }
 
-function isLolmAgentComparison(prompt) {
-  return /\b(compare|comparison|versus|\bvs\b|other agents?)\b/i.test(String(prompt || ""))
+function isComparisonRequest(prompt) {
+  return /\b(?:compar(?:e|ed|ing|ison)s?|versus|vs\.?|other\s+(?:customer\s+)?(?:coding\s+)?agents?)\b/i.test(String(prompt || ""));
+}
+
+export function isLolmAgentComparison(prompt) {
+  return isComparisonRequest(prompt)
     && /\b(LOLM|yourself|you)\b/i.test(String(prompt || ""));
 }
 
@@ -207,7 +215,7 @@ export function documentIssues(text, { comparison = false, sources = [] } = {}) 
   if (sources.length && (value.match(/https?:\/\//g) || []).length < 2) issues.push("missing source URLs");
   if (comparison && new Set(sources.map(comparisonSourceFamily).filter(Boolean)).size < 3) issues.push("missing official sources for all compared agents");
   if (/prevents? malicious behavior|LangChain[^.]{0,100}lacks? (?:the )?local model/i.test(claims)) issues.push("contains an unsupported security or competitor claim");
-  if (/runs? entirely (?:on|locally)|NFET[^.]{0,160}(?:ensures?|guarantees?)[^.]{0,80}(?:safe|reliable|correct|secure)/i.test(guarantees)) issues.push("overstates local execution or NFET guarantees");
+  if (/runs? entirely (?:on|locally)|without relying on external APIs|data stays local|NFET[^.]{0,160}(?:ensures?|guarantees?)[^.]{0,80}(?:safe|reliable|correct|secure)/i.test(guarantees)) issues.push("overstates local execution or NFET guarantees");
   if (comparison && !/\b(limitations?|trade-?offs?|where (?:others|competitors) (?:win|lead|are stronger))\b/i.test(value)) issues.push("missing honest trade-offs");
   return issues;
 }
@@ -269,8 +277,8 @@ export async function runAgent({
     let streamedChars = 0;
     const response = await chat(runtime, messages, {
       tools,
-      reasoning: reasoningFor(mode, prompt),
-      maxTokens: mode === "code" ? 2_000 : 1_600,
+      reasoning: reasoningFor(mode, prompt, runtime),
+      maxTokens: mode === "code" ? (runtime.protocol === "ollama" ? 800 : 2_000) : 1_600,
       onToken(delta, meta = {}) {
         streamedChars += String(delta || "").length;
         onProgress({ step, chars: streamedChars, thinking: Boolean(meta.thinking) });
@@ -392,25 +400,25 @@ export async function generateDocument({
   try {
   const contract = documentContract(prompt);
   const comparison = Boolean(contract);
+  const verifiedTemplate = isLolmAgentComparison(prompt);
   let sources = comparison ? [
     { title: "OpenAI Codex official repository", url: "https://github.com/openai/codex", snippet: "Official OpenAI Codex repository and CLI documentation." },
     { title: "Claude Code overview", url: "https://code.claude.com/docs/en/overview", snippet: "Official Anthropic Claude Code documentation." },
     { title: "Gemini CLI official repository", url: "https://github.com/google-gemini/gemini-cli", snippet: "Official Google Gemini CLI repository and documentation." },
   ] : [];
-  if (needsFreshEvidence(prompt)) {
+  if (needsFreshEvidence(prompt) && !verifiedTemplate) {
     onPhase({ label: "Researching the comparison" });
-    const queries = /\b(compare|comparison|versus|\bvs\b|other agents?)\b/i.test(prompt)
+    const queries = isComparisonRequest(prompt)
       ? ["OpenAI Codex official documentation CLI agent", "Anthropic Claude Code official documentation", "Google Gemini CLI official documentation"]
       : [`${prompt} official documentation`];
-    for (const query of queries) {
+    const researched = await Promise.all(queries.map(async (query) => {
       onTool(`Researching ${query.replace(/ official documentation.*$/i, "")}`);
       try {
-        const research = await runner.execute({ name: "web_search", arguments: { query, limit: 8 } });
-        const accepted = (research.results || []).filter((row) => row?.url && (!comparison || officialComparisonSource(row))).slice(0, comparison ? 2 : 6);
-        for (const row of accepted) {
-          if (!sources.some((existing) => existing.url === row.url)) sources.push(row);
-        }
-      } catch { /* a later contract check prevents unsupported completion */ }
+        return await runner.execute({ name: "web_search", arguments: { query, limit: 8 } });
+      } catch { return { results: [] }; }
+    }));
+    for (const research of researched) for (const row of (research.results || []).filter((item) => item?.url && (!comparison || officialComparisonSource(item))).slice(0, comparison ? 2 : 6)) {
+      if (!sources.some((existing) => existing.url === row.url)) sources.push(row);
     }
     sources = sources.slice(0, comparison ? 6 : 10);
   }
@@ -420,7 +428,6 @@ export async function generateDocument({
     ...history.slice(-8),
     { role: "user", content: `REQUEST:\n${prompt}\n\nMANDATORY DOCUMENT CONTRACT:\n${contract || "Write a substantive, well-structured document with honest limitations."}${sourcePacket}` },
   ];
-  const verifiedTemplate = isLolmAgentComparison(prompt);
   onPhase({ label: verifiedTemplate ? "Building a verified comparison" : "Writing your document" });
   let streamedChars = 0;
   let response = { content: "", usage: null };

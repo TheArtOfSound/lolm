@@ -45,7 +45,7 @@ export function classifyCommand(command) {
   const value = String(command || "").trim();
   if (!value) return { risk: "execute", approval: "confirm", reason: "Empty commands are not executable." };
   if (CATASTROPHIC.some((pattern) => pattern.test(value))) {
-    return { risk: "execute", approval: "blocked", blocked: true, reason: "The command matches a catastrophic or broadly destructive pattern." };
+    return { risk: "execute", approval: "blocked", blocked: true, reason: "Command blocked because it matches a catastrophic or broadly destructive pattern." };
   }
   if (EXTERNAL.some((pattern) => pattern.test(value))) return { risk: "external", approval: "explicit", reason: "The command changes remote or production state." };
   if (MUTATING.some((pattern) => pattern.test(value))) return { risk: "write", approval: "confirm", reason: "The command can change local files, dependencies, or long-running state." };

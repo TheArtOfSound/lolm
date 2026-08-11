@@ -3,7 +3,7 @@
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { objectSchema, resolveUserPath, truncate } from "./shared.mjs";
+import { commandResult, objectSchema, resolveUserPath, runFile, truncate } from "./shared.mjs";
 
 async function playwright() {
   try { return await import("playwright-core"); }
@@ -130,8 +130,38 @@ export function registerBrowserTools(registry, { browser }) {
 }
 
 export function registerComputerTools(registry, { browser }) {
-  registry.register({ name: "computer.observe", description: "Observe the current browser UI as text and HTML. This is the portable computer-use fallback.", risk: "read", inputSchema: objectSchema({ max_chars: { type: "integer", minimum: 100, maximum: 50_000 } }), execute: async (args) => browser.inspect(args) });
-  registry.register({ name: "computer.click", description: "Click a visible browser UI element by selector or text.", risk: "external", approval: "confirm", inputSchema: { type: "object", oneOf: [objectSchema({ selector: { type: "string", minLength: 1 } }, ["selector"]), objectSchema({ text: { type: "string", minLength: 1 } }, ["text"])] }, execute: async (args) => browser.click(args) });
-  registry.register({ name: "computer.type", description: "Type into a visible browser UI field.", risk: "external", approval: "confirm", inputSchema: objectSchema({ selector: { type: "string", minLength: 1 }, text: { type: "string" }, clear: { type: "boolean" }, press: { type: "string" } }, ["selector", "text"]), execute: async (args) => browser.type(args) });
-  registry.register({ name: "computer.screenshot", description: "Capture the current browser UI as a PNG artifact.", risk: "write", approval: "confirm", inputSchema: objectSchema({ path: { type: "string" } }), execute: async ({ path }) => browser.screenshot(path) });
+  const desktopOnly = () => { if (process.platform !== "darwin") throw Object.assign(new Error("Desktop computer-use fallback currently requires macOS; use browser.* for portable web automation."), { code: "DESKTOP_AUTOMATION_UNAVAILABLE" }); };
+  const desktopScreenshot = async (value) => {
+    desktopOnly(); const path = value ? resolveUserPath(browser.root, value) : join(browser.root, ".lolm", "screenshots", `desktop-${Date.now()}.png`);
+    await mkdir(dirname(path), { recursive: true }); commandResult(await runFile("screencapture", ["-x", path], { timeoutMs: 20_000 }), "desktop screenshot"); return { target: "desktop", path };
+  };
+  registry.register({
+    name: "computer.observe", description: "Observe the browser as structured text, or capture the active macOS desktop when Playwright cannot reach the UI.", risk: "read",
+    classify: ({ target = "auto" }) => target === "desktop" || (target === "auto" && !browser.page) ? { risk: "write", approval: "confirm", reason: "Desktop observation captures a screenshot and may require macOS Screen Recording permission." } : { risk: "read", approval: "auto" },
+    inputSchema: objectSchema({ target: { type: "string", enum: ["auto", "browser", "desktop"] }, max_chars: { type: "integer", minimum: 100, maximum: 50_000 }, path: { type: "string" } }),
+    execute: async ({ target = "auto", max_chars, path }) => {
+      if (target !== "desktop" && browser.page) return browser.inspect({ max_chars });
+      desktopOnly(); const active = await runFile("osascript", ["-e", "tell application \"System Events\" to get name of first application process whose frontmost is true"], { timeoutMs: 10_000 });
+      return { ...(await desktopScreenshot(path)), active_application: active.ok ? active.stdout.trim() : null, note: "Use the screenshot as visual evidence; macOS may request Screen Recording permission." };
+    },
+  });
+  registry.register({
+    name: "computer.click", description: "Click browser content by selector/text, or use an approved macOS coordinate click when Playwright is insufficient.", risk: "external", approval: "confirm",
+    inputSchema: { type: "object", oneOf: [objectSchema({ selector: { type: "string", minLength: 1 }, target: { type: "string", enum: ["browser"] } }, ["selector"]), objectSchema({ text: { type: "string", minLength: 1 }, target: { type: "string", enum: ["browser"] } }, ["text"]), objectSchema({ x: { type: "integer", minimum: 0 }, y: { type: "integer", minimum: 0 }, target: { type: "string", enum: ["desktop"] } }, ["x", "y"])] },
+    execute: async ({ x, y, ...args }) => { if (Number.isInteger(x) && Number.isInteger(y)) { desktopOnly(); commandResult(await runFile("osascript", ["-e", `tell application \"System Events\" to click at {${x}, ${y}}`], { timeoutMs: 10_000 }), "desktop click"); return { target: "desktop", x, y }; } return browser.click(args); },
+  });
+  registry.register({
+    name: "computer.type", description: "Type into a browser selector, or send approved text to the active macOS application when Playwright is insufficient.", risk: "external", approval: "confirm",
+    inputSchema: objectSchema({ target: { type: "string", enum: ["browser", "desktop"] }, selector: { type: "string" }, text: { type: "string" }, clear: { type: "boolean" }, press: { type: "string" } }, ["text"]),
+    execute: async ({ target = "browser", selector, text, clear, press }) => {
+      if (target !== "desktop") { if (!selector) throw Object.assign(new Error("Browser typing requires selector."), { code: "INVALID_TOOL_ARGUMENTS" }); return browser.type({ selector, text, clear, press }); }
+      desktopOnly(); const script = "on run argv\ntell application \"System Events\" to keystroke (item 1 of argv)\nend run";
+      commandResult(await runFile("osascript", ["-e", script, "--", text], { timeoutMs: 10_000 }), "desktop typing"); return { target: "desktop", characters: text.length };
+    },
+  });
+  registry.register({
+    name: "computer.screenshot", description: "Capture the browser page or active macOS desktop as a local PNG artifact.", risk: "write", approval: "confirm",
+    inputSchema: objectSchema({ target: { type: "string", enum: ["auto", "browser", "desktop"] }, path: { type: "string" } }),
+    execute: async ({ target = "auto", path }) => target !== "desktop" && browser.page ? browser.screenshot(path) : desktopScreenshot(path),
+  });
 }

@@ -12,7 +12,10 @@ export ANTHROPIC_API_KEY=...
 lolm setup anthropic
 
 lolm setup ollama</pre></section>
-<section><div class="step">03 · USE</div><h2>Open the terminal UI</h2><pre>lolm</pre><p>Keep talking in the same session. Say <code>try again</code> after a failed task, or add <code>--once</code> for one non-interactive request:</p><pre>lolm "answer this question…" --once
+<section><div class="step">03 · USE</div><h2>Open the terminal UI</h2><pre>lolm
+lolm tools
+lolm doctor</pre><p>Keep talking in the same session. LOLM records durable local runs and can use typed terminal, filesystem, Git, GitHub, Cloudflare, browser, and computer tools. Say <code>try again</code> after a failed task, or use <code>lolm run</code> for one autonomous request:</p><pre>lolm run "fix the tests, deploy, and verify it in Chrome"
+lolm "answer this question…" --once
 lolm "make me a PDF and put it on my Desktop"
 lolm "code a polished HTML page here" --cwd ./project
 lolm "update yourself"</pre></section>

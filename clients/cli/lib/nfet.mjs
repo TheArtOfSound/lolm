@@ -16,20 +16,25 @@ async function exists(path) {
 }
 
 export async function findNfetHome(config = {}) {
+  const explicit = [process.env.LOLM_HOME, config.nfet?.home].filter(Boolean).map((value) => resolve(String(value)));
+  for (const root of [...new Set(explicit)]) {
+    if (await exists(join(root, "lolm", "nfet_policy.py")) && await exists(join(root, "local_ui", "server.py"))) return root;
+  }
   const candidates = [
-    process.env.LOLM_HOME,
-    config.nfet?.home,
     packageRoot,
     process.cwd(),
     join(homedir(), "Documents", "CLI", "lolm"),
     join(homedir(), "code", "lolm"),
   ].filter(Boolean).map((value) => resolve(String(value)));
+  let sourceOnlyFallback = "";
   for (const root of [...new Set(candidates)]) {
     if (await exists(join(root, "lolm", "nfet_policy.py")) && await exists(join(root, "local_ui", "server.py"))) {
-      return root;
+      sourceOnlyFallback ||= root;
+      const checkpoint = resolve(root, config.nfet?.checkpoint || "runs/nfet_controller/live_qwen4b.pt");
+      if (await exists(checkpoint)) return root;
     }
   }
-  return "";
+  return sourceOnlyFallback;
 }
 
 export async function inspectNfet(config = {}) {

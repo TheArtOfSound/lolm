@@ -1,8 +1,9 @@
 # LOLM — local intelligence that does not lose the plot
 
 LOLM is an open-source, local-first AI agent with its own terminal interface,
-provider-agnostic API keys, local coding tools, artifact creation, and a real
-NFET control loop. The public website is documentation only. File operations,
+provider-agnostic API keys, 60+ typed computer-use tools, browser automation,
+durable resumable runs, artifact creation, and a real NFET control loop. The
+public website is documentation only. File operations,
 commands, configuration, and credentials stay on your computer; when you pick
 a remote model provider, that provider receives the prompt and selected
 context under its own policies.
@@ -35,6 +36,8 @@ lolm code "fix the failing tests" --cwd .
 lolm pdf "write a launch plan" --out ~/Desktop/launch-plan.pdf
 lolm html "build a personal landing page" --out ./index.html
 lolm doctor --json
+lolm tools
+lolm run "fix the tests, deploy, and verify it in Chrome"
 ```
 
 ## Bring any model
@@ -44,8 +47,9 @@ Mistral, DeepSeek, Together AI, Cerebras, Ollama, and custom
 OpenAI-compatible endpoints. Credentials resolve in this order:
 
 1. the provider's normal environment variable;
-2. `~/.lolm/config.json` written with mode `0600` by `lolm setup`;
-3. `--api-key` for one-off use.
+2. the native secret store (macOS Keychain or Secret Service when available);
+3. `~/.lolm/config.json` written with mode `0600` as a secure fallback;
+4. `--api-key` for one-off use.
 
 ```bash
 export ANTHROPIC_API_KEY=...
@@ -98,10 +102,17 @@ reports NFET as unavailable; it never substitutes invented telemetry.
 
 ## Local safety model
 
-- Read-only inspection tools run directly.
-- File writes and shell commands require approval unless `--yes` is supplied.
+- Every tool has a JSON schema and one of four risk classes: read, write,
+  execute, or external.
+- `readonly`, `standard`, `developer`, and `trusted` modes make approval scope
+  explicit.
+- Read-only inspection and recognized tests/builds can run directly.
+- File writes, unknown commands, and remote mutations use graduated approval.
 - Broad destructive commands are blocked even with `--yes`.
 - Files are written atomically.
+- Git checkout/merge/pull protect dirty worktrees.
+- API keys are validated before setup is saved and use native secret storage
+  when available.
 - `--dry-run` previews mutations.
 - API keys are redacted from diagnostics and JSON output.
 - `--json` emits one stable machine-readable result.
@@ -115,7 +126,10 @@ clients/cli/                 npm CLI and terminal UI
   lib/providers.mjs          provider adapters
   lib/agent.mjs              local tool/NFET agent loop
   lib/nfet_bridge.py         real Python NFET telemetry bridge
-  lib/tools.mjs              local file, shell, and web tools
+  lib/runtime/               schemas, permissions, process IDs, run ledger
+  lib/tools/                 terminal, fs, GitHub, Cloudflare, browser tools
+  lib/plugins.mjs            enabled local plugin discovery and loading
+  lib/mcp.mjs                explicitly enabled MCP tool servers
   lib/pdf.mjs                guaranteed local PDF writer
 lolm/                        LOLM model and NFET policy
 local_ui/                    Python local runtime and MCP server

@@ -132,10 +132,11 @@ function emit(flags, payload, human = "") {
 
 function taskRoute(text) {
   const value = String(text || "").trim();
+  const compoundWork = /\b(then|test|tests|script|repository|project|deploy|publish|run (?:it|the|a)|multiple files|and verify|and check)\b/i.test(value);
   if (isRetryPhrase(value)) return "retry";
   if (/\b(update|upgrade)\s+(yourself|lolm|the cli)\b/i.test(value)) return "update";
   if (/\b(pdf)\b/i.test(value) && /\b(make|create|write|generate|build|turn|convert)\b/i.test(value)) return "pdf";
-  if (/\b(html|web\s?page|landing page|website)\b/i.test(value) && /\b(make|create|code|build|write|design)\b/i.test(value)) return "html";
+  if (!compoundWork && /\b(html|web\s?page|landing page|website)\b/i.test(value) && /\b(make|create|code|build|write|design)\b/i.test(value)) return "html";
   if (/\b(code|implement|fix|debug|refactor|edit|file|script|app|component|test)\b/i.test(value)) return "code";
   return "ask";
 }
@@ -148,6 +149,9 @@ function inferredOut(task, kind, cwd) {
   else if (/\bdocuments?\b/.test(lower)) root = join(homedir(), "Documents");
   const explicit = task.match(/(?:save|put|write|export)(?:\s+it)?\s+(?:to|at|as)\s+([~/.][^\s"']*\.(?:pdf|html?))/i)?.[1];
   if (explicit) return resolve(explicit.replace(/^~/, homedir()));
+  const named = task.match(/(?:named|called|file(?:\s+named)?|as)\s+["'`]?([a-z0-9_.-]+\.(?:pdf|html?))/i)?.[1]
+    || task.match(/\b([a-z0-9_.-]+\.(?:pdf|html?))\b/i)?.[1];
+  if (named) return resolve(root, named);
   return join(root, kind === "pdf" ? "lolm-document.pdf" : "lolm-page.html");
 }
 

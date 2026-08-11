@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { documentIssues } from "../lib/agent.mjs";
+import { documentIssues, isLolmAgentComparison } from "../lib/agent.mjs";
 import { createPdf } from "../lib/pdf.mjs";
 import { PROVIDERS, resolveRuntime } from "../lib/config.mjs";
 import { chat } from "../lib/providers.mjs";
@@ -56,7 +56,7 @@ test("help and version describe the local open-source command surface", async ()
   assert.match(help.stdout, /tools \[group\]/);
   assert.match(help.stdout, /run show\|resume/);
   const version = await exec(process.execPath, [bin, "--version"]);
-  assert.equal(version.stdout.trim(), "1.1.0");
+  assert.equal(version.stdout.trim(), "1.2.0");
 });
 
 test("JSON providers output is one stable document", async () => {
@@ -153,6 +153,35 @@ test("code tool loop writes locally and reports exact path", async (t) => {
   assert.equal(calls, 2);
 });
 
+test("compound HTML work stays in the agent loop instead of the artifact shortcut", async (t) => {
+  const server = await startServer((_req, payload) => {
+    if (!payload.messages.some((message) => message.role === "tool")) {
+      return { body: { choices: [{ message: { role: "assistant", content: null, tool_calls: [
+        { id: "w1", type: "function", function: { name: "fs__write", arguments: JSON.stringify({ path: "index.html", content: "<h1>Ready</h1>" }) } },
+        { id: "r1", type: "function", function: { name: "terminal__exec", arguments: JSON.stringify({ command: `${JSON.stringify(process.execPath)} -e \"process.exit(0)\"` }) } },
+      ] } }] } };
+    }
+    return { body: { choices: [{ message: { role: "assistant", content: "Created and verified index.html." } }] } };
+  });
+  t.after(() => server.close());
+  const root = await temp("compound-html");
+  const result = await exec(process.execPath, [bin, "create", "index.html", "then", "run", "a", "test", "--cwd", root, "--once", "--yes", "--provider", "custom", "--base-url", address(server), "--model", "test", "--api-key", "test", "--no-nfet", "--json"], { env: { ...process.env, LOLM_LAST_TASK: join(root, "last-task.json") } });
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.kind, undefined);
+  assert.equal(payload.verified, true);
+  assert.equal(await readFile(join(root, "index.html"), "utf8"), "<h1>Ready</h1>");
+});
+
+test("simple named HTML requests preserve the requested filename", async (t) => {
+  const server = await startServer(() => ({ body: { choices: [{ message: { role: "assistant", content: "<!doctype html><html><title>Named</title></html>" } }] } }));
+  t.after(() => server.close());
+  const root = await temp("named-html");
+  const result = await exec(process.execPath, [bin, "create", "an", "HTML", "file", "named", "index.html", "--cwd", root, "--once", "--yes", "--provider", "custom", "--base-url", address(server), "--model", "test", "--api-key", "test", "--no-nfet", "--json"], { env: { ...process.env, LOLM_LAST_TASK: join(root, "last-task.json") } });
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.kind, "html");
+  assert.equal(payload.path, join(root, "index.html"));
+});
+
 test("PDF writer creates a valid multi-object PDF", async () => {
   const root = await temp("pdf");
   const out = join(root, "report.pdf");
@@ -165,6 +194,8 @@ test("PDF writer creates a valid multi-object PDF", async () => {
 });
 
 test("customer comparison documents reject framework substitutions and unsupported claims", () => {
+  assert.equal(isLolmAgentComparison("Make comparisons of yourself to other agents"), true);
+  assert.equal(isLolmAgentComparison("Compare LOLM with other customer coding agents"), true);
   const sources = [
     { url: "https://github.com/openai/codex" },
     { url: "https://code.claude.com/docs/en/overview" },
