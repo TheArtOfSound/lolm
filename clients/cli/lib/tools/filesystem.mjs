@@ -123,7 +123,7 @@ export function registerFilesystemTools(registry, { root, onAction = () => {} })
   });
   registry.register({
     name: "fs.delete", description: "Delete a file or, only when recursive is explicitly true, a directory tree.", risk: "write", approval: "confirm",
-    classify: ({ path, recursive }) => pathClassification(root, [path], { destructive: true || recursive }),
+    classify: ({ path }) => pathClassification(root, [path], { destructive: true }),
     inputSchema: fileSchema({ recursive: { type: "boolean" } }),
     execute: async ({ path: value, recursive = false }) => { const path = resolveUserPath(root, value); if (path === root) throw Object.assign(new Error("Deleting the workspace root is blocked."), { code: "COMMAND_BLOCKED" }); await rm(path, { recursive, force: false }); return { path, recursive }; },
   });

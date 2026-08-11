@@ -105,7 +105,7 @@ export async function secretPrompt(question) {
     let value = "";
     const onKey = (text, key) => {
       if (key?.ctrl && key.name === "c") {
-        cleanup(); output.write("\n"); resolvePromise(""); return;
+        cleanup(); output.write("\n"); resolvePromise(null); return;
       }
       if (key?.name === "return" || key?.name === "enter") {
         cleanup(); output.write("\n"); resolvePromise(value); return;

@@ -46,6 +46,7 @@ export class RunStore {
       created_at: now,
       updated_at: now,
       prompt: input.prompt || "",
+      command: input.command || null,
       cwd: input.cwd || process.cwd(),
       mode: input.mode || "standard",
       provider: input.provider || null,

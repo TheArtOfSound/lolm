@@ -53,6 +53,8 @@ test("help and version describe the local open-source command surface", async ()
   assert.match(help.stdout, /local intelligence/i);
   assert.match(help.stdout, /lolm "update yourself"/);
   assert.match(help.stdout, /nfet status\|test/);
+  assert.match(help.stdout, /tools \[group\]/);
+  assert.match(help.stdout, /run show\|resume/);
   const version = await exec(process.execPath, [bin, "--version"]);
   assert.equal(version.stdout.trim(), "1.1.0");
 });
@@ -81,6 +83,53 @@ test("OpenAI-compatible ask works without any LOLM hosted credential", async (t)
   assert.equal(payload.ok, true);
   assert.equal(payload.response, "local answer from test-model");
   assert.equal(payload.provider, "custom");
+  assert.match(payload.run_id, /^run_/);
+  const runs = await exec(process.execPath, [bin, "runs", "--json"], { env: { ...process.env, LOLM_LAST_TASK: join(root, "last-task.json") } });
+  assert.equal(JSON.parse(runs.stdout).runs[0].id, payload.run_id);
+  const shown = await exec(process.execPath, [bin, "run", "show", payload.run_id, "--json"], { env: { ...process.env, LOLM_LAST_TASK: join(root, "last-task.json") } });
+  assert.ok(JSON.parse(shown.stdout).run.events.some((event) => event.type === "provider.responded"));
+});
+
+test("tools command exposes schemas and risk classes without loading a provider", async () => {
+  const root = await temp("tools-command");
+  const list = await exec(process.execPath, [bin, "tools", "--json"], { env: { ...process.env, LOLM_CONFIG: join(root, "missing.json") } });
+  const payload = JSON.parse(list.stdout);
+  assert.ok(payload.count >= 60);
+  assert.ok(payload.tools.some((tool) => tool.name === "terminal.spawn" && tool.risk === "execute"));
+  const inspect = await exec(process.execPath, [bin, "tools", "inspect", "fs.patch", "--json"], { env: { ...process.env, LOLM_CONFIG: join(root, "missing.json") } });
+  assert.deepEqual(JSON.parse(inspect.stdout).tool.inputSchema.required, ["path", "old_text", "new_text"]);
+});
+
+test("setup validates a provider before saving and exits without unsettled top-level await", async (t) => {
+  const server = await startServer(() => ({ body: { data: [{ id: "test-model" }] } }));
+  t.after(() => server.close());
+  const root = await temp("setup");
+  const configPath = join(root, "config.json");
+  const result = await exec(process.execPath, [bin, "setup", "custom", "--base-url", address(server), "--model", "test-model", "--api-key", "test-secret", "--json"], {
+    env: { ...process.env, LOLM_CONFIG: configPath, LOLM_DISABLE_NATIVE_SECRETS: "1" },
+  });
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.validated, true);
+  assert.doesNotMatch(result.stderr, /unsettled top-level await/i);
+  const saved = JSON.parse(await readFile(configPath, "utf8"));
+  assert.equal(saved.provider, "custom");
+  assert.equal(saved.providers.custom.model, "test-model");
+});
+
+test("setup refuses invalid credentials without changing configuration", async (t) => {
+  const server = await startServer(() => ({ status: 401, body: { error: { message: "invalid credential" } } }));
+  t.after(() => server.close());
+  const root = await temp("setup-invalid");
+  const configPath = join(root, "config.json");
+  const result = await exec(process.execPath, [bin, "setup", "custom", "--base-url", address(server), "--model", "test-model", "--api-key", "bad-secret", "--json"], {
+    env: { ...process.env, LOLM_CONFIG: configPath, LOLM_DISABLE_NATIVE_SECRETS: "1" },
+  }).catch((error) => error);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, false);
+  assert.match(payload.error.message, /invalid credential/);
+  await assert.rejects(readFile(configPath, "utf8"), /ENOENT/);
+  assert.doesNotMatch(result.stderr, /unsettled top-level await/i);
 });
 
 test("code tool loop writes locally and reports exact path", async (t) => {

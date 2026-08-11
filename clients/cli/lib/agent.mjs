@@ -206,6 +206,8 @@ export async function runAgent({
   onTool = () => {},
   onNfet = () => {},
   onProgress = () => {},
+  permissionMode,
+  eventSink,
 } = {}) {
   if (mode === "ask" && isGreeting(prompt)) {
     const response = "Hey — I’m LOLM. Tell me what to make, fix, or figure out; I can work directly with files, code, and PDFs on this computer.";
@@ -224,7 +226,7 @@ export async function runAgent({
       messages: [{ role: "user", content: String(prompt || "") }, { role: "assistant", content: response }],
     };
   }
-  const runner = createToolRunner({ cwd, yes, dryRun, onAction: onTool });
+  const runner = createToolRunner({ cwd, yes, dryRun, mode: permissionMode, onAction: onTool, eventSink });
   const messages = [
     { role: "system", content: `${BASE_SYSTEM}\n\n${MODE_SYSTEM[mode] || MODE_SYSTEM.ask}\nWorking directory: ${cwd}` },
     ...history,
@@ -233,8 +235,10 @@ export async function runAgent({
   let final = "", usage = null, interventions = 0, nfet = null;
   const tools = isGreeting(prompt) ? [] : allowedTools(mode, runner.tools);
 
+  try {
   for (let step = 1; step <= maxSteps; step++) {
     onPhase({ step, maxSteps, label: step === 1 ? "Thinking" : "Continuing" });
+    await eventSink?.({ type: "provider.requested", provider: runtime.provider, model: runtime.model, step, message_count: messages.length });
     let streamedChars = 0;
     const response = await chat(runtime, messages, {
       tools,
@@ -246,6 +250,7 @@ export async function runAgent({
       },
     });
     usage = response.usage || usage;
+    await eventSink?.({ type: "provider.responded", provider: runtime.provider, model: runtime.model, step, usage: response.usage || null, tool_calls: response.toolCalls?.length || 0, content_chars: response.content?.length || 0 });
     const assistant = { role: "assistant", content: response.content || "", toolCalls: response.toolCalls || [] };
     messages.push(assistant);
 
@@ -271,6 +276,7 @@ export async function runAgent({
           maxTokens: monitorTokenBudget(mode, final),
         });
         onNfet(nfet);
+        await eventSink?.({ type: "nfet.decision", checkpoint: "work", decision: nfet?.decision || null, telemetry: nfet?.telemetry || null });
       } catch (error) {
         nfet = { available: false, reason: error.message };
         onNfet(nfet);
@@ -289,6 +295,7 @@ export async function runAgent({
         const resultCheck = await monitor.decide(final, { checkpoint: "result", verified, reuse: true });
         nfet = resultCheck;
         onNfet(resultCheck);
+        await eventSink?.({ type: "nfet.decision", checkpoint: "result", decision: resultCheck?.decision || null, telemetry: resultCheck?.telemetry || null, verified });
         if (resultCheck.decision?.label === "verify" && interventions < 3 && step < maxSteps) {
           interventions++;
           messages.push({ role: "user", content: NFET_GUIDANCE.verify });
@@ -326,6 +333,9 @@ export async function runAgent({
     interventions,
     messages,
   };
+  } finally {
+    await runner.close();
+  }
 }
 
 export async function generateDocument({

@@ -4,6 +4,7 @@
 import { mkdir, readFile, rename, writeFile, chmod } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
+import { getProviderSecret } from "./secrets.mjs";
 
 export const CONFIG_PATH = process.env.LOLM_CONFIG || join(homedir(), ".lolm", "config.json");
 
@@ -105,7 +106,11 @@ export function normalizeProvider(value) {
 export async function loadConfig() {
   try {
     const parsed = JSON.parse(await readFile(CONFIG_PATH, "utf8"));
-    return parsed && typeof parsed === "object" ? parsed : {};
+    if (!parsed || typeof parsed !== "object") return {};
+    for (const [provider, saved] of Object.entries(parsed.providers || {})) {
+      if (saved?.apiKeyRef && !saved.apiKey) saved.apiKey = await getProviderSecret(provider, saved.apiKeyRef);
+    }
+    return parsed;
   } catch {
     return {};
   }
@@ -115,7 +120,9 @@ export async function saveConfig(config) {
   const dir = dirname(CONFIG_PATH);
   await mkdir(dir, { recursive: true, mode: 0o700 });
   const temp = `${CONFIG_PATH}.${process.pid}.tmp`;
-  await writeFile(temp, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  const persisted = structuredClone(config);
+  for (const saved of Object.values(persisted.providers || {})) if (saved?.apiKeyRef) delete saved.apiKey;
+  await writeFile(temp, `${JSON.stringify(persisted, null, 2)}\n`, { mode: 0o600 });
   await rename(temp, CONFIG_PATH);
   await chmod(CONFIG_PATH, 0o600).catch(() => {});
 }
@@ -147,7 +154,7 @@ export function resolveRuntime(config = {}, flags = {}) {
   const saved = config.providers?.[providerName] || {};
   const envKey = envKeyFor(providerName);
   const apiKey = flags.apiKey || envKey.value || saved.apiKey || "";
-  const keySource = flags.apiKey ? "flag" : envKey.value ? `env:${envKey.name}` : saved.apiKey ? "config" : provider.noKey ? "not-required" : "missing";
+  const keySource = flags.apiKey ? "flag" : envKey.value ? `env:${envKey.name}` : saved.apiKey && saved.apiKeyRef ? "secret-store" : saved.apiKey ? "config" : provider.noKey ? "not-required" : "missing";
   const baseUrl = String(flags.baseUrl || saved.baseUrl || provider.baseUrl || "").replace(/\/+$/, "");
   const model = String(flags.model || process.env.LOLM_MODEL || saved.model || provider.model || "");
   if (!baseUrl) throw new Error(`${provider.label} needs a base URL. Set it with 'lolm config set base-url URL'.`);

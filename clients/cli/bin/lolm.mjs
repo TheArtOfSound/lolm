@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /** LOLM: local, open-source, BYOK agent with real NFET control. */
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { spawn } from "node:child_process";
@@ -15,13 +16,18 @@ import { listModels, rawGet, ProviderError } from "../lib/providers.mjs";
 import { NfetMonitor, inspectNfet } from "../lib/nfet.mjs";
 import { createPdf } from "../lib/pdf.mjs";
 import { isRetryPhrase, loadLastTask, saveLastTask } from "../lib/session.mjs";
+import { nativeSecretBackend, storeProviderSecret } from "../lib/secrets.mjs";
+import { collectDiagnostics } from "../lib/diagnostics.mjs";
+import { createAgentToolbox } from "../lib/tools/index.mjs";
+import { RunStore } from "../lib/runtime/runs.mjs";
+import { PERMISSION_MODES } from "../lib/runtime/permissions.mjs";
 import { banner, confirm, createConsoleSurface, failure, nfetLine, note, prompt as askPrompt, renderMarkdown, secretPrompt, section, spinner, success, ui, warning, wordmark } from "../lib/tui.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const VERSION = pkg.version;
 
-const VALUE_FLAGS = new Set(["--provider", "--model", "--api-key", "--base-url", "--cwd", "--out", "-o", "--timeout", "--max-steps"]);
+const VALUE_FLAGS = new Set(["--provider", "--model", "--api-key", "--base-url", "--cwd", "--out", "-o", "--timeout", "--max-steps", "--mode"]);
 const BOOLEAN_FLAGS = new Set(["--json", "--yes", "-y", "--dry-run", "--check", "--open", "--help", "-h", "--version", "-V", "--no-nfet", "--once"]);
 
 function parse(argv) {
@@ -34,7 +40,7 @@ function parse(argv) {
     if (!literal && VALUE_FLAGS.has(token)) {
       const value = argv[++i];
       if (value == null) throw Object.assign(new Error(`${token} requires a value`), { exitCode: 2 });
-      const key = ({ "--provider": "provider", "--model": "model", "--api-key": "apiKey", "--base-url": "baseUrl", "--cwd": "cwd", "--out": "out", "-o": "out", "--timeout": "timeout", "--max-steps": "maxSteps" })[token];
+      const key = ({ "--provider": "provider", "--model": "model", "--api-key": "apiKey", "--base-url": "baseUrl", "--cwd": "cwd", "--out": "out", "-o": "out", "--timeout": "timeout", "--max-steps": "maxSteps", "--mode": "permissionMode" })[token];
       flags[key] = value;
     } else if (!literal && BOOLEAN_FLAGS.has(token)) {
       const key = ({ "--json": "json", "--yes": "yes", "-y": "yes", "--dry-run": "dryRun", "--check": "check", "--open": "open", "--help": "help", "-h": "help", "--version": "version", "-V": "version", "--no-nfet": "noNfet", "--once": "once" })[token];
@@ -56,6 +62,7 @@ function parse(argv) {
   };
   flags.timeout = integerFlag("--timeout", flags.timeout, undefined, 1_000, 3_600_000);
   flags.maxSteps = integerFlag("--max-steps", flags.maxSteps, 12, 1, 40);
+  if (flags.permissionMode && !PERMISSION_MODES.includes(flags.permissionMode)) throw Object.assign(new Error(`--mode must be one of: ${PERMISSION_MODES.join(", ")}`), { exitCode: 2 });
   return { flags, words };
 }
 
@@ -70,6 +77,8 @@ ${ui.bold("USE IT NATURALLY")}
 
 ${ui.bold("COMMANDS")}
   chat                         interactive terminal UI
+  agent                        interactive autonomous agent UI
+  run <task>                   run one autonomous task and return
   ask <question>               answer with read-only file/web tools
   code <task>                  inspect, edit, run, and verify locally
   pdf <request> --out FILE     create a real local PDF
@@ -79,6 +88,10 @@ ${ui.bold("COMMANDS")}
   models                       list live models for the selected provider
   nfet status|test             inspect or exercise the real NFET monitor
   doctor                       verify provider, key, model, and NFET runtime
+  tools [group]                list typed tools, schemas, and risk classes
+  tools inspect NAME           inspect one tool contract
+  runs                         list durable local agent runs
+  run show|resume RUN_ID       inspect or resume a durable run
   config show|set|unset        manage ~/.lolm/config.json
   request get <path>           read-only raw provider API escape hatch
   update [--check]             update the npm CLI in place
@@ -91,6 +104,7 @@ ${ui.bold("GLOBAL OPTIONS")}
   --base-url URL     custom OpenAI-compatible endpoint
   --cwd DIR          working directory for local tools
   --yes              approve requested file writes and commands
+  --mode MODE        readonly, standard, developer, or trusted
   --dry-run          preview writes and commands
   --json             stable machine-readable output
   --once             answer once and return to the shell
@@ -157,11 +171,34 @@ async function setup(config, flags, words) {
   const model = flags.model || (process.stdin.isTTY ? await askPrompt("Model", prior.model || spec.model) : prior.model || spec.model);
   const baseUrl = flags.baseUrl || (provider === "custom" && process.stdin.isTTY ? await askPrompt("OpenAI-compatible base URL", prior.baseUrl || "http://127.0.0.1:8000/v1") : prior.baseUrl || spec.baseUrl);
   let apiKey = flags.apiKey || prior.apiKey || "";
-  if (!spec.noKey && !apiKey && process.stdin.isTTY) apiKey = await secretPrompt(`${spec.label} API key (stored locally with mode 0600; Enter to use env only)`);
-  const next = { ...config, provider, providers: { ...(config.providers || {}), [provider]: { ...prior, model, baseUrl, ...(apiKey ? { apiKey } : {}) } } };
+  if (!spec.noKey && !apiKey && process.stdin.isTTY) {
+    const backend = nativeSecretBackend();
+    apiKey = await secretPrompt(`${spec.label} API key (${backend ? `saved in ${backend}` : "saved in protected local config"}; Enter to use env only)`);
+    if (apiKey === null) {
+      emit(flags, { ok: false, cancelled: true, provider }, `${ui.dim("Setup cancelled. No configuration was changed.")}`);
+      return config;
+    }
+  }
+  const environmentKey = (spec.env || []).find((name) => process.env[name]);
+  const candidateKey = apiKey || (environmentKey ? process.env[environmentKey] : "");
+  if (!spec.noKey && !candidateKey) throw Object.assign(new Error(`${spec.label} needs an API key. Enter one, set ${spec.env?.[0] || "the provider environment variable"}, or pass --api-key for this setup.`), { exitCode: 2, code: "MISSING_API_KEY" });
+  const draftProvider = { ...prior, model, baseUrl, ...(candidateKey ? { apiKey: candidateKey } : {}) };
+  const draft = { ...config, provider, providers: { ...(config.providers || {}), [provider]: draftProvider } };
+  const runtime = resolveRuntime(draft, { ...flags, apiKey: candidateKey });
+  const models = await spinner(`Validating ${spec.label}`, () => listModels(runtime), { enabled: !flags.json });
+  if (models.length && !models.includes(model)) {
+    throw Object.assign(new Error(`${spec.label} accepted the credential, but model '${model}' was not returned. Available examples: ${models.slice(0, 8).join(", ")}`), { code: "MODEL_NOT_AVAILABLE" });
+  }
+  let secret = { stored: false, backend: null, reference: null };
+  if (apiKey) secret = await storeProviderSecret(provider, apiKey);
+  const savedProvider = { ...prior, model, baseUrl };
+  if (secret.stored) savedProvider.apiKeyRef = secret.reference;
+  else if (apiKey) savedProvider.apiKey = apiKey;
+  else if (prior.apiKeyRef) savedProvider.apiKeyRef = prior.apiKeyRef;
+  const next = { ...config, provider, providers: { ...(config.providers || {}), [provider]: savedProvider } };
   await saveConfig(next);
-  emit(flags, { ok: true, provider, model, base_url: baseUrl, key_stored: Boolean(apiKey), config: CONFIG_PATH },
-    `${successText("Configured")} ${spec.label} · ${model}\n${ui.dim(CONFIG_PATH)}\nRun ${ui.cyan("lolm doctor")} to verify it.`);
+  emit(flags, { ok: true, provider, model, base_url: baseUrl, key_stored: Boolean(apiKey), key_backend: secret.backend || (apiKey ? "protected config (0600)" : environmentKey ? `env:${environmentKey}` : "not-required"), validated: true, models_visible: models.length, config: CONFIG_PATH },
+    `${successText("Configured and verified")} ${spec.label} · ${model}\n${ui.dim(secret.backend ? `Credential: ${secret.backend}` : apiKey ? "Credential: protected local config (0600)" : environmentKey ? `Credential: ${environmentKey}` : "No API key required")}\n${ui.dim(CONFIG_PATH)}`);
   return next;
 }
 
@@ -197,13 +234,7 @@ async function configCommand(config, flags, words) {
 async function doctor(config, flags) {
   const runtime = resolveRuntime(config, flags);
   const nfet = await inspectNfet(config);
-  const checks = [
-    { name: "Node.js", ok: Number(process.versions.node.split(".")[0]) >= 20, detail: process.version },
-    { name: "Provider", ok: true, detail: `${runtime.label} · ${runtime.model}` },
-    { name: "API key", ok: !runtime.keyRequired || Boolean(runtime.apiKey), detail: runtime.keySource },
-    { name: "NFET source", ok: Boolean(nfet.home), detail: nfet.home || "set LOLM_HOME to a cloned LOLM repo" },
-    { name: "NFET checkpoint", ok: nfet.checkpoint_available, detail: nfet.checkpoint },
-  ];
+  const checks = await collectDiagnostics({ cwd: flags.cwd, configPath: CONFIG_PATH, runtime, nfet });
   if (!runtime.keyRequired || runtime.apiKey) {
     try {
       const models = await spinner(`Contacting ${runtime.label}`, () => listModels(runtime), { enabled: !flags.json });
@@ -213,9 +244,50 @@ async function doctor(config, flags) {
         detail: selectedVisible ? runtime.model : `${runtime.model} not returned; run 'lolm models'` });
     } catch (error) { checks.push({ name: "Provider API", ok: false, detail: error.message }); }
   }
-  const ok = checks.every((item) => item.ok);
-  emit(flags, { ok, runtime: publicRuntime(runtime), nfet, checks }, checks.map((item) => `${item.ok ? ui.green("✓") : ui.red("×")} ${item.name.padEnd(16)} ${ui.dim(item.detail)}`).join("\n"));
+  const ok = checks.every((item) => item.ok || item.optional);
+  const actions = checks.filter((item) => !item.ok && item.action).map((item) => item.action);
+  emit(flags, { ok, runtime: publicRuntime(runtime), nfet, checks, actions }, `${checks.map((item) => `${item.ok ? ui.green("✓") : item.optional ? ui.amber("!") : ui.red("×")} ${item.name.padEnd(18)} ${ui.dim(item.detail)}${item.optional && !item.ok ? ui.dim(" · optional") : ""}`).join("\n")}${actions.length ? `\n\n${ui.bold("Recommended actions")}\n${actions.map((action) => `  ${ui.cyan("→")} ${action}`).join("\n")}` : ""}`);
   return ok ? 0 : 1;
+}
+
+async function toolsCommand(flags, words) {
+  const toolbox = createAgentToolbox({ cwd: flags.cwd, mode: "readonly" });
+  try {
+    if (words[1] === "inspect") {
+      const name = words[2];
+      if (!name) throw Object.assign(new Error("usage: lolm tools inspect <tool-name>"), { exitCode: 2 });
+      const tool = toolbox.registry.resolve(name);
+      if (!tool) throw Object.assign(new Error(`unknown tool '${name}'`), { exitCode: 2 });
+      const { execute, classify, ...publicTool } = tool;
+      return emit(flags, { ok: true, tool: publicTool }, `${ui.bold(publicTool.name)}  ${ui.dim(`[${publicTool.risk}]`)}\n${publicTool.description}\n\n${JSON.stringify(publicTool.inputSchema, null, 2)}`);
+    }
+    const group = words[1] || undefined;
+    const tools = toolbox.registry.list({ group });
+    if (group && !tools.length) throw Object.assign(new Error(`unknown or empty tool group '${group}'`), { exitCode: 2 });
+    const groups = Object.groupBy ? Object.groupBy(tools, (tool) => tool.name.split(".")[0]) : tools.reduce((out, tool) => { (out[tool.name.split(".")[0]] ||= []).push(tool); return out; }, {});
+    const human = Object.entries(groups).map(([name, rows]) => `${ui.bold(name)} ${ui.dim(`(${rows.length})`)}\n${rows.map((tool) => `  ${ui.cyan(tool.name.padEnd(24))} ${ui.dim(tool.risk.padEnd(8))} ${tool.description}`).join("\n")}`).join("\n\n");
+    return emit(flags, { ok: true, count: tools.length, tools }, human);
+  } finally { await toolbox.close(); }
+}
+
+function runStore() {
+  const root = process.env.LOLM_RUNS_DIR || (process.env.LOLM_LAST_TASK ? join(dirname(process.env.LOLM_LAST_TASK), "runs") : undefined);
+  return new RunStore(root ? { root } : undefined);
+}
+
+async function runsCommand(flags, words) {
+  const store = runStore();
+  const action = words[1];
+  if (!action) {
+    const runs = await store.list({ limit: 50 });
+    return emit(flags, { ok: true, runs }, runs.length ? runs.map((run) => `${ui.cyan(run.id)}  ${String(run.status).padEnd(10)} ${ui.dim(run.created_at)}  ${String(run.prompt || "").slice(0, 80)}`).join("\n") : ui.dim("No local runs yet."));
+  }
+  if (!["show", "resume"].includes(action) || !words[2]) throw Object.assign(new Error("usage: lolm run show|resume <run-id>"), { exitCode: 2 });
+  if (action === "show") {
+    const run = await store.show(words[2]);
+    return emit(flags, { ok: true, run }, `${ui.bold(run.meta.id)}  ${run.meta.status}\n${ui.dim(`${run.meta.created_at} · ${run.meta.cwd}`)}\n\n${run.events.map((event) => `${event.at}  ${event.type}`).join("\n")}`);
+  }
+  return null;
 }
 
 async function updateSelf(flags) {
@@ -254,17 +326,24 @@ function monitorFor(config, flags, surface = null) {
 
 async function executeTask(command, text, config, flags, sharedMonitor = null, history = [], surface = null) {
   const runtime = resolveRuntime(config, flags);
+  const store = runStore();
+  const run = flags.resumeRunId
+    ? (await store.resume(flags.resumeRunId)).meta
+    : await store.create({ command, prompt: text, cwd: flags.cwd, mode: flags.permissionMode || (flags.yes ? "developer" : "standard"), provider: runtime.provider, model: runtime.model });
+  const eventSink = store.eventSink(run.id);
   const monitor = sharedMonitor || monitorFor(config, flags, surface);
   const resolvedOut = ["pdf", "html"].includes(command)
     ? resolve(flags.out || inferredOut(text, command, flags.cwd)) : "";
-  const taskRecord = { command, prompt: text, cwd: flags.cwd, out: resolvedOut, status: "running" };
+  const taskRecord = { command, prompt: text, cwd: flags.cwd, out: resolvedOut, status: "running", run_id: run.id };
   await saveLastTask(taskRecord).catch(() => {});
   const onNfet = (result) => {
+    void eventSink({ type: "nfet.visible", available: Boolean(result?.available), decision: result?.decision || null, telemetry: result?.telemetry || null }).catch(() => {});
     if (flags.json) return;
     if (surface) surface.nfet(result);
     else process.stderr.write(`  ${nfetLine(result)}\n`);
   };
   const onPhase = ({ label, step, maxSteps }) => {
+    void eventSink({ type: "agent.phase", label, step, max_steps: maxSteps }).catch(() => {});
     if (flags.json) return;
     const customerLabel = command === "pdf" && label === "Thinking" ? "Building your document"
       : command === "html" && label === "Thinking" ? "Designing your page"
@@ -274,6 +353,7 @@ async function executeTask(command, text, config, flags, sharedMonitor = null, h
     else section(label, detail);
   };
   const onTool = (label) => {
+    void eventSink({ type: "agent.activity", label }).catch(() => {});
     if (flags.json) return;
     if (surface) surface.tool(label);
     else note(label);
@@ -304,7 +384,7 @@ async function executeTask(command, text, config, flags, sharedMonitor = null, h
       if (!generated.text) throw new Error("The provider returned an empty document.");
       const result = await createPdf(generated.text, out, { title: "" });
       if (flags.open) await openLocal(result.path);
-      const payload = { ok: true, kind: "pdf", ...result, provider: runtime.provider, model: runtime.model, nfet: generated.nfet,
+      const payload = { ok: true, run_id: run.id, kind: "pdf", ...result, provider: runtime.provider, model: runtime.model, nfet: generated.nfet,
         response: `Created the PDF at ${result.path}.` };
       if (typeof flags.captureResult === "function") flags.captureResult(payload);
       if (surface) {
@@ -314,6 +394,7 @@ async function executeTask(command, text, config, flags, sharedMonitor = null, h
         emit(flags, payload, `${successText("Created PDF")}\n${result.path}\n${ui.dim(`${result.pages} page${result.pages === 1 ? "" : "s"} · ${result.bytes} bytes`)}`);
       }
       await saveLastTask({ ...taskRecord, status: "complete", result_path: result.path }).catch(() => {});
+      await store.finish(run.id, "completed", { kind: "pdf", result_path: result.path });
       return 0;
     }
     if (command === "html") {
@@ -324,23 +405,27 @@ async function executeTask(command, text, config, flags, sharedMonitor = null, h
       await mkdir(dirname(out), { recursive: true });
       await writeFile(out, `${generated.html}\n`);
       if (flags.open) await openLocal(out);
-      const payload = { ok: true, kind: "html", path: out, bytes: Buffer.byteLength(generated.html), provider: runtime.provider, model: runtime.model, nfet: generated.nfet,
+      const payload = { ok: true, run_id: run.id, kind: "html", path: out, bytes: Buffer.byteLength(generated.html), provider: runtime.provider, model: runtime.model, nfet: generated.nfet,
         response: `Created the HTML page at ${out}.` };
       if (typeof flags.captureResult === "function") flags.captureResult(payload);
       if (surface) { surface.success("HTML page created"); surface.assistant(out); }
       else emit(flags, payload, `${successText("Created HTML")}\n${out}`);
       await saveLastTask({ ...taskRecord, status: "complete", result_path: out }).catch(() => {});
+      await store.finish(run.id, "completed", { kind: "html", result_path: out });
       return 0;
     }
-    const result = await runAgent({ prompt: text, mode: command, runtime, monitor, cwd: flags.cwd, yes: flags.yes, dryRun: flags.dryRun, maxSteps: flags.maxSteps, history, onPhase, onTool, onNfet, onProgress });
+    const result = await runAgent({ prompt: text, mode: command, runtime, monitor, cwd: flags.cwd, yes: flags.yes, dryRun: flags.dryRun, maxSteps: flags.maxSteps, history, onPhase, onTool, onNfet, onProgress, permissionMode: flags.permissionMode, eventSink });
+    result.run_id = run.id;
     if (typeof flags.captureResult === "function") flags.captureResult(result);
     if (surface) surface.assistant(result.response || result.error);
     else emit(flags, result, renderMarkdown(result.response || result.error));
     await saveLastTask({ ...taskRecord, status: result.ok ? "complete" : "incomplete", error: result.error }).catch(() => {});
+    await store.finish(run.id, result.ok ? "completed" : "incomplete", { verified: result.verified, error: result.error || null, steps: result.steps });
     return result.ok ? 0 : 1;
   } catch (error) {
     error.retryAvailable = true;
     await saveLastTask({ ...taskRecord, status: "failed", error: error.message }).catch(() => {});
+    await store.finish(run.id, "failed", { error: error.message, code: error.code || "TASK_FAILED" }).catch(() => {});
     throw error;
   } finally { if (!sharedMonitor) await monitor?.close(); }
 }
@@ -415,15 +500,35 @@ async function interactive(config, flags, { seed = null } = {}) {
 async function main() {
   const { flags, words } = parse(process.argv.slice(2));
   if (flags.version) return emit(flags, { ok: true, version: VERSION }, VERSION);
-  if (flags.help) return emit(flags, { ok: true, version: VERSION, commands: ["chat", "ask", "code", "pdf", "html", "setup", "providers", "models", "nfet", "doctor", "config", "request", "update"] }, HELP);
+  if (flags.help) return emit(flags, { ok: true, version: VERSION, commands: ["chat", "agent", "run", "ask", "code", "pdf", "html", "setup", "providers", "models", "nfet", "doctor", "tools", "runs", "config", "request", "update"] }, HELP);
   let config = await loadConfig();
   if (!words.length) return process.stdin.isTTY ? interactive(config, flags) : emit(flags, { ok: true, help: true }, HELP);
   let command = words[0].toLowerCase();
-  const known = new Set(["chat", "ask", "code", "pdf", "html", "setup", "providers", "models", "nfet", "doctor", "config", "request", "update", "help"]);
+  const known = new Set(["chat", "agent", "run", "runs", "ask", "code", "pdf", "html", "setup", "providers", "models", "nfet", "doctor", "tools", "config", "request", "update", "help"]);
   let text = words.slice(1).join(" ").trim();
   if (!known.has(command)) { text = words.join(" "); command = taskRoute(text); }
   if (command === "help") return emit(flags, { ok: true, help: true }, HELP);
-  if (command === "chat") return interactive(config, flags);
+  if (["chat", "agent"].includes(command)) return interactive(config, flags);
+  if (command === "tools") return toolsCommand(flags, words);
+  if (command === "runs") return runsCommand(flags, ["run"]);
+  if (command === "run" && words[1] === "show") return runsCommand(flags, words);
+  if (command === "run" && words[1] === "resume") {
+    if (!words[2]) throw Object.assign(new Error("usage: lolm run resume <run-id>"), { exitCode: 2 });
+    const prior = await runStore().show(words[2]);
+    flags.resumeRunId = prior.meta.id;
+    flags.cwd = resolve(prior.meta.cwd || flags.cwd);
+    flags.permissionMode = prior.meta.mode || flags.permissionMode;
+    flags.provider ||= prior.meta.provider;
+    flags.model ||= prior.meta.model;
+    text = prior.meta.prompt;
+    command = prior.meta.command || taskRoute(text);
+    flags.once = true;
+  } else if (command === "run") {
+    text = words.slice(1).join(" ").trim();
+    if (!text) throw Object.assign(new Error("run requires a task"), { exitCode: 2 });
+    command = taskRoute(text);
+    flags.once = true;
+  }
   if (command === "setup") { config = await setup(config, flags, words); return 0; }
   if (command === "config") { await configCommand(config, flags, words); return 0; }
   if (command === "providers") {
@@ -470,10 +575,7 @@ async function main() {
   return executeTask(command, text, config, flags);
 }
 
-try {
-  const code = await main();
-  if (Number.isInteger(code)) process.exitCode = code;
-} catch (error) {
+function handleFailure(error) {
   const json = process.argv.includes("--json");
   const exitCode = error.exitCode || 1;
   const payload = { ok: false, exit_code: exitCode, error: { code: error.code || (error instanceof ProviderError ? error.code : "CLI_ERROR"), message: error.message } };
@@ -481,3 +583,7 @@ try {
   else failure(error.message);
   process.exitCode = exitCode;
 }
+
+void main().then((code) => {
+  if (Number.isInteger(code)) process.exitCode = code;
+}).catch(handleFailure);
