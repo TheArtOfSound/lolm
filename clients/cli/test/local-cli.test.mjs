@@ -56,7 +56,10 @@ test("help and version describe the local open-source command surface", async ()
   assert.match(help.stdout, /tools \[group\]/);
   assert.match(help.stdout, /run show\|resume/);
   const version = await exec(process.execPath, [bin, "--version"]);
-  assert.equal(version.stdout.trim(), "1.2.1");
+  // Derived, not literal: a hardcoded version turns every release into a
+  // failing test that gets edited on autopilot.
+  const declared = JSON.parse(await readFile(join(here, "..", "package.json"), "utf8")).version;
+  assert.equal(version.stdout.trim(), declared);
 });
 
 test("JSON providers output is one stable document", async () => {
