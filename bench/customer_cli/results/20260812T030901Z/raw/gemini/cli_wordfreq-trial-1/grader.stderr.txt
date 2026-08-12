@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-gemini-cli_wordfreq-pod1eo1j/_lolm_hidden_check.py", line 14, in <module>
+    r = run(['-n', '3', 'sample.txt'], 0)
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-gemini-cli_wordfreq-pod1eo1j/_lolm_hidden_check.py", line 11, in run
+    assert r.returncode == expect, (args, r.returncode, r.stdout[:200], r.stderr[:200])
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: (['-n', '3', 'sample.txt'], 2, '', "/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python: can't open file '/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/")

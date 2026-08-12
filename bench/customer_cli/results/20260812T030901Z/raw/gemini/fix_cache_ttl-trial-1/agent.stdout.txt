@@ -1,0 +1,118 @@
+{
+  "session_id": "35ac3a92-99f4-4f11-92ec-4ea4b0459aef",
+  "response": "I have refactored `cache.py` to use `OrderedDict` for correct LRU and expiration management, and updated `service.py` to track hits/misses and manage state as required. All requirements—including exact-TTL expiration, LRU eviction upon capacity, and proper service-layer functionality—have been verified with a custom test suite.",
+  "stats": {
+    "models": {
+      "gemini-3.1-flash-lite": {
+        "api": {
+          "totalRequests": 12,
+          "totalErrors": 0,
+          "totalLatencyMs": 30711
+        },
+        "tokens": {
+          "input": 42903,
+          "prompt": 148121,
+          "candidates": 2301,
+          "total": 150422,
+          "cached": 105218,
+          "thoughts": 0,
+          "tool": 0
+        },
+        "roles": {
+          "main": {
+            "totalRequests": 12,
+            "totalErrors": 0,
+            "totalLatencyMs": 30711,
+            "tokens": {
+              "input": 42903,
+              "prompt": 148121,
+              "candidates": 2301,
+              "total": 150422,
+              "cached": 105218,
+              "thoughts": 0,
+              "tool": 0
+            }
+          }
+        }
+      }
+    },
+    "tools": {
+      "totalCalls": 11,
+      "totalSuccess": 11,
+      "totalFail": 0,
+      "totalDurationMs": 2471,
+      "totalDecisions": {
+        "accept": 11,
+        "reject": 0,
+        "modify": 0,
+        "auto_accept": 0
+      },
+      "byName": {
+        "update_topic": {
+          "count": 3,
+          "success": 3,
+          "fail": 0,
+          "durationMs": 23,
+          "decisions": {
+            "accept": 3,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "read_file": {
+          "count": 2,
+          "success": 2,
+          "fail": 0,
+          "durationMs": 100,
+          "decisions": {
+            "accept": 2,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "write_file": {
+          "count": 3,
+          "success": 3,
+          "fail": 0,
+          "durationMs": 67,
+          "decisions": {
+            "accept": 3,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "run_shell_command": {
+          "count": 2,
+          "success": 2,
+          "fail": 0,
+          "durationMs": 2269,
+          "decisions": {
+            "accept": 2,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        },
+        "replace": {
+          "count": 1,
+          "success": 1,
+          "fail": 0,
+          "durationMs": 12,
+          "decisions": {
+            "accept": 1,
+            "reject": 0,
+            "modify": 0,
+            "auto_accept": 0
+          }
+        }
+      }
+    },
+    "files": {
+      "totalLinesAdded": 110,
+      "totalLinesRemoved": 11
+    }
+  }
+}

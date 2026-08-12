@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-lolm_gemini-config_merge-rx1m2_sf/_lolm_hidden_check.py", line 14, in <module>
+    assert merge({'n': 5}, {'n': None})['n'] is None
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

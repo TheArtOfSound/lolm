@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-gemini-tdd_matrix-z4loigb5/_lolm_hidden_check.py", line 3, in <module>
+    from matrix import Matrix
+ModuleNotFoundError: No module named 'matrix'

@@ -1,0 +1,4965 @@
+{
+  "schema_version": 1,
+  "run_id": "20260812T030901Z",
+  "created_at": "2026-08-12T03:09:01.518587+00:00",
+  "agents": [
+    "lolm_gemini",
+    "gemini"
+  ],
+  "tasks": [
+    {
+      "id": "iso_duration",
+      "tier": "impl",
+      "instruction_sha256": "fdcccdff8e4fcae8d99f9f7cd7e2f6d6f37e9202f83470f9da9a59cfa8b8f750",
+      "hidden_test_sha256": "4796fe0596f398a87d271c482b67ca27d378236cf23cff86540b6f347818d7ae",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "roman",
+      "tier": "impl",
+      "instruction_sha256": "660aa0def4780c8803f0738a278aa44a98cc5315c34a1ef1a260949020b0db30",
+      "hidden_test_sha256": "7f8ab6e2a96313246b0fe6fd7cbdbc3d7639ea570c71535f38f16b1e101fa2d4",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "interval_merge",
+      "tier": "impl",
+      "instruction_sha256": "7773e8bfa24f109110f4abd21cc31b6b06f3730c3ca0f64cc0b060adbd184468",
+      "hidden_test_sha256": "669ee4931505edf19e3255bcddcbe098d6d7443672ea5a39ac71831ef1ce1d34",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "lru",
+      "tier": "impl",
+      "instruction_sha256": "8af019b6fae92da46f0f29dbe4815d308ba4cf3b092899b5c36b5641ac786e0e",
+      "hidden_test_sha256": "a24f3abc7b32c965ccffcb125903ffdec843f3bb2b6503c4d2d2775bbb5d9cf1",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "semver",
+      "tier": "impl",
+      "instruction_sha256": "cb563d12430dd37e1dcec0ddb6b6ad77a1e995d69b0c58aaa95b7bbe2db69462",
+      "hidden_test_sha256": "8e4025cb0093fddf8455274b077d3aa49742cca29687f991b340d9a2af5c2681",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "expr_eval",
+      "tier": "impl",
+      "instruction_sha256": "08aafca8ade59be4452669a90442e2015a7c934dcfd9bcd08b4a33aeb5e88794",
+      "hidden_test_sha256": "498983003a4c5e91a2b7d81ef2dfcb0b728ef09de11afb30f07eb892dbed177b",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "jsonpath",
+      "tier": "impl",
+      "instruction_sha256": "40c14b1b40a29aa06cbfa91c180155444696d6256c065e3c9498b90f72816942",
+      "hidden_test_sha256": "693482138a217036e59ee38aba7bb98e050bb6a66eb08deda4a77c3f69a6f3a5",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "wrap",
+      "tier": "impl",
+      "instruction_sha256": "bdf5a285346d74a7d5d3d62f56d1a9d4ff2dd4fec92d148e1358213a7377327a",
+      "hidden_test_sha256": "d5d5aeeec691ce623786d2b1f88245e6183534742d79bcaaf42d1ede114b2454",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "fix_pagination",
+      "tier": "fix",
+      "instruction_sha256": "0537ceead19a0cf7d7213917b83f734288af3eb88abc4bcacf84bd5b66ce4963",
+      "hidden_test_sha256": "63ab348dbc2d77c965d9f0ec7578b5382c92c4230a0c5dd51f2cae68237de5ac",
+      "seed_sha256": "6753c57ed6f21b3226754da1df1032f0d72d1f926885218b01f34c824254021a"
+    },
+    {
+      "id": "fix_multifile_stats",
+      "tier": "fix",
+      "instruction_sha256": "e73e3dc048fd3620bf2f48aa74a798d532a27a1110ad7e87abb2a36a008cabe6",
+      "hidden_test_sha256": "242ec3e7c8353ffda2fb60e8a76f380081fb4a4e9b4425dbe034635d696fa66b",
+      "seed_sha256": "bc51b541e65237e7cdab955867464a024e596a20226ca0fb5b3d8a5a00474f2c"
+    },
+    {
+      "id": "fix_state_machine",
+      "tier": "fix",
+      "instruction_sha256": "ac4c36ed1f7949ab20f80566e4ae5a45b47bc23cc421220cf976fd87ce198e8d",
+      "hidden_test_sha256": "22868bb32643200afb87af5940c6d16724c014921351099094020e8e34cf7817",
+      "seed_sha256": "b82eff05e506e59a7de31042b933805674e04508642342d2338c2afa0cb8663c"
+    },
+    {
+      "id": "fix_csv_parser",
+      "tier": "fix",
+      "instruction_sha256": "eae6d49a36869b3a090baeac34b3e728cc3c96fd539e5c19425c43944d53ad01",
+      "hidden_test_sha256": "77168e42f0b906fe3181d059c1f7411c3193baa59290ace4a5744370f7d8443b",
+      "seed_sha256": "e66c6025b7da30986cae121ad61f7acbe442e9b7780870db02165fb6d0613f56"
+    },
+    {
+      "id": "fix_cache_ttl",
+      "tier": "fix",
+      "instruction_sha256": "17de2c29ac54b1cefb9d18b26f3ffe83ebcf2eb0964ece8711194653445660b3",
+      "hidden_test_sha256": "c13aafb5d50a15d91633abcd8adc122a070ebbf74360678250ad3b4afcf52a83",
+      "seed_sha256": "836aef95b2654b3c1ae9ae2bfcc4f0947122d81a92ba75e648cc39ee7a1b88ac"
+    },
+    {
+      "id": "fix_argsplit",
+      "tier": "fix",
+      "instruction_sha256": "c531194b8cb8c4966643b710172c716316e358d5a3c4e46acca6dfe44ae30fde",
+      "hidden_test_sha256": "159f57931d7fa178f7e40e82c25a0ce13470df688a6231616de9bfe1ddb8ab2c",
+      "seed_sha256": "f60384ae4bb3385af48cab544c64fc3e5c1087db9ab0a2ac722390e650fc3695"
+    },
+    {
+      "id": "fix_retry",
+      "tier": "fix",
+      "instruction_sha256": "507e8ae259bd3e8a1215e215228add0072bfca54d96cd554a6aad1ee88069b82",
+      "hidden_test_sha256": "764c0583e32eae02e092a51bf25b05d16af54e8410541dadb30342f96e8153bf",
+      "seed_sha256": "4f9218d312ffffe5bbfc4e24cba1f58f4c1b5fd09c728736840afd2396f49556"
+    },
+    {
+      "id": "fix_date_range",
+      "tier": "fix",
+      "instruction_sha256": "7444364dfa70f9ad15c974d1d4ce76e2aadad36050598eb0941b6787348067b2",
+      "hidden_test_sha256": "3988c76c68d52c8cfb8b7d83d7899614b50b4f782e9e2e6f88b4066956626649",
+      "seed_sha256": "9a502209bb8657cbc643a24a5ba13d85bea58f92f06b7a18a22dda5a26e6ee5d"
+    },
+    {
+      "id": "refactor_shapes",
+      "tier": "refactor",
+      "instruction_sha256": "b4369d65db0b798a9d567130b4975e66bc58eb131376da3ce8bd55ea63350260",
+      "hidden_test_sha256": "545469f86a3a0f6231d2d302eeff398e690c5a3b98727138f3f382259d7775fc",
+      "seed_sha256": "be5aaf5d827bc875ebc77195f1f6a53cc07b168700241a8992234ef0c17f2ceb"
+    },
+    {
+      "id": "refactor_extract",
+      "tier": "refactor",
+      "instruction_sha256": "7337262f1095d2e2c343cdd7124723f100dee9c5517d12c3b8191bda7c4c1763",
+      "hidden_test_sha256": "580d49bddef257804911fc2cf1b9c669f075ad28d237f47d47102761494ad8ef",
+      "seed_sha256": "fe4624511ada3f7b0e35593f499c6ae984171e527a1684263d760a18406e4255"
+    },
+    {
+      "id": "tdd_matrix",
+      "tier": "tdd",
+      "instruction_sha256": "3134e42f3426efc21260248011cdf4159e3f01dd71c6b78d68b52b3f66732649",
+      "hidden_test_sha256": "6d716caf4ef87c45636e5037fe1e3ad2e4da9b16e9fc23cdb4ee35672f5179f6",
+      "seed_sha256": "c94e7c595a7d8059ef511ae41e92db5e58c4799bd704faa6692c85f159dcb770"
+    },
+    {
+      "id": "cli_wordfreq",
+      "tier": "cli",
+      "instruction_sha256": "29fd066fd34eb0fea24e0cf55448a1c9e919322a721c4c854317207a887fbf77",
+      "hidden_test_sha256": "7c4e7417fb97421d545dfdbf967d18076a16956a67265ebe732cea0bd397b194",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "cli_csvstat",
+      "tier": "cli",
+      "instruction_sha256": "ab8bc9476fbda33b94dd684403243d5dce805cf0a500a8d631def5c1c9d16bdf",
+      "hidden_test_sha256": "94ef698b12f9256c5a98c8bae2c34a3e0dffffc0487985de10972179905b118a",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "pkg_calc",
+      "tier": "package",
+      "instruction_sha256": "ab8e6061fc8e70a7d0631e6be21331e7b9fad7ae1ac7f6730e51f104af6ee342",
+      "hidden_test_sha256": "ecdb8f5d17f76cc8b6690304183961ca6e4b503913b1b57a2fbc693b2940e384",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "json_patch",
+      "tier": "impl",
+      "instruction_sha256": "9b42a6fcc14640e1c5774d14ca8730ebcd1ac58803642edeadf77b043c2356c2",
+      "hidden_test_sha256": "2ac90ee48c777d3cbe083a81d236ecfba1c7795b08391b70480c9eb0ea25a4b4",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "graph_topo",
+      "tier": "impl",
+      "instruction_sha256": "e189560aafb73112ff3f8436f116382c1a9520f6987e236cfcd80e49fe4d6623",
+      "hidden_test_sha256": "136d045e81231e38c1e0fb4d1312e8aa5ce310b0c9f8571c79e86f9bdd9603d4",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "config_merge",
+      "tier": "impl",
+      "instruction_sha256": "1a6b413695a356621b30c3943ca20048c147bd2703a18bd4fb4be78906f83f0e",
+      "hidden_test_sha256": "d8b267821bc7cda0c162dbf26ced224c78a862ed6985dd435a9c96f77e3dc0ba",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "bank_ledger",
+      "tier": "impl",
+      "instruction_sha256": "66644d8247832cc01262c355e1c93d735c67451d8005329ca473900cd03ae4d3",
+      "hidden_test_sha256": "7c3331558b871670d8eea68a7303abe6072f9b9d83253a9f0b9d6897f96740fd",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ],
+  "settings": {
+    "repeat": 1,
+    "timeout_seconds": 300,
+    "max_steps": 12,
+    "lolm_nfet": true,
+    "provider_cooldown_seconds": 4
+  },
+  "environment": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+    "python": "3.14.6",
+    "git_commit": "3bae2fd7a82ae001f8531e9d9cd3d8a4305e1219",
+    "git_dirty": false,
+    "lolm_version": "1.3.0",
+    "codex_version": "codex-cli 0.147.0-alpha.6.5",
+    "gemini_version": "0.40.1",
+    "claude_version": "2.1.223 (Claude Code)",
+    "control_model": "gemini-3.1-flash-lite",
+    "lolm_backend": "Ollama qwen3:14b (local)",
+    "lolm_cerebras_backend": "Cerebras gpt-oss-120b via user-owned key",
+    "lolm_gemini_backend": "Google gemini-3.1-flash-lite via user-owned key",
+    "lolm_gemini_nonfet_backend": "Google gemini-3.1-flash-lite, NFET disabled (ablation)",
+    "codex_backend": "installed Codex CLI with its own local configuration",
+    "gemini_backend": "installed Gemini CLI on gemini-3.1-flash-lite via user-owned key",
+    "claude_backend": "installed Claude Code CLI with its own local credentials"
+  },
+  "results": [
+    {
+      "agent": "lolm_gemini",
+      "task": "iso_duration",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 9,
+        "usage": {
+          "promptTokenCount": 6850,
+          "candidatesTokenCount": 45,
+          "totalTokenCount": 6895,
+          "cachedContentTokenCount": 3957,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 6850
+            }
+          ],
+          "cacheTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 3957
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "19cfa766d5c1fdd7396ecbac2e9191441de4ca9c0df1f0ef42a74c7479b80f41",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.394,
+              "drift": 0.063,
+              "gate": 0.089,
+              "regime": -0.103
+            },
+            "head_probs": [
+              0.1366,
+              0.1754,
+              0.2037,
+              0.1321,
+              0.3522
+            ],
+            "step": 42
+          },
+          "telemetry": {
+            "avg_entropy": 1.842771,
+            "avg_hidden_drift": 5.238537,
+            "avg_gate": 0.766362,
+            "avg_regime_entropy": 1.519143
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:09:10.949149+00:00",
+        "wall_seconds": 87.41,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/iso_duration-trial-1/agent.stdout.txt",
+          "bytes": 18036,
+          "sha256": "fcc37ab24508558f8c20b13628e37783b35e897ec05403acdf9ce1e0ac485ebe"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/iso_duration-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/iso_duration-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/iso_duration-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 2982,
+          "sha256": "1997ab9fbc17454c1ff29ffd4506215d51dfc9c7145c58ff62d92ad146bf2c39"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 1852,
+          "sha256": "e73050d0029c027e6fc74083a110abdad9108b51d3de74d38f99b91848bfda55"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/iso_duration-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "roman",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 11,
+        "usage": {
+          "promptTokenCount": 7384,
+          "candidatesTokenCount": 47,
+          "totalTokenCount": 7431,
+          "cachedContentTokenCount": 3955,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 7384
+            }
+          ],
+          "cacheTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 3955
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "27e9e497e663dba81bc9d54b942e1dfad76337d0f9a1971da8062f17c6b9cb81",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.072,
+              "drift": 0.162,
+              "gate": 0.06,
+              "regime": 0.408
+            },
+            "head_probs": [
+              0.1356,
+              0.1232,
+              0.2403,
+              0.1746,
+              0.3263
+            ],
+            "step": 44
+          },
+          "telemetry": {
+            "avg_entropy": 1.512189,
+            "avg_hidden_drift": 7.890156,
+            "avg_gate": 0.762009,
+            "avg_regime_entropy": 1.458061
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:10:42.562104+00:00",
+        "wall_seconds": 114.728,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/roman-trial-1/agent.stdout.txt",
+          "bytes": 19678,
+          "sha256": "5e0637bf8a75eed21a2f97d7d2e17b3c1114f899fc3d7e4a6ca92f7de4b479da"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/roman-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/roman-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/roman-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 2318,
+          "sha256": "3b5da4faf474d98776fc50a80f8289cf0e6fd48f8b3f3e24e84d4a6e1be87a6f"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 1584,
+          "sha256": "e81087c1a921be9ee60dcf964a3d94b2618bdb3172ee795d3467120b7de082aa"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/roman-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "interval_merge",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 8,
+        "usage": {
+          "promptTokenCount": 4610,
+          "candidatesTokenCount": 51,
+          "totalTokenCount": 4661,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 4610
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "01f9d4de9a340d9ea850849ff4b254f01ac7bf957c583735601f4a137460172f",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.201,
+              "drift": 0.098,
+              "gate": 0.175,
+              "regime": -0.058
+            },
+            "head_probs": [
+              0.1125,
+              0.0687,
+              0.1214,
+              0.2356,
+              0.4618
+            ],
+            "step": 50
+          },
+          "telemetry": {
+            "avg_entropy": 1.514734,
+            "avg_hidden_drift": 4.655216,
+            "avg_gate": 0.769432,
+            "avg_regime_entropy": 1.448948
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:12:41.363178+00:00",
+        "wall_seconds": 79.893,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/interval_merge-trial-1/agent.stdout.txt",
+          "bytes": 11959,
+          "sha256": "98056ce639956167dcbca4a2ac74ca77c5749a91be5b43bcae585b40af2ca505"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/interval_merge-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/interval_merge-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/interval_merge-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 1111,
+          "sha256": "6330ad0cfee646bf212a953cb38cfa18a491d27876a3038d8cb79e1b789431c4"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 786,
+          "sha256": "bcea5cfe8b4ffc7d71778a8a95af587b4b892e589db78df1671a4e2afdcb68c4"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/interval_merge-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "lru",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 11,
+        "usage": {
+          "promptTokenCount": 5138,
+          "candidatesTokenCount": 254,
+          "totalTokenCount": 5392,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 5138
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "6619ccff472cff6dabf1869a1a60f69a5e57200dbdb66ea04ef97e6d5dec881d",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.491,
+              "drift": 0.025,
+              "gate": -0.609,
+              "regime": -0.257
+            },
+            "head_probs": [
+              0.1678,
+              0.0471,
+              0.1991,
+              0.1417,
+              0.4443
+            ],
+            "step": 128
+          },
+          "telemetry": {
+            "avg_entropy": 0.610452,
+            "avg_hidden_drift": 9.982881,
+            "avg_gate": 0.7607,
+            "avg_regime_entropy": 1.530438
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:14:05.321065+00:00",
+        "wall_seconds": 97.257,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/lru-trial-1/agent.stdout.txt",
+          "bytes": 18515,
+          "sha256": "3146ba0b55fe79a87a288a4868ac41299e19ecda4f506cac4dbf440d0b10b59b"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/lru-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/lru-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/lru-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 1860,
+          "sha256": "8148dea38556d2548dd56b5665f4d086a4aac22046bf4474dc990b5796ae8514"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 790,
+          "sha256": "a90641af297de423f18dd6572dbb32b09a39e9d2efa829610614437189866774"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/lru-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "semver",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 7,
+        "usage": {
+          "promptTokenCount": 5567,
+          "candidatesTokenCount": 46,
+          "totalTokenCount": 5613,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 5567
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "2fca65c285ebdd1f964db0645e8dcd5c0da721e9d5ba28f9710e30f68bddab33",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.408,
+              "drift": -0.189,
+              "gate": 0.346,
+              "regime": -0.383
+            },
+            "head_probs": [
+              0.1587,
+              0.1703,
+              0.2834,
+              0.1375,
+              0.25
+            ],
+            "step": 46
+          },
+          "telemetry": {
+            "avg_entropy": 2.033111,
+            "avg_hidden_drift": 6.092776,
+            "avg_gate": 0.766952,
+            "avg_regime_entropy": 1.677104
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:15:46.640603+00:00",
+        "wall_seconds": 55.788,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/semver-trial-1/agent.stdout.txt",
+          "bytes": 13839,
+          "sha256": "76130bced8ac49387c57bddae5518b8c07211359e2dc5660621b3e13ed343171"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/semver-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/semver-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/semver-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 2372,
+          "sha256": "17fb83c50c89f807177f3765b485165c00c7622ad7752cdaf86c1e0cab335e97"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 1702,
+          "sha256": "d8d4957ca7ee4d861d8d3429440753e7c40d1b969df9e9990b69b92f5741d51e"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/semver-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "expr_eval",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": false,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": null,
+        "steps": 12,
+        "usage": null,
+        "nfet": {},
+        "error": "Agent reached its 12-step limit before a clean finish."
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:16:46.497936+00:00",
+        "wall_seconds": 75.376,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/expr_eval-trial-1/agent.stdout.txt",
+          "bytes": 28009,
+          "sha256": "92eecf2b05a943d9cb14f89b2adc742b10149c7da596902b02eaf665b5792d3f"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/expr_eval-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/expr_eval-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/expr_eval-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 3692,
+          "sha256": "091ff6f05c965432ff4e0165a8cd97a540242afcc395151331ca9241476dd091"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 3375,
+          "sha256": "5ba377ad632e0986c6faa2f686616a594c7c51f2a0924dd49e620920e1ee8286"
+        },
+        {
+          "path": "test_solution.py",
+          "bytes": 1250,
+          "sha256": "ca18fbe92a9b1a5de0eba2b32060b36e44fa2fb17b824e2c69912efad4b0ec0a"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/expr_eval-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "jsonpath",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": false,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": null,
+        "steps": 12,
+        "usage": null,
+        "nfet": {},
+        "error": "Agent reached its 12-step limit before a clean finish."
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:18:06.022599+00:00",
+        "wall_seconds": 93.995,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/jsonpath-trial-1/agent.stdout.txt",
+          "bytes": 22209,
+          "sha256": "326f71f154e00c481cd9434dd5afb1c961a96d6bdb247ffe40c0b145d6d05b32"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/jsonpath-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/jsonpath-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/jsonpath-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 2415,
+          "sha256": "b5f46d9ea9d395ac8c954752784440a4856df02aeac825c4cda97e23f984ec2b"
+        },
+        {
+          "path": "extra_tests.py",
+          "bytes": 419,
+          "sha256": "df51e83389da95e3322bf025f8aa02f112200ce4a4ba84aedde33b00aa401d8b"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 2412,
+          "sha256": "9a9e337aad73817f1ce345bcc5582036718a251785a466b9ca9779a92cfd34bb"
+        },
+        {
+          "path": "test.py",
+          "bytes": 876,
+          "sha256": "146926d6b3648dd524a36eed418ec6f81b7efd611579d5626622a67ac280c05d"
+        },
+        {
+          "path": "test_malformed.py",
+          "bytes": 495,
+          "sha256": "a8eaacfc043b48c50c13733da09440ce49b8314d3bb680788c228e71a2b1e4eb"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/jsonpath-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "wrap",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": false,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": null,
+        "steps": 12,
+        "usage": null,
+        "nfet": {},
+        "error": "Agent reached its 12-step limit before a clean finish."
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:19:44.048832+00:00",
+        "wall_seconds": 73.154,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/wrap-trial-1/agent.stdout.txt",
+          "bytes": 22969,
+          "sha256": "2cda7316713d2d58e41bf73b77ab5ef16203c0c1a7d298e980fc38f64b624abc"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/wrap-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/wrap-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/wrap-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 2009,
+          "sha256": "3ce83771e6097a38eb1f3b395300d57d667a314a4fc3827c30a49cdb0a2465d7"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 1737,
+          "sha256": "92b7f82c07f0f978e735ee1afec97f7e28795dfd26ce991d8ceb94890a77df77"
+        },
+        {
+          "path": "test_solution.py",
+          "bytes": 1187,
+          "sha256": "9c895d3592e8c068e639b7f6c0d6f63b04c25eb2b21ce9b1e89da3155f474ff1"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/wrap-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "fix_pagination",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 8,
+        "usage": {
+          "promptTokenCount": 4480,
+          "candidatesTokenCount": 30,
+          "totalTokenCount": 4510,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 4480
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "d2c662d6f1d573b003b6ddb72e2c5fac7730342e6d983c20ae7d8823f2b6bc73",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": 0.124,
+              "drift": -0.475,
+              "gate": 0.275,
+              "regime": 1.285
+            },
+            "head_probs": [
+              0.1545,
+              0.3071,
+              0.2615,
+              0.1506,
+              0.1263
+            ],
+            "step": 28
+          },
+          "telemetry": {
+            "avg_entropy": 2.608575,
+            "avg_hidden_drift": 5.313855,
+            "avg_gate": 0.765839,
+            "avg_regime_entropy": 1.429811
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:21:01.234308+00:00",
+        "wall_seconds": 66.542,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_pagination-trial-1/agent.stdout.txt",
+          "bytes": 11987,
+          "sha256": "4ac438ed0aa74fc31c1469786cc687e8694c8f8166813b167cdfaae47d46e0c8"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_pagination-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_pagination-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_pagination-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/paginate.cpython-314.pyc",
+          "bytes": 1087,
+          "sha256": "c8a31c60f57821db906495134371178c5dfb06de6426db9698c598c22f0673ea"
+        },
+        {
+          "path": "paginate.py",
+          "bytes": 621,
+          "sha256": "7a55d2e598ce29555f58df81025d32b5741eb80f489349916034b7ab1f934934"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/fix_pagination-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "fix_multifile_stats",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 11,
+        "usage": {
+          "promptTokenCount": 4736,
+          "candidatesTokenCount": 94,
+          "totalTokenCount": 4830,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 4736
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "248ac9b7907bc0fd46aea8cb913ea8c54b8ee6892afe793ccc904fa393a818b3",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": 0.236,
+              "drift": -0.201,
+              "gate": 0.21,
+              "regime": -0.345
+            },
+            "head_probs": [
+              0.1032,
+              0.1737,
+              0.2252,
+              0.222,
+              0.2759
+            ],
+            "step": 93
+          },
+          "telemetry": {
+            "avg_entropy": 1.393459,
+            "avg_hidden_drift": 6.487252,
+            "avg_gate": 0.766677,
+            "avg_regime_entropy": 1.544615
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:22:12.084812+00:00",
+        "wall_seconds": 90.18,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_multifile_stats-trial-1/agent.stdout.txt",
+          "bytes": 15040,
+          "sha256": "0fa2b4c28b5c404249be3e7d5b4e23205ace9653ec8937f8fc94c4c507501c76"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_multifile_stats-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_multifile_stats-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_multifile_stats-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/report.cpython-314.pyc",
+          "bytes": 624,
+          "sha256": "a0240e972c135ec24964b441e984ab25cffc84acfbb4a96292f431c33ce73272"
+        },
+        {
+          "path": "__pycache__/stats.cpython-314.pyc",
+          "bytes": 1338,
+          "sha256": "f962802e3f16d9fa6607d11bee3eb64a83878d66fc70e01330f8f5560743828e"
+        },
+        {
+          "path": "report.py",
+          "bytes": 301,
+          "sha256": "378f6cc3ab801bc3fdc57a6910feef06fce0d809d3ab9327274eb269d81b0b0e"
+        },
+        {
+          "path": "stats.py",
+          "bytes": 601,
+          "sha256": "6dde5fff44693679364696ae7b5c5653a215225e518c3a9335db15a4115f6ff7"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/fix_multifile_stats-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "fix_state_machine",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 9,
+        "usage": {
+          "promptTokenCount": 5396,
+          "candidatesTokenCount": 124,
+          "totalTokenCount": 5520,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 5396
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "fc69533a4f6375106f343cd338fddf80bace4103066316acdae8b2e909117dd3",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.231,
+              "drift": -0.635,
+              "gate": 0.423,
+              "regime": 0.402
+            },
+            "head_probs": [
+              0.1292,
+              0.1113,
+              0.2076,
+              0.1837,
+              0.3682
+            ],
+            "step": 120
+          },
+          "telemetry": {
+            "avg_entropy": 1.316268,
+            "avg_hidden_drift": 7.881784,
+            "avg_gate": 0.765984,
+            "avg_regime_entropy": 1.401768
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:23:46.338111+00:00",
+        "wall_seconds": 99.996,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_state_machine-trial-1/agent.stdout.txt",
+          "bytes": 14665,
+          "sha256": "b231097878f10fc88068f1157250dd918d8b94e1489d7154f30d6117b90122d7"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_state_machine-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_state_machine-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_state_machine-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/orders.cpython-314.pyc",
+          "bytes": 1713,
+          "sha256": "6621e4fd5b780b21edfdd394203a2e6ae8961efdfcf61e4c604185c80d290248"
+        },
+        {
+          "path": "orders.py",
+          "bytes": 823,
+          "sha256": "317b50a10c07df0f20faffebe50f3e50568fda5fce4a9102779db8e826ca6444"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/fix_state_machine-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "fix_csv_parser",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": "TIMEOUT",
+          "message": "Provider request timed out"
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:25:30.409437+00:00",
+        "wall_seconds": 178.046,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_csv_parser-trial-1/agent.stdout.txt",
+          "bytes": 93,
+          "sha256": "0fef6f85eac3d19be1163c024b6abc8a5bab74b06766a6454315c362f17a31fa"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_csv_parser-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_csv_parser-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_csv_parser-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/csvlite.cpython-314.pyc",
+          "bytes": 1458,
+          "sha256": "316c9e5331c2dcce0190b0ab264dab427191945149b931c660a40a56f3b4559d"
+        },
+        {
+          "path": "csvlite.py",
+          "bytes": 1583,
+          "sha256": "1d2dca5bcab7c868e93e611cad9b2f01f5e463026eb9264057d543421e9ffdbf"
+        },
+        {
+          "path": "test_csvlite.py",
+          "bytes": 522,
+          "sha256": "2ee67107d265e1f72025a9a0b723c383f6733c1174d21363cc8438461b5f3290"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/fix_csv_parser-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "fix_cache_ttl",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": 503,
+          "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:28:32.521159+00:00",
+        "wall_seconds": 220.669,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_cache_ttl-trial-1/agent.stdout.txt",
+          "bytes": 174,
+          "sha256": "fe94cabd7ca2f2c0c96ccd399ee0aa8aa21d0de5cdb8c5523669ee8f7ae47638"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_cache_ttl-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_cache_ttl-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_cache_ttl-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/cache.cpython-314.pyc",
+          "bytes": 2823,
+          "sha256": "8fe4320f8a235705940ec630503f59f22315c1bdea75518e64294901b5431df4"
+        },
+        {
+          "path": "__pycache__/service.cpython-314.pyc",
+          "bytes": 1276,
+          "sha256": "56c95e42af978fd130c83667b1e202e1b944bbbea1c9ab5a4219c7de89a5a260"
+        },
+        {
+          "path": "cache.py",
+          "bytes": 1876,
+          "sha256": "84a74b8ddff0635614211e7cd47ef9cf01fb3f83a1e50381aa817bac697d89ee"
+        },
+        {
+          "path": "service.py",
+          "bytes": 517,
+          "sha256": "62c4a481c2552a22a3c785ab8ca787d3f77fe4c23a9fed20626b36f2b4ad30e8"
+        },
+        {
+          "path": "test_cache.py",
+          "bytes": 1571,
+          "sha256": "235f3af858b7bca9b86bf1948ce3529708ab3c66e082b99281ee28288f931daf"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/fix_cache_ttl-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "fix_argsplit",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": false,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": null,
+        "steps": 12,
+        "usage": null,
+        "nfet": {},
+        "error": "Agent reached its 12-step limit before a clean finish."
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:32:17.258167+00:00",
+        "wall_seconds": 92.528,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_argsplit-trial-1/agent.stdout.txt",
+          "bytes": 20858,
+          "sha256": "d411050fc519e6287aaa327d4f3e205a23457b70ab0526ee6c6ba513446905d4"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_argsplit-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_argsplit-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_argsplit-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/lexer.cpython-314.pyc",
+          "bytes": 1869,
+          "sha256": "0ff30f263faf16385d7e7c12b692fcd9d98eb3935e7f605a451b73d6f52e4100"
+        },
+        {
+          "path": "__pycache__/runner.cpython-314.pyc",
+          "bytes": 717,
+          "sha256": "b1aaee3bac1100fcce58537fe266b50e622013d3ea15fbff8c9137dfe85815b6"
+        },
+        {
+          "path": "lexer.py",
+          "bytes": 1726,
+          "sha256": "8cafe402b699624b5bddbbfbf136b3dcc2602c551223ff316642dd224549847d"
+        },
+        {
+          "path": "runner.py",
+          "bytes": 295,
+          "sha256": "b4c1f31d879cef61c8acf247f38169a31594cdbb49e1d5fcf26ba6f978e05b9a"
+        },
+        {
+          "path": "test.py",
+          "bytes": 998,
+          "sha256": "015a2eb0ebfcde7be3b1661af19465adaae6b678d1c050026e8593eacf440750"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/fix_argsplit-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "fix_retry",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 10,
+        "usage": {
+          "promptTokenCount": 4779,
+          "candidatesTokenCount": 200,
+          "totalTokenCount": 4979,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 4779
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "13c5dca8ace575f3d03c51f300ca024f8402dc4d7a3d54c8835a1ec229f5ac10",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.564,
+              "drift": 0.712,
+              "gate": 0.103,
+              "regime": 0.524
+            },
+            "head_probs": [
+              0.1982,
+              0.0872,
+              0.275,
+              0.1479,
+              0.2917
+            ],
+            "step": 128
+          },
+          "telemetry": {
+            "avg_entropy": 0.798457,
+            "avg_hidden_drift": 10.049587,
+            "avg_gate": 0.748341,
+            "avg_regime_entropy": 1.348306
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:33:53.833518+00:00",
+        "wall_seconds": 115.882,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_retry-trial-1/agent.stdout.txt",
+          "bytes": 17207,
+          "sha256": "ef106a3677e917a97af77b8645af20770e806b756d41b5aeed57e5925186698f"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_retry-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_retry-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_retry-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/retry.cpython-314.pyc",
+          "bytes": 1389,
+          "sha256": "2e5823224a3fe0b7cd8aa38f640bffecbeb8efbac41d468081b54045509269a4"
+        },
+        {
+          "path": "retry.py",
+          "bytes": 623,
+          "sha256": "903f3ab360096d9100c8f19d70e406f3cfdcb71cdd3984ff74250d2601dd843f"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/fix_retry-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "fix_date_range",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 10,
+        "usage": {
+          "promptTokenCount": 6557,
+          "candidatesTokenCount": 249,
+          "totalTokenCount": 6806,
+          "cachedContentTokenCount": 3943,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 6557
+            }
+          ],
+          "cacheTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 3943
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "a648fed62497b0c4ba9c84ee45ddcb69bb665834dd871a2d6c5cef7e3e4cf3e2",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.549,
+              "drift": 0.466,
+              "gate": 0.146,
+              "regime": -0.118
+            },
+            "head_probs": [
+              0.1688,
+              0.0529,
+              0.1912,
+              0.2025,
+              0.3846
+            ],
+            "step": 128
+          },
+          "telemetry": {
+            "avg_entropy": 0.667047,
+            "avg_hidden_drift": 9.834699,
+            "avg_gate": 0.764485,
+            "avg_regime_entropy": 1.390279
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:35:53.786273+00:00",
+        "wall_seconds": 122.581,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_date_range-trial-1/agent.stdout.txt",
+          "bytes": 19048,
+          "sha256": "f8ecc47486eb6a27ab3ea28dbfd4a77fb2c1c872b869315d76249bfb3926706e"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_date_range-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_date_range-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/fix_date_range-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/dates.cpython-314.pyc",
+          "bytes": 1388,
+          "sha256": "86110392663bfcbf5e45688766bec4535c3196ac31f072b7bfa664f5ae395555"
+        },
+        {
+          "path": "dates.py",
+          "bytes": 757,
+          "sha256": "8c1574a5d1b6eb2ad7ed905577857334fa0c678f6e52fdff1daf06b5167bbc63"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/fix_date_range-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "refactor_shapes",
+      "tier": "refactor",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 8,
+        "usage": {
+          "promptTokenCount": 5920,
+          "candidatesTokenCount": 61,
+          "totalTokenCount": 5981,
+          "cachedContentTokenCount": 3940,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 5920
+            }
+          ],
+          "cacheTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 3940
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "3a371a0d749c9245307812eb01c7d8d79a605a1b49e0bb9bfa1f52ee4a9a6e9d",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.593,
+              "drift": 1.388,
+              "gate": -0.394,
+              "regime": -0.88
+            },
+            "head_probs": [
+              0.1341,
+              0.1433,
+              0.2158,
+              0.228,
+              0.2788
+            ],
+            "step": 62
+          },
+          "telemetry": {
+            "avg_entropy": 1.607929,
+            "avg_hidden_drift": 6.851474,
+            "avg_gate": 0.767377,
+            "avg_regime_entropy": 1.504329
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:38:00.431965+00:00",
+        "wall_seconds": 56.159,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/refactor_shapes-trial-1/agent.stdout.txt",
+          "bytes": 15143,
+          "sha256": "92fcfa82cab54df106bb6b902dbb5170750b0db42e46f0a03d46dfbb8ec5ae3c"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/refactor_shapes-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/refactor_shapes-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/refactor_shapes-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/shapes.cpython-314.pyc",
+          "bytes": 3184,
+          "sha256": "3a683d4e5150d94f2f1a316aa5937350f0e35cef5f84d9870e2d45b49828afde"
+        },
+        {
+          "path": "shapes.py",
+          "bytes": 1270,
+          "sha256": "0240065749036b87c6a8733c3d1cf84606bd765d808ed1dc31335eed16c81b3e"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/refactor_shapes-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "refactor_extract",
+      "tier": "refactor",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 12,
+        "usage": {
+          "promptTokenCount": 5455,
+          "candidatesTokenCount": 70,
+          "totalTokenCount": 5525,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 5455
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "762316a30c778aba454fa01776bd54ccb176a44fb7648470dc9dda54b81261f2",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.073,
+              "drift": -0.129,
+              "gate": 0.088,
+              "regime": 0.155
+            },
+            "head_probs": [
+              0.1335,
+              0.124,
+              0.2336,
+              0.1296,
+              0.3792
+            ],
+            "step": 62
+          },
+          "telemetry": {
+            "avg_entropy": 1.436082,
+            "avg_hidden_drift": 7.237643,
+            "avg_gate": 0.768405,
+            "avg_regime_entropy": 1.510689
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:39:00.661441+00:00",
+        "wall_seconds": 107.428,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/refactor_extract-trial-1/agent.stdout.txt",
+          "bytes": 16792,
+          "sha256": "6b538a0b9eca0b8ff39fd6d9d2a21dadc4c9f2edbf39e2452ee3c2929a25c1f0"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/refactor_extract-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/refactor_extract-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/refactor_extract-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/app.cpython-314.pyc",
+          "bytes": 869,
+          "sha256": "14ae6ec443995c40857ad7e7ffab53c6fa47fd8752a9d71c81b569101bba33aa"
+        },
+        {
+          "path": "__pycache__/pricing.cpython-314.pyc",
+          "bytes": 1053,
+          "sha256": "9f8d334fadb19f675c083daae307cef6e4c866c08ffc0154ceec090411d4b597"
+        },
+        {
+          "path": "__pycache__/storage.cpython-314.pyc",
+          "bytes": 937,
+          "sha256": "6e5d4718726d618971c4424e36114c0bdeacd6822d29ed45c96895a9e42d7965"
+        },
+        {
+          "path": "app.py",
+          "bytes": 404,
+          "sha256": "730d422d0798845f52178c9a55d8ba08343a7a1b7c4ff4385b5e3826bd2321d1"
+        },
+        {
+          "path": "pricing.py",
+          "bytes": 331,
+          "sha256": "557982ea5baa3bdf07be4e865be0dfa04009ad041dc1cdd9ca85f1ab984d80ec"
+        },
+        {
+          "path": "storage.py",
+          "bytes": 315,
+          "sha256": "188f4133ed3c112f14a6da73213d586cbabd1e128c1a5010057328dfdc4fe0c9"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/refactor_extract-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "tdd_matrix",
+      "tier": "tdd",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 10,
+        "usage": {
+          "promptTokenCount": 5803,
+          "candidatesTokenCount": 148,
+          "totalTokenCount": 5951,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 5803
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "ab02868b3e1dc0d7159acc183e7fc8ed417286b5146d6ddbf49b31b6beba7d04",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": 0.307,
+              "drift": 0.951,
+              "gate": -0.073,
+              "regime": -0.253
+            },
+            "head_probs": [
+              0.1168,
+              0.143,
+              0.186,
+              0.1434,
+              0.4108
+            ],
+            "step": 128
+          },
+          "telemetry": {
+            "avg_entropy": 1.271824,
+            "avg_hidden_drift": 7.943841,
+            "avg_gate": 0.768038,
+            "avg_regime_entropy": 1.522837
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:40:52.419283+00:00",
+        "wall_seconds": 113.858,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/tdd_matrix-trial-1/agent.stdout.txt",
+          "bytes": 20924,
+          "sha256": "c457247362a044e5fe5b93a72c90ed8e7020ffc451960effae62637db702cc1b"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/tdd_matrix-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/tdd_matrix-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/tdd_matrix-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/matrix.cpython-314.pyc",
+          "bytes": 5394,
+          "sha256": "a848e8d54049bd59ab2a1775c110ba9e19bc6cbc7cfcda42fea9756c8c484b90"
+        },
+        {
+          "path": "matrix.py",
+          "bytes": 2057,
+          "sha256": "b6b430e94e5b2c2af410b0b42339ed09907055a8ea45246b78e63ee8c9fb197c"
+        },
+        {
+          "path": "test_matrix.py",
+          "bytes": 392,
+          "sha256": "fd7cc0a531448a3c9e09fb3febdeeb904d777f5dbdc722ea6356491c6581854c"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/tdd_matrix-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "cli_wordfreq",
+      "tier": "cli",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 11,
+        "usage": {
+          "promptTokenCount": 6222,
+          "candidatesTokenCount": 674,
+          "totalTokenCount": 6896,
+          "cachedContentTokenCount": 3961,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 6222
+            }
+          ],
+          "cacheTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 3961
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "d38fb7dcb76ce7e2dd3e9e024ad17599dd3745d9259d1b299edf1ed2a16ed619",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.577,
+              "drift": 0.109,
+              "gate": 0.325,
+              "regime": 0.892
+            },
+            "head_probs": [
+              0.1645,
+              0.0701,
+              0.2224,
+              0.2304,
+              0.3127
+            ],
+            "step": 128
+          },
+          "telemetry": {
+            "avg_entropy": 0.739091,
+            "avg_hidden_drift": 8.974037,
+            "avg_gate": 0.75961,
+            "avg_regime_entropy": 1.40803
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:42:50.544405+00:00",
+        "wall_seconds": 206.094,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/cli_wordfreq-trial-1/agent.stdout.txt",
+          "bytes": 25759,
+          "sha256": "7131570ff120e6c394824120d11c13f66102cd18a61737eb1670962baffad06d"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/cli_wordfreq-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/cli_wordfreq-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/cli_wordfreq-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "empty.txt",
+          "bytes": 3,
+          "sha256": "bd85bcdb8d4e613a79cb62d0903946ad10c83e63dc75f67614c159c0dbf4d184"
+        },
+        {
+          "path": "test.txt",
+          "bytes": 78,
+          "sha256": "786ee0c48fa36b18a7054c9e9931509f92b1d498382976babd94431e9e9a7d90"
+        },
+        {
+          "path": "wordfreq.py",
+          "bytes": 2653,
+          "sha256": "0f4c70a61d2881c12b94ac81595b2984b8aa4bf251bb406bd7499c882456276f"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/cli_wordfreq-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "cli_csvstat",
+      "tier": "cli",
+      "trial": 1,
+      "passed": false,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": false,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": null,
+        "steps": 12,
+        "usage": null,
+        "nfet": {},
+        "error": "Agent reached its 12-step limit before a clean finish."
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:46:20.916088+00:00",
+        "wall_seconds": 89.469,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/cli_csvstat-trial-1/agent.stdout.txt",
+          "bytes": 21798,
+          "sha256": "91d4c98bb01ef6157fd939c068ea9905567c1324e94c916f2bd419e4b27bcd39"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/cli_csvstat-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/cli_csvstat-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/cli_csvstat-trial-1/grader.stderr.txt",
+          "bytes": 296,
+          "sha256": "44a6513fa3a6a7479605322d632417ace1b5544ce1381751603befc7f0f9fbbd"
+        }
+      },
+      "output_files": [
+        {
+          "path": "bad.csv",
+          "bytes": 27,
+          "sha256": "a73fa5ae2df22077bdff6479461369eee2f005bae24710942c11a2802bab1e71"
+        },
+        {
+          "path": "csvstat.py",
+          "bytes": 1972,
+          "sha256": "4ddbc0222a4c99a74e0a950ed42b535aa9b1915855d233db4c0aaec0973cec1d"
+        },
+        {
+          "path": "test.csv",
+          "bytes": 29,
+          "sha256": "4986117ad86a4cb2851d6d982588f6d899600ac847972c92292fe546d5968a83"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/cli_csvstat-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "pkg_calc",
+      "tier": "package",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": false,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": null,
+        "steps": 12,
+        "usage": null,
+        "nfet": {},
+        "error": "Agent reached its 12-step limit before a clean finish."
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:47:55.216600+00:00",
+        "wall_seconds": 129.267,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/pkg_calc-trial-1/agent.stdout.txt",
+          "bytes": 17035,
+          "sha256": "74e1aadeb704b7f2daf2e0a430b93b630fed3f1331e1c0d125d7317ce1059fb5"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/pkg_calc-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/pkg_calc-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/pkg_calc-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "calc/__init__.py",
+          "bytes": 1965,
+          "sha256": "fda21b9c6ed4e76a2f92a29d1fd0d93d8a5942a246072c67c8e18f563da70d35"
+        },
+        {
+          "path": "calc/__main__.py",
+          "bytes": 536,
+          "sha256": "ef278760fb0b4cc29866cc729bd7c180ec205f43769cbe6781572645286d26f6"
+        },
+        {
+          "path": "calc/__pycache__/__init__.cpython-314.pyc",
+          "bytes": 2773,
+          "sha256": "2adb4e329bb71e3055ee0c0a42ed29fac0d07ead28eff4a613313c988a7893a0"
+        },
+        {
+          "path": "calc/__pycache__/__main__.cpython-314.pyc",
+          "bytes": 1326,
+          "sha256": "abc7630e314e4bc8b150eea17670e0089674cafb6ef84d5df73238514b3531c5"
+        },
+        {
+          "path": "calc/__pycache__/ops.cpython-314.pyc",
+          "bytes": 752,
+          "sha256": "85045e81d203a961f8667c15cd3c42eb2e3f75cbdeb36cce10b9d009084110e4"
+        },
+        {
+          "path": "calc/ops.py",
+          "bytes": 183,
+          "sha256": "3647857c0de5397adffb11683e08faefefe92dc396a6b8e76b8e8ded5aa93b5a"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/pkg_calc-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "json_patch",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": false,
+        "infrastructure_error": "unparseable_output"
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:50:09.273900+00:00",
+        "wall_seconds": 300.019,
+        "exit_code": 124,
+        "timed_out": true
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/json_patch-trial-1/agent.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/json_patch-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/json_patch-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/json_patch-trial-1/grader.stderr.txt",
+          "bytes": 407,
+          "sha256": "bfc3e518f3fd066f00929b4e94657229bef3be192f69ca2618d46b5791f8af69"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/jsonpatch.cpython-314.pyc",
+          "bytes": 5723,
+          "sha256": "98ebd41010f45a229ae4250561fea8204b7d26db3501d350f8551adec3f8e184"
+        },
+        {
+          "path": "jsonpatch.py",
+          "bytes": 5584,
+          "sha256": "e01b94c062933beed4cfbcbfd84969c0aa38778815f57c90a1bfe17f8f9579c7"
+        },
+        {
+          "path": "test_patch.py",
+          "bytes": 1212,
+          "sha256": "60236671d58528d3e07fd165271ecb86fb89bb7c09a694fecd46414d21fad933"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/json_patch-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "graph_topo",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 10,
+        "usage": {
+          "promptTokenCount": 6457,
+          "candidatesTokenCount": 57,
+          "totalTokenCount": 6514,
+          "cachedContentTokenCount": 3972,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 6457
+            }
+          ],
+          "cacheTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 3972
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "2e635381debb0f45dd2c844e0c39cef3617fa2f8c9a8f938c35bdaea5f206fcc",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.029,
+              "drift": -0.395,
+              "gate": 0.215,
+              "regime": -0.256
+            },
+            "head_probs": [
+              0.1577,
+              0.1404,
+              0.2445,
+              0.1072,
+              0.3502
+            ],
+            "step": 57
+          },
+          "telemetry": {
+            "avg_entropy": 1.731556,
+            "avg_hidden_drift": 6.082821,
+            "avg_gate": 0.768061,
+            "avg_regime_entropy": 1.557358
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:55:13.406066+00:00",
+        "wall_seconds": 183.761,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/graph_topo-trial-1/agent.stdout.txt",
+          "bytes": 21526,
+          "sha256": "d67edec6d088adc62883838b62cecf6da964fced19fe6bd35b02c94c0152839d"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/graph_topo-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/graph_topo-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/graph_topo-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/topo.cpython-314.pyc",
+          "bytes": 3110,
+          "sha256": "59d614a51050a61a02b3939aa9943b57982f1eff32b9ad59beea0bf9fb9117da"
+        },
+        {
+          "path": "test_topo.py",
+          "bytes": 1724,
+          "sha256": "557e73bc0cfb160d877eb17091ec11060f7aae34e4a820d783bbbd6041ea2cff"
+        },
+        {
+          "path": "topo.py",
+          "bytes": 2028,
+          "sha256": "82e3b441d924b3d61e1969c542cb55fcd44ed44439e7297bf8ed9c850fb70044"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/graph_topo-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "config_merge",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": false,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": null,
+        "steps": 12,
+        "usage": null,
+        "nfet": {},
+        "error": "Agent reached its 12-step limit before a clean finish."
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:58:21.384530+00:00",
+        "wall_seconds": 134.104,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/config_merge-trial-1/agent.stdout.txt",
+          "bytes": 22572,
+          "sha256": "5d2f612db118f93ee8067aa79890828377793f41c7e6ad3e42730d5bc80d3c71"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/config_merge-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/config_merge-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/config_merge-trial-1/grader.stderr.txt",
+          "bytes": 311,
+          "sha256": "d8412aa06e5161848f2dc0199e37c04cb6d33f7e31de7a18504d238453f01a38"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/config.cpython-314.pyc",
+          "bytes": 2377,
+          "sha256": "1177e7f6e1486244b87ad4690a1b9ec34b3258648eea4d5e76b30a8aa55cf8e3"
+        },
+        {
+          "path": "config.py",
+          "bytes": 2030,
+          "sha256": "496c98d3b9fc20c23e41896002f8ba9dfd2204363ca7669af8dedb4bf88e1ce0"
+        },
+        {
+          "path": "test_config.py",
+          "bytes": 1372,
+          "sha256": "e1beeae9cdcea4bc79c822ffb9b6c6b915c5800c75fe1aaabcb838bc89f49485"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/config_merge-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "bank_ledger",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": true,
+        "steps": 9,
+        "usage": {
+          "promptTokenCount": 7103,
+          "candidatesTokenCount": 33,
+          "totalTokenCount": 7136,
+          "cachedContentTokenCount": 3934,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 7103
+            }
+          ],
+          "cacheTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 3934
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "80d5cae9b6aac86b1b03141651877005852e269548d32cbdc6928e3f2c25dcb2",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.42,
+              "drift": 0.29,
+              "gate": 0.283,
+              "regime": 0.425
+            },
+            "head_probs": [
+              0.1097,
+              0.2285,
+              0.2482,
+              0.1508,
+              0.2628
+            ],
+            "step": 30
+          },
+          "telemetry": {
+            "avg_entropy": 2.34037,
+            "avg_hidden_drift": 4.306071,
+            "avg_gate": 0.76544,
+            "avg_regime_entropy": 1.67164
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:00:39.745636+00:00",
+        "wall_seconds": 164.486,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/bank_ledger-trial-1/agent.stdout.txt",
+          "bytes": 17206,
+          "sha256": "e364caa01365927f13145be9eb5f51a6d55dc8946be8549500bbd1ad2f849ca5"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/bank_ledger-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/bank_ledger-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/lolm_gemini/bank_ledger-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/ledger.cpython-314.pyc",
+          "bytes": 3336,
+          "sha256": "d1bd1f0c1ce5cb07e230b46d6c7b517a7f6299bc011cb0150992bfaf8cbbf291"
+        },
+        {
+          "path": "ledger.py",
+          "bytes": 1821,
+          "sha256": "778cdf69b01af94123fe93adf84a3c21dc8c84168f3d4b2537c8451265b8685a"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/lolm_gemini/bank_ledger-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "iso_duration",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 4,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 5,
+              "totalErrors": 0,
+              "totalLatencyMs": 122686
+            },
+            "tokens": {
+              "input": 35160,
+              "prompt": 55433,
+              "candidates": 1295,
+              "total": 56728,
+              "cached": 20273,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 5,
+                "totalErrors": 0,
+                "totalLatencyMs": 122686,
+                "tokens": {
+                  "input": 35160,
+                  "prompt": 55433,
+                  "candidates": 1295,
+                  "total": 56728,
+                  "cached": 20273,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:03:28.406046+00:00",
+        "wall_seconds": 125.892,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/iso_duration-trial-1/agent.stdout.txt",
+          "bytes": 2532,
+          "sha256": "c7882627be2c0281b8b553cd010c5a29de72f75329ba650f9c157c7633a6a499"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/iso_duration-trial-1/agent.stderr.txt",
+          "bytes": 327,
+          "sha256": "72c213956b05db11a879ea1680c7a7fd79e05a67ba56a5d710a08a716a220c1f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/iso_duration-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/iso_duration-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 2627,
+          "sha256": "e17ab9880940462e314c6db6f043f5a6c76afa3ee0b67ad4b7b963f1a57158c4"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 2142,
+          "sha256": "fa29308a1747fedfd62afb5bec6788622712bad67a9cb28967f602bacfacabcc"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/iso_duration-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "roman",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 5,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 6,
+              "totalErrors": 0,
+              "totalLatencyMs": 52913
+            },
+            "tokens": {
+              "input": 26898,
+              "prompt": 67427,
+              "candidates": 1335,
+              "total": 68762,
+              "cached": 40529,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 6,
+                "totalErrors": 0,
+                "totalLatencyMs": 52913,
+                "tokens": {
+                  "input": 26898,
+                  "prompt": 67427,
+                  "candidates": 1335,
+                  "total": 68762,
+                  "cached": 40529,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:05:38.476503+00:00",
+        "wall_seconds": 56.445,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/roman-trial-1/agent.stdout.txt",
+          "bytes": 2526,
+          "sha256": "004b1450e6d0a78d66f7cb14fbe869a4f523740a6ca566ae58322504ddf8af4c"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/roman-trial-1/agent.stderr.txt",
+          "bytes": 327,
+          "sha256": "72c213956b05db11a879ea1680c7a7fd79e05a67ba56a5d710a08a716a220c1f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/roman-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/roman-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 2126,
+          "sha256": "04570e8cf898e0dd3371cd1a4ddf86350ba367da8487579b78aef2ceaafd2f72"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 1290,
+          "sha256": "c2048a7cc8190d30c6458ef18219f643fc2eb3484d5683bf3993a3460f0579b1"
+        },
+        {
+          "path": "test_solution.py",
+          "bytes": 1074,
+          "sha256": "f2c1662ae6035dda0b6db413a8dcbac3477968827770113adc74eb2d0dc6005d"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/roman-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "interval_merge",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 5,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 6,
+              "totalErrors": 0,
+              "totalLatencyMs": 41731
+            },
+            "tokens": {
+              "input": 22970,
+              "prompt": 63468,
+              "candidates": 813,
+              "total": 64281,
+              "cached": 40498,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 6,
+                "totalErrors": 0,
+                "totalLatencyMs": 41731,
+                "tokens": {
+                  "input": 22970,
+                  "prompt": 63468,
+                  "candidates": 813,
+                  "total": 64281,
+                  "cached": 40498,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:06:39.114571+00:00",
+        "wall_seconds": 45.258,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/interval_merge-trial-1/agent.stdout.txt",
+          "bytes": 2345,
+          "sha256": "fd4d21198666ca807e0c4f0adbd540c99d96c018900200defaca0947b96b3cb3"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/interval_merge-trial-1/agent.stderr.txt",
+          "bytes": 327,
+          "sha256": "72c213956b05db11a879ea1680c7a7fd79e05a67ba56a5d710a08a716a220c1f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/interval_merge-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/interval_merge-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 1004,
+          "sha256": "bf50d53f02c98286278abbed4b5ee3d5de30579994e27006819aba894c27c6e1"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 484,
+          "sha256": "b7aa8b761a64f164064ab237c4b9638809634880cac978af3cbf04076fe62234"
+        },
+        {
+          "path": "test_solution.py",
+          "bytes": 958,
+          "sha256": "8cef9f276bad1b0b08c149015f7ebc805ae026af5fc10cf4b55cc082bbb64b56"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/interval_merge-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "lru",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 5,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 6,
+              "totalErrors": 0,
+              "totalLatencyMs": 72439
+            },
+            "tokens": {
+              "input": 36394,
+              "prompt": 64749,
+              "candidates": 1462,
+              "total": 66211,
+              "cached": 28355,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 6,
+                "totalErrors": 0,
+                "totalLatencyMs": 72439,
+                "tokens": {
+                  "input": 36394,
+                  "prompt": 64749,
+                  "candidates": 1462,
+                  "total": 66211,
+                  "cached": 28355,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:07:28.545881+00:00",
+        "wall_seconds": 75.846,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/lru-trial-1/agent.stdout.txt",
+          "bytes": 4050,
+          "sha256": "9d7c0ce802d70b8c58853717bc525b76b655c5eb8ecb8a91e49b877b527ed12b"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/lru-trial-1/agent.stderr.txt",
+          "bytes": 327,
+          "sha256": "72c213956b05db11a879ea1680c7a7fd79e05a67ba56a5d710a08a716a220c1f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/lru-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/lru-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 1818,
+          "sha256": "dafd056b38cd7d7a9bdad45979cc976890d05e5241d2c460d5e89bc8620477fa"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 1065,
+          "sha256": "bddfee3a4b41eea5c69e53067ee2c282047137d1ca9a0c19ab890616836aad0b"
+        },
+        {
+          "path": "test_solution.py",
+          "bytes": 673,
+          "sha256": "9580e790cbfb954ed1daacda0300da1a1357228b291a324576ce232443b2ceb1"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/lru-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "semver",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 7,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 8,
+              "totalErrors": 0,
+              "totalLatencyMs": 91833
+            },
+            "tokens": {
+              "input": 51954,
+              "prompt": 96532,
+              "candidates": 2871,
+              "total": 99403,
+              "cached": 44578,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 8,
+                "totalErrors": 0,
+                "totalLatencyMs": 91833,
+                "tokens": {
+                  "input": 51954,
+                  "prompt": 96532,
+                  "candidates": 2871,
+                  "total": 99403,
+                  "cached": 44578,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:08:48.490885+00:00",
+        "wall_seconds": 94.458,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/semver-trial-1/agent.stdout.txt",
+          "bytes": 4197,
+          "sha256": "1cc70a1023acb798eee3cfe14d432310bcc4eb7886b80c77eec6b5adce2ad197"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/semver-trial-1/agent.stderr.txt",
+          "bytes": 327,
+          "sha256": "72c213956b05db11a879ea1680c7a7fd79e05a67ba56a5d710a08a716a220c1f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/semver-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/semver-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 2343,
+          "sha256": "e4678e3e62f6e5bbd36a3ee43e110ce2eb37ec0857356b3d0fe8e201831d5a04"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 1546,
+          "sha256": "2d50193fd0d8283caeecc1020e4ce8b6716a7e1f7efae9a916f23e93c89518d1"
+        },
+        {
+          "path": "test_solution.py",
+          "bytes": 1034,
+          "sha256": "e111ca0416ea581806af02bcc140b89ef50c9bf3590a6f59a1ce486d1639fab0"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/semver-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "expr_eval",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 7,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 11,
+              "totalErrors": 3,
+              "totalLatencyMs": 147809
+            },
+            "tokens": {
+              "input": 57259,
+              "prompt": 97785,
+              "candidates": 2747,
+              "total": 100532,
+              "cached": 40526,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 11,
+                "totalErrors": 3,
+                "totalLatencyMs": 147809,
+                "tokens": {
+                  "input": 57259,
+                  "prompt": 97785,
+                  "candidates": 2747,
+                  "total": 100532,
+                  "cached": 40526,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:10:27.126971+00:00",
+        "wall_seconds": 187.787,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/expr_eval-trial-1/agent.stdout.txt",
+          "bytes": 3383,
+          "sha256": "07ec0ca0ca3df72509e187ac5b2a454d0e966ec76fbf979901d7907bc0966359"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/expr_eval-trial-1/agent.stderr.txt",
+          "bytes": 5847,
+          "sha256": "2b0304726e4fa00b47e0e141a8c9ba30669696d1a89cba6d9d12c25c7abb528f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/expr_eval-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/expr_eval-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 3360,
+          "sha256": "01789129bc0c9b34740908888d248cc1e0cd988f43c2e03af5f9e086b6d88ab2"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 2101,
+          "sha256": "b9335f8785e64b903aab46226489d4738fdbdc0c50553058211e1a2007d80582"
+        },
+        {
+          "path": "test_solution.py",
+          "bytes": 1452,
+          "sha256": "ff0df341d76c77c4e1e438cb2f5512d6f98a5ad1e76a86d051db8e00d057ec4a"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/expr_eval-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "jsonpath",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 12,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 18,
+              "totalErrors": 5,
+              "totalLatencyMs": 216577
+            },
+            "tokens": {
+              "input": 93283,
+              "prompt": 170204,
+              "candidates": 3239,
+              "total": 173443,
+              "cached": 76921,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 18,
+                "totalErrors": 5,
+                "totalLatencyMs": 216577,
+                "tokens": {
+                  "input": 93283,
+                  "prompt": 170204,
+                  "candidates": 3239,
+                  "total": 173443,
+                  "cached": 76921,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:13:39.069904+00:00",
+        "wall_seconds": 257.491,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/jsonpath-trial-1/agent.stdout.txt",
+          "bytes": 4638,
+          "sha256": "da22081be7099b1d6ef83569151ef96a00476e1452699fed7037d4cb71f82c88"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/jsonpath-trial-1/agent.stderr.txt",
+          "bytes": 9527,
+          "sha256": "e4efaed18cdcf9b6f65a407a8ffe88e15e2ae1258a6963c8819a434492406ea0"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/jsonpath-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/jsonpath-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 1877,
+          "sha256": "7238a0c2b0c0d08b31f2e011ee02b428c0640c8322ceb142cfaed97f8265b011"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 1802,
+          "sha256": "88db7750a0482064b271022c7e07fe00855ade752c02797969a3a9213d2e1fde"
+        },
+        {
+          "path": "test_solution.py",
+          "bytes": 1195,
+          "sha256": "d7641052101edc1cc90ef29b3edf7f13ebb1137bd18b60c8ce64a9c2b28cf5f9"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/jsonpath-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "wrap",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 5,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 8,
+              "totalErrors": 2,
+              "totalLatencyMs": 61323
+            },
+            "tokens": {
+              "input": 25047,
+              "prompt": 65563,
+              "candidates": 1017,
+              "total": 66580,
+              "cached": 40516,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 8,
+                "totalErrors": 2,
+                "totalLatencyMs": 61323,
+                "tokens": {
+                  "input": 25047,
+                  "prompt": 65563,
+                  "candidates": 1017,
+                  "total": 66580,
+                  "cached": 40516,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:18:00.641262+00:00",
+        "wall_seconds": 73.116,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/wrap-trial-1/agent.stdout.txt",
+          "bytes": 2361,
+          "sha256": "810be6e43b2a6f14108478da98140cfd43c8d810238c7486f4762db37b60d3af"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/wrap-trial-1/agent.stderr.txt",
+          "bytes": 4007,
+          "sha256": "201f5479763e2490b332dd1b9b9d4630cc510f4be75457638d9b5861c4aa94c0"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/wrap-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/wrap-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 2153,
+          "sha256": "d074deef9a5d4f4942f99f21bf9dc0662d3bbceab90ef6958e0040c6c4c4b103"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 1806,
+          "sha256": "84f4e166b3b674431dda8bc85cc7c824f3bacdd7e168f6a2d5285deb503e7b0d"
+        },
+        {
+          "path": "test_solution.py",
+          "bytes": 791,
+          "sha256": "9a7f53e8e28a704b06fe7a036051bae6d6073697868a82c7147bf863037510e1"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/wrap-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "fix_pagination",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 7,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 8,
+              "totalErrors": 0,
+              "totalLatencyMs": 33697
+            },
+            "tokens": {
+              "input": 32870,
+              "prompt": 89556,
+              "candidates": 1169,
+              "total": 90725,
+              "cached": 56686,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 8,
+                "totalErrors": 0,
+                "totalLatencyMs": 33697,
+                "tokens": {
+                  "input": 32870,
+                  "prompt": 89556,
+                  "candidates": 1169,
+                  "total": 90725,
+                  "cached": 56686,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:19:17.836304+00:00",
+        "wall_seconds": 35.581,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_pagination-trial-1/agent.stdout.txt",
+          "bytes": 3194,
+          "sha256": "2e74ee0b2f3ea705d570b3a5d53ed5018496429112af99f338a01e5139d87658"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_pagination-trial-1/agent.stderr.txt",
+          "bytes": 327,
+          "sha256": "72c213956b05db11a879ea1680c7a7fd79e05a67ba56a5d710a08a716a220c1f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_pagination-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_pagination-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/paginate.cpython-314.pyc",
+          "bytes": 996,
+          "sha256": "c4020f9faeeb5d48d0ca940e547c3eceff0facef22cd51e7ddb24469d6c9801b"
+        },
+        {
+          "path": "paginate.py",
+          "bytes": 545,
+          "sha256": "85146e11b02c317a839c4125286816bfb3cc1a1c9dca1faf55b6b17f9749c1d4"
+        },
+        {
+          "path": "test_paginate.py",
+          "bytes": 970,
+          "sha256": "f270175c123be809b2c461b8af22e3e9b91f0ec82056286d673ac4d7305f8832"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/fix_pagination-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "fix_multifile_stats",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 13,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 14,
+              "totalErrors": 0,
+              "totalLatencyMs": 82958
+            },
+            "tokens": {
+              "input": 58848,
+              "prompt": 163915,
+              "candidates": 1634,
+              "total": 165549,
+              "cached": 105067,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 14,
+                "totalErrors": 0,
+                "totalLatencyMs": 82958,
+                "tokens": {
+                  "input": 58848,
+                  "prompt": 163915,
+                  "candidates": 1634,
+                  "total": 165549,
+                  "cached": 105067,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:19:57.511318+00:00",
+        "wall_seconds": 85.644,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_multifile_stats-trial-1/agent.stdout.txt",
+          "bytes": 3225,
+          "sha256": "21ff363ef5b0433080f2c56dac6d54551ec2614dc13d3e117ba241834efbf99e"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_multifile_stats-trial-1/agent.stderr.txt",
+          "bytes": 526,
+          "sha256": "a8a3a11710cb54c38eb7efe6df89a4e30809f2def76ad9b0627cc1e78dd15ea3"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_multifile_stats-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_multifile_stats-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/report.cpython-314.pyc",
+          "bytes": 615,
+          "sha256": "0b4c97e857514fc87a4d65006ff25cc4d9232907868bc5d1ccd7bf6796728b87"
+        },
+        {
+          "path": "__pycache__/stats.cpython-314.pyc",
+          "bytes": 1221,
+          "sha256": "a69b0285ca421fa2faa97cd583512d0bb07fb099e562a270b74ebf188e2f267e"
+        },
+        {
+          "path": "report.py",
+          "bytes": 271,
+          "sha256": "0bdff07a435c9f491890211e0eb1ca588ffec14a0a749d4bd767b2ea1c5b018a"
+        },
+        {
+          "path": "stats.py",
+          "bytes": 517,
+          "sha256": "923f54e88fcf7a4842658a46641ae76f8d13a17daa55a8078fcecd05b7787f2a"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/fix_multifile_stats-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "fix_state_machine",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 10,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 11,
+              "totalErrors": 0,
+              "totalLatencyMs": 69173
+            },
+            "tokens": {
+              "input": 45681,
+              "prompt": 122497,
+              "candidates": 1158,
+              "total": 123655,
+              "cached": 76816,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 11,
+                "totalErrors": 0,
+                "totalLatencyMs": 69173,
+                "tokens": {
+                  "input": 45681,
+                  "prompt": 122497,
+                  "candidates": 1158,
+                  "total": 123655,
+                  "cached": 76816,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:21:27.332021+00:00",
+        "wall_seconds": 74.171,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_state_machine-trial-1/agent.stdout.txt",
+          "bytes": 2739,
+          "sha256": "3124f294f5117577efe3fed9d74c60c6ddd49dbb8e11f2ea0d69a807fba6a1d2"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_state_machine-trial-1/agent.stderr.txt",
+          "bytes": 327,
+          "sha256": "72c213956b05db11a879ea1680c7a7fd79e05a67ba56a5d710a08a716a220c1f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_state_machine-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_state_machine-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/orders.cpython-314.pyc",
+          "bytes": 1708,
+          "sha256": "e8ef3ca965b20a2cc9f1f38ceca927285b7bcd0498a47f37680a7ecb18b7794b"
+        },
+        {
+          "path": "orders.py",
+          "bytes": 711,
+          "sha256": "b2c25e5c599b50e1da51650dc5689223b0903c877b890d57c0257dc4055b53d9"
+        },
+        {
+          "path": "test_full.py",
+          "bytes": 846,
+          "sha256": "9d1330c474515b24d1e21d04cf1677e5bdeb36dd25c08a48f895ab436509c415"
+        },
+        {
+          "path": "test_orders.py",
+          "bytes": 817,
+          "sha256": "27dc67de6546b612d07e1a00c46f170cc68bf8975e2d15ea167490ee669d1914"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/fix_state_machine-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "fix_csv_parser",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 12,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 14,
+              "totalErrors": 1,
+              "totalLatencyMs": 61596
+            },
+            "tokens": {
+              "input": 67646,
+              "prompt": 156606,
+              "candidates": 1497,
+              "total": 158103,
+              "cached": 88960,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 14,
+                "totalErrors": 1,
+                "totalLatencyMs": 61596,
+                "tokens": {
+                  "input": 67646,
+                  "prompt": 156606,
+                  "candidates": 1497,
+                  "total": 158103,
+                  "cached": 88960,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:22:45.711887+00:00",
+        "wall_seconds": 75.174,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_csv_parser-trial-1/agent.stdout.txt",
+          "bytes": 2918,
+          "sha256": "94997c1ae3ca2c50d50e0cd126cd932628d7b0ca0345ed55aae9a36d9a18cd37"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_csv_parser-trial-1/agent.stderr.txt",
+          "bytes": 2167,
+          "sha256": "4aac902c11548cfce2b81bfac42576cc894051136a15d65d51d404261136f624"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_csv_parser-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_csv_parser-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/csvlite.cpython-314.pyc",
+          "bytes": 1558,
+          "sha256": "76b02312fc506de7a6b6718eb1ab1ae8bdab05cff4fe5f7c8082b12418bae456"
+        },
+        {
+          "path": "csvlite.py",
+          "bytes": 1404,
+          "sha256": "96a180be8c2f930fd1dfe30e572432b70f871ca68b5e769a94ac80eb884dad3a"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/fix_csv_parser-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "fix_cache_ttl",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 11,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 12,
+              "totalErrors": 0,
+              "totalLatencyMs": 30711
+            },
+            "tokens": {
+              "input": 42903,
+              "prompt": 148121,
+              "candidates": 2301,
+              "total": 150422,
+              "cached": 105218,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 12,
+                "totalErrors": 0,
+                "totalLatencyMs": 30711,
+                "tokens": {
+                  "input": 42903,
+                  "prompt": 148121,
+                  "candidates": 2301,
+                  "total": 150422,
+                  "cached": 105218,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:24:05.832112+00:00",
+        "wall_seconds": 38.379,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_cache_ttl-trial-1/agent.stdout.txt",
+          "bytes": 2956,
+          "sha256": "f99f45214081dbde97f96e97f1efef80838d0554073c7d3dcd274baedac62c9b"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_cache_ttl-trial-1/agent.stderr.txt",
+          "bytes": 327,
+          "sha256": "72c213956b05db11a879ea1680c7a7fd79e05a67ba56a5d710a08a716a220c1f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_cache_ttl-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_cache_ttl-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/cache.cpython-314.pyc",
+          "bytes": 2634,
+          "sha256": "388675d20df2685dc7aae776928faa31045a2654d132c311231cff0ab1fb8bfc"
+        },
+        {
+          "path": "__pycache__/service.cpython-314.pyc",
+          "bytes": 1231,
+          "sha256": "21c1290f33b0c808493107f29e1ffb9c48565451ad5eaa2fbb23303f9f15e9ca"
+        },
+        {
+          "path": "cache.py",
+          "bytes": 1576,
+          "sha256": "afc418ea4204984f921bcee25387309ab7bd68856c701984fa925687e03f7a1a"
+        },
+        {
+          "path": "service.py",
+          "bytes": 616,
+          "sha256": "c5056f95bb7a9e74e1b543fe5eb9166a8a6478f351487bca342e6563faa7f3ac"
+        },
+        {
+          "path": "test.py",
+          "bytes": 1552,
+          "sha256": "97ca3ac14b75960d2a86e8d538855ca736bc7107c5c120e140fffa301901b07c"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/fix_cache_ttl-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "fix_argsplit",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 14,
+        "tool_failures": 1,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 17,
+              "totalErrors": 2,
+              "totalLatencyMs": 27666
+            },
+            "tokens": {
+              "input": 63153,
+              "prompt": 188462,
+              "candidates": 2551,
+              "total": 191013,
+              "cached": 125309,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 17,
+                "totalErrors": 2,
+                "totalLatencyMs": 27666,
+                "tokens": {
+                  "input": 63153,
+                  "prompt": 188462,
+                  "candidates": 2551,
+                  "total": 191013,
+                  "cached": 125309,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:24:48.618520+00:00",
+        "wall_seconds": 100.689,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_argsplit-trial-1/agent.stdout.txt",
+          "bytes": 3356,
+          "sha256": "a49c8c09818ed80c5105d4e6e0e52d38fd2b551503847f86f0fd99e31047113f"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_argsplit-trial-1/agent.stderr.txt",
+          "bytes": 2941,
+          "sha256": "ea5be273d757d5735c54a13546e00e4a72f48d0d9a0f8c69365e405637390b76"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_argsplit-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_argsplit-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/lexer.cpython-314.pyc",
+          "bytes": 1517,
+          "sha256": "0c9346b5ac9ea0f0c322726b2d06b301d041e8c43fa8f31be29a0deb9306cafc"
+        },
+        {
+          "path": "__pycache__/runner.cpython-314.pyc",
+          "bytes": 693,
+          "sha256": "eb2c771e943baba86342d2b217cfb61f62462165ad8022720896fe79f05b953d"
+        },
+        {
+          "path": "lexer.py",
+          "bytes": 1348,
+          "sha256": "843b2db6f3fb8a8cd939894390aa91d3f5c1db8016bcd0668dd40f4e9e0b393d"
+        },
+        {
+          "path": "runner.py",
+          "bytes": 276,
+          "sha256": "cb48f4bb8d58d53f28c81fa1a24fcabbaa14a1ed9275b8d2a359a6cf8b1ce200"
+        },
+        {
+          "path": "test_parser.py",
+          "bytes": 1441,
+          "sha256": "f2c70c9f42a96def3d1e1ae12dec87930fce65d5eb12c9200e6133854f96ccd8"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/fix_argsplit-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "fix_retry",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 5,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 6,
+              "totalErrors": 0,
+              "totalLatencyMs": 7388
+            },
+            "tokens": {
+              "input": 24267,
+              "prompt": 64775,
+              "candidates": 921,
+              "total": 65696,
+              "cached": 40508,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 6,
+                "totalErrors": 0,
+                "totalLatencyMs": 7388,
+                "tokens": {
+                  "input": 24267,
+                  "prompt": 64775,
+                  "candidates": 921,
+                  "total": 65696,
+                  "cached": 40508,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:26:33.466381+00:00",
+        "wall_seconds": 10.811,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_retry-trial-1/agent.stdout.txt",
+          "bytes": 2534,
+          "sha256": "122dcad956a9e0833d63d4db8f44eee0a9fbe0ef3158b64a1aecd8740c26eb04"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_retry-trial-1/agent.stderr.txt",
+          "bytes": 327,
+          "sha256": "72c213956b05db11a879ea1680c7a7fd79e05a67ba56a5d710a08a716a220c1f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_retry-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_retry-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "retry.py",
+          "bytes": 2020,
+          "sha256": "94c3131ec44cd49d107db8850fc5cb6d260dd2922b3323a99760eabd266e430a"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/fix_retry-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "fix_date_range",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 10,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 13,
+              "totalErrors": 2,
+              "totalLatencyMs": 71284
+            },
+            "tokens": {
+              "input": 51917,
+              "prompt": 124583,
+              "candidates": 1483,
+              "total": 126066,
+              "cached": 72666,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 13,
+                "totalErrors": 2,
+                "totalLatencyMs": 71284,
+                "tokens": {
+                  "input": 51917,
+                  "prompt": 124583,
+                  "candidates": 1483,
+                  "total": 126066,
+                  "cached": 72666,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:26:48.388018+00:00",
+        "wall_seconds": 151.763,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_date_range-trial-1/agent.stdout.txt",
+          "bytes": 3679,
+          "sha256": "a583990d359cbf11e4ca57bfa70bd4668f37b9d93a2991f9fdbc9e17717053d4"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_date_range-trial-1/agent.stderr.txt",
+          "bytes": 1291,
+          "sha256": "5ad0820139b558e3913c881bbee5ca08db145913e98e2a929ab93bd1bad7394c"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_date_range-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/fix_date_range-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/dates.cpython-314.pyc",
+          "bytes": 2031,
+          "sha256": "930f9dc2b09ff1fa8470211ce458d13c9b5f273759934c4d1aa94ca59aac0848"
+        },
+        {
+          "path": "dates.py",
+          "bytes": 1394,
+          "sha256": "a90013e0388153910affdcb4340af4020f9442a4185af3c58a52fe623c95837e"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/fix_date_range-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "refactor_shapes",
+      "tier": "refactor",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 9,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 10,
+              "totalErrors": 0,
+              "totalLatencyMs": 60483
+            },
+            "tokens": {
+              "input": 57023,
+              "prompt": 121806,
+              "candidates": 2045,
+              "total": 123851,
+              "cached": 64783,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 10,
+                "totalErrors": 0,
+                "totalLatencyMs": 60483,
+                "tokens": {
+                  "input": 57023,
+                  "prompt": 121806,
+                  "candidates": 2045,
+                  "total": 123851,
+                  "cached": 64783,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:29:24.217406+00:00",
+        "wall_seconds": 62.19,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/refactor_shapes-trial-1/agent.stdout.txt",
+          "bytes": 2717,
+          "sha256": "2e33ffbbc0f448eebe2503976cfe1e6df4c0adf8a2e06777a4d624713eca6c9b"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/refactor_shapes-trial-1/agent.stderr.txt",
+          "bytes": 327,
+          "sha256": "72c213956b05db11a879ea1680c7a7fd79e05a67ba56a5d710a08a716a220c1f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/refactor_shapes-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/refactor_shapes-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/shapes.cpython-314.pyc",
+          "bytes": 3207,
+          "sha256": "14e05fbac9f1ef186082802a5d81ccb34ffd897a156565eb64593d87911070ad"
+        },
+        {
+          "path": "shapes.py",
+          "bytes": 1354,
+          "sha256": "8813c758dde8ec5656cfec043239ab78f25a6a7ff6f147e93bf98450df674641"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/refactor_shapes-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "refactor_extract",
+      "tier": "refactor",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "model": "gemini-3.1-flash-lite",
+        "tool_calls": 11,
+        "tool_failures": 0,
+        "usage": {
+          "gemini-3.1-flash-lite": {
+            "api": {
+              "totalRequests": 15,
+              "totalErrors": 3,
+              "totalLatencyMs": 30461
+            },
+            "tokens": {
+              "input": 51806,
+              "prompt": 140781,
+              "candidates": 1837,
+              "total": 142618,
+              "cached": 88975,
+              "thoughts": 0,
+              "tool": 0
+            },
+            "roles": {
+              "main": {
+                "totalRequests": 15,
+                "totalErrors": 3,
+                "totalLatencyMs": 30461,
+                "tokens": {
+                  "input": 51806,
+                  "prompt": 140781,
+                  "candidates": 1837,
+                  "total": 142618,
+                  "cached": 88975,
+                  "thoughts": 0,
+                  "tool": 0
+                }
+              }
+            }
+          }
+        },
+        "error": null,
+        "infrastructure_error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:30:30.493205+00:00",
+        "wall_seconds": 119.455,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/refactor_extract-trial-1/agent.stdout.txt",
+          "bytes": 3155,
+          "sha256": "ac3313d9d79a67056dbb1aeb526e7c130f818d2ee10e59433bc5e784926a8091"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/refactor_extract-trial-1/agent.stderr.txt",
+          "bytes": 3135,
+          "sha256": "40375b3eb825f21acfe08ca7e227607609472bf7b477088be6d28a46d5e3db22"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/refactor_extract-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/refactor_extract-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/app.cpython-314.pyc",
+          "bytes": 817,
+          "sha256": "637169a50848851ac289ca1c0887e03392758ea92c9f17915ad37f0a0bcfe8c9"
+        },
+        {
+          "path": "__pycache__/pricing.cpython-314.pyc",
+          "bytes": 1013,
+          "sha256": "6d4829fd552d7d4c31c3506c6f557da0e3674110178f773fc1286048c42e8409"
+        },
+        {
+          "path": "__pycache__/storage.cpython-314.pyc",
+          "bytes": 932,
+          "sha256": "ca591a88b5b37b1183d1ffe57bd9ac2cb17d6243aed4546cbb3c4e7a46da73d5"
+        },
+        {
+          "path": "app.py",
+          "bytes": 378,
+          "sha256": "9296fd4726e92f2bbcb73e5611280f64cdabfd0c217dced30732f60759ba7cb9"
+        },
+        {
+          "path": "pricing.py",
+          "bytes": 322,
+          "sha256": "bad147eeef31bb7df0d1f494869c3fbe6320646d4e8fe77d6b6f2d3af8747f7f"
+        },
+        {
+          "path": "storage.py",
+          "bytes": 318,
+          "sha256": "c37e4f4fd0d140c09aa85fa902a1be4f2990ee3765fd18bef38181d8cf1dbd95"
+        },
+        {
+          "path": "test_refactor.py",
+          "bytes": 1023,
+          "sha256": "91e084b07d50474e35064e2a4926352b976fed206d4d5c5d3e714dcc450cf02d"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/refactor_extract-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "tdd_matrix",
+      "tier": "tdd",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": false,
+        "infrastructure_error": "usage_limit"
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:32:34.078138+00:00",
+        "wall_seconds": 10.489,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/tdd_matrix-trial-1/agent.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/tdd_matrix-trial-1/agent.stderr.txt",
+          "bytes": 2847,
+          "sha256": "c02a143e4b0007a91722589ea119e0aaab807f328f1e3affe0b037da5e504a75"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/tdd_matrix-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/tdd_matrix-trial-1/grader.stderr.txt",
+          "bytes": 258,
+          "sha256": "15c637be7d494bb1bdb8ebe022465394c5b18647d0721c4e45e0bdafb4d45658"
+        }
+      },
+      "output_files": [
+        {
+          "path": "test_matrix.py",
+          "bytes": 392,
+          "sha256": "fd7cc0a531448a3c9e09fb3febdeeb904d777f5dbdc722ea6356491c6581854c"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/tdd_matrix-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "cli_wordfreq",
+      "tier": "cli",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": false,
+        "infrastructure_error": "usage_limit"
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:32:48.709715+00:00",
+        "wall_seconds": 2.019,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/cli_wordfreq-trial-1/agent.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/cli_wordfreq-trial-1/agent.stderr.txt",
+          "bytes": 2846,
+          "sha256": "80c7345e52792fe396b94f03ce53de0318d38dbfdf0054e19232a2adf90db3f7"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/cli_wordfreq-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/cli_wordfreq-trial-1/grader.stderr.txt",
+          "bytes": 749,
+          "sha256": "bc1926e5cece2f710a26956209c4623049ceb4369597996d9bd387548157c131"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/cli_wordfreq-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "cli_csvstat",
+      "tier": "cli",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": false,
+        "infrastructure_error": "usage_limit"
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:32:54.972521+00:00",
+        "wall_seconds": 1.707,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/cli_csvstat-trial-1/agent.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/cli_csvstat-trial-1/agent.stderr.txt",
+          "bytes": 2846,
+          "sha256": "650c9d507f51ab91b63cba053f343dee6b49c39d7aec84b4db19f3da9b67948d"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/cli_csvstat-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/cli_csvstat-trial-1/grader.stderr.txt",
+          "bytes": 821,
+          "sha256": "5a985554aed0374296572245bfbc55ad59594f3cb3b831eccac93bb40cb5532b"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/cli_csvstat-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "pkg_calc",
+      "tier": "package",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": false,
+        "infrastructure_error": "usage_limit"
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:33:00.904495+00:00",
+        "wall_seconds": 25.698,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/pkg_calc-trial-1/agent.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/pkg_calc-trial-1/agent.stderr.txt",
+          "bytes": 2847,
+          "sha256": "7b1591e3f51e54c3a9f194636125c0ed205de000ed6d6eb4c484a07b78bf1ca3"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/pkg_calc-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/pkg_calc-trial-1/grader.stderr.txt",
+          "bytes": 288,
+          "sha256": "970d4a071dea8ab2b7880600c112ce500380233dadc4bfa3d0c3a310a0115264"
+        }
+      },
+      "output_files": [
+        {
+          "path": "calc/__init__.py",
+          "bytes": 504,
+          "sha256": "78bfab2ce0688916fe4892c5562358862379a373c61451518aa534a8090158f5"
+        },
+        {
+          "path": "calc/ops.py",
+          "bytes": 198,
+          "sha256": "9219b02243dc2d1c25f7e7fde5e3743d503f27819e396de9dc42b33951c87370"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/pkg_calc-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "json_patch",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": false,
+        "infrastructure_error": "usage_limit"
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:33:30.801344+00:00",
+        "wall_seconds": 2.654,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/json_patch-trial-1/agent.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/json_patch-trial-1/agent.stderr.txt",
+          "bytes": 3046,
+          "sha256": "96893afef4a7e9a10e4205771f343cc7bb9a1b2010cd627bd8ad11166d1a59fc"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/json_patch-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/json_patch-trial-1/grader.stderr.txt",
+          "bytes": 269,
+          "sha256": "984a6adc747e1ba71fd58dba4a7df84f965a91d9e2dfdda646b61a1b4ee4b2c2"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/json_patch-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "graph_topo",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": false,
+        "infrastructure_error": "usage_limit"
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:33:37.639760+00:00",
+        "wall_seconds": 2.236,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/graph_topo-trial-1/agent.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/graph_topo-trial-1/agent.stderr.txt",
+          "bytes": 2847,
+          "sha256": "65b9d0fe44effe49eb2e496230a4699f0040a73fee5b5cf5ecc1e15cc9fc394f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/graph_topo-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/graph_topo-trial-1/grader.stderr.txt",
+          "bytes": 268,
+          "sha256": "00288e8d5a84170fb017c6dbfcd33b1e6f6bc71fbe27aea5c23f61de39b9b237"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/graph_topo-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "config_merge",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": false,
+        "infrastructure_error": "usage_limit"
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:33:44.061972+00:00",
+        "wall_seconds": 2.315,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/config_merge-trial-1/agent.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/config_merge-trial-1/agent.stderr.txt",
+          "bytes": 2846,
+          "sha256": "e63ad4caa3ef71a90e4c64c242e46c8154a342288993fa3437f439585d4d9b3f"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/config_merge-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/config_merge-trial-1/grader.stderr.txt",
+          "bytes": 259,
+          "sha256": "19e63e234dade93ff11df7976f88a69306a2b8ea085947a44984d8f9830733c4"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/config_merge-trial-1"
+    },
+    {
+      "agent": "gemini",
+      "task": "bank_ledger",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": false,
+        "infrastructure_error": "usage_limit"
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T04:33:50.526496+00:00",
+        "wall_seconds": 17.808,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/bank_ledger-trial-1/agent.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/bank_ledger-trial-1/agent.stderr.txt",
+          "bytes": 4686,
+          "sha256": "764b401462cfe76206c23f2d8ee14961b5a24a422ab55537b7bf11c31b409dff"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/bank_ledger-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/raw/gemini/bank_ledger-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "ledger.py",
+          "bytes": 2231,
+          "sha256": "bf257df554a773dec88d4feb79bcc8ffecd6bc707e44e49f1c03a4eadc1e3700"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-control2/artifacts/gemini/bank_ledger-trial-1"
+    }
+  ],
+  "summary": {
+    "lolm_gemini": {
+      "backend": "Google gemini-3.1-flash-lite via user-owned key",
+      "passed": 23,
+      "jobs": 26,
+      "scoreable_jobs": 25,
+      "excluded": 1,
+      "pass_rate": 0.92,
+      "median_wall_seconds": 103.71199999999999
+    },
+    "gemini": {
+      "backend": "installed Gemini CLI on gemini-3.1-flash-lite via user-owned key",
+      "passed": 18,
+      "jobs": 26,
+      "scoreable_jobs": 18,
+      "excluded": 8,
+      "pass_rate": 1.0,
+      "median_wall_seconds": 59.317499999999995
+    }
+  },
+  "completed_at": "2026-08-12T04:34:12.804699+00:00"
+}

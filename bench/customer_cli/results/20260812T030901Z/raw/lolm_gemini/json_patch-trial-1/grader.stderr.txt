@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-lolm_gemini-json_patch-pq4lv44u/_lolm_hidden_check.py", line 12, in <module>
+    assert apply_patch(base, [{'op': 'add', 'path': '/b/c/-', 'value': 4}])['b']['c'] == [1, 2, 3, 4]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-lolm_gemini-cli_csvstat-q8j18wgh/_lolm_hidden_check.py", line 33, in <module>
+    assert r.stderr.strip() != '', args
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ['--bogus', '1']

@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-gemini-json_patch-7e0c4iyp/_lolm_hidden_check.py", line 2, in <module>
+    from jsonpatch import apply_patch
+ModuleNotFoundError: No module named 'jsonpatch'

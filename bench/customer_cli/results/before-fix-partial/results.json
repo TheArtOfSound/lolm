@@ -1,0 +1,1363 @@
+{
+  "schema_version": 1,
+  "run_id": "20260812T025120Z",
+  "created_at": "2026-08-12T02:51:20.200170+00:00",
+  "agents": [
+    "lolm_cerebras"
+  ],
+  "tasks": [
+    {
+      "id": "iso_duration",
+      "tier": "impl",
+      "instruction_sha256": "fdcccdff8e4fcae8d99f9f7cd7e2f6d6f37e9202f83470f9da9a59cfa8b8f750",
+      "hidden_test_sha256": "4796fe0596f398a87d271c482b67ca27d378236cf23cff86540b6f347818d7ae",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "roman",
+      "tier": "impl",
+      "instruction_sha256": "660aa0def4780c8803f0738a278aa44a98cc5315c34a1ef1a260949020b0db30",
+      "hidden_test_sha256": "7f8ab6e2a96313246b0fe6fd7cbdbc3d7639ea570c71535f38f16b1e101fa2d4",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "interval_merge",
+      "tier": "impl",
+      "instruction_sha256": "7773e8bfa24f109110f4abd21cc31b6b06f3730c3ca0f64cc0b060adbd184468",
+      "hidden_test_sha256": "669ee4931505edf19e3255bcddcbe098d6d7443672ea5a39ac71831ef1ce1d34",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "lru",
+      "tier": "impl",
+      "instruction_sha256": "8af019b6fae92da46f0f29dbe4815d308ba4cf3b092899b5c36b5641ac786e0e",
+      "hidden_test_sha256": "a24f3abc7b32c965ccffcb125903ffdec843f3bb2b6503c4d2d2775bbb5d9cf1",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "semver",
+      "tier": "impl",
+      "instruction_sha256": "cb563d12430dd37e1dcec0ddb6b6ad77a1e995d69b0c58aaa95b7bbe2db69462",
+      "hidden_test_sha256": "8e4025cb0093fddf8455274b077d3aa49742cca29687f991b340d9a2af5c2681",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "expr_eval",
+      "tier": "impl",
+      "instruction_sha256": "08aafca8ade59be4452669a90442e2015a7c934dcfd9bcd08b4a33aeb5e88794",
+      "hidden_test_sha256": "498983003a4c5e91a2b7d81ef2dfcb0b728ef09de11afb30f07eb892dbed177b",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "jsonpath",
+      "tier": "impl",
+      "instruction_sha256": "40c14b1b40a29aa06cbfa91c180155444696d6256c065e3c9498b90f72816942",
+      "hidden_test_sha256": "693482138a217036e59ee38aba7bb98e050bb6a66eb08deda4a77c3f69a6f3a5",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "wrap",
+      "tier": "impl",
+      "instruction_sha256": "bdf5a285346d74a7d5d3d62f56d1a9d4ff2dd4fec92d148e1358213a7377327a",
+      "hidden_test_sha256": "d5d5aeeec691ce623786d2b1f88245e6183534742d79bcaaf42d1ede114b2454",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "fix_pagination",
+      "tier": "fix",
+      "instruction_sha256": "0537ceead19a0cf7d7213917b83f734288af3eb88abc4bcacf84bd5b66ce4963",
+      "hidden_test_sha256": "63ab348dbc2d77c965d9f0ec7578b5382c92c4230a0c5dd51f2cae68237de5ac",
+      "seed_sha256": "6753c57ed6f21b3226754da1df1032f0d72d1f926885218b01f34c824254021a"
+    },
+    {
+      "id": "fix_multifile_stats",
+      "tier": "fix",
+      "instruction_sha256": "e73e3dc048fd3620bf2f48aa74a798d532a27a1110ad7e87abb2a36a008cabe6",
+      "hidden_test_sha256": "242ec3e7c8353ffda2fb60e8a76f380081fb4a4e9b4425dbe034635d696fa66b",
+      "seed_sha256": "bc51b541e65237e7cdab955867464a024e596a20226ca0fb5b3d8a5a00474f2c"
+    },
+    {
+      "id": "fix_state_machine",
+      "tier": "fix",
+      "instruction_sha256": "ac4c36ed1f7949ab20f80566e4ae5a45b47bc23cc421220cf976fd87ce198e8d",
+      "hidden_test_sha256": "22868bb32643200afb87af5940c6d16724c014921351099094020e8e34cf7817",
+      "seed_sha256": "b82eff05e506e59a7de31042b933805674e04508642342d2338c2afa0cb8663c"
+    },
+    {
+      "id": "fix_csv_parser",
+      "tier": "fix",
+      "instruction_sha256": "eae6d49a36869b3a090baeac34b3e728cc3c96fd539e5c19425c43944d53ad01",
+      "hidden_test_sha256": "77168e42f0b906fe3181d059c1f7411c3193baa59290ace4a5744370f7d8443b",
+      "seed_sha256": "e66c6025b7da30986cae121ad61f7acbe442e9b7780870db02165fb6d0613f56"
+    },
+    {
+      "id": "fix_cache_ttl",
+      "tier": "fix",
+      "instruction_sha256": "17de2c29ac54b1cefb9d18b26f3ffe83ebcf2eb0964ece8711194653445660b3",
+      "hidden_test_sha256": "c13aafb5d50a15d91633abcd8adc122a070ebbf74360678250ad3b4afcf52a83",
+      "seed_sha256": "836aef95b2654b3c1ae9ae2bfcc4f0947122d81a92ba75e648cc39ee7a1b88ac"
+    },
+    {
+      "id": "fix_argsplit",
+      "tier": "fix",
+      "instruction_sha256": "c531194b8cb8c4966643b710172c716316e358d5a3c4e46acca6dfe44ae30fde",
+      "hidden_test_sha256": "159f57931d7fa178f7e40e82c25a0ce13470df688a6231616de9bfe1ddb8ab2c",
+      "seed_sha256": "f60384ae4bb3385af48cab544c64fc3e5c1087db9ab0a2ac722390e650fc3695"
+    },
+    {
+      "id": "fix_retry",
+      "tier": "fix",
+      "instruction_sha256": "507e8ae259bd3e8a1215e215228add0072bfca54d96cd554a6aad1ee88069b82",
+      "hidden_test_sha256": "764c0583e32eae02e092a51bf25b05d16af54e8410541dadb30342f96e8153bf",
+      "seed_sha256": "4f9218d312ffffe5bbfc4e24cba1f58f4c1b5fd09c728736840afd2396f49556"
+    },
+    {
+      "id": "fix_date_range",
+      "tier": "fix",
+      "instruction_sha256": "7444364dfa70f9ad15c974d1d4ce76e2aadad36050598eb0941b6787348067b2",
+      "hidden_test_sha256": "3988c76c68d52c8cfb8b7d83d7899614b50b4f782e9e2e6f88b4066956626649",
+      "seed_sha256": "9a502209bb8657cbc643a24a5ba13d85bea58f92f06b7a18a22dda5a26e6ee5d"
+    },
+    {
+      "id": "refactor_shapes",
+      "tier": "refactor",
+      "instruction_sha256": "b4369d65db0b798a9d567130b4975e66bc58eb131376da3ce8bd55ea63350260",
+      "hidden_test_sha256": "545469f86a3a0f6231d2d302eeff398e690c5a3b98727138f3f382259d7775fc",
+      "seed_sha256": "be5aaf5d827bc875ebc77195f1f6a53cc07b168700241a8992234ef0c17f2ceb"
+    },
+    {
+      "id": "refactor_extract",
+      "tier": "refactor",
+      "instruction_sha256": "7337262f1095d2e2c343cdd7124723f100dee9c5517d12c3b8191bda7c4c1763",
+      "hidden_test_sha256": "580d49bddef257804911fc2cf1b9c669f075ad28d237f47d47102761494ad8ef",
+      "seed_sha256": "fe4624511ada3f7b0e35593f499c6ae984171e527a1684263d760a18406e4255"
+    },
+    {
+      "id": "tdd_matrix",
+      "tier": "tdd",
+      "instruction_sha256": "3134e42f3426efc21260248011cdf4159e3f01dd71c6b78d68b52b3f66732649",
+      "hidden_test_sha256": "6d716caf4ef87c45636e5037fe1e3ad2e4da9b16e9fc23cdb4ee35672f5179f6",
+      "seed_sha256": "c94e7c595a7d8059ef511ae41e92db5e58c4799bd704faa6692c85f159dcb770"
+    },
+    {
+      "id": "cli_wordfreq",
+      "tier": "cli",
+      "instruction_sha256": "29fd066fd34eb0fea24e0cf55448a1c9e919322a721c4c854317207a887fbf77",
+      "hidden_test_sha256": "7c4e7417fb97421d545dfdbf967d18076a16956a67265ebe732cea0bd397b194",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "cli_csvstat",
+      "tier": "cli",
+      "instruction_sha256": "ab8bc9476fbda33b94dd684403243d5dce805cf0a500a8d631def5c1c9d16bdf",
+      "hidden_test_sha256": "94ef698b12f9256c5a98c8bae2c34a3e0dffffc0487985de10972179905b118a",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "pkg_calc",
+      "tier": "package",
+      "instruction_sha256": "ab8e6061fc8e70a7d0631e6be21331e7b9fad7ae1ac7f6730e51f104af6ee342",
+      "hidden_test_sha256": "ecdb8f5d17f76cc8b6690304183961ca6e4b503913b1b57a2fbc693b2940e384",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "json_patch",
+      "tier": "impl",
+      "instruction_sha256": "9b42a6fcc14640e1c5774d14ca8730ebcd1ac58803642edeadf77b043c2356c2",
+      "hidden_test_sha256": "2ac90ee48c777d3cbe083a81d236ecfba1c7795b08391b70480c9eb0ea25a4b4",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "graph_topo",
+      "tier": "impl",
+      "instruction_sha256": "e189560aafb73112ff3f8436f116382c1a9520f6987e236cfcd80e49fe4d6623",
+      "hidden_test_sha256": "136d045e81231e38c1e0fb4d1312e8aa5ce310b0c9f8571c79e86f9bdd9603d4",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "config_merge",
+      "tier": "impl",
+      "instruction_sha256": "1a6b413695a356621b30c3943ca20048c147bd2703a18bd4fb4be78906f83f0e",
+      "hidden_test_sha256": "d8b267821bc7cda0c162dbf26ced224c78a862ed6985dd435a9c96f77e3dc0ba",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "bank_ledger",
+      "tier": "impl",
+      "instruction_sha256": "66644d8247832cc01262c355e1c93d735c67451d8005329ca473900cd03ae4d3",
+      "hidden_test_sha256": "7c3331558b871670d8eea68a7303abe6072f9b9d83253a9f0b9d6897f96740fd",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ],
+  "settings": {
+    "repeat": 1,
+    "timeout_seconds": 300,
+    "max_steps": 12,
+    "lolm_nfet": true,
+    "provider_cooldown_seconds": 5
+  },
+  "environment": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+    "python": "3.14.6",
+    "git_commit": "95c23c06d5da0ca21aa084ac8140bb6cfc462671",
+    "git_dirty": false,
+    "lolm_version": "1.2.1",
+    "codex_version": "codex-cli 0.147.0-alpha.6.5",
+    "gemini_version": "0.40.1",
+    "claude_version": "2.1.223 (Claude Code)",
+    "control_model": "gemini-3.1-flash-lite",
+    "lolm_backend": "Ollama qwen3:14b (local)",
+    "lolm_cerebras_backend": "Cerebras gpt-oss-120b via user-owned key",
+    "lolm_gemini_backend": "Google gemini-3.1-flash-lite via user-owned key",
+    "lolm_gemini_nonfet_backend": "Google gemini-3.1-flash-lite, NFET disabled (ablation)",
+    "codex_backend": "installed Codex CLI with its own local configuration",
+    "gemini_backend": "installed Gemini CLI on gemini-3.1-flash-lite via user-owned key",
+    "claude_backend": "installed Claude Code CLI with its own local credentials"
+  },
+  "results": [
+    {
+      "agent": "lolm_cerebras",
+      "task": "iso_duration",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": false,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": null,
+        "steps": 12,
+        "usage": null,
+        "nfet": {},
+        "error": "Agent reached its 12-step limit before a clean finish."
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T02:51:21.990535+00:00",
+        "wall_seconds": 124.024,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/iso_duration-trial-1/agent.stdout.txt",
+          "bytes": 28977,
+          "sha256": "353f63dc640a0b551a1302d4fe7edd56b47517ebba153eed36a97555218777bf"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/iso_duration-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/iso_duration-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/iso_duration-trial-1/grader.stderr.txt",
+          "bytes": 427,
+          "sha256": "34b99b413cb7abcc1a4f9c48419e3c3f9a38c6090acc8114fffc14d7ca2e7c5c"
+        }
+      },
+      "output_files": [
+        {
+          "path": "solution.py",
+          "bytes": 3710,
+          "sha256": "60a6507364f50c77ea2c5df8bc5ad3e13554b376d71c5d925827959e1e261fb8"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/artifacts/lolm_cerebras/iso_duration-trial-1"
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "roman",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 6,
+        "usage": {
+          "total_tokens": 4836,
+          "completion_tokens": 109,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 4727,
+          "prompt_tokens_details": {
+            "cached_tokens": 3712
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "801f2753f0c2513ecc26cec811446e88c53ee948ebf50e0f61faa5b81b908e71",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": 0.074,
+              "drift": -0.353,
+              "gate": 0.345,
+              "regime": -0.392
+            },
+            "head_probs": [
+              0.1559,
+              0.1953,
+              0.238,
+              0.1241,
+              0.2867
+            ],
+            "step": 107
+          },
+          "telemetry": {
+            "avg_entropy": 1.433473,
+            "avg_hidden_drift": 6.626923,
+            "avg_gate": 0.764184,
+            "avg_regime_entropy": 1.552191
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T02:53:31.143539+00:00",
+        "wall_seconds": 113.947,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/roman-trial-1/agent.stdout.txt",
+          "bytes": 15513,
+          "sha256": "b6f9eab3a459710818650b8b77aa84470eb84480ccb1b690504960cae8dfb7ba"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/roman-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/roman-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/roman-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 4918,
+          "sha256": "9f480fa783032820686745cdac360d9298e8f50d3b2610e27d9fda8f07addf62"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 3667,
+          "sha256": "c7f056b01b98833661e27859b8b7c05b8b16c46f75717992abb5cac799380d31"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/artifacts/lolm_cerebras/roman-trial-1"
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "interval_merge",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 5,
+        "usage": {
+          "total_tokens": 4841,
+          "completion_tokens": 767,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 627
+          },
+          "prompt_tokens": 4074,
+          "prompt_tokens_details": {
+            "cached_tokens": 3712
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "6465cec07204ac633dd658d00be259393df35234ea5e6daadd804b3dad7d15a5",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.475,
+              "drift": 1.554,
+              "gate": -1.425,
+              "regime": -0.236
+            },
+            "head_probs": [
+              0.1031,
+              0.1304,
+              0.1724,
+              0.1737,
+              0.4205
+            ],
+            "step": 128
+          },
+          "telemetry": {
+            "avg_entropy": 1.10587,
+            "avg_hidden_drift": 5.881986,
+            "avg_gate": 0.76801,
+            "avg_regime_entropy": 1.514871
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T02:55:30.424742+00:00",
+        "wall_seconds": 61.16,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/interval_merge-trial-1/agent.stdout.txt",
+          "bytes": 13480,
+          "sha256": "f2cef7daec9b5f4d345338dcd4d541421a737a6369ef28f335a4f8d743b0508a"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/interval_merge-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/interval_merge-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/interval_merge-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 2778,
+          "sha256": "6457e93e37633ac461b84ced031cd4ed1c043bdf77a2ef888bb5e705bc59ce8a"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 2450,
+          "sha256": "bd3a324b41360d5e12a51a1d5ce1cf27b2dd245f21b6ff7a669c1f650d6ca045"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/artifacts/lolm_cerebras/interval_merge-trial-1"
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "lru",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 4,
+        "usage": {
+          "total_tokens": 3999,
+          "completion_tokens": 95,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 3904,
+          "prompt_tokens_details": {
+            "cached_tokens": 3328
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "731cf852eb5ad9743b6332be08d577b28165f9201ff3d6a5d0d662b3f7388b7f",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": 0.139,
+              "drift": 0.054,
+              "gate": 0.044,
+              "regime": 0.067
+            },
+            "head_probs": [
+              0.1283,
+              0.1577,
+              0.1675,
+              0.179,
+              0.3676
+            ],
+            "step": 89
+          },
+          "telemetry": {
+            "avg_entropy": 1.561691,
+            "avg_hidden_drift": 7.62702,
+            "avg_gate": 0.765842,
+            "avg_regime_entropy": 1.476249
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T02:56:36.795270+00:00",
+        "wall_seconds": 36.751,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/lru-trial-1/agent.stdout.txt",
+          "bytes": 14347,
+          "sha256": "111a10ed18e061b3a335efdd7976a02ec3021be489aa70eeb38c8cafa5842888"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/lru-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/lru-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/lru-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 9337,
+          "sha256": "8a04c4629b48e51c54e23825b257f8c8fb5dcdbdb0ab9db6d9aa83b6380e7878"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 6439,
+          "sha256": "77c8f80f160463bb4ffa49f3c05218053d14408521a1fed128729b4e8f04c0a4"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/artifacts/lolm_cerebras/lru-trial-1"
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "semver",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 7,
+        "usage": {
+          "total_tokens": 6869,
+          "completion_tokens": 76,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 16
+          },
+          "prompt_tokens": 6793,
+          "prompt_tokens_details": {
+            "cached_tokens": 384
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "a82e26f81e9bae88e2304fbc3f8c812e295cb0b9055b9753fd5b8468a505ba1c",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": 0.273,
+              "drift": -0.539,
+              "gate": 0.281,
+              "regime": 0.077
+            },
+            "head_probs": [
+              0.1452,
+              0.1464,
+              0.2329,
+              0.1424,
+              0.3331
+            ],
+            "step": 54
+          },
+          "telemetry": {
+            "avg_entropy": 2.082739,
+            "avg_hidden_drift": 5.931769,
+            "avg_gate": 0.761661,
+            "avg_regime_entropy": 1.629491
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T02:57:18.605781+00:00",
+        "wall_seconds": 71.05,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/semver-trial-1/agent.stdout.txt",
+          "bytes": 21530,
+          "sha256": "d569b5f1cbcbd2116242647270d367022103218c788cae2d73401bcda440afc4"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/semver-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/semver-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/semver-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 6003,
+          "sha256": "c07ce76d2840e2ec8499c072b3f4fbe705fd80efea44706b9f4ec85a20f36cd2"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 5280,
+          "sha256": "be9cdb18a60fc0b83ddfd9e2057ef6ddb177139c0c42cf7af98d0255ec4ae530"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/artifacts/lolm_cerebras/semver-trial-1"
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "expr_eval",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 9,
+        "usage": {
+          "total_tokens": 9250,
+          "completion_tokens": 52,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 9198,
+          "prompt_tokens_details": {
+            "cached_tokens": 8448
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "c88dc0354c2a23bee86b2a22d3fb9218c36e77fe512eaf2c41f958790423126e",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.006,
+              "drift": 0.025,
+              "gate": 0.104,
+              "regime": 0.637
+            },
+            "head_probs": [
+              0.1299,
+              0.1872,
+              0.2285,
+              0.1324,
+              0.322
+            ],
+            "step": 48
+          },
+          "telemetry": {
+            "avg_entropy": 2.110017,
+            "avg_hidden_drift": 4.82899,
+            "avg_gate": 0.767756,
+            "avg_regime_entropy": 1.471298
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T02:58:34.708101+00:00",
+        "wall_seconds": 130.75,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/expr_eval-trial-1/agent.stdout.txt",
+          "bytes": 31264,
+          "sha256": "1adc412f1a0ab128f8497cb7a7915054949e33dacb62f46ad39ca4c919dd8dc6"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/expr_eval-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/expr_eval-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/expr_eval-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 8918,
+          "sha256": "26ed23d165f1c7abcd94e1ab0dc620282014cff19bc3f4a9f4b679128dd6d371"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 4991,
+          "sha256": "7cf0f9f4a301c2af736865f5bb7ffce668fa932eb2d8f9b0d065c85b7188d46a"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/artifacts/lolm_cerebras/expr_eval-trial-1"
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "jsonpath",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 12,
+        "usage": {
+          "total_tokens": 10264,
+          "completion_tokens": 64,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 10200,
+          "prompt_tokens_details": {
+            "cached_tokens": 9856
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "d0d4bad4c1d0cd0d648d5986ba315c115d33414b4001bb34583c7352fc539159",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": 0.062,
+              "drift": 0.093,
+              "gate": 0.203,
+              "regime": 0.537
+            },
+            "head_probs": [
+              0.1107,
+              0.2242,
+              0.2186,
+              0.1641,
+              0.2824
+            ],
+            "step": 58
+          },
+          "telemetry": {
+            "avg_entropy": 2.443559,
+            "avg_hidden_drift": 4.909832,
+            "avg_gate": 0.768248,
+            "avg_regime_entropy": 1.549176
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:00:50.507992+00:00",
+        "wall_seconds": 190.361,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/jsonpath-trial-1/agent.stdout.txt",
+          "bytes": 35262,
+          "sha256": "6f54b6bd8f6b1ad0f95045e073a2aeff897260cc4e0989787068c59aa880a126"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/jsonpath-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/jsonpath-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/jsonpath-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "solution.py",
+          "bytes": 3549,
+          "sha256": "88ff932ad46512c026a360d2290d90eebdb090ffe0254521df6c93c9c51d2279"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/artifacts/lolm_cerebras/jsonpath-trial-1"
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "wrap",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 4,
+        "usage": {
+          "total_tokens": 3386,
+          "completion_tokens": 217,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 122
+          },
+          "prompt_tokens": 3169,
+          "prompt_tokens_details": {
+            "cached_tokens": 2432
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "976e83ca2734edac61d7b7c0c2460bfe075bd5061f86810c1b70f25b336e6d22",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.42,
+              "drift": -0.705,
+              "gate": 0.313,
+              "regime": 1.003
+            },
+            "head_probs": [
+              0.1107,
+              0.1936,
+              0.2435,
+              0.0902,
+              0.3618
+            ],
+            "step": 85
+          },
+          "telemetry": {
+            "avg_entropy": 1.505685,
+            "avg_hidden_drift": 7.009904,
+            "avg_gate": 0.766361,
+            "avg_regime_entropy": 1.512964
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:04:05.951570+00:00",
+        "wall_seconds": 22.137,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/wrap-trial-1/agent.stdout.txt",
+          "bytes": 11623,
+          "sha256": "695ca2add983295763cebd8ab2b75d958e677760bd17dcd029b6c8d2a690081d"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/wrap-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/wrap-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/wrap-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 3322,
+          "sha256": "c943a0f930ecd55d25dd2b8b3ed6265e4a4b9f306acdc43d9b8aade0def42196"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 3065,
+          "sha256": "da058cec8a79293ec5cf2728ebdbf5e8628e421ba1a35f649ece4b7a7c45e3ea"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/artifacts/lolm_cerebras/wrap-trial-1"
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "fix_pagination",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 5,
+        "usage": {
+          "total_tokens": 3628,
+          "completion_tokens": 106,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 3522,
+          "prompt_tokens_details": {
+            "cached_tokens": 2176
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "36efb3d5307bffdb7081402b63c42120e717ef378094d516b66d85a59ae9a46e",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": 0.002,
+              "drift": -0.238,
+              "gate": 0.267,
+              "regime": -0.169
+            },
+            "head_probs": [
+              0.1394,
+              0.1463,
+              0.2154,
+              0.195,
+              0.304
+            ],
+            "step": 101
+          },
+          "telemetry": {
+            "avg_entropy": 1.536544,
+            "avg_hidden_drift": 7.063077,
+            "avg_gate": 0.766437,
+            "avg_regime_entropy": 1.554494
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:04:33.347725+00:00",
+        "wall_seconds": 175.58,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/fix_pagination-trial-1/agent.stdout.txt",
+          "bytes": 11714,
+          "sha256": "33bbc555666942895aa4676896aa6e39de31e627d772933823bb2ad5e5f0256e"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/fix_pagination-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/fix_pagination-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/fix_pagination-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/paginate.cpython-314.pyc",
+          "bytes": 1465,
+          "sha256": "22c62c0e45de073ee59c1dc38508df2f0b67cbabe544f5b0f1a0e565743e8267"
+        },
+        {
+          "path": "paginate.py",
+          "bytes": 1113,
+          "sha256": "c2156a8a52a70faa8d2e3dd8882209347c0c9c0f234a5a59bf33b0a279313d87"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/artifacts/lolm_cerebras/fix_pagination-trial-1"
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "fix_multifile_stats",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 10,
+        "usage": {
+          "total_tokens": 5247,
+          "completion_tokens": 436,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 292
+          },
+          "prompt_tokens": 4811,
+          "prompt_tokens_details": {
+            "cached_tokens": 4224
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "faee1d4dca1dd8ef45b7fbf7d134f7aaa3b44dca4b08ee2ab939e056d1819b5c",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": -0.563,
+              "drift": 1.279,
+              "gate": -0.188,
+              "regime": 0.466
+            },
+            "head_probs": [
+              0.1477,
+              0.0531,
+              0.1826,
+              0.1421,
+              0.4745
+            ],
+            "step": 128
+          },
+          "telemetry": {
+            "avg_entropy": 1.406909,
+            "avg_hidden_drift": 6.938852,
+            "avg_gate": 0.768206,
+            "avg_regime_entropy": 1.524905
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:07:34.086251+00:00",
+        "wall_seconds": 110.474,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/fix_multifile_stats-trial-1/agent.stdout.txt",
+          "bytes": 18573,
+          "sha256": "efadb56b4c45c8241d143a19c1cd519aefada46498d78785969328f557bd36a0"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/fix_multifile_stats-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/fix_multifile_stats-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/fix_multifile_stats-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/report.cpython-314.pyc",
+          "bytes": 799,
+          "sha256": "ff0606b9d216172bebe96a5aaa8cb72d9e18f780aa2b6a8966288f26c00d26d3"
+        },
+        {
+          "path": "__pycache__/stats.cpython-314.pyc",
+          "bytes": 1895,
+          "sha256": "feadf3171d8e4038d4a2ce6afd1e8c2a4c91af7bd8ebe94e5918e49d2ce0812b"
+        },
+        {
+          "path": "report.py",
+          "bytes": 481,
+          "sha256": "ac7cc471e435c9cf509538767e33c98ecd705e7702e3b4aeebe4f68e9ef951cb"
+        },
+        {
+          "path": "stats.py",
+          "bytes": 1483,
+          "sha256": "19e005f2d3d1c1e453aa3d8e57aaaa84bb1c5fd815f80250cf6a4ab169c7011c"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/artifacts/lolm_cerebras/fix_multifile_stats-trial-1"
+    },
+    {
+      "agent": "lolm_cerebras",
+      "task": "fix_state_machine",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": true,
+        "provider": "cerebras",
+        "model": "gpt-oss-120b",
+        "verified": true,
+        "steps": 6,
+        "usage": {
+          "total_tokens": 4732,
+          "completion_tokens": 163,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0,
+            "reasoning_tokens": 24
+          },
+          "prompt_tokens": 4569,
+          "prompt_tokens_details": {
+            "cached_tokens": 384
+          }
+        },
+        "nfet": {
+          "available": true,
+          "text_sha256": "cd20133b0c3ead096ab0a53774caa6d1dd51784eb01e6769970b4bbd01affb21",
+          "head_trained": true,
+          "checkpoint": "result",
+          "verified": true,
+          "decision": {
+            "control": 4,
+            "label": "finalize",
+            "source": "verified_result",
+            "reason": "normal checks passed and telemetry raised no supported intervention",
+            "zscores": {
+              "entropy": 0.27,
+              "drift": -0.373,
+              "gate": 0.35,
+              "regime": 0.459
+            },
+            "head_probs": [
+              0.1148,
+              0.2121,
+              0.2314,
+              0.1714,
+              0.2703
+            ],
+            "step": 128
+          },
+          "telemetry": {
+            "avg_entropy": 1.777484,
+            "avg_hidden_drift": 7.615493,
+            "avg_gate": 0.767562,
+            "avg_regime_entropy": 1.461358
+          }
+        },
+        "error": null
+      },
+      "agent_process": {
+        "started_at": "2026-08-12T03:09:29.673404+00:00",
+        "wall_seconds": 95.851,
+        "exit_code": 0,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/fix_state_machine-trial-1/agent.stdout.txt",
+          "bytes": 15612,
+          "sha256": "f043d7947abdf42fab8c2d1960bd44b0418ef168e3db38cb9a8db17fced51a81"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/fix_state_machine-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/fix_state_machine-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/raw/lolm_cerebras/fix_state_machine-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/orders.cpython-314.pyc",
+          "bytes": 2239,
+          "sha256": "2c52f187d558b1d85b6c71d350fb46270b1539f6db39ccdfc074855c256e1899"
+        },
+        {
+          "path": "orders.py",
+          "bytes": 1848,
+          "sha256": "379ea160bf99d699df45a6ad86158c87c31c6081d1aae6129d9b236a0e1e91ea"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/run-cerebras/artifacts/lolm_cerebras/fix_state_machine-trial-1"
+    }
+  ]
+}

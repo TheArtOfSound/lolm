@@ -125,13 +125,32 @@ def build(runs: list[dict[str, Any]]) -> str:
     for left, right in CONTROLLED_PAIRS:
         if left in scores and right in scores and scores[left]["scored"] and scores[right]["scored"]:
             any_pair = True
-            shared = [task for task in tasks if (left, task) in keyed and (right, task) in keyed]
-            left_wins = sum(1 for task in shared if keyed[(left, task)]["passed"] and not keyed[(right, task)]["passed"])
-            right_wins = sum(1 for task in shared if keyed[(right, task)]["passed"] and not keyed[(left, task)]["passed"])
+            # Head to head only counts tasks BOTH sides actually attempted. A task
+            # one side never reached is not a win for the other side.
+            shared = [
+                task for task in tasks
+                if keyed.get((left, task), {}).get("scoreable", False)
+                and keyed.get((right, task), {}).get("scoreable", False)
+            ]
+            left_only = sum(1 for task in shared if keyed[(left, task)]["passed"] and not keyed[(right, task)]["passed"])
+            right_only = sum(1 for task in shared if keyed[(right, task)]["passed"] and not keyed[(left, task)]["passed"])
+            left_passed = sum(1 for task in shared if keyed[(left, task)]["passed"])
+            right_passed = sum(1 for task in shared if keyed[(right, task)]["passed"])
+            verdict = ("a tie" if left_only == right_only == 0
+                       else f"`{left}` ahead by {left_only - right_only}" if left_only > right_only
+                       else f"`{right}` ahead by {right_only - left_only}")
+            unscored_left = scores[left]["attempted"] - scores[left]["scored"]
+            unscored_right = scores[right]["attempted"] - scores[right]["scored"]
             lines += [
-                f"**`{left}` vs `{right}`** over {len(shared)} shared tasks: "
-                f"{scores[left]['passed']}/{scores[left]['scored']} against {scores[right]['passed']}/{scores[right]['scored']}. "
-                f"`{left}` solved {left_wins} that `{right}` did not; `{right}` solved {right_wins} that `{left}` did not.",
+                f"**`{left}` vs `{right}`** on the {len(shared)} tasks both agents attempted: "
+                f"**{left_passed}–{right_passed}**, {verdict}. "
+                f"`{left}` solved {left_only} that `{right}` missed; `{right}` solved {right_only} that `{left}` missed.",
+                "",
+                f"Outside that shared set, `{left}` was blocked on {unscored_left} task(s) and `{right}` on "
+                f"{unscored_right}. Those are excluded from the head-to-head in both directions: a task an "
+                f"agent never reached is not a loss for it and not a win for anyone else. Whole-suite rates "
+                f"in the scorecard above are therefore over different task sets and are not comparable to "
+                f"each other.",
                 "",
             ]
     if not any_pair:
@@ -217,8 +236,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("results", nargs="+", type=Path)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--notes", type=Path,
+                        help="markdown appended verbatim under Caveats; narrative belongs here so "
+                             "the derived numbers above stay derived")
     args = parser.parse_args()
-    args.out.write_text(build(load(args.results)))
+    report = build(load(args.results))
+    if args.notes:
+        report += "\n## Caveats recorded by hand\n\n" + args.notes.read_text().strip() + "\n"
+    args.out.write_text(report)
     print(args.out)
     return 0
 
