@@ -1,0 +1,77 @@
+{
+  "products": [
+    {
+      "id": "flows",
+      "name": "Flows",
+      "shortDescription": "Build · verify · recover",
+      "tooltip": "Builds software through controlled steps and tracks the evidence supporting the result.",
+      "url": "https://flows.oortstack.com",
+      "icon": "flows",
+      "status": "live",
+      "order": 1,
+      "visibleInLauncher": true
+    },
+    {
+      "id": "oort",
+      "name": "Oort",
+      "shortDescription": "Account · models · usage",
+      "tooltip": "Manages your Qira account, AI providers, models, access, and usage.",
+      "url": "https://oortstack.com",
+      "icon": "oort",
+      "status": "live",
+      "order": 2,
+      "visibleInLauncher": true
+    },
+    {
+      "id": "qev",
+      "name": "QEV",
+      "shortDescription": "Protect · prove · verify",
+      "tooltip": "Protects digital files and provides evidence that they remain unchanged.",
+      "url": "https://secure.imagineqira.com",
+      "icon": "qev",
+      "status": "live",
+      "order": 3,
+      "visibleInLauncher": true
+    },
+    {
+      "id": "lolm",
+      "name": "LOLM",
+      "shortDescription": "Persistent AI operations",
+      "tooltip": "Keeps operational context and failed-attempt memory across long-running AI work.",
+      "url": "https://lolm.imagineqira.com",
+      "icon": "lolm",
+      "status": "research",
+      "order": 4,
+      "visibleInLauncher": true
+    },
+    {
+      "id": "ledger",
+      "name": "Ledger",
+      "shortDescription": "AI work · usage · records",
+      "tooltip": "Records AI work, usage, and operational history across Qira products.",
+      "url": "https://ledger.imagineqira.com",
+      "icon": "ledger",
+      "status": "live",
+      "order": 5,
+      "visibleInLauncher": true
+    },
+    {
+      "id": "aex",
+      "name": "AEX",
+      "shortDescription": "AI efficiency infrastructure",
+      "tooltip": "A planned system for measuring and verifying AI compute efficiency.",
+      "url": null,
+      "icon": "aex",
+      "status": "coming_soon",
+      "order": 6,
+      "visibleInLauncher": true
+    }
+  ],
+  "allowlist": [
+    "https://flows.oortstack.com",
+    "https://oortstack.com",
+    "https://secure.imagineqira.com",
+    "https://lolm.imagineqira.com",
+    "https://ledger.imagineqira.com"
+  ]
+}

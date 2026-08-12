@@ -1,0 +1,342 @@
+/* Generated for shadow DOM host isolation — classes use qira-launcher__ prefix */
+/**
+ * Qira Apps launcher — self-contained styles for light (Oort) and dark (Flows) hosts.
+ * No Tailwind dependency. Hosts may override via CSS variables.
+ */
+
+.qira-launcher {
+  --ql-bg: #ffffff;
+  --ql-panel: #ffffff;
+  --ql-border: #dde2e8;
+  --ql-text: #111827;
+  --ql-muted: #536072;
+  --ql-muted2: #7a8696;
+  --ql-hover: #f7f8fa;
+  --ql-scrim: rgba(17, 24, 39, 0.4);
+  --ql-focus: #2563eb;
+  --ql-here-bg: rgba(37, 99, 235, 0.12);
+  --ql-here-fg: #1d4ed8;
+  --ql-soon-bg: rgba(122, 134, 150, 0.16);
+  --ql-soon-fg: #536072;
+  --ql-tile-border: #dde2e8;
+  --ql-icon-bg: #f2f4f7;
+  --ql-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+  --ql-radius: 16px;
+  --ql-trigger-border: #dde2e8;
+  --ql-trigger-fg: #536072;
+  --ql-trigger-hover-bg: #f7f8fa;
+  --ql-trigger-hover-fg: #111827;
+  position: relative;
+  flex-shrink: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.qira-launcher[data-theme="dark"] {
+  --ql-bg: #0f1419;
+  --ql-panel: #151b22;
+  --ql-border: #2a3441;
+  --ql-text: #f3f4f6;
+  --ql-muted: #9aa3af;
+  --ql-muted2: #6b7280;
+  --ql-hover: #1c2430;
+  --ql-scrim: rgba(0, 0, 0, 0.55);
+  --ql-focus: #60a5fa;
+  --ql-here-bg: rgba(37, 99, 235, 0.22);
+  --ql-here-fg: #93c5fd;
+  --ql-soon-bg: rgba(156, 163, 175, 0.18);
+  --ql-soon-fg: #9ca3af;
+  --ql-tile-border: #2a3441;
+  --ql-icon-bg: #1c2430;
+  --ql-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+  --ql-trigger-border: #2a3441;
+  --ql-trigger-fg: #9aa3af;
+  --ql-trigger-hover-bg: #1c2430;
+  --ql-trigger-hover-fg: #f3f4f6;
+}
+
+/* Trigger */
+.qira-launcher__trigger {
+  display: inline-flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  border: 1px solid var(--ql-trigger-border);
+  background: transparent;
+  color: var(--ql-trigger-fg);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.qira-launcher__trigger:hover {
+  background: var(--ql-trigger-hover-bg);
+  color: var(--ql-trigger-hover-fg);
+}
+
+.qira-launcher__trigger:focus-visible {
+  outline: 2px solid var(--ql-focus);
+  outline-offset: 2px;
+}
+
+/* Desktop panel */
+.qira-launcher__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 50;
+  width: min(100vw - 1.5rem, 22rem);
+  overflow: hidden;
+  border-radius: var(--ql-radius);
+  border: 1px solid var(--ql-border);
+  background: var(--ql-panel);
+  box-shadow: var(--ql-shadow);
+}
+
+.qira-launcher__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--ql-border);
+  padding: 0.75rem 1rem;
+}
+
+.qira-launcher__title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ql-muted);
+}
+
+.qira-launcher__close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  width: 44px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--ql-muted);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.qira-launcher__close:hover {
+  background: var(--ql-hover);
+  color: var(--ql-text);
+}
+
+.qira-launcher__close:focus-visible {
+  outline: 2px solid var(--ql-focus);
+  outline-offset: 2px;
+}
+
+.qira-launcher__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+
+/* Tile */
+.qira-launcher__tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  min-height: 5.5rem;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--ql-tile-border);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+a.qira-launcher__tile:hover {
+  background: var(--ql-hover);
+  border-color: var(--ql-muted2);
+}
+
+.qira-launcher__tile:focus-visible {
+  outline: 2px solid var(--ql-focus);
+  outline-offset: 2px;
+}
+
+.qira-launcher__tile--current {
+  border-color: color-mix(in srgb, var(--ql-focus) 45%, var(--ql-tile-border));
+  background: color-mix(in srgb, var(--ql-focus) 8%, transparent);
+}
+
+.qira-launcher__tile--disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.qira-launcher__tile--disabled:hover {
+  background: transparent;
+  border-color: var(--ql-tile-border);
+}
+
+.qira-launcher__tile-top {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.qira-launcher__icon {
+  display: inline-flex;
+  height: 2rem;
+  width: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: var(--ql-icon-bg);
+  color: var(--ql-text);
+}
+
+.qira-launcher__badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.125rem 0.4rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.qira-launcher__badge--here {
+  background: var(--ql-here-bg);
+  color: var(--ql-here-fg);
+}
+
+.qira-launcher__badge--soon {
+  background: var(--ql-soon-bg);
+  color: var(--ql-soon-fg);
+}
+
+.qira-launcher__badge--research {
+  background: color-mix(in srgb, #7c3aed 16%, transparent);
+  color: #7c3aed;
+}
+
+.qira-launcher[data-theme="dark"] .qira-launcher__badge--research {
+  background: color-mix(in srgb, #a78bfa 22%, transparent);
+  color: #c4b5fd;
+}
+
+.qira-launcher__name {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ql-text);
+  line-height: 1.25;
+}
+
+.qira-launcher__desc {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--ql-muted);
+  line-height: 1.3;
+}
+
+/* Tooltip */
+.qira-launcher__tooltip-wrap {
+  position: relative;
+}
+
+.qira-launcher__tooltip {
+  position: absolute;
+  z-index: 60;
+  left: 50%;
+  bottom: calc(100% + 0.4rem);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 14rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--ql-border);
+  background: var(--ql-panel);
+  color: var(--ql-text);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  box-shadow: var(--ql-shadow);
+  pointer-events: none;
+}
+
+.qira-launcher__tooltip[hidden] {
+  display: none !important;
+}
+
+/* Mobile sheet */
+.qira-launcher__scrim {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .qira-launcher__scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    border: 0;
+    background: var(--ql-scrim);
+    cursor: pointer;
+  }
+
+  .qira-launcher__panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    z-index: 90;
+    width: 100%;
+    max-width: none;
+    max-height: min(88dvh, 36rem);
+    border-radius: 1rem 1rem 0 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .qira-launcher__close {
+    display: inline-flex;
+  }
+
+  .qira-launcher__grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    padding: 0.75rem;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .qira-launcher__tile {
+    min-height: 5.75rem;
+    min-width: 0;
+  }
+
+  .qira-launcher__tooltip {
+    max-width: min(14rem, 70vw);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qira-launcher__trigger,
+  .qira-launcher__tile,
+  .qira-launcher__close {
+    transition: none;
+  }
+}
