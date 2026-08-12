@@ -49,6 +49,7 @@ GROQ_MODEL = os.environ.get("LOLM_BENCH_GROQ_MODEL", "llama-3.3-70b-versatile")
 # memory-constrained host a 14B model and the controller thrash together, so the
 # ablation model is overridable and defaults small enough to co-reside.
 LOCAL_MODEL = os.environ.get("LOLM_BENCH_LOCAL_MODEL", "qwen3:14b")
+OPENROUTER_MODEL = os.environ.get("LOLM_BENCH_OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
 
 LOLM_TRACKS = {
     "lolm": ("ollama", LOCAL_MODEL, True, f"Ollama {LOCAL_MODEL} (local)"),
@@ -59,6 +60,8 @@ LOLM_TRACKS = {
     "lolm_gemini_nonfet": ("google", CONTROL_MODEL, False, f"Google {CONTROL_MODEL}, NFET disabled (ablation)"),
     "lolm_groq": ("groq", GROQ_MODEL, True, f"Groq {GROQ_MODEL} via user-owned key"),
     "lolm_groq_nonfet": ("groq", GROQ_MODEL, False, f"Groq {GROQ_MODEL}, NFET disabled (ablation)"),
+    "lolm_openrouter": ("openrouter", OPENROUTER_MODEL, True, f"OpenRouter {OPENROUTER_MODEL} via user-owned key"),
+    "lolm_openrouter_nonfet": ("openrouter", OPENROUTER_MODEL, False, f"OpenRouter {OPENROUTER_MODEL}, NFET disabled (ablation)"),
 }
 CLI_BACKENDS = {
     "codex": "installed Codex CLI with its own local configuration",
@@ -69,7 +72,8 @@ CLI_BACKENDS = {
 # Rate-limited hosted backends need a gap between trials or the harness measures
 # the provider's throttle instead of the agent.
 COOLDOWN_AGENTS = {"lolm_cerebras", "lolm_cerebras_nonfet", "lolm_gemini", "lolm_gemini_nonfet",
-                   "lolm_groq", "lolm_groq_nonfet", "gemini"}
+                   "lolm_groq", "lolm_groq_nonfet",
+                   "lolm_openrouter", "lolm_openrouter_nonfet", "gemini"}
 
 
 def gemini_api_key() -> str:

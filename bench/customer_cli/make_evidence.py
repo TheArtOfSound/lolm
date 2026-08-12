@@ -26,6 +26,7 @@ CONTROLLED_PAIRS = [
     ("lolm", "lolm_nonfet"),
     ("lolm_cerebras", "lolm_cerebras_nonfet"),
     ("lolm_groq", "lolm_groq_nonfet"),
+    ("lolm_openrouter", "lolm_openrouter_nonfet"),
     ("lolm_gemini", "lolm_gemini_nonfet"),
     ("lolm_gemini", "gemini"),
 ]

@@ -72,6 +72,21 @@ async function request(url, runtime, { method = "POST", body, headers = {} } = {
 
     let payload = {};
     try { payload = text ? JSON.parse(text) : {}; } catch { payload = { raw: text.slice(0, 1000) }; }
+
+    // Some OpenAI-compatible routers — OpenRouter's free tier especially — answer
+    // HTTP 200 with an error object and no choices. Handle it as the error it is,
+    // so a throttle is retried and classified instead of surfacing one turn later
+    // as an opaque "response did not contain a message".
+    if (response.ok && payload && payload.error && !payload.choices) {
+      const message = String(payload.error?.message || payload.error);
+      const throttled = /\brate|limit|overloaded|capacity|temporarily|timeout|503|429\b/i.test(message);
+      if (throttled && !quotaIsExhausted(payload, text) && attempt < RATE_LIMIT_ATTEMPTS - 1) {
+        lastRateLimit = message;
+        await new Promise((resolvePromise) => setTimeout(resolvePromise, Math.min(retryDelayMs(response, payload, text, attempt), MAX_BACKOFF_MS)));
+        continue;
+      }
+      throw new ProviderError(message, { status: 200, code: payload.error?.code || (throttled ? "RATE_LIMITED" : "PROVIDER_ERROR"), body: payload });
+    }
     if (response.ok) return payload;
 
     const message = String(payload?.error?.message || payload?.error || payload?.message || `Provider returned HTTP ${response.status}`);
