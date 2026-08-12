@@ -44,13 +44,17 @@ LOLM_SOURCE = str(ROOT / "clients" / "cli" / "bin" / "lolm.mjs")
 # model, so a score difference is a difference between the two scaffolds rather
 # than between two model vendors.
 CONTROL_MODEL = os.environ.get("LOLM_BENCH_GEMINI_MODEL", "gemini-3.1-flash-lite")
+GROQ_MODEL = os.environ.get("LOLM_BENCH_GROQ_MODEL", "llama-3.3-70b-versatile")
 
 LOLM_TRACKS = {
     "lolm": ("ollama", "qwen3:14b", True, "Ollama qwen3:14b (local)"),
+    "lolm_nonfet": ("ollama", "qwen3:14b", False, "Ollama qwen3:14b (local), NFET disabled (ablation)"),
     "lolm_cerebras": ("cerebras", "gpt-oss-120b", True, "Cerebras gpt-oss-120b via user-owned key"),
     "lolm_cerebras_nonfet": ("cerebras", "gpt-oss-120b", False, "Cerebras gpt-oss-120b, NFET disabled (ablation)"),
     "lolm_gemini": ("google", CONTROL_MODEL, True, f"Google {CONTROL_MODEL} via user-owned key"),
     "lolm_gemini_nonfet": ("google", CONTROL_MODEL, False, f"Google {CONTROL_MODEL}, NFET disabled (ablation)"),
+    "lolm_groq": ("groq", GROQ_MODEL, True, f"Groq {GROQ_MODEL} via user-owned key"),
+    "lolm_groq_nonfet": ("groq", GROQ_MODEL, False, f"Groq {GROQ_MODEL}, NFET disabled (ablation)"),
 }
 CLI_BACKENDS = {
     "codex": "installed Codex CLI with its own local configuration",
@@ -60,7 +64,8 @@ CLI_BACKENDS = {
 
 # Rate-limited hosted backends need a gap between trials or the harness measures
 # the provider's throttle instead of the agent.
-COOLDOWN_AGENTS = {"lolm_cerebras", "lolm_cerebras_nonfet", "lolm_gemini", "lolm_gemini_nonfet", "gemini"}
+COOLDOWN_AGENTS = {"lolm_cerebras", "lolm_cerebras_nonfet", "lolm_gemini", "lolm_gemini_nonfet",
+                   "lolm_groq", "lolm_groq_nonfet", "gemini"}
 
 
 def gemini_api_key() -> str:
@@ -234,7 +239,16 @@ def classify_infrastructure(text: str) -> str | None:
     """Name the blocker when a run never reached the model, so it is excluded
     rather than scored as a model failure."""
     lower = text.lower()
-    if "usage limit" in lower or "quota" in lower or "rate limit" in lower or "429" in lower:
+    # Providers phrase a throttle a dozen ways, and the underscore form of the
+    # LOLM error code ("rate_limited") does not contain the space in "rate
+    # limit". Normalise separators so one set of needles catches them all.
+    flat = lower.replace("_", " ").replace("-", " ")
+    limit_needles = (
+        "usage limit", "rate limit", "rate limited", "quota", "429",
+        "limit exceeded", "tokens per day", "per day limit", "daily limit",
+        "too many tokens", "too many requests", "capacity", "overloaded",
+    )
+    if any(needle in flat for needle in limit_needles):
         return "usage_limit"
     if "not logged in" in lower or "please run /login" in lower or "auth" in lower and "api key" in lower:
         return "auth"

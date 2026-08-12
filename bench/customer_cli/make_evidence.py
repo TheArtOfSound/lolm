@@ -23,7 +23,9 @@ from typing import Any
 # The nonfet pairs share the model AND the scaffold, isolating the NFET
 # controller alone — the cleanest ablation the suite can produce.
 CONTROLLED_PAIRS = [
+    ("lolm", "lolm_nonfet"),
     ("lolm_cerebras", "lolm_cerebras_nonfet"),
+    ("lolm_groq", "lolm_groq_nonfet"),
     ("lolm_gemini", "lolm_gemini_nonfet"),
     ("lolm_gemini", "gemini"),
 ]
