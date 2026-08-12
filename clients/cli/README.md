@@ -88,6 +88,25 @@ rows are rewritten, which keeps typing smooth over SSH.
 | `↑` `↓` | recall history from the buffer edges |
 | PgUp PgDn | page back through the transcript |
 | `^C` `^L` | clear the draft (again to exit) / repaint |
+| `esc` / `^G` | enter scrollback navigation |
+| `^S` | open the settings panel |
+
+In scrollback navigation the keys are vim's: `j`/`k` by line, `^D`/`^U` by half a
+screen, `^F`/`^B` by a screen, `gg` to the oldest line, `G` back to the live tail,
+`/` to search and `n` for the next match, `y` to copy what is on screen, `esc` to
+return to typing.
+
+`^S` opens a settings panel over the transcript: `↑`/`↓` to move, `←`/`→` to cycle
+permissions or NFET detail, `⏎` to edit provider, model, or workspace, `esc` to
+close. A rejected value is reported instead of silently kept.
+
+Copying uses OSC 52, so it reaches the clipboard of the terminal you are sitting
+at even over SSH or from inside a container. It is wrapped for tmux and screen,
+falls back to `tmux load-buffer` when tmux passthrough is off, and prefers a
+native tool when LOLM is running locally. OSC 52 delivery cannot be confirmed by
+design, so every copy is also written to `~/.lolm/clipboard.txt`
+(`LOLM_COPY_FILE`) and the console tells you which routes it used.
+`LOLM_CLIPBOARD_NO_OSC52=1` disables the escape sequence.
 
 It degrades rather than dictates: a pipe, a non-TTY, `--plain`, a screen reader,
 or `LOLM_FULLSCREEN=0` all get the linear console, and `LOLM_NO_ALT_SCREEN=1`

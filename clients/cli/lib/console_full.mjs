@@ -13,6 +13,8 @@ import { homedir } from "node:os";
 import { createScreen, fit } from "./screen.mjs";
 import { createEditor } from "./editor.mjs";
 import { caps, glyph, nfetSummary, renderMarkdown, stripAnsi, ui, wordmark, wrap } from "./tui.mjs";
+import { copyText } from "./clipboard.mjs";
+import { scrollKey, searchTranscript, settingsKey, settingsModel } from "./overlays.mjs";
 
 const aside = (value) => ui.dim(value);
 
@@ -29,6 +31,16 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
   let closed = false;
   let pendingResolve = null;
   let context = { provider, model, nfet, mode, workspace };
+  // "input" is the normal state; "scroll" is vim navigation over the
+  // transcript; "settings" is the panel. Only one owns the keyboard at a time.
+  let uiMode = "input";
+  let vimPending = "";
+  let searching = false;
+  let searchQuery = "";
+  let lastSearch = "";
+  let notice = "";
+  let panel = { rows: [], index: 0, editing: false, buffer: "" };
+  let onSetting = null;
 
   const columns = () => screen.size().columns;
   const inner = () => columns() - 4;
@@ -98,10 +110,32 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
   }
 
   function footer() {
+    if (notice) return `  ${ui.green(notice)}`;
+    if (uiMode === "settings") {
+      return aside(panel.editing ? "  type a value · ⏎ apply · esc cancel" : "  ↑↓ move · ←→ change · ⏎ edit · esc close");
+    }
+    if (uiMode === "scroll") {
+      if (searching) return `  ${ui.violet("/")}${searchQuery}${aside("   ⏎ find · esc cancel")}`;
+      return aside("  j k scroll · ^D ^U half · gg top · G bottom · / search · y copy · esc input");
+    }
     const hint = editor.value.includes("\n")
-      ? "⏎ send · ⌥⏎ newline · ^C clear"
-      : "⏎ send · ⌥⏎ newline · PgUp scroll · /help · /exit";
+      ? "⏎ send · ⌥⏎ newline · ^C clear · ^S settings"
+      : "⏎ send · ⌥⏎ newline · esc/^G scroll · ^S settings · /help · /exit";
     return aside(`  ${hint}`);
+  }
+
+  /** The settings panel, drawn over the transcript. */
+  function panelLines(width) {
+    const rows = [aside(`  ${glyph.rule} settings ${glyph.rule.repeat(Math.max(2, width - 16))}`)];
+    panel.rows.forEach((row, index) => {
+      const selected = index === panel.index;
+      const marker = selected ? ui.violet("›") : " ";
+      const value = selected && panel.editing ? `${panel.buffer}${ui.violet("▏")}` : row.value;
+      const left = `  ${marker} ${selected ? ui.bold(row.label) : row.label}`;
+      const pad = Math.max(1, 22 - stripAnsi(left).length);
+      rows.push(`${left}${" ".repeat(pad)}${value}${selected ? aside(`   ${row.hint}`) : ""}`);
+    });
+    return rows;
   }
 
   function render() {
@@ -119,10 +153,15 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
     const visible = transcript.slice(top, top + viewport);
 
     const lines = [...header];
-    for (let index = 0; index < viewport; index += 1) {
-      lines.push(visible[index] === undefined ? "" : fit(`  ${visible[index]}`, width));
+    if (uiMode === "settings") {
+      const rows = panelLines(width);
+      for (let index = 0; index < viewport; index += 1) lines.push(fit(rows[index] ?? "", width));
+    } else {
+      for (let index = 0; index < viewport; index += 1) {
+        lines.push(visible[index] === undefined ? "" : fit(`  ${visible[index]}`, width));
+      }
     }
-    if (scrollOffset > 0) {
+    if (uiMode !== "settings" && scrollOffset > 0) {
       lines[lines.length - 1] = fit(aside(`  ${glyph.rule.repeat(2)} ${scrollOffset} more line(s) below ${glyph.rule.repeat(2)}`), width);
     }
     if (status) {
@@ -141,8 +180,12 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
     lines.push(fit(`  ${ui.violet(`${glyph.bottomLeft}${edge}${glyph.bottomRight}`)}`, width));
     lines.push(footer());
 
-    const cursorRowOnScreen = lines.length - 2 - box.rows.length + box.cursorRow;
-    screen.draw(lines, { row: cursorRowOnScreen, column: 4 + box.cursorColumn });
+    if (uiMode === "input") {
+      const cursorRowOnScreen = lines.length - 2 - box.rows.length + box.cursorRow;
+      screen.draw(lines, { row: cursorRowOnScreen, column: 4 + box.cursorColumn });
+    } else {
+      screen.draw(lines, null);
+    }
   }
 
   function startTicker() {
@@ -158,6 +201,7 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
 
   const onResize = () => { screen.invalidate(); render(); };
   let onKey = null;
+  let onEscape = null;
 
   return {
     fullScreen: true,
@@ -166,8 +210,91 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
       readlineBase.emitKeypressEvents(input);
       if (input.isTTY) input.setRawMode(true);
       output.on("resize", onResize);
+      // readline never reports a lone Escape: it holds the byte back and folds
+      // it into the next key as Alt+key. A terminal sends a bare ESC as its own
+      // read, so watching the raw stream is the only way to see the keypress.
+      onEscape = (chunk) => {
+        if (closed || String(chunk) !== "\x1b") return;
+        if (uiMode === "settings") { uiMode = "input"; return render(); }
+        if (uiMode === "scroll") {
+          if (searching) { searching = false; searchQuery = ""; return render(); }
+          uiMode = "input"; vimPending = "";
+          return render();
+        }
+        if (!editor.value) { uiMode = "scroll"; vimPending = ""; render(); }
+      };
+      input.on("data", onEscape);
       onKey = (sequence, info = {}) => {
         if (closed) return;
+        if (notice) { notice = ""; }
+
+        // Settings owns every key while it is open.
+        if (uiMode === "settings") {
+          const next = settingsKey(info.name, { ...panel, sequence, ctrl: info.ctrl, meta: info.meta });
+          panel = { rows: next.rows, index: next.index, editing: next.editing, buffer: next.buffer };
+          if (next.action === "close") uiMode = "input";
+          if (next.action === "apply" && next.value) {
+            const applied = onSetting?.(next.key, next.value);
+            if (applied?.error) notice = `${glyph.err} ${applied.error}`;
+            panel.rows = settingsModel({ ...context, verbose });
+          }
+          return render();
+        }
+
+        // Scrollback navigation, including an incremental search prompt.
+        if (uiMode === "scroll") {
+          const height = Math.max(3, screen.size().rows - 8);
+          if (searching) {
+            if (info.name === "escape") { searching = false; searchQuery = ""; return render(); }
+            if (info.name === "return") {
+              const hit = searchTranscript(transcript, searchQuery, { strip: stripAnsi });
+              searching = false;
+              lastSearch = searchQuery;
+              searchQuery = "";
+              if (hit) scrollOffset = Math.min(hit.offset, Math.max(0, transcript.length - height));
+              else notice = `no match for ${lastSearch}`;
+              return render();
+            }
+            if (info.name === "backspace") { searchQuery = searchQuery.slice(0, -1); return render(); }
+            if (sequence && !info.ctrl && !info.meta) { searchQuery += sequence; return render(); }
+            return render();
+          }
+          if (info.name === "escape" || info.name === "i") { uiMode = "input"; vimPending = ""; return render(); }
+          if (info.name === "slash" || sequence === "/") { searching = true; searchQuery = ""; return render(); }
+          if (info.name === "n" && lastSearch) {
+            const hit = searchTranscript(transcript, lastSearch, { from: transcript.length - scrollOffset, strip: stripAnsi });
+            if (hit) scrollOffset = Math.min(hit.offset, Math.max(0, transcript.length - height));
+            return render();
+          }
+          if (sequence === "y" || info.name === "y") {
+            // Copy what is on screen, which is what the reader can see and meant.
+            const top = Math.max(0, transcript.length - height - scrollOffset);
+            const text = transcript.slice(top, top + height).map(stripAnsi).join("\n").trim();
+            copyText(text, { output }).then((result) => {
+              notice = result.confirmed
+                ? `${glyph.ok} ${result.note} (${result.routes.join(", ")})`
+                : `${glyph.ok} ${result.note} ${result.backup}`;
+              render();
+            }).catch((error) => { notice = `${glyph.err} copy failed: ${error.message}`; render(); });
+            return render();
+          }
+          const moved = scrollKey(sequence === "G" ? "G" : info.name || sequence, {
+            offset: scrollOffset, total: transcript.length, height, ctrl: info.ctrl, pending: vimPending,
+          });
+          scrollOffset = moved.offset;
+          vimPending = moved.pending;
+          return render();
+        }
+
+        // Input mode.
+        if (info.ctrl && info.name === "s") {
+          panel = { rows: settingsModel({ ...context, verbose }), index: 0, editing: false, buffer: "" };
+          uiMode = "settings";
+          return render();
+        }
+        if ((info.ctrl && info.name === "g") || (info.name === "escape" && !editor.value)) {
+          uiMode = "scroll"; vimPending = ""; return render();
+        }
         const action = editor.key(sequence, info);
         if (action === "submit") {
           const value = editor.value.trim();
@@ -183,7 +310,7 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
         }
         if (action === "quit") { const p = pendingResolve; pendingResolve = null; p?.("/exit"); return; }
         if (action === "cancel") { const p = pendingResolve; pendingResolve = null; p?.("/exit"); return; }
-        if (action === "scroll-up") { scrollOffset = Math.min(scrollOffset + 5, Math.max(0, transcript.length - 1)); return render(); }
+        if (action === "scroll-up") { uiMode = "scroll"; scrollOffset = Math.min(scrollOffset + 5, Math.max(0, transcript.length - 1)); return render(); }
         if (action === "scroll-down") { scrollOffset = Math.max(0, scrollOffset - 5); return render(); }
         if (action === "redraw") return render();
       };
@@ -197,6 +324,7 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
       closed = true;
       stopTicker();
       if (onKey) input.off("keypress", onKey);
+      if (onEscape) input.off("data", onEscape);
       output.off("resize", onResize);
       if (input.isTTY) input.setRawMode(false);
       screen.close();
@@ -209,6 +337,9 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
       });
     },
     setContext(next = {}) { context = { ...context, ...next }; render(); },
+    /** The loop supplies this so the panel can apply a change and report a
+     *  rejection ({error}) without the console knowing how config works. */
+    onSettingChange(handler) { onSetting = handler; },
     setVerbose(value) { verbose = Boolean(value); },
     get verbose() { return verbose; },
     user(message) {

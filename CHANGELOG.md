@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.9.0 - 2026-08-12
+
+Clipboard routing, vim scrollback navigation, and a settings panel.
+
+- `y` in scrollback copies what is on screen through OSC 52, so it reaches the
+  clipboard of the terminal you are sitting at even over SSH or from inside a
+  container. It is DCS-wrapped for tmux and chunked for screen, falls back to
+  `tmux load-buffer` when tmux passthrough is off, and prefers a native tool when
+  LOLM is local. OSC 52 delivery cannot be confirmed by design, so every copy is
+  also written to `~/.lolm/clipboard.txt` and the console reports which routes it
+  used rather than claiming success it cannot verify;
+- `esc` (or `^G`) enters scrollback navigation with vim's keys: `j`/`k`,
+  `^D`/`^U`, `^F`/`^B`, `gg`, `G`, `/` to search, `n` for the next match. The
+  viewport reports how many lines are hidden below;
+- `^S` opens a settings panel over the transcript for provider, model,
+  permissions, workspace, and NFET detail. Changes apply immediately and the
+  header updates; a rejected value is reported instead of silently kept;
+- a bare Escape is now detected on the raw stream. Node's readline never reports
+  one — it holds the byte back and folds it into the next key as Alt+key — so
+  Escape could not have worked as a mode key without reading the stream directly.
+
 ## 1.8.0 - 2026-08-12
 
 The interactive terminal is a real full-screen application.

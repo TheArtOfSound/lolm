@@ -485,6 +485,24 @@ async function interactive(config, flags, { seed = null } = {}) {
     mode: flags.permissionMode || (flags.yes ? "developer" : "standard"),
     workspace: flags.cwd,
   });
+  // The settings panel changes the same things the slash commands do, so both
+  // go through one place and a bad value is reported rather than silently kept.
+  surface.onSettingChange?.((key, value) => {
+    try {
+      if (key === "provider") { flags.provider = normalizeProvider(value); runtime = resolveRuntime(config, flags); }
+      else if (key === "model") { flags.model = value; runtime = resolveRuntime(config, flags); }
+      else if (key === "cwd") { flags.cwd = resolve(value.replace(/^~/, homedir())); }
+      else if (key === "verbose") { surface.setVerbose(value === "shown"); }
+      else if (key === "mode") {
+        if (!PERMISSION_MODES.includes(value)) return { error: `mode must be one of: ${PERMISSION_MODES.join(", ")}` };
+        flags.permissionMode = value;
+      }
+      surface.setContext({ provider: runtime.label, model: runtime.model, mode: flags.permissionMode || "standard", workspace: flags.cwd, verbose: surface.verbose });
+      return { ok: true };
+    } catch (error) {
+      return { error: error.message };
+    }
+  });
   surface.open();
   // The linear console still needs a readline; the full-screen one reads keys
   // itself and must not have a second consumer of stdin.
