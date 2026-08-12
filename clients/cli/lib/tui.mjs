@@ -64,11 +64,28 @@ export function asciiSafe(value) {
   return caps.unicode ? text : text.replace(/[^\x09\x0a\x0d\x20-\x7e\x1b[\]]/g, "");
 }
 
-/** The prompt the reader types at. Box drawing is decoration, not information. */
+/** Right-align a trailing detail against the terminal edge. */
+export function spread(left, right, width = caps.width) {
+  const gap = Math.max(1, width - stripAnsi(left).length - stripAnsi(right).length - 2);
+  return `${left}${" ".repeat(gap)}${right}`;
+}
+
+/** Everything in the console hangs off one two-space gutter. */
+export const GUTTER = "  ";
+
+/** A labelled rule: the strongest cheap signal that a new section started. */
+export function rule(label = "", paint = aside) {
+  const width = Math.max(24, caps.width - GUTTER.length - 2);
+  if (!label) return GUTTER + paint(glyph.rule.repeat(width));
+  const head = `${glyph.rule} ${label} `;
+  return GUTTER + paint(head + glyph.rule.repeat(Math.max(0, width - stripAnsi(head).length)));
+}
+
+/** The prompt the reader types at. readline writes this itself, so it never
+ *  passes the sanitised write edge and must be folded here. */
 export function inputPrompt() {
   if (caps.plain) return "\nYou: ";
-  // readline writes this itself, so it never passes the sanitised write edge.
-  return asciiSafe(`\n${ui.indigo(`${glyph.topLeft}${glyph.rule} YOU`)}\n${ui.violet(`${glyph.bottomLeft}${glyph.rule}›`)} `);
+  return asciiSafe(`\n${rule("YOU", ui.indigo)}\n${GUTTER}${ui.violet("›")} `);
 }
 
 /** Wrap to the terminal width so indentation survives; never split a word. */
@@ -268,9 +285,25 @@ export function createConsoleSurface({ version = "", provider = "", model = "", 
     if (caps.motion) output.write("\r\x1b[2K");
     progressVisible = false;
   };
+  // While readline owns the prompt line, anything written straight to stdout
+  // lands on top of it and corrupts what the reader is typing. Async notices —
+  // the controller finishing its load, a tool reporting in — must therefore
+  // erase the prompt, write above it, and let readline paint it back.
+  let line = null;
+  let promptLive = false;
   const writeLine = (value = "") => {
     clearProgress();
-    output.write(asciiSafe(`${value}\n`));
+    const text = asciiSafe(`${value}\n`);
+    // A readline is only ever attached in interactive mode, so its presence is
+    // the real signal here; plain mode opts out because it emits no escapes.
+    if (line && promptLive && !caps.plain) {
+      readlineBase.cursorTo(output, 0);
+      readlineBase.clearLine(output, 0);
+      output.write(text);
+      line.prompt(true);
+      return;
+    }
+    output.write(text);
   };
   const close = () => {
     if (closed) return;
@@ -296,45 +329,65 @@ export function createConsoleSurface({ version = "", provider = "", model = "", 
         process.once("exit", close);
         return;
       }
-      writeLine(`${wordmark()}  ${ui.bold("PERSONAL AGENT")}`);
-      writeLine(aside("Local intelligence that works on your computer"));
       writeLine();
-      writeLine(`${ui.green(glyph.dot)} ${provider} ${aside(`· ${model}`)}   ${ui.violet(glyph.diamond)} ${nfet}   ${aside(`v${version}`)}`);
-      writeLine(`${ui.cyan(glyph.home)} ${workspace}   ${ui.amber(glyph.small)} ${mode} permissions`);
-      writeLine(wrap("Talk normally. I remember the conversation and unfinished work."));
-      writeLine(aside("/help for controls  ·  /debug for NFET details  ·  /exit when done"));
-      writeLine(aside(glyph.rule.repeat(Math.min(96, Math.max(48, caps.width - 2)))));
+      writeLine(spread(`  ${wordmark()}  ${ui.bold("personal agent")}`, aside(`v${version}`)));
+      writeLine(rule());
+      writeLine(spread(
+        `  ${ui.green(glyph.dot)} ${ui.bold(provider)} ${aside(model)}`,
+        `${ui.violet(glyph.diamond)} ${nfet}  `,
+      ));
+      writeLine(spread(
+        `  ${ui.cyan(glyph.home)} ${workspace}`,
+        `${ui.amber(glyph.small)} ${mode} permissions  `,
+      ));
+      writeLine();
+      writeLine(wrap(`  Talk normally. I remember the conversation and unfinished work.`));
+      writeLine(aside("  /help  ·  /debug for NFET detail  ·  /exit"));
       process.once("exit", close);
     },
     close,
     setVerbose(value) { verbose = Boolean(value); },
     get verbose() { return verbose; },
+    // The interactive loop hands over its readline so async output can redraw
+    // the prompt instead of trampling it.
+    attach(instance) { line = instance; },
+    setPromptLive(value) { promptLive = Boolean(value); },
     user(message) {
+      if (caps.plain) { writeLine(); writeLine(`You: ${String(message || "").trim()}`); return; }
       writeLine();
-      writeLine(`${ui.indigo("YOU")}  ${String(message || "").trim()}`);
+      writeLine(rule("YOU", ui.indigo));
+      writeLine(`${GUTTER}${ui.violet("›")} ${String(message || "").trim()}`);
     },
     phase(label, detail = "") {
       clearProgress();
       const suffix = detail ? ` ${aside(`· ${detail}`)}` : "";
-      writeLine(`${ui.violet(glyph.diamond)} ${ui.bold(label)}${suffix}`);
+      writeLine();
+      writeLine(`  ${ui.violet(glyph.diamond)} ${ui.bold(label)}${suffix}`);
       startProgress("Working locally");
     },
     progress({ chars = 0, thinking = false } = {}) {
       startProgress(thinking ? "Reasoning locally" : chars ? `Writing · ${chars} characters` : "Working");
     },
-    tool(label) { writeLine(`  ${ui.cyan(glyph.arrow)} ${label}`); },
+    tool(label) { writeLine(`    ${ui.cyan(glyph.arrow)} ${aside(label)}`); },
     activity(event) {
-      if (event?.type === "tool.started") writeLine(`  ${ui.violet(glyph.small)} ${event.tool} running`);
-      else if (event?.type === "tool.completed") {
-        const processId = event.result?.id ? ` · ${event.result.id}` : "";
-        writeLine(`  ${ui.green(glyph.ok)} ${event.tool} ${aside(`${event.duration_ms || 0}ms${processId}`)}`);
-      } else if (event?.type === "tool.failed") writeLine(`  ${ui.red(glyph.err)} ${event.tool} failed: ${event.error?.message || "unknown error"}`);
+      if (event?.type === "tool.started") {
+        writeLine(`    ${ui.violet(glyph.small)} ${event.tool}`);
+      } else if (event?.type === "tool.completed") {
+        // Durations right-align into a column, so a long run reads as a table
+        // rather than as ragged trailing text.
+        const detail = `${event.duration_ms || 0}ms${event.result?.id ? ` · ${event.result.id}` : ""}`;
+        writeLine(spread(`    ${ui.green(glyph.ok)} ${event.tool}`, aside(detail)));
+      } else if (event?.type === "tool.failed") {
+        writeLine(spread(`    ${ui.red(glyph.err)} ${event.tool}`, ui.red(event.error?.message || "failed")));
+      }
     },
-    nfet(result) { writeLine(`  ${nfetSummary(result, { verbose })}`); },
+    nfet(result) { writeLine(`    ${nfetSummary(result, { verbose })}`); },
     assistant(message) {
       clearProgress();
+      if (caps.plain) { writeLine(); writeLine(`LOLM: ${renderMarkdown(message)}`); return; }
       writeLine();
-      writeLine(caps.plain ? `LOLM: ${renderMarkdown(message)}` : `${wordmark()}  ${renderMarkdown(message)}`);
+      writeLine(rule("LOLM", ui.rose));
+      writeLine(wrap(renderMarkdown(message), caps.width - GUTTER.length, GUTTER));
     },
     success(message) { writeLine(`${ui.green(glyph.ok)} ${message}`); },
     warning(message) { writeLine(`${ui.amber(glyph.warn)} Warning: ${message}`); },

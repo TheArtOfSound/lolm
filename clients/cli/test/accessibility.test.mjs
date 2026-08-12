@@ -82,7 +82,7 @@ test("FORCE_COLOR keeps colour when output is piped", async () => {
 test("NO_COLOR removes every colour escape", async () => {
   const out = await chat({ NO_COLOR: "1", FORCE_COLOR: "" });
   assert.ok(!/\x1b\[[0-9;]*m/.test(out), "NO_COLOR must silence colour");
-  assert.match(out, /PERSONAL AGENT/, "content survives without colour");
+  assert.match(out, /personal agent/i, "content survives without colour");
 });
 
 test("a non-UTF-8 locale produces only printable ASCII", async () => {

@@ -1,6 +1,6 @@
 {
   "name": "lolm-cli",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Open-source local computer-use agent with a polished terminal UI, 60+ typed tools, provider-agnostic BYOK, browser automation, durable runs, and real LOLM-NFET control.",
   "type": "module",
   "bin": {

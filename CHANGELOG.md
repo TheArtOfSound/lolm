@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.7.0 - 2026-08-12
+
+The interactive terminal stops corrupting itself, and looks designed.
+
+- background output no longer paints over the line you are typing on. The
+  controller finishing its load printed its status *inside* the input prompt,
+  because anything written to stdout while readline owns the prompt lands on top
+  of it. Async notices now erase the prompt, write above it, and let readline
+  repaint it with your typed input intact;
+- the console hangs off one shared gutter: labelled rules mark each turn, tool
+  timings right-align into a column instead of trailing raggedly, and the header
+  pins provider, controller, workspace, and permissions to the edges;
+- assistant replies wrap to the terminal width against the same gutter rather
+  than relying on terminal soft-wrap;
+- plain and ASCII accessibility modes are unchanged and still linear.
+
+Also: `request()` now surfaces HTTP-200 error bodies from OpenAI-compatible
+routers (OpenRouter's free tier answers 200 with an `{error}` object and no
+choices), retrying a throttle and otherwise raising a classifiable error instead
+of failing a turn later as an opaque malformed response.
+
 ## 1.6.0 - 2026-08-12
 
 A stray NFET verdict can no longer discard a correct answer.
