@@ -352,6 +352,16 @@ export function createConsoleSurface({ version = "", provider = "", model = "", 
     // the prompt instead of trampling it.
     attach(instance) { line = instance; },
     setPromptLive(value) { promptLive = Boolean(value); },
+    setContext() {},
+    /** Read one line, matching the full-screen console's contract. */
+    async read() {
+      if (!line) throw new Error("no readline attached to the console");
+      const ask = inputPrompt();
+      line.setPrompt(ask);
+      promptLive = true;
+      try { return (await line.question(ask)).trim(); }
+      finally { promptLive = false; }
+    },
     user(message) {
       if (caps.plain) { writeLine(); writeLine(`You: ${String(message || "").trim()}`); return; }
       writeLine();

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.8.0 - 2026-08-12
+
+The interactive terminal is a real full-screen application.
+
+- a frame compositor draws the whole screen: a fixed header, a scrolling
+  transcript, and a bordered input pinned to the bottom. Frames are diffed
+  against the last one so only the rows that actually changed are rewritten,
+  which is what keeps typing from flickering over SSH;
+- the input is a genuine multi-line editor rather than a readline prompt. It
+  grows as you type, wraps, and keeps a cursor the compositor can position:
+  `⌥⏎` inserts a newline, `⏎` sends, `^W`/`^U`/`^K` delete by word and line,
+  `^A`/`^E`/Home/End move, `⌥←`/`⌥→` move by word, Up/Down recall history from
+  the buffer edges, `^C` clears a draft before it exits, and `^L` repaints;
+- PgUp/PgDn page back through the transcript, and the viewport says how many
+  lines are hidden below;
+- the header keeps provider, model, controller, permission mode, and workspace
+  visible, shortening `$HOME` to `~` and trimming a deep path from the left
+  rather than crowding out the status;
+- the window is tracked on resize.
+
+It degrades rather than dictates. A pipe, a non-TTY, `--plain`, a screen reader,
+or `LOLM_FULLSCREEN=0` all get the linear console instead, and `LOLM_NO_ALT_SCREEN=1`
+keeps the frame in the normal scrollback. Nothing here is the only way to use LOLM.
+
 ## 1.7.0 - 2026-08-12
 
 The interactive terminal stops corrupting itself, and looks designed.

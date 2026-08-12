@@ -1,6 +1,6 @@
 {
   "name": "lolm-cli",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Open-source local computer-use agent with a polished terminal UI, 60+ typed tools, provider-agnostic BYOK, browser automation, durable runs, and real LOLM-NFET control.",
   "type": "module",
   "bin": {
@@ -24,6 +24,9 @@
     "lib/tools.mjs",
     "lib/tools",
     "lib/terminal_caps.mjs",
+    "lib/screen.mjs",
+    "lib/editor.mjs",
+    "lib/console_full.mjs",
     "lib/tui.mjs",
     "scripts/postinstall.mjs",
     "README.md",

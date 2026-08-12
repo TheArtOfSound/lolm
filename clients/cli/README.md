@@ -73,6 +73,26 @@ rather than a misleading schema error, and the model is told to split the work.
 otherwise, so code search works on a machine that has never installed `rg`. The
 result reports which engine answered.
 
+## The terminal
+
+`lolm` with no arguments opens a full-screen console: a fixed header, a scrolling
+transcript, and a bordered multi-line input. Frames are diffed so only changed
+rows are rewritten, which keeps typing smooth over SSH.
+
+| Key | Does |
+|---|---|
+| `⏎` / `⌥⏎` | send / insert a newline |
+| `^W` `^U` `^K` | delete word back, to line start, to line end |
+| `^A` `^E` Home End | move to line start / end |
+| `⌥←` `⌥→` | move by word |
+| `↑` `↓` | recall history from the buffer edges |
+| PgUp PgDn | page back through the transcript |
+| `^C` `^L` | clear the draft (again to exit) / repaint |
+
+It degrades rather than dictates: a pipe, a non-TTY, `--plain`, a screen reader,
+or `LOLM_FULLSCREEN=0` all get the linear console, and `LOLM_NO_ALT_SCREEN=1`
+keeps output in your normal scrollback.
+
 ## Accessibility
 
 `--plain` (or `LOLM_PLAIN=1`) switches the terminal to linear, append-only text

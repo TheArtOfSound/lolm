@@ -22,6 +22,7 @@ import { createAgentToolbox } from "../lib/tools/index.mjs";
 import { RunStore } from "../lib/runtime/runs.mjs";
 import { PERMISSION_MODES } from "../lib/runtime/permissions.mjs";
 import { readMcpConfig } from "../lib/mcp.mjs";
+import { createFullScreenConsole } from "../lib/console_full.mjs";
 import { banner, confirm, asciiSafe, createConsoleSurface, explainCapabilities, caps as termCaps, failure, inputPrompt, nfetLine, note, prompt as askPrompt, renderMarkdown, secretPrompt, section, spinner, success, ui, warning, wordmark } from "../lib/tui.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -471,7 +472,12 @@ async function executeTask(command, text, config, flags, sharedMonitor = null, h
 async function interactive(config, flags, { seed = null } = {}) {
   let runtime = resolveRuntime(config, flags);
   const info = await inspectNfet(config);
-  const surface = createConsoleSurface({
+  // A frame compositor needs a real terminal on both ends and a reader who is
+  // not using a screen reader; everything else gets the linear console.
+  const fullScreen = Boolean(process.stdout.isTTY && process.stdin.isTTY)
+    && !termCaps.plain && process.env.LOLM_FULLSCREEN !== "0";
+  const makeConsole = fullScreen ? createFullScreenConsole : createConsoleSurface;
+  const surface = makeConsole({
     version: VERSION,
     provider: runtime.label,
     model: runtime.model,
@@ -480,7 +486,11 @@ async function interactive(config, flags, { seed = null } = {}) {
     workspace: flags.cwd,
   });
   surface.open();
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, historySize: 500 });
+  // The linear console still needs a readline; the full-screen one reads keys
+  // itself and must not have a second consumer of stdin.
+  const rl = surface.fullScreen
+    ? null
+    : readline.createInterface({ input: process.stdin, output: process.stdout, historySize: 500 });
   // Hand the reader's line editor to the surface so background output redraws
   // the prompt rather than overwriting what is being typed.
   surface.attach(rl);
@@ -499,13 +509,8 @@ async function interactive(config, flags, { seed = null } = {}) {
         queued = null;
         surface.user(line);
       } else {
-        const ask = inputPrompt();
-        // question() sets its own prompt; setPrompt keeps redraws identical.
-        rl.setPrompt(ask);
-        surface.setPromptLive(true);
-        try { line = (await rl.question(ask)).trim(); }
+        try { line = await surface.read(); }
         catch { break; }
-        finally { surface.setPromptLive(false); }
       }
       if (!line) continue;
       if (["/exit", "/quit"].includes(line)) break;
@@ -550,7 +555,7 @@ async function interactive(config, flags, { seed = null } = {}) {
         delete flags.captureResult;
       }
     }
-  } finally { rl.close(); await monitor?.close(); surface.close(); }
+  } finally { rl?.close(); await monitor?.close(); surface.close(); }
   return 0;
 }
 
