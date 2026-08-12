@@ -62,6 +62,17 @@ Global provider flags are `--provider`, `--model`, `--api-key`, and
 Groq, Mistral, DeepSeek, Together, Cerebras, Ollama, and arbitrary
 OpenAI-compatible endpoints.
 
+`--max-steps N` bounds how many turns one autonomous task may take (default 12)
+and `--max-tokens N` overrides the per-completion budget. The default budget is
+sized so a whole source file fits in one `fs.write`; raise it for a model that
+writes very large files in a single call. If a provider truncates a tool call at
+its token limit, the CLI reports `TOOL_ARGUMENTS_TRUNCATED` with the real cause
+rather than a misleading schema error, and the model is told to split the work.
+
+`fs.search` uses ripgrep when it is on `PATH` and an equivalent built-in search
+otherwise, so code search works on a machine that has never installed `rg`. The
+result reports which engine answered.
+
 ## NFET
 
 The npm command locates a cloned LOLM repository through `LOLM_HOME`, the
@@ -75,8 +86,20 @@ lolm nfet status
 lolm nfet test "verified result text"
 ```
 
+The controller takes a checkpoint when a step finishes and again on a streak of
+failing tool calls — the stalled trajectory it exists to catch. Its verdict
+(`continue`, `retrieve`, `verify`, `branch`, `finalize`) steers the next step.
+
 If the source checkout or trained checkpoint is absent, `doctor` reports the
-gap and the CLI labels the monitor unavailable. It never fabricates NFET data.
+gap and the CLI labels the monitor unavailable. It never fabricates NFET data:
+when the controller is not running, any nudge you see is a plain deterministic
+observation and is not presented as telemetry.
+
+The controller loads a 4B backbone, which is not instant — a cold start
+measured 92s on an M-series Mac with `device: cpu`. It is warmed in the
+background while you type your first message and stays hot for the rest of an
+interactive session, so a one-shot `lolm run` pays more of that cost than a
+conversation does. Use `--no-nfet` to skip it entirely.
 
 ## JSON contract
 
