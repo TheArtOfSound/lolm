@@ -24,6 +24,23 @@ const NFET_GUIDANCE = {
   continue: `LOLM-NFET reports a healthy trajectory. Finish the current approach without unnecessary detours.`,
 };
 
+// An NFET nudge is a course correction, not a reset. Without the trajectory the
+// model tends to throw away correct work and rebuild — the exact failure this
+// carries the context to prevent.
+export function interventionGuidance(label, runner, final) {
+  const base = NFET_GUIDANCE[label] || NFET_GUIDANCE.continue;
+  const done = [];
+  if (runner?.changes?.length) done.push(`edited ${runner.changes.length} file(s)`);
+  if (runner?.commands?.length) done.push(`ran ${runner.commands.length} command(s)`);
+  const head = String(final || "").split("\n").find((line) => line.trim())?.slice(0, 160) || "";
+  if (head) done.push(`produced a draft answer beginning "${head}"`);
+  const context = done.length ? `\nAlready done this run: ${done.join("; ")}.` : "";
+  const keep = label === "branch" || label === "retrieve"
+    ? " Improve or confirm what exists — do not discard correct work, restart from scratch, or create redundant files. Keep the current result unless a concrete check shows a specific defect."
+    : "";
+  return `${base}${context}${keep}`;
+}
+
 function allowedTools(mode, definitions = TOOL_DEFINITIONS, prompt = "") {
   if (mode === "code") return definitions;
   const safe = new Set(["fs__list", "fs__read", "fs__inspect", "fs__find", "fs__search", "web__search", "web__fetch", "git__status", "git__diff", "git__log"]);
@@ -55,7 +72,7 @@ function requiresComputerAction(prompt) {
 }
 
 function requiresExecutionVerification(prompt) {
-  return /\b(fix|debug|refactor|update|upgrade|implement|test|build|deploy|publish)\b/i.test(String(prompt || ""));
+  return /\b(fix|debug|refactor|update|upgrade|implement|test|build|deploy|publish|verify|validate)\b/i.test(String(prompt || ""));
 }
 
 function isGreeting(prompt) {
@@ -370,6 +387,12 @@ export async function runAgent({
       messages.push({ role: "user", content: "The files changed, but the result is not verified. Run the most relevant tests, build, inspection, or browser check before finishing." });
       continue;
     }
+    // Compute this before consulting the controller. Once the result is
+    // complete and backed by evidence, NFET's exploratory verdicts (retrieve,
+    // branch) can only subtract value — discarding a correct answer to "try
+    // another approach" is the derailment this guards against. They are still
+    // recorded, so the decision stays honest; they just do not force a rebuild.
+    const verified = verifiedFor(mode, runner, final, prompt);
     if (monitor) {
       try {
         nfet = await monitor.decide(final, {
@@ -386,22 +409,34 @@ export async function runAgent({
       }
     }
     const decision = nfet?.decision?.label || "continue";
-    if (["retrieve", "verify", "branch"].includes(decision) && interventions < 3 && step < maxSteps) {
+    const exploratory = decision === "retrieve" || decision === "branch";
+    if (exploratory && verified) {
+      await eventSink?.({ type: "nfet.downgraded", from: decision, reason: "result_already_verified", step });
+    } else if (exploratory && interventions < 3 && step < maxSteps) {
       interventions++;
-      messages.push({ role: "user", content: NFET_GUIDANCE[decision] });
+      await eventSink?.({ type: "nfet.intervention", decision, reason: "unverified_trajectory", step });
+      messages.push({ role: "user", content: interventionGuidance(decision, runner, final) });
+      continue;
+    }
+    // Re-checking is only worth a step while the result is still unverified; a
+    // verified answer sent back to verify again just loops.
+    if (decision === "verify" && !verified && interventions < 3 && step < maxSteps) {
+      interventions++;
+      await eventSink?.({ type: "nfet.intervention", decision: "verify", reason: "work_checkpoint", step });
+      messages.push({ role: "user", content: interventionGuidance("verify", runner, final) });
       continue;
     }
 
-    const verified = verifiedFor(mode, runner, final, prompt);
     if (monitor && nfet?.available) {
       try {
         const resultCheck = await monitor.decide(final, { checkpoint: "result", verified, reuse: true });
         nfet = resultCheck;
         onNfet(resultCheck);
         await eventSink?.({ type: "nfet.decision", checkpoint: "result", decision: resultCheck?.decision || null, telemetry: resultCheck?.telemetry || null, verified });
-        if (resultCheck.decision?.label === "verify" && interventions < 3 && step < maxSteps) {
+        if (resultCheck.decision?.label === "verify" && !verified && interventions < 3 && step < maxSteps) {
           interventions++;
-          messages.push({ role: "user", content: NFET_GUIDANCE.verify });
+          await eventSink?.({ type: "nfet.intervention", decision: "verify", reason: "result_checkpoint", step });
+          messages.push({ role: "user", content: interventionGuidance("verify", runner, final) });
           continue;
         }
       } catch (error) {

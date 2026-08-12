@@ -123,6 +123,15 @@ The controller takes a checkpoint when a step finishes and again on a streak of
 failing tool calls — the stalled trajectory it exists to catch. Its verdict
 (`continue`, `retrieve`, `verify`, `branch`, `finalize`) steers the next step.
 
+A verdict is a course correction, not a reset. When the loop acts on `retrieve`
+or `branch`, the model is told what it has already done and instructed to improve
+or confirm it rather than restart — so a stray verdict cannot make the agent
+discard a working answer and rebuild. And once a result is independently
+verified (its tests pass, or its evidence is gathered), the exploratory verdicts
+are recorded but no longer force more work: re-deriving a checked answer only
+risks breaking it. The controller governs the uncertain middle of a task, then
+gets out of the way.
+
 If the source checkout or trained checkpoint is absent, `doctor` reports the
 gap and the CLI labels the monitor unavailable. It never fabricates NFET data:
 when the controller is not running, any nudge you see is a plain deterministic

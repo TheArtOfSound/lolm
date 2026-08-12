@@ -48,6 +48,7 @@ CONTROL_MODEL = os.environ.get("LOLM_BENCH_GEMINI_MODEL", "gemini-3.1-flash-lite
 LOLM_TRACKS = {
     "lolm": ("ollama", "qwen3:14b", True, "Ollama qwen3:14b (local)"),
     "lolm_cerebras": ("cerebras", "gpt-oss-120b", True, "Cerebras gpt-oss-120b via user-owned key"),
+    "lolm_cerebras_nonfet": ("cerebras", "gpt-oss-120b", False, "Cerebras gpt-oss-120b, NFET disabled (ablation)"),
     "lolm_gemini": ("google", CONTROL_MODEL, True, f"Google {CONTROL_MODEL} via user-owned key"),
     "lolm_gemini_nonfet": ("google", CONTROL_MODEL, False, f"Google {CONTROL_MODEL}, NFET disabled (ablation)"),
 }
@@ -59,7 +60,7 @@ CLI_BACKENDS = {
 
 # Rate-limited hosted backends need a gap between trials or the harness measures
 # the provider's throttle instead of the agent.
-COOLDOWN_AGENTS = {"lolm_cerebras", "lolm_gemini", "lolm_gemini_nonfet", "gemini"}
+COOLDOWN_AGENTS = {"lolm_cerebras", "lolm_cerebras_nonfet", "lolm_gemini", "lolm_gemini_nonfet", "gemini"}
 
 
 def gemini_api_key() -> str:
