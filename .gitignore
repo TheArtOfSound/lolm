@@ -51,3 +51,6 @@ fix_checkpoint.py
 grant_proposal.js
 count_params.py
 SESSION_SUMMARY*.md
+
+# Aborted or in-flight benchmark runs are working state, not evidence.
+bench/customer_cli/results/**/results.partial.json
