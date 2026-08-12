@@ -239,6 +239,7 @@ export async function runAgent({
   yes = false,
   dryRun = false,
   maxSteps = 12,
+  maxTokens = 0,
   history = [],
   onPhase = () => {},
   onTool = () => {},
@@ -271,8 +272,14 @@ export async function runAgent({
     ...history,
     { role: "user", content: String(prompt || "") },
   ];
-  let final = "", usage = null, interventions = 0, nfet = null;
+  let final = "", usage = null, interventions = 0, nfet = null, lastStallStep = -2;
+  const toolOutcomes = [];
   const tools = isGreeting(prompt) ? [] : mode === "code" ? routedCodeTools(runner.tools, prompt) : allowedTools(mode, runner.tools, prompt);
+
+  // Booting the controller costs real seconds of CPU and its first verdict is
+  // not needed until a step completes, so overlap it with the first provider
+  // round trip instead of paying for both back to back.
+  monitor?.start().catch(() => {});
 
   try {
   for (let step = 1; step <= maxSteps; step++) {
@@ -282,7 +289,10 @@ export async function runAgent({
     const response = await chat(runtime, messages, {
       tools,
       reasoning: reasoningFor(mode, prompt, runtime),
-      maxTokens: mode === "code" ? (runtime.protocol === "ollama" ? 800 : 2_000) : 1_600,
+      // Writing a source file in one tool call routinely needs several thousand
+      // tokens of JSON-escaped content. The old code budget cut those calls in
+      // half mid-string, so the budget is sized for the job it actually has.
+      maxTokens: maxTokens || (mode === "code" ? (runtime.protocol === "ollama" ? 4_000 : 8_000) : 1_600),
       onToken(delta, meta = {}) {
         streamedChars += String(delta || "").length;
         onProgress({ step, chars: streamedChars, thinking: Boolean(meta.thinking) });
@@ -297,9 +307,53 @@ export async function runAgent({
       for (const call of assistant.toolCalls) {
         onTool(`${call.name}${call.arguments?.path ? ` ${call.arguments.path}` : ""}`);
         let result;
-        try { result = await runner.execute(call); }
-        catch (error) { result = { ok: false, error: error.message }; }
+        // Arguments the provider cut off are not the model forgetting a field.
+        // Say so, or it retries the identical oversized call until the step
+        // budget is gone.
+        if (call.malformed) {
+          result = {
+            ok: false,
+            code: "TOOL_ARGUMENTS_TRUNCATED",
+            error: `The arguments for ${call.name} were cut off after ${call.malformed.length} characters because the response hit its token limit (${call.malformed.reason}). Nothing ran. Split the work into smaller calls — for a large file, write it in sections with fs.write then fs.patch.`,
+          };
+          await eventSink?.({ type: "tool.truncated", tool: call.name, step, characters: call.malformed.length });
+        } else {
+          try { result = await runner.execute(call); }
+          catch (error) { result = { ok: false, error: error.message }; }
+        }
         messages.push({ role: "tool", id: call.id, name: call.name, content: JSON.stringify(result) });
+        toolOutcomes.push({ step, name: call.name, ok: result?.ok !== false, code: result?.code || null, detail: String(result?.error || result?.message || "").slice(0, 400) });
+      }
+
+      // A run that thrashes on failing tool calls never reaches the text-only
+      // branch below, so the controller used to sit out the exact trajectory it
+      // exists to catch: repeated failure with no progress.
+      const recent = toolOutcomes.slice(-3);
+      const stalled = recent.length >= 2 && recent.every((row) => !row.ok) && step - lastStallStep >= 2;
+      if (stalled && interventions < 3 && step < maxSteps) {
+        lastStallStep = step;
+        interventions++;
+        const trajectory = recent.map((row) => `${row.name} failed (${row.code || "error"}): ${row.detail}`).join("\n");
+        let label = "";
+        if (monitor) {
+          try {
+            const stallCheck = await monitor.decide(trajectory, { checkpoint: "work", verified: false, reuse: true, maxTokens: 256 });
+            if (stallCheck?.available) {
+              nfet = stallCheck;
+              onNfet(stallCheck);
+              label = stallCheck.decision?.label || "";
+              await eventSink?.({ type: "nfet.decision", checkpoint: "tool_stall", decision: label || null, telemetry: stallCheck.telemetry || null });
+            }
+          } catch (error) {
+            nfet = { available: false, reason: error.message };
+          }
+        }
+        // Only NFET_GUIDANCE text is attributed to NFET; the fallback nudge is
+        // a plain deterministic observation and is not dressed up as telemetry.
+        messages.push({
+          role: "user",
+          content: NFET_GUIDANCE[label] || `The last ${recent.length} tool calls failed without making progress:\n${trajectory}\nStop repeating them. Re-read the current state of the files with fs.inspect or fs.read, then take a materially different approach.`,
+        });
       }
       continue;
     }

@@ -30,6 +30,16 @@ function fileSchema(extra = {}, required = ["path"]) {
 }
 
 const SEARCH_MAX_BYTES = 1024 * 1024;
+const LINE_NUMBER = /^\s*\d+:\s?/;
+
+function isLineNumbered(text) {
+  const lines = String(text ?? "").split("\n").filter((line) => line.trim());
+  return lines.length > 0 && lines.every((line) => LINE_NUMBER.test(line));
+}
+
+function stripLineNumbers(text) {
+  return String(text ?? "").split("\n").map((line) => line.replace(LINE_NUMBER, "")).join("\n");
+}
 
 function globToRegExp(pattern) {
   const SPECIAL = ".+^${}()|[]\\";
@@ -116,13 +126,23 @@ export function registerFilesystemTools(registry, { root, onAction = () => {} })
     },
   });
   registry.register({
-    name: "fs.patch", description: "Apply an exact text replacement to a file after verifying the old text is present.", risk: "write",
+    name: "fs.patch", description: "Apply an exact text replacement to a file after verifying the old text is present. old_text must be the file's literal bytes, without the line numbers that fs.inspect adds to its preview.", risk: "write",
     classify: ({ path }) => pathClassification(root, [path], { destructive: true }),
     inputSchema: fileSchema({ old_text: { type: "string", minLength: 1 }, new_text: { type: "string" }, all: { type: "boolean" } }, ["path", "old_text", "new_text"]),
     execute: async ({ path: value, old_text, new_text, all = false }) => {
       const path = resolveUserPath(root, value); const content = await readFile(path, "utf8");
-      const occurrences = content.split(old_text).length - 1;
-      if (!occurrences) throw Object.assign(new Error("The exact old_text was not found; inspect the file before retrying."), { code: "PATCH_CONTEXT_MISSING" });
+      let occurrences = content.split(old_text).length - 1;
+      // fs.inspect hands back a numbered preview and models paste it straight
+      // back in. Recover the literal text rather than failing on our own format.
+      if (!occurrences && isLineNumbered(old_text)) {
+        const literal = stripLineNumbers(old_text);
+        if (literal && content.includes(literal)) {
+          old_text = literal;
+          new_text = isLineNumbered(new_text) ? stripLineNumbers(new_text) : new_text;
+          occurrences = content.split(old_text).length - 1;
+        }
+      }
+      if (!occurrences) throw Object.assign(new Error("The exact old_text was not found. Read the file with fs.read for its literal bytes; fs.inspect previews are prefixed with line numbers that are not part of the file."), { code: "PATCH_CONTEXT_MISSING" });
       if (occurrences > 1 && !all) throw Object.assign(new Error(`old_text occurs ${occurrences} times; provide more context or set all=true.`), { code: "PATCH_AMBIGUOUS" });
       const next = all ? content.split(old_text).join(new_text) : content.replace(old_text, new_text);
       await atomicWrite(path, next); return { path, replacements: all ? occurrences : 1, bytes: Buffer.byteLength(next) };
@@ -167,12 +187,18 @@ export function registerFilesystemTools(registry, { root, onAction = () => {} })
     },
   });
   registry.register({
-    name: "fs.inspect", description: "Inspect a path and, for text files, return a numbered preview suitable for planning an edit.", risk: "read",
-    inputSchema: fileSchema({ lines: { type: "integer", minimum: 1, maximum: 400 } }),
-    execute: async ({ path: value, lines = 120 }, context) => {
+    name: "fs.inspect", description: "Inspect a path and, for text files, return a line-numbered preview suitable for planning an edit. Start at line_start to page through a long file. The numbers are display only — never send them back as fs.patch old_text.", risk: "read",
+    inputSchema: fileSchema({ lines: { type: "integer", minimum: 1, maximum: 400 }, line_start: { type: "integer", minimum: 1 } }),
+    execute: async ({ path: value, lines = 120, line_start = 1 }, context) => {
       const path = resolveUserPath(root, value); assertReadablePath(root, path, context); const info = await stat(path);
       if (!info.isFile()) return { path, type: info.isDirectory() ? "directory" : "other", entries: info.isDirectory() ? await walk(path, 1) : [] };
-      const content = await readFile(path, "utf8"); return { path, size: info.size, preview: content.split("\n").slice(0, lines).map((line, index) => `${index + 1}: ${line}`).join("\n"), truncated: content.split("\n").length > lines };
+      const all = (await readFile(path, "utf8")).split("\n");
+      const from = Math.max(0, line_start - 1);
+      return {
+        path, size: info.size, total_lines: all.length, line_start: from + 1,
+        preview: all.slice(from, from + lines).map((line, index) => `${from + index + 1}: ${line}`).join("\n"),
+        truncated: all.length > from + lines,
+      };
     },
   });
   registry.register({

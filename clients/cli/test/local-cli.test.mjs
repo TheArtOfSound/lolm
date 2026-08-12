@@ -320,3 +320,39 @@ test("Ollama receives a local-model inactivity budget by default", () => {
   const runtime = resolveRuntime({ provider: "ollama", providers: { ollama: { model: "qwen3:14b" } } });
   assert.equal(runtime.timeoutMs, 600_000);
 });
+
+test("a tool call truncated at the token limit reports truncation, not a missing field", async () => {
+  const root = await temp("truncated");
+  let turn = 0;
+  const server = await startServer(() => {
+    turn += 1;
+    // Turn 1 is what a real provider returns when max_tokens cuts a big
+    // fs.write mid-string: valid JSON envelope, unparseable arguments.
+    if (turn === 1) {
+      return { body: { choices: [{ finish_reason: "length", message: { role: "assistant", content: "", tool_calls: [
+        { id: "c1", type: "function", function: { name: "fs__write", arguments: '{"path":"solution.py","content":"VALUE = 7\\nHALF' } },
+      ] } }] } };
+    }
+    if (turn === 2) {
+      return { body: { choices: [{ finish_reason: "tool_calls", message: { role: "assistant", content: "", tool_calls: [
+        { id: "c2", type: "function", function: { name: "fs__write", arguments: JSON.stringify({ path: "solution.py", content: "VALUE = 7\n" }) } },
+      ] } }] } };
+    }
+    return { body: { choices: [{ finish_reason: "stop", message: { role: "assistant", content: "Wrote solution.py with VALUE = 7." } }] } };
+  });
+  try {
+    const result = await exec(process.execPath, [bin, "run", "Create solution.py defining VALUE as 7", "--cwd", root,
+      "--yes", "--provider", "custom", "--base-url", address(server), "--model", "test", "--api-key", "test", "--no-nfet", "--json"], {
+      env: { ...process.env, LOLM_LAST_TASK: join(root, "last-task.json") },
+    });
+    const payload = JSON.parse(result.stdout.trim().split("\n").filter((line) => line.startsWith("{")).pop());
+    assert.equal(payload.ok, true, JSON.stringify(payload.error));
+    assert.equal(await readFile(join(root, "solution.py"), "utf8"), "VALUE = 7\n");
+    const feedback = payload.messages.find((message) => message.role === "tool" && message.content.includes("TOOL_ARGUMENTS_TRUNCATED"));
+    assert.ok(feedback, "the model must be told its arguments were cut off");
+    assert.match(feedback.content, /hit its token limit/);
+    assert.doesNotMatch(feedback.content, /is required/, "a truncated call must not be reported as a missing field");
+  } finally {
+    server.close();
+  }
+});

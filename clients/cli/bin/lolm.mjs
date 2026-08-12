@@ -28,7 +28,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const VERSION = pkg.version;
 
-const VALUE_FLAGS = new Set(["--provider", "--model", "--api-key", "--base-url", "--cwd", "--out", "-o", "--timeout", "--max-steps", "--mode"]);
+const VALUE_FLAGS = new Set(["--provider", "--model", "--api-key", "--base-url", "--cwd", "--out", "-o", "--timeout", "--max-steps", "--max-tokens", "--mode"]);
 const BOOLEAN_FLAGS = new Set(["--json", "--yes", "-y", "--dry-run", "--check", "--open", "--help", "-h", "--version", "-V", "--no-nfet", "--once"]);
 
 function parse(argv) {
@@ -41,7 +41,7 @@ function parse(argv) {
     if (!literal && VALUE_FLAGS.has(token)) {
       const value = argv[++i];
       if (value == null) throw Object.assign(new Error(`${token} requires a value`), { exitCode: 2 });
-      const key = ({ "--provider": "provider", "--model": "model", "--api-key": "apiKey", "--base-url": "baseUrl", "--cwd": "cwd", "--out": "out", "-o": "out", "--timeout": "timeout", "--max-steps": "maxSteps", "--mode": "permissionMode" })[token];
+      const key = ({ "--provider": "provider", "--model": "model", "--api-key": "apiKey", "--base-url": "baseUrl", "--cwd": "cwd", "--out": "out", "-o": "out", "--timeout": "timeout", "--max-steps": "maxSteps", "--max-tokens": "maxTokens", "--mode": "permissionMode" })[token];
       flags[key] = value;
     } else if (!literal && BOOLEAN_FLAGS.has(token)) {
       const key = ({ "--json": "json", "--yes": "yes", "-y": "yes", "--dry-run": "dryRun", "--check": "check", "--open": "open", "--help": "help", "-h": "help", "--version": "version", "-V": "version", "--no-nfet": "noNfet", "--once": "once" })[token];
@@ -63,6 +63,7 @@ function parse(argv) {
   };
   flags.timeout = integerFlag("--timeout", flags.timeout, undefined, 1_000, 3_600_000);
   flags.maxSteps = integerFlag("--max-steps", flags.maxSteps, 12, 1, 40);
+  flags.maxTokens = integerFlag("--max-tokens", flags.maxTokens, 0, 256, 200_000);
   if (flags.permissionMode && !PERMISSION_MODES.includes(flags.permissionMode)) throw Object.assign(new Error(`--mode must be one of: ${PERMISSION_MODES.join(", ")}`), { exitCode: 2 });
   return { flags, words };
 }
@@ -446,7 +447,7 @@ async function executeTask(command, text, config, flags, sharedMonitor = null, h
       await store.finish(run.id, "completed", { kind: "html", result_path: out });
       return 0;
     }
-    const result = await runAgent({ prompt: text, mode: command, runtime, monitor, cwd: flags.cwd, yes: flags.yes, dryRun: flags.dryRun, maxSteps: flags.maxSteps, history, onPhase, onTool, onNfet, onProgress, permissionMode: flags.permissionMode, eventSink });
+    const result = await runAgent({ prompt: text, mode: command, runtime, monitor, cwd: flags.cwd, yes: flags.yes, dryRun: flags.dryRun, maxSteps: flags.maxSteps, maxTokens: flags.maxTokens, history, onPhase, onTool, onNfet, onProgress, permissionMode: flags.permissionMode, eventSink });
     result.run_id = run.id;
     if (typeof flags.captureResult === "function") flags.captureResult(result);
     if (surface) surface.assistant(result.response || result.error);
