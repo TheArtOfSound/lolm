@@ -45,10 +45,14 @@ LOLM_SOURCE = str(ROOT / "clients" / "cli" / "bin" / "lolm.mjs")
 # than between two model vendors.
 CONTROL_MODEL = os.environ.get("LOLM_BENCH_GEMINI_MODEL", "gemini-3.1-flash-lite")
 GROQ_MODEL = os.environ.get("LOLM_BENCH_GROQ_MODEL", "llama-3.3-70b-versatile")
+# The default local model shares the machine with the 4B NFET controller. On a
+# memory-constrained host a 14B model and the controller thrash together, so the
+# ablation model is overridable and defaults small enough to co-reside.
+LOCAL_MODEL = os.environ.get("LOLM_BENCH_LOCAL_MODEL", "qwen3:14b")
 
 LOLM_TRACKS = {
-    "lolm": ("ollama", "qwen3:14b", True, "Ollama qwen3:14b (local)"),
-    "lolm_nonfet": ("ollama", "qwen3:14b", False, "Ollama qwen3:14b (local), NFET disabled (ablation)"),
+    "lolm": ("ollama", LOCAL_MODEL, True, f"Ollama {LOCAL_MODEL} (local)"),
+    "lolm_nonfet": ("ollama", LOCAL_MODEL, False, f"Ollama {LOCAL_MODEL} (local), NFET disabled (ablation)"),
     "lolm_cerebras": ("cerebras", "gpt-oss-120b", True, "Cerebras gpt-oss-120b via user-owned key"),
     "lolm_cerebras_nonfet": ("cerebras", "gpt-oss-120b", False, "Cerebras gpt-oss-120b, NFET disabled (ablation)"),
     "lolm_gemini": ("google", CONTROL_MODEL, True, f"Google {CONTROL_MODEL} via user-owned key"),
