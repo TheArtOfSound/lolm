@@ -136,3 +136,38 @@ rl.on("line", (line) => { const message = JSON.parse(line); if (message.id == nu
     assert.equal(result.result.content[0].text, "from mcp");
   } finally { await toolbox.close(); }
 });
+
+test("fs.patch accepts text pasted back from an fs.inspect preview", async () => {
+  const root = await workspace("patch-numbered");
+  await writeFile(join(root, "app.py"), "def main():\n    return 1\n");
+  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted" });
+  const preview = await toolbox.registry.execute({ name: "fs.inspect", arguments: { path: "app.py" } });
+  assert.match(preview.result.preview, /^1: def main\(\):/);
+  // The model pastes the numbered preview lines straight into old_text.
+  const patch = await toolbox.registry.execute({
+    name: "fs.patch",
+    arguments: { path: "app.py", old_text: "2:     return 1", new_text: "    return 2" },
+  });
+  assert.equal(patch.ok, true, JSON.stringify(patch.error));
+  assert.equal(await readFile(join(root, "app.py"), "utf8"), "def main():\n    return 2\n");
+  // Genuinely absent text must still fail, and say why.
+  const missing = await toolbox.registry.execute({
+    name: "fs.patch",
+    arguments: { path: "app.py", old_text: "nowhere", new_text: "x" },
+  });
+  assert.equal(missing.ok, false);
+  assert.equal(missing.error.code, "PATCH_CONTEXT_MISSING");
+  await toolbox.close();
+});
+
+test("fs.inspect pages a long file from an explicit start line", async () => {
+  const root = await workspace("inspect-range");
+  await writeFile(join(root, "long.txt"), Array.from({ length: 300 }, (_, i) => `line ${i + 1}`).join("\n"));
+  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted" });
+  const page = await toolbox.registry.execute({ name: "fs.inspect", arguments: { path: "long.txt", line_start: 150, lines: 3 } });
+  assert.equal(page.ok, true, JSON.stringify(page.error));
+  assert.equal(page.result.preview, "150: line 150\n151: line 151\n152: line 152");
+  assert.equal(page.result.total_lines, 300);
+  assert.equal(page.result.truncated, true);
+  await toolbox.close();
+});

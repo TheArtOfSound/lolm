@@ -148,9 +148,25 @@ async function streamJsonLines(url, runtime, { body, headers = {}, onValue = () 
   }
 }
 
+/** Tool arguments arrive as a JSON string. When the completion is cut off at the
+ *  token limit that string is unterminated, and silently degrading it to `{}`
+ *  reports "path is required" for what is really a truncated response — so the
+ *  model retries the same oversized write until the step budget is gone. Keep
+ *  the real cause attached to the call. */
 function parseArguments(value) {
-  if (value && typeof value === "object") return value;
-  try { return JSON.parse(String(value || "{}")); } catch { return {}; }
+  if (value && typeof value === "object") return { arguments: value, malformed: null };
+  const text = String(value ?? "").trim();
+  if (!text) return { arguments: {}, malformed: null };
+  try {
+    return { arguments: JSON.parse(text), malformed: null };
+  } catch (error) {
+    return { arguments: {}, malformed: { reason: error.message, length: text.length } };
+  }
+}
+
+function toolCall(id, name, rawArguments, index) {
+  const parsed = parseArguments(rawArguments);
+  return { id: id || `call_${index}`, name: name || "", arguments: parsed.arguments, malformed: parsed.malformed };
 }
 
 function openAiMessages(messages) {
@@ -190,11 +206,8 @@ async function openAiChat(runtime, messages, tools = [], { maxTokens } = {}) {
   return {
     content: typeof message.content === "string" ? message.content : Array.isArray(message.content)
       ? message.content.map((part) => part?.text || "").join("") : "",
-    toolCalls: (message.tool_calls || []).map((call, index) => ({
-      id: call.id || `call_${index}`,
-      name: call.function?.name || "",
-      arguments: parseArguments(call.function?.arguments),
-    })),
+    toolCalls: (message.tool_calls || []).map((call, index) => toolCall(call.id, call.function?.name, call.function?.arguments, index)),
+    truncated: payload?.choices?.[0]?.finish_reason === "length",
     usage: payload.usage || null,
     raw: payload,
   };
@@ -244,6 +257,7 @@ async function anthropicChat(runtime, messages, tools = [], { maxTokens } = {}) 
       name: block.name || "",
       arguments: block.input || {},
     })),
+    truncated: payload?.stop_reason === "max_tokens",
     usage: payload.usage || null,
     raw: payload,
   };
@@ -357,6 +371,7 @@ async function geminiChat(runtime, messages, tools = [], { maxTokens } = {}) {
       arguments: part.functionCall.args || {},
       signature: part.thoughtSignature || "",
     })),
+    truncated: payload?.candidates?.[0]?.finishReason === "MAX_TOKENS",
     usage: payload.usageMetadata || null,
     raw: payload,
   };
