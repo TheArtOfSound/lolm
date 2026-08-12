@@ -137,10 +137,14 @@ gap and the CLI labels the monitor unavailable. It never fabricates NFET data:
 when the controller is not running, any nudge you see is a plain deterministic
 observation and is not presented as telemetry.
 
-The controller loads a 4B backbone, which is not instant. The first run on a
-machine starts a small background service that holds that loaded model, and
-every later invocation attaches to it over a local socket instead of loading it
-again. On an M-series Mac with `device: cpu` the first start measured 92s cold
+The controller loads a 4B backbone, which is not instant, and it holds that
+model in memory beside whatever you are running. If you also run a large local
+model through Ollama — a 14B needs about 10 GB — the two together can exhaust a
+constrained machine and make everything crawl. Give the pair real RAM headroom,
+run the controller against a hosted provider while a big model runs locally, or
+turn it off with `--no-nfet` when memory is tight. The first run on a machine
+starts a small background service that holds the loaded model, and every later
+invocation attaches to it over a local socket instead of loading it again. On an M-series Mac with `device: cpu` the first start measured 92s cold
 and about 29s with the model already in the page cache; attaching afterwards and
 returning a real decision took under two seconds.
 

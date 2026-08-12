@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.6.0 - 2026-08-12
+
+A stray NFET verdict can no longer discard a correct answer.
+
+- the control loop treated every retrieve/verify/branch verdict as a hard order
+  to rework. On a task already finished correctly a spurious `branch` told the
+  model to try a different approach, and with no memory of what it had produced
+  it rebuilt from scratch — once observed proliferating four files for a
+  one-file task before hitting the step ceiling;
+- once a result is independently verified (its tests pass, or its evidence is
+  gathered) the exploratory verdicts are recorded but no longer force more work,
+  and each such case is logged as an `nfet.downgraded` event so the decision
+  stays honest;
+- while a result is still unverified the verdict is honored, but the guidance
+  now carries the trajectory ("already edited N files; produced a draft
+  beginning …") and forbids discarding correct work or creating redundant files;
+- `verify` is gated on the unverified state at both checkpoints, so a verified
+  answer is never trapped in a re-check loop;
+- a task that says "verify it" now actually forces verification before
+  finishing;
+- proven with a hermetic test: a stub branch controller and a localhost provider
+  drive the real loop and show a verified answer finalizing on the first step
+  with zero interventions, while an unverified trajectory is still corrected and
+  capped;
+- documented that the 4B controller needs memory headroom beside a large local
+  model, since the two can thrash a constrained host.
+
+Benchmark honesty: a run that exhausts a provider's tokens-per-day allowance is
+now excluded as `usage_limit` rather than scored as model failures — the
+classifier previously missed `RATE_LIMITED` and "tokens per day limit exceeded".
+Added same-model, same-scaffold ablation tracks (NFET on vs off) for local
+Ollama, Cerebras, and Groq so the controller's contribution can be measured
+directly; the evidence report labels those as NFET ablations.
+
 ## 1.5.0 - 2026-08-12
 
 The terminal is now usable without sight, without colour, and without Unicode.
