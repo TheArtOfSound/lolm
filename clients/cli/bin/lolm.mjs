@@ -477,6 +477,9 @@ async function interactive(config, flags, { seed = null } = {}) {
   surface.open();
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, historySize: 500 });
   const monitor = monitorFor(config, flags, surface);
+  // Loading the controller takes real seconds. Spend them while the reader is
+  // still typing their first message rather than in the middle of their task.
+  monitor?.start().catch(() => {});
   let history = [];
   let queued = seed;
   try {
