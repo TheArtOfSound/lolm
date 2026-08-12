@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.4.0 - 2026-08-12
+
+The NFET controller no longer reloads a 4B model on every command.
+
+- the first run starts a small background service that owns the loaded bridge,
+  and later invocations attach to it over a local socket; on an M-series Mac the
+  first start measured 92s cold and ~29s with the model in the page cache, while
+  attaching and returning a real decision afterwards took under two seconds;
+- the Python bridge is now multi-session, so one loaded model serves several
+  callers with separate rolling policy state — two LOLM processes sharing the
+  service cannot contaminate each other's control decisions;
+- there is one service per distinct profile, device, checkpoint, and backend, so
+  a differently configured run can never attach to the wrong model;
+- the service exits after 30 minutes idle (`LOLM_NFET_IDLE_MS`), can be stopped
+  with `lolm nfet stop`, is reported by `lolm nfet status`, and is disabled by
+  `LOLM_NFET_DAEMON=0`;
+- if the service cannot start, the CLI falls back to a private in-process
+  bridge, so NFET degrades in speed rather than availability.
+
 ## 1.3.0 - 2026-08-12
 
 Every change below came from watching the agent fail a hidden-test benchmark and

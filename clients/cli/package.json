@@ -1,6 +1,6 @@
 {
   "name": "lolm-cli",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Open-source local computer-use agent with a polished terminal UI, 60+ typed tools, provider-agnostic BYOK, browser automation, durable runs, and real LOLM-NFET control.",
   "type": "module",
   "bin": {
@@ -13,6 +13,7 @@
     "lib/diagnostics.mjs",
     "lib/mcp.mjs",
     "lib/nfet.mjs",
+    "lib/nfet_daemon.mjs",
     "lib/nfet_bridge.py",
     "lib/pdf.mjs",
     "lib/plugins.mjs",

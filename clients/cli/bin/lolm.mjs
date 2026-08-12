@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { runAgent, generateDocument, generateHtml } from "../lib/agent.mjs";
 import { CONFIG_PATH, PROVIDERS, loadConfig, publicRuntime, resolveRuntime, saveConfig, normalizeProvider } from "../lib/config.mjs";
 import { listModels, rawGet, ProviderError } from "../lib/providers.mjs";
-import { NfetMonitor, inspectNfet } from "../lib/nfet.mjs";
+import { NfetMonitor, daemonStatus, inspectNfet, stopDaemon } from "../lib/nfet.mjs";
 import { createPdf } from "../lib/pdf.mjs";
 import { isRetryPhrase, loadLastTask, saveLastTask } from "../lib/session.mjs";
 import { nativeSecretBackend, storeProviderSecret } from "../lib/secrets.mjs";
@@ -88,7 +88,7 @@ ${ui.bold("COMMANDS")}
   setup [provider]             configure any provider/API key
   providers                    list built-in and custom providers
   models                       list live models for the selected provider
-  nfet status|test             inspect or exercise the real NFET monitor
+  nfet status|test|stop        inspect, exercise, or stop the NFET service
   doctor                       verify provider, key, model, and NFET runtime
   tools [group]                list typed tools, schemas, and risk classes
   tools inspect NAME           inspect one tool contract
@@ -595,7 +595,15 @@ async function main() {
   if (command === "update") return updateSelf(flags);
   if (command === "nfet") {
     const action = words[1] || "status", info = await inspectNfet(config);
-    if (action === "status") return emit(flags, { ok: info.available, nfet: info }, JSON.stringify(info, null, 2));
+    if (action === "status") {
+      const service = await daemonStatus(info);
+      const detail = { ...info, service };
+      return emit(flags, { ok: info.available, nfet: detail }, JSON.stringify(detail, null, 2));
+    }
+    if (action === "stop") {
+      const stopped = await stopDaemon(info);
+      return emit(flags, { ok: true, stopped }, stopped ? "Shared NFET service stopped." : "No shared NFET service was running.");
+    }
     if (action === "test") {
       const monitor = monitorFor(config, flags);
       try {
@@ -603,7 +611,7 @@ async function main() {
         return emit(flags, { ok: result.available, nfet: result }, nfetLine(result));
       } finally { await monitor?.close(); }
     }
-    throw Object.assign(new Error("usage: lolm nfet status|test [text]"), { exitCode: 2 });
+    throw Object.assign(new Error("usage: lolm nfet status|test [text]|stop"), { exitCode: 2 });
   }
   if (command === "retry") {
     const previous = await loadLastTask();

@@ -95,11 +95,27 @@ gap and the CLI labels the monitor unavailable. It never fabricates NFET data:
 when the controller is not running, any nudge you see is a plain deterministic
 observation and is not presented as telemetry.
 
-The controller loads a 4B backbone, which is not instant — a cold start
-measured 92s on an M-series Mac with `device: cpu`. It is warmed in the
-background while you type your first message and stays hot for the rest of an
-interactive session, so a one-shot `lolm run` pays more of that cost than a
-conversation does. Use `--no-nfet` to skip it entirely.
+The controller loads a 4B backbone, which is not instant. The first run on a
+machine starts a small background service that holds that loaded model, and
+every later invocation attaches to it over a local socket instead of loading it
+again. On an M-series Mac with `device: cpu` the first start measured 92s cold
+and about 29s with the model already in the page cache; attaching afterwards and
+returning a real decision took under two seconds.
+
+```bash
+lolm nfet status    # is the service up, and what is it holding
+lolm nfet stop      # shut it down
+```
+
+The service exits on its own after 30 minutes idle (`LOLM_NFET_IDLE_MS`), and
+`LOLM_NFET_DAEMON=0` disables it so each command loads its own private copy.
+Each connection gets its own bridge session, so two LOLM processes sharing the
+service keep separate rolling telemetry and cannot influence each other's
+control decisions. There is one service per distinct profile, device,
+checkpoint, and backend — a differently configured run never reuses the wrong
+model. If the service cannot start for any reason the CLI falls back to a
+private in-process bridge, so NFET degrades in speed rather than availability.
+Use `--no-nfet` to skip it entirely.
 
 ## JSON contract
 

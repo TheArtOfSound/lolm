@@ -65,9 +65,14 @@ def main():
     if not result.get("loaded"):
         raise RuntimeError(result.get("warning") or "NFET model failed to load")
 
-    policy = NFETControlPolicy()
-    last_text_sha = ""
-    last_traces = None
+    # Loading the backbone is what costs a minute; the rolling policy state is
+    # cheap. Keying that state by session lets one loaded model serve several
+    # concurrent callers without their trajectories contaminating each other.
+    sessions: dict[str, dict] = {}
+
+    def session_for(name):
+        return sessions.setdefault(name, {"policy": NFETControlPolicy(), "text_sha": "", "traces": None})
+
     emit({
         "event": "ready",
         "profile": workspace.STATE.profile,
@@ -83,6 +88,10 @@ def main():
             if request.get("op") == "close":
                 emit({"event": "closed"})
                 return
+            if request.get("op") == "end_session":
+                sessions.pop(str(request.get("session") or "default"), None)
+                emit({"event": "session_ended", "sessions": len(sessions)})
+                continue
             if request.get("op") == "status":
                 emit({
                     "event": "status",
@@ -91,8 +100,11 @@ def main():
                     "device": str(workspace.STATE.device),
                     "backend": workspace.STATE.latent_backend,
                     "head_trained": workspace.STATE.head_trained,
+                    "sessions": len(sessions),
                 })
                 continue
+            state = session_for(str(request.get("session") or "default"))
+            policy = state["policy"]
             text = str(request.get("text") or "").strip()
             checkpoint_kind = str(request.get("checkpoint") or "work").lower()
             verified = bool(request.get("verified"))
@@ -101,14 +113,14 @@ def main():
             if checkpoint_kind not in {"plan", "work", "result"}:
                 raise ValueError("checkpoint must be plan, work, or result")
             if request.get("reset"):
-                policy = NFETControlPolicy()
-                last_text_sha = ""
-                last_traces = None
+                policy = state["policy"] = NFETControlPolicy()
+                state["text_sha"] = ""
+                state["traces"] = None
 
             text_sha = hashlib.sha256(text.encode()).hexdigest()
-            reuse = bool(request.get("reuse")) and text_sha == last_text_sha and last_traces
+            reuse = bool(request.get("reuse")) and text_sha == state["text_sha"] and state["traces"]
             if reuse:
-                traces = last_traces
+                traces = state["traces"]
             else:
                 traces = telemetry_traces_from_text(
                     workspace.STATE.backbone,
@@ -121,8 +133,8 @@ def main():
                 raise RuntimeError("LOLM produced no telemetry frames")
             if not reuse:
                 policy.observe_all(frames)
-                last_text_sha = text_sha
-                last_traces = traces
+                state["text_sha"] = text_sha
+                state["traces"] = traces
             decision = policy.decide(
                 control_logits=aggregate_logits(traces),
                 head_trained=workspace.STATE.head_trained,
