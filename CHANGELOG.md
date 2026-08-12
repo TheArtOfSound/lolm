@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.5.0 - 2026-08-12
+
+The terminal is now usable without sight, without colour, and without Unicode.
+
+- `--plain` / `LOLM_PLAIN=1` gives linear, append-only output for a screen
+  reader: no alternate screen, no repainting, no cursor movement, no animation,
+  and no decorative symbols. Speakers are named ("You:", "LOLM:") and status is
+  written as sentences instead of a row of coloured glyphs;
+- `TERM=dumb` selects that mode on its own;
+- `LOLM_NO_MOTION=1` replaces spinners with one static line every 15 seconds,
+  so progress is still reported without a stream of repainted frames;
+- a locale that is not UTF-8 now selects an ASCII fallback automatically, and
+  typographic characters are folded at the write edge, so box drawing and
+  symbols can no longer arrive as mojibake;
+- `FORCE_COLOR` is honoured alongside `NO_COLOR`, which keeps colour when piping
+  into a pager that understands escapes;
+- output is wrapped to the detected width rather than relying on terminal
+  soft-wrap, which used to destroy indentation;
+- meaning is no longer carried by colour alone: warnings and errors say
+  "Warning:" and "Error:", and tool failures name the failure;
+- `lolm doctor` reports the detected terminal capabilities and the exact
+  variable that changes each one.
+
 ## 1.4.0 - 2026-08-12
 
 The NFET controller no longer reloads a 4B model on every command.

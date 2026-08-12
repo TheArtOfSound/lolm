@@ -22,14 +22,14 @@ import { createAgentToolbox } from "../lib/tools/index.mjs";
 import { RunStore } from "../lib/runtime/runs.mjs";
 import { PERMISSION_MODES } from "../lib/runtime/permissions.mjs";
 import { readMcpConfig } from "../lib/mcp.mjs";
-import { banner, confirm, createConsoleSurface, failure, nfetLine, note, prompt as askPrompt, renderMarkdown, secretPrompt, section, spinner, success, ui, warning, wordmark } from "../lib/tui.mjs";
+import { banner, confirm, asciiSafe, createConsoleSurface, explainCapabilities, caps as termCaps, failure, inputPrompt, nfetLine, note, prompt as askPrompt, renderMarkdown, secretPrompt, section, spinner, success, ui, warning, wordmark } from "../lib/tui.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 const VERSION = pkg.version;
 
 const VALUE_FLAGS = new Set(["--provider", "--model", "--api-key", "--base-url", "--cwd", "--out", "-o", "--timeout", "--max-steps", "--max-tokens", "--mode"]);
-const BOOLEAN_FLAGS = new Set(["--json", "--yes", "-y", "--dry-run", "--check", "--open", "--help", "-h", "--version", "-V", "--no-nfet", "--once"]);
+const BOOLEAN_FLAGS = new Set(["--json", "--yes", "-y", "--dry-run", "--check", "--open", "--help", "-h", "--version", "-V", "--no-nfet", "--once", "--plain"]);
 
 function parse(argv) {
   const flags = { cwd: process.cwd(), maxSteps: 12 };
@@ -44,7 +44,7 @@ function parse(argv) {
       const key = ({ "--provider": "provider", "--model": "model", "--api-key": "apiKey", "--base-url": "baseUrl", "--cwd": "cwd", "--out": "out", "-o": "out", "--timeout": "timeout", "--max-steps": "maxSteps", "--max-tokens": "maxTokens", "--mode": "permissionMode" })[token];
       flags[key] = value;
     } else if (!literal && BOOLEAN_FLAGS.has(token)) {
-      const key = ({ "--json": "json", "--yes": "yes", "-y": "yes", "--dry-run": "dryRun", "--check": "check", "--open": "open", "--help": "help", "-h": "help", "--version": "version", "-V": "version", "--no-nfet": "noNfet", "--once": "once" })[token];
+      const key = ({ "--json": "json", "--yes": "yes", "-y": "yes", "--dry-run": "dryRun", "--check": "check", "--open": "open", "--help": "help", "-h": "help", "--version": "version", "-V": "version", "--no-nfet": "noNfet", "--once": "once", "--plain": "plain" })[token];
       flags[key] = true;
     } else if (!literal && token.startsWith("-")) {
       throw Object.assign(new Error(`unknown flag ${token}`), { exitCode: 2 });
@@ -113,6 +113,7 @@ ${ui.bold("GLOBAL OPTIONS")}
   --json             stable machine-readable output
   --once             answer once and return to the shell
   --no-nfet          explicitly run without the local NFET monitor
+  --plain            linear, screen-reader friendly output (LOLM_PLAIN=1)
 
 Flags override environment, then config, then defaults. Keys are never printed. Run ${ui.cyan("lolm setup")} first.`;
 
@@ -128,7 +129,7 @@ Conversation controls: /clear · /provider NAME · /model NAME · /cwd PATH · /
 
 function emit(flags, payload, human = "") {
   if (flags.json) process.stdout.write(`${JSON.stringify(payload)}\n`);
-  else if (human) process.stdout.write(`${human}\n`);
+  else if (human) process.stdout.write(asciiSafe(`${human}\n`));
 }
 
 function taskRoute(text) {
@@ -256,7 +257,11 @@ async function doctor(config, flags) {
   }
   const ok = checks.every((item) => item.ok || item.optional);
   const actions = checks.filter((item) => !item.ok && item.action).map((item) => item.action);
-  emit(flags, { ok, runtime: publicRuntime(runtime), nfet, checks, actions }, `${checks.map((item) => `${item.ok ? ui.green("✓") : item.optional ? ui.amber("!") : ui.red("×")} ${item.name.padEnd(18)} ${ui.dim(item.detail)}${item.optional && !item.ok ? ui.dim(" · optional") : ""}`).join("\n")}${actions.length ? `\n\n${ui.bold("Recommended actions")}\n${actions.map((action) => `  ${ui.cyan("→")} ${action}`).join("\n")}` : ""}`);
+  const terminal = explainCapabilities(termCaps);
+  const accessibility = `\n\n${ui.bold("Terminal and accessibility")}\n${terminal
+    .map(([name, value, detail]) => `  ${name.padEnd(18)} ${value.padEnd(28)} ${ui.dim(detail)}`)
+    .join("\n")}`;
+  emit(flags, { ok, runtime: publicRuntime(runtime), nfet, checks, actions, terminal: termCaps }, `${checks.map((item) => `${item.ok ? ui.green("✓") : item.optional ? ui.amber("!") : ui.red("×")} ${item.name.padEnd(18)} ${ui.dim(item.detail)}${item.optional && !item.ok ? ui.dim(" · optional") : ""}`).join("\n")}${accessibility}${actions.length ? `\n\n${ui.bold("Recommended actions")}\n${actions.map((action) => `  ${ui.cyan("→")} ${action}`).join("\n")}` : ""}`);
   return ok ? 0 : 1;
 }
 
@@ -491,7 +496,7 @@ async function interactive(config, flags, { seed = null } = {}) {
         queued = null;
         surface.user(line);
       } else {
-        try { line = (await rl.question(`\n${ui.indigo("╭─ YOU")}\n${ui.violet("╰─›")} `)).trim(); }
+        try { line = (await rl.question(inputPrompt())).trim(); }
         catch { break; }
       }
       if (!line) continue;

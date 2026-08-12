@@ -73,6 +73,39 @@ rather than a misleading schema error, and the model is told to split the work.
 otherwise, so code search works on a machine that has never installed `rg`. The
 result reports which engine answered.
 
+## Accessibility
+
+`--plain` (or `LOLM_PLAIN=1`) switches the terminal to linear, append-only text
+built for a screen reader: no alternate screen, no repainting, no animation, no
+cursor movement, no decorative symbols. Speakers are named in words, and status
+is written as sentences rather than a row of coloured glyphs.
+
+```text
+LOLM personal agent, version 1.5.0.
+Provider: Cerebras, model gpt-oss-120b.
+Quality controller: NFET active.
+Permissions: standard.
+
+You: fix the failing tests
+LOLM: …
+```
+
+The rest is detected rather than assumed, and `lolm doctor` prints what it found
+along with the switch that changes it:
+
+| Variable | Effect |
+|---|---|
+| `LOLM_PLAIN` / `--plain` | linear screen-reader output (also on for `TERM=dumb`) |
+| `NO_COLOR` / `FORCE_COLOR` | colour off, or kept on when piping into a pager |
+| `LOLM_NO_MOTION` | spinners become a static line every 15s |
+| `LOLM_ASCII` | restrict output to printable ASCII |
+| `LOLM_NO_ALT_SCREEN` | keep output in the normal scrollback |
+
+A locale that is not UTF-8 turns on the ASCII fallback by itself, so box drawing
+and symbols never arrive as mojibake. Meaning is never carried by colour alone:
+every state that matters also has a word or an ASCII-safe mark, which is what
+makes the output equally usable in a pipe, a CI log, and a screen reader.
+
 ## NFET
 
 The npm command locates a cloned LOLM repository through `LOLM_HOME`, the
