@@ -20,7 +20,13 @@ from typing import Any
 
 # Only a pair sharing one model isolates the scaffold; anything else mostly
 # measures whichever model is stronger, so the report must not imply otherwise.
-CONTROLLED_PAIRS = [("lolm_gemini", "gemini"), ("lolm_gemini_nonfet", "lolm_gemini")]
+# The nonfet pairs share the model AND the scaffold, isolating the NFET
+# controller alone — the cleanest ablation the suite can produce.
+CONTROLLED_PAIRS = [
+    ("lolm_cerebras", "lolm_cerebras_nonfet"),
+    ("lolm_gemini", "lolm_gemini_nonfet"),
+    ("lolm_gemini", "gemini"),
+]
 
 
 def sha256(path: Path) -> str:
@@ -141,8 +147,20 @@ def build(runs: list[dict[str, Any]]) -> str:
                        else f"`{right}` ahead by {right_only - left_only}")
             unscored_left = scores[left]["attempted"] - scores[left]["scored"]
             unscored_right = scores[right]["attempted"] - scores[right]["scored"]
+            # An ablation pairs the same scaffold on the same model with the only
+            # controller toggled, so it measures NFET alone rather than a vendor.
+            ablation = right.endswith("_nonfet") and right.startswith(left)
+            heading = (f"NFET ablation — **`{left}` (controller on) vs `{right}` (controller off)**"
+                       if ablation else f"**`{left}` vs `{right}`**")
+            median_left = scores[left]["median_seconds"]
+            median_right = scores[right]["median_seconds"]
             lines += [
-                f"**`{left}` vs `{right}`** on the {len(shared)} tasks both agents attempted: "
+                f"{heading} on the {len(shared)} tasks both attempted: "
+                f"**{left_passed}–{right_passed}**, {verdict}. "
+                f"`{left}` solved {left_only} that `{right}` missed; `{right}` solved {right_only} that `{left}` missed. "
+                f"Median wall time {median_left:.0f}s with the controller against {median_right:.0f}s without."
+                if ablation else
+                f"{heading} on the {len(shared)} tasks both agents attempted: "
                 f"**{left_passed}–{right_passed}**, {verdict}. "
                 f"`{left}` solved {left_only} that `{right}` missed; `{right}` solved {right_only} that `{left}` missed.",
                 "",
