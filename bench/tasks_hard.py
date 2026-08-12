@@ -1635,10 +1635,13 @@ print('OK')
             "either input. Nested dicts merge key by key. Lists follow list_strategy: 'replace' "
             "takes the override list, 'append' concatenates base then override, and 'unique' "
             "concatenates and then drops later duplicates while keeping first-seen order. Any "
-            "other strategy raises a ValueError mentioning the strategy. A value of None on "
-            "either side is always replaceable. int and float mix freely, but bool does not "
-            "count as a number. Any other type conflict raises a ValueError whose message "
-            "contains the dotted path to the conflict."
+            "other strategy raises a ValueError mentioning the strategy. None is an ordinary "
+            "value that never blocks a merge and never wins by default: the override side "
+            "always replaces the base, so merge({'n': 5}, {'n': None}) gives None and "
+            "merge({'n': None}, {'n': 5}) gives 5, and a None on either side is never a type "
+            "conflict. int and float mix freely, but bool does not count as a number. Any "
+            "other type conflict raises a ValueError whose message contains the dotted path "
+            "to the conflict."
         ),
         "reference": {
             "config.py": '''"""Deep configuration merge."""
