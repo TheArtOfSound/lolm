@@ -96,9 +96,12 @@ jobs:
           # npm's publish endpoint can acknowledge before every read replica
           # serves the immutable tarball. Poll the registry document first and
           # allow three minutes before treating propagation as a release error.
+          # Poll the resolver `npm install` actually uses. The registry document
+          # endpoint goes live on the CDN before the packument npm reads has
+          # propagated, so a curl probe passes while the install still ETARGETs.
           available=0
-          for i in {1..18}; do
-            if curl -fsS "https://registry.npmjs.org/lolm-cli/$V" >/dev/null; then available=1; break; fi
+          for i in {1..30}; do
+            if npm view "lolm-cli@$V" version --json >/dev/null 2>&1; then available=1; break; fi
             sleep 10
           done
           [ "$available" -eq 1 ]
