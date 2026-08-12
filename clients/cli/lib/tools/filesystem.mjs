@@ -29,6 +29,71 @@ function fileSchema(extra = {}, required = ["path"]) {
   return objectSchema({ path: { type: "string", minLength: 1 }, ...extra }, required);
 }
 
+const SEARCH_MAX_BYTES = 1024 * 1024;
+
+function globToRegExp(pattern) {
+  const SPECIAL = ".+^${}()|[]\\";
+  let body = "";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index];
+    if (char === "*") {
+      if (pattern[index + 1] === "*") {
+        index += 1;
+        // `**/` spans directories; a bare trailing `**` matches everything below.
+        if (pattern[index + 1] === "/") { index += 1; body += "(?:.*/)?"; } else body += ".*";
+      } else {
+        body += "[^/]*";
+      }
+    } else if (char === "?") {
+      body += "[^/]";
+    } else {
+      body += SPECIAL.includes(char) ? `\\${char}` : char;
+    }
+  }
+  return new RegExp(`^${body}$`);
+}
+
+/** Search without ripgrep. Most machines do not have `rg`, and a coding agent
+ *  that cannot grep is crippled on exactly the multi-file work it exists for. */
+async function searchInProcess(base, { query, glob, fixed, maxResults }) {
+  const matcher = fixed ? null : new RegExp(query);
+  const globRe = glob ? globToRegExp(glob) : null;
+  const rows = [];
+  let truncated = false;
+
+  const visit = async (directory, prefix) => {
+    if (truncated) return;
+    let entries;
+    try { entries = await readdir(directory, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (truncated) return;
+      if (SKIP_DIRECTORIES.has(entry.name)) continue;
+      const shown = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const full = join(directory, entry.name);
+      if (entry.isDirectory()) { await visit(full, shown); continue; }
+      if (!entry.isFile()) continue;
+      if (globRe && !globRe.test(glob.includes("/") ? shown : entry.name)) continue;
+      let info;
+      try { info = await stat(full); } catch { continue; }
+      if (info.size > SEARCH_MAX_BYTES) continue;
+      let content;
+      try { content = await readFile(full, "utf8"); } catch { continue; }
+      if (content.includes("\u0000")) continue; // skip binaries
+      const lines = content.split("\n");
+      for (let index = 0; index < lines.length; index += 1) {
+        const line = lines[index];
+        if (fixed ? line.includes(query) : matcher.test(line)) {
+          rows.push(`${shown}:${index + 1}:${line}`);
+          if (rows.length >= maxResults) { truncated = true; return; }
+        }
+      }
+    }
+  };
+
+  await visit(base, "");
+  return { matches: rows, truncated, engine: "builtin" };
+}
+
 export function registerFilesystemTools(registry, { root, onAction = () => {} }) {
   registry.register({
     name: "fs.read", aliases: ["read_file"], description: "Read a UTF-8 text file inside the trusted workspace.", risk: "read",
@@ -79,15 +144,18 @@ export function registerFilesystemTools(registry, { root, onAction = () => {} })
     },
   });
   registry.register({
-    name: "fs.search", aliases: ["search_files"], description: "Search text files with ripgrep and return exact file, line, and match output.", risk: "read",
+    name: "fs.search", aliases: ["search_files", "grep"], description: "Search text file contents and return exact file, line, and match output. Uses ripgrep when installed and an equivalent built-in search otherwise.", risk: "read",
     inputSchema: objectSchema({ query: { type: "string", minLength: 1 }, path: { type: "string" }, glob: { type: "string" }, fixed: { type: "boolean" }, max_results: { type: "integer", minimum: 1, maximum: 1000 } }, ["query"]),
     execute: async ({ query, path: value = ".", glob, fixed = false, max_results = 200 }, context) => {
       const path = resolveUserPath(root, value); assertReadablePath(root, path, context);
       const args = ["-n", "--hidden", "--glob", "!.git/**", "--glob", "!node_modules/**"];
       if (fixed) args.push("-F"); if (glob) args.push("--glob", glob); args.push("--", query, path);
       const result = await runFile("rg", args, { cwd: root, timeoutMs: 30_000 });
+      // Exit 1 is ripgrep's "no matches"; ENOENT means it simply is not installed.
+      if (result.code === "ENOENT") return searchInProcess(path, { query, glob, fixed, maxResults: max_results });
       if (!result.ok && result.exit_code !== 1) throw Object.assign(new Error(result.stderr || result.error || "Search failed."), { code: "SEARCH_FAILED" });
-      return { matches: result.stdout.split("\n").filter(Boolean).slice(0, max_results), truncated: result.stdout.split("\n").filter(Boolean).length > max_results };
+      const lines = result.stdout.split("\n").filter(Boolean);
+      return { matches: lines.slice(0, max_results), truncated: lines.length > max_results, engine: "ripgrep" };
     },
   });
   registry.register({

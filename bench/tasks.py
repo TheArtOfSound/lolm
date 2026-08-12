@@ -534,6 +534,11 @@ print('OK')
 ]
 
 
+from bench.tasks_hard import HARD_TASKS  # noqa: E402
+
+TASKS = TASKS + HARD_TASKS
+
+
 def by_id(task_id: str):
     for t in TASKS:
         if t["id"] == task_id:

@@ -34,6 +34,33 @@ test("filesystem tools inspect, patch, and search exact local content", async ()
   await toolbox.close();
 });
 
+test("fs.search works on a machine with no ripgrep installed", async () => {
+  const root = await workspace("search");
+  await mkdir(join(root, "pkg"), { recursive: true });
+  await writeFile(join(root, "pkg", "app.py"), "import os\nNEEDLE = 1\n");
+  await writeFile(join(root, "notes.md"), "NEEDLE in prose\n");
+  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted" });
+  const search = async (args) => {
+    const call = await toolbox.registry.execute({ name: "fs.search", arguments: args });
+    assert.equal(call.ok, true, JSON.stringify(call.error));
+    return call.result;
+  };
+  // Force the fallback rather than depending on whether this host has `rg`.
+  const original = process.env.PATH;
+  process.env.PATH = join(root, "no-such-bin");
+  try {
+    const all = await search({ query: "NEEDLE" });
+    assert.equal(all.engine, "builtin");
+    assert.deepEqual(all.matches.slice().sort(), ["notes.md:1:NEEDLE in prose", "pkg/app.py:2:NEEDLE = 1"]);
+    assert.deepEqual((await search({ query: "NEEDLE", glob: "*.py" })).matches, ["pkg/app.py:2:NEEDLE = 1"]);
+    assert.deepEqual((await search({ query: "NEEDLE = 1", fixed: true })).matches, ["pkg/app.py:2:NEEDLE = 1"]);
+    assert.deepEqual((await search({ query: "absent" })).matches, []);
+  } finally {
+    process.env.PATH = original;
+    await toolbox.close();
+  }
+});
+
 test("agent runner removes provider tool-envelope metadata before strict validation", async () => {
   const root = await workspace("envelope");
   const runner = createToolRunner({ cwd: root, yes: true, mode: "trusted" });

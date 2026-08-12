@@ -40,6 +40,43 @@ HIDDEN = "_lolm_hidden_check.py"
 CODEX = "/Applications/ChatGPT.app/Contents/Resources/codex"
 LOLM_SOURCE = str(ROOT / "clients" / "cli" / "bin" / "lolm.mjs")
 
+# The controlled comparison: LOLM and Google's own CLI driving the identical
+# model, so a score difference is a difference between the two scaffolds rather
+# than between two model vendors.
+CONTROL_MODEL = os.environ.get("LOLM_BENCH_GEMINI_MODEL", "gemini-3.1-flash-lite")
+
+LOLM_TRACKS = {
+    "lolm": ("ollama", "qwen3:14b", True, "Ollama qwen3:14b (local)"),
+    "lolm_cerebras": ("cerebras", "gpt-oss-120b", True, "Cerebras gpt-oss-120b via user-owned key"),
+    "lolm_gemini": ("google", CONTROL_MODEL, True, f"Google {CONTROL_MODEL} via user-owned key"),
+    "lolm_gemini_nonfet": ("google", CONTROL_MODEL, False, f"Google {CONTROL_MODEL}, NFET disabled (ablation)"),
+}
+CLI_BACKENDS = {
+    "codex": "installed Codex CLI with its own local configuration",
+    "gemini": f"installed Gemini CLI on {CONTROL_MODEL} via user-owned key",
+    "claude": "installed Claude Code CLI with its own local credentials",
+}
+
+# Rate-limited hosted backends need a gap between trials or the harness measures
+# the provider's throttle instead of the agent.
+COOLDOWN_AGENTS = {"lolm_cerebras", "lolm_gemini", "lolm_gemini_nonfet", "gemini"}
+
+
+def gemini_api_key() -> str:
+    """Resolve the Gemini credential without ever storing one in this repo."""
+    for name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        if os.environ.get(name):
+            return os.environ[name]
+    if sys.platform == "darwin":
+        found = subprocess.run(
+            ["security", "find-generic-password", "-a", os.environ.get("USER", ""),
+             "-s", "lolm-cli-provider:google", "-w"],
+            text=True, capture_output=True, check=False,
+        )
+        if found.returncode == 0:
+            return found.stdout.strip()
+    return ""
+
 
 def sha(value: bytes | str) -> str:
     if isinstance(value, str):
@@ -91,8 +128,9 @@ def prompt_for(task: dict[str, Any]) -> str:
     )
 
 
-def agent_command(agent: str, prompt: str, work: Path, *, nfet: bool) -> list[str]:
-    if agent in {"lolm", "lolm_cerebras"}:
+def agent_command(agent: str, prompt: str, work: Path, *, nfet: bool, max_steps: int) -> list[str]:
+    if agent in LOLM_TRACKS:
+        provider, model, track_nfet, _ = LOLM_TRACKS[agent]
         command = [
             shutil.which("node") or "node",
             LOLM_SOURCE,
@@ -105,15 +143,33 @@ def agent_command(agent: str, prompt: str, work: Path, *, nfet: bool) -> list[st
             "--yes",
             "--json",
             "--max-steps",
-            "12",
+            str(max_steps),
+            "--provider",
+            provider,
+            "--model",
+            model,
         ]
-        if agent == "lolm":
-            command += ["--provider", "ollama", "--model", "qwen3:14b"]
-        else:
-            command += ["--provider", "cerebras", "--model", "gpt-oss-120b"]
-        if not nfet:
+        # An explicit ablation track always wins over the run-wide default, so
+        # the NFET-off row stays honest even when the run enables NFET.
+        if not (nfet and track_nfet):
             command.append("--no-nfet")
         return command
+    if agent == "gemini":
+        return [
+            shutil.which("gemini") or "gemini",
+            "-p", prompt,
+            "-m", CONTROL_MODEL,
+            "--yolo",
+            "--skip-trust",
+            "-o", "json",
+        ]
+    if agent == "claude":
+        return [
+            shutil.which("claude") or "claude",
+            "-p", prompt,
+            "--permission-mode", "bypassPermissions",
+            "--output-format", "json",
+        ]
     if agent == "codex":
         return [
             CODEX,
@@ -173,16 +229,61 @@ def save_text(path: Path, value: str) -> dict[str, Any]:
     return {"path": str(path), "bytes": path.stat().st_size, "sha256": sha(path.read_bytes())}
 
 
-def parse_agent_output(agent: str, stdout: str) -> dict[str, Any]:
+def classify_infrastructure(text: str) -> str | None:
+    """Name the blocker when a run never reached the model, so it is excluded
+    rather than scored as a model failure."""
+    lower = text.lower()
+    if "usage limit" in lower or "quota" in lower or "rate limit" in lower or "429" in lower:
+        return "usage_limit"
+    if "not logged in" in lower or "please run /login" in lower or "auth" in lower and "api key" in lower:
+        return "auth"
+    if "api key not valid" in lower or "set an auth method" in lower or "credential" in lower:
+        return "auth"
+    return None
+
+
+def parse_agent_output(agent: str, stdout: str, stderr: str = "") -> dict[str, Any]:
     lines = [line for line in stdout.splitlines() if line.strip().startswith("{")]
+    if agent == "gemini":
+        blob = stdout.strip()
+        try:
+            payload = json.loads(blob)
+        except Exception:
+            return {"parsed": False, "infrastructure_error": classify_infrastructure(stdout + stderr) or "unparseable_output"}
+        error = json.dumps(payload.get("error") or "")
+        stats = (payload.get("stats") or {}).get("tools") or {}
+        return {
+            "parsed": True,
+            "model": CONTROL_MODEL,
+            "tool_calls": stats.get("totalCalls"),
+            "tool_failures": stats.get("totalFail"),
+            "usage": (payload.get("stats") or {}).get("models"),
+            "error": payload.get("error") or None,
+            "infrastructure_error": classify_infrastructure(error + stderr) if payload.get("error") else None,
+        }
+    if agent == "claude":
+        try:
+            payload = json.loads(stdout.strip())
+        except Exception:
+            return {"parsed": False, "infrastructure_error": classify_infrastructure(stdout + stderr) or "unparseable_output"}
+        error = str(payload.get("result") or "") if payload.get("is_error") else ""
+        return {
+            "parsed": True,
+            "model": payload.get("model"),
+            "usage": payload.get("usage"),
+            "error": error or None,
+            "infrastructure_error": classify_infrastructure(error + stderr) if error else None,
+        }
     if agent.startswith("lolm"):
         try:
             payload = json.loads(lines[-1])
         except Exception:
             return {"parsed": False, "infrastructure_error": "unparseable_output"}
         nfet = payload.get("nfet") or {}
+        failure = json.dumps(payload.get("error") or "") if not payload.get("ok") else ""
         return {
             "parsed": True,
+            "infrastructure_error": classify_infrastructure(failure) if failure else None,
             "ok": payload.get("ok"),
             "provider": payload.get("provider"),
             "model": payload.get("model"),
@@ -214,6 +315,7 @@ def run_trial(
     *,
     timeout: int,
     nfet: bool,
+    max_steps: int = 12,
 ) -> dict[str, Any]:
     work = Path(tempfile.mkdtemp(prefix=f"lolm-bench-{agent}-{task['id']}-"))
     try:
@@ -221,11 +323,15 @@ def run_trial(
             target = work / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content)
-        command = agent_command(agent, prompt_for(task), work, nfet=nfet)
+        command = agent_command(agent, prompt_for(task), work, nfet=nfet, max_steps=max_steps)
         env = dict(os.environ)
         env["NO_COLOR"] = "1"
+        if agent == "gemini":
+            key = gemini_api_key()
+            if key:
+                env["GEMINI_API_KEY"] = key
         process = execute(command, cwd=work, timeout=timeout, env=env)
-        agent_receipt = parse_agent_output(agent, process["stdout"])
+        agent_receipt = parse_agent_output(agent, process["stdout"], process["stderr"])
         before_grade = file_manifest(work)
         grader = grade(task, work)
         raw = results / "raw" / agent / f"{task['id']}-trial-{trial}"
@@ -312,7 +418,7 @@ def summarize(payload: dict[str, Any]) -> None:
         scoreable = [row for row in rows if row.get("scoreable", True)]
         passed = sum(bool(row["passed"]) for row in scoreable)
         payload["summary"][agent] = {
-            "backend": payload["environment"][f"{agent}_backend"],
+            "backend": payload["environment"].get(f"{agent}_backend", "unknown"),
             "passed": passed,
             "jobs": len(rows),
             "scoreable_jobs": len(scoreable),
@@ -325,9 +431,12 @@ def summarize(payload: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--agents", default="lolm,codex")
-    parser.add_argument("--tasks", default=",".join(DEFAULT_TASKS))
+    parser.add_argument("--tasks", default="", help="comma-separated task ids; defaults to --suite")
+    parser.add_argument("--suite", default="full", choices=("full", "pilot"),
+                        help="full = every task in bench.tasks; pilot = the original six-task set")
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=480)
+    parser.add_argument("--max-steps", type=int, default=12)
     parser.add_argument("--lolm-nfet", action="store_true")
     parser.add_argument("--provider-cooldown", type=int, default=20)
     parser.add_argument("--output", type=Path)
@@ -338,7 +447,8 @@ def main() -> int:
         payload = json.loads(source.read_text())
         for row in payload["results"]:
             stdout = Path(row["receipts"]["stdout"]["path"]).read_text()
-            receipt = parse_agent_output(row["agent"], stdout)
+            stderr = Path(row["receipts"]["stderr"]["path"]).read_text()
+            receipt = parse_agent_output(row["agent"], stdout, stderr)
             row["agent_receipt"] = receipt
             row["scoreable"] = not bool(receipt.get("infrastructure_error"))
         summarize(payload)
@@ -347,7 +457,8 @@ def main() -> int:
         print(source.parent)
         return 0
     agents = [value.strip() for value in args.agents.split(",") if value.strip()]
-    requested = [value.strip() for value in args.tasks.split(",") if value.strip()]
+    default_tasks = [task["id"] for task in TASKS] if args.suite == "full" else list(DEFAULT_TASKS)
+    requested = [value.strip() for value in args.tasks.split(",") if value.strip()] or default_tasks
     by_id = {task["id"]: task for task in TASKS}
     missing = [task for task in requested if task not in by_id]
     if missing:
@@ -361,7 +472,7 @@ def main() -> int:
         "created_at": datetime.now(timezone.utc).isoformat(),
         "agents": agents,
         "tasks": [task_digest(by_id[name]) for name in requested],
-        "settings": {"repeat": args.repeat, "timeout_seconds": args.timeout, "lolm_nfet": args.lolm_nfet, "provider_cooldown_seconds": args.provider_cooldown},
+        "settings": {"repeat": args.repeat, "timeout_seconds": args.timeout, "max_steps": args.max_steps, "lolm_nfet": args.lolm_nfet, "provider_cooldown_seconds": args.provider_cooldown},
         "environment": {
             "platform": platform.platform(),
             "python": sys.version.split()[0],
@@ -369,9 +480,11 @@ def main() -> int:
             "git_dirty": bool(git_value("status", "--porcelain")),
             "lolm_version": run_version([shutil.which("node") or "node", LOLM_SOURCE, "--version"]),
             "codex_version": run_version([CODEX, "--version"]),
-            "lolm_backend": "Ollama qwen3:14b",
-            "lolm_cerebras_backend": "Cerebras gpt-oss-120b via user-owned key",
-            "codex_backend": "gpt-5.6-sol, high reasoning (local config at launch)",
+            "gemini_version": run_version([shutil.which("gemini") or "gemini", "--version"]),
+            "claude_version": run_version([shutil.which("claude") or "claude", "--version"]),
+            "control_model": CONTROL_MODEL,
+            **{f"{name}_backend": label for name, (_, _, _, label) in LOLM_TRACKS.items()},
+            **{f"{name}_backend": label for name, label in CLI_BACKENDS.items()},
         },
         "results": [],
     }
@@ -379,11 +492,14 @@ def main() -> int:
         for task_id in requested:
             for trial in range(1, args.repeat + 1):
                 print(f"[{agent}] {task_id} trial {trial}/{args.repeat}", flush=True)
-                row = run_trial(agent, by_id[task_id], trial, output, timeout=args.timeout, nfet=args.lolm_nfet)
+                row = run_trial(agent, by_id[task_id], trial, output, timeout=args.timeout,
+                                nfet=args.lolm_nfet, max_steps=args.max_steps)
                 payload["results"].append(row)
                 (output / "results.partial.json").write_text(json.dumps(payload, indent=2) + "\n")
-                print(f"  {'PASS' if row['passed'] else 'FAIL'} in {row['agent_process']['wall_seconds']}s", flush=True)
-                if agent == "lolm_cerebras" and args.provider_cooldown > 0:
+                blocker = row["agent_receipt"].get("infrastructure_error")
+                verdict = f"UNSCORED ({blocker})" if blocker else "PASS" if row["passed"] else "FAIL"
+                print(f"  {verdict} in {row['agent_process']['wall_seconds']}s", flush=True)
+                if agent in COOLDOWN_AGENTS and args.provider_cooldown > 0:
                     time.sleep(args.provider_cooldown)
     summarize(payload)
     payload["completed_at"] = datetime.now(timezone.utc).isoformat()

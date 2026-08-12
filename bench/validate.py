@@ -459,7 +459,9 @@ def check(task, files, expect_pass, what):
     with tempfile.TemporaryDirectory() as td:
         d = Path(td)
         for name, body in files.items():
-            (d / name).write_text(body.lstrip("\n"))
+            target = d / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(body.lstrip("\n"))
         (d / "_check.py").write_text(task["test"])
         p = subprocess.run([sys.executable, "_check.py"], cwd=d,
                            capture_output=True, text=True, timeout=120)
@@ -475,7 +477,8 @@ def main():
     bad = []
     for t in TASKS:
         tid = t["id"]
-        ref = REFERENCE.get(tid)
+        # Newer suites keep the reference beside the task so the two cannot drift.
+        ref = t.get("reference") or REFERENCE.get(tid)
         if not ref:
             bad.append(f"{tid}: NO reference implementation — test is unvalidated")
             continue

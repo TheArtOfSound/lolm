@@ -290,7 +290,7 @@ export async function runAgent({
     });
     usage = response.usage || usage;
     await eventSink?.({ type: "provider.responded", provider: runtime.provider, model: runtime.model, step, usage: response.usage || null, tool_calls: response.toolCalls?.length || 0, content_chars: response.content?.length || 0 });
-    const assistant = { role: "assistant", content: response.content || "", toolCalls: response.toolCalls || [] };
+    const assistant = { role: "assistant", content: response.content || "", toolCalls: response.toolCalls || [], signature: response.signature || "" };
     messages.push(assistant);
 
     if (assistant.toolCalls.length) {

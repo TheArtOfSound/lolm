@@ -16,42 +16,82 @@ function endpoint(base, suffix) {
   return `${String(base).replace(/\/+$/, "")}${suffix}`;
 }
 
+const RATE_LIMIT_ATTEMPTS = 5;
+const MAX_BACKOFF_MS = 65_000;
+
+/** A per-minute rate limit clears on its own; a spent daily allowance does not,
+ *  so waiting on one only burns the user's time. */
+function quotaIsExhausted(payload, text) {
+  const haystack = `${JSON.stringify(payload?.error || "")} ${text}`.toLowerCase();
+  if (/per\s*day|daily|"?requests_per_day"?|perday/.test(haystack)) return true;
+  return /exhausted your daily|quota exceeded.*limit:\s*0\b/.test(haystack);
+}
+
+/** Providers disagree on where the wait lives: a header, a structured RetryInfo
+ *  duration, or only the prose of the error message. Read all three. */
+function retryDelayMs(response, payload, text, attempt) {
+  const header = Number(response.headers.get("retry-after"));
+  if (Number.isFinite(header) && header > 0) return header * 1_000;
+  const details = payload?.error?.details;
+  if (Array.isArray(details)) {
+    for (const detail of details) {
+      const seconds = Number(String(detail?.retryDelay || "").replace(/s$/, ""));
+      if (Number.isFinite(seconds) && seconds > 0) return seconds * 1_000;
+    }
+  }
+  const prose = /retry in ([\d.]+)\s*s/i.exec(text);
+  if (prose) return Math.ceil(Number(prose[1]) * 1_000);
+  return 2_000 * 2 ** attempt;
+}
+
 async function request(url, runtime, { method = "POST", body, headers = {} } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new Error("provider request timed out")), runtime.timeoutMs);
-  try {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const response = await fetch(url, {
+  let lastRateLimit = null;
+  for (let attempt = 0; attempt < RATE_LIMIT_ATTEMPTS; attempt++) {
+    // Each attempt gets its own deadline. A single timer spanning the retries
+    // would abort a request that was only ever waiting out someone's throttle.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new Error("provider request timed out")), runtime.timeoutMs);
+    let response;
+    let text;
+    try {
+      response = await fetch(url, {
         method,
         headers: { "content-type": "application/json", ...headers },
         body: body == null ? undefined : JSON.stringify(body),
         signal: controller.signal,
       });
-      const text = await response.text();
-      let payload = {};
-      try { payload = text ? JSON.parse(text) : {}; } catch { payload = { raw: text.slice(0, 1000) }; }
-      if (!response.ok) {
-        if (response.status === 429 && attempt < 2) {
-          const headerSeconds = Number(response.headers.get("retry-after"));
-          const waitMs = Number.isFinite(headerSeconds) ? Math.max(0, headerSeconds * 1_000) : 12_000 * (attempt + 1);
-          await new Promise((resolvePromise) => setTimeout(resolvePromise, Math.min(waitMs, 30_000)));
-          continue;
-        }
-        const message = payload?.error?.message || payload?.error || payload?.message || `Provider returned HTTP ${response.status}`;
-        throw new ProviderError(String(message), { status: response.status, code: payload?.error?.code || "HTTP_ERROR", body: payload });
-      }
-      return payload;
+      text = await response.text();
+    } catch (error) {
+      const timeout = error?.name === "AbortError" || /timed out/i.test(error?.message || "");
+      throw new ProviderError(timeout ? "Provider request timed out" : `Provider request failed: ${error.message}`, {
+        code: timeout ? "TIMEOUT" : "NETWORK_ERROR",
+      });
+    } finally {
+      clearTimeout(timer);
     }
-    throw new ProviderError("Provider rate limit did not clear after bounded retries", { status: 429, code: "RATE_LIMITED" });
-  } catch (error) {
-    if (error instanceof ProviderError) throw error;
-    const timeout = error?.name === "AbortError" || /timed out/i.test(error?.message || "");
-    throw new ProviderError(timeout ? "Provider request timed out" : `Provider request failed: ${error.message}`, {
-      code: timeout ? "TIMEOUT" : "NETWORK_ERROR",
+
+    let payload = {};
+    try { payload = text ? JSON.parse(text) : {}; } catch { payload = { raw: text.slice(0, 1000) }; }
+    if (response.ok) return payload;
+
+    const message = String(payload?.error?.message || payload?.error || payload?.message || `Provider returned HTTP ${response.status}`);
+    const retryable = response.status === 429 || response.status === 503;
+    if (retryable && !quotaIsExhausted(payload, text) && attempt < RATE_LIMIT_ATTEMPTS - 1) {
+      lastRateLimit = message;
+      const waitMs = Math.min(retryDelayMs(response, payload, text, attempt), MAX_BACKOFF_MS);
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, waitMs));
+      continue;
+    }
+    throw new ProviderError(message, {
+      status: response.status,
+      code: payload?.error?.code || (retryable ? "RATE_LIMITED" : "HTTP_ERROR"),
+      body: payload,
     });
-  } finally {
-    clearTimeout(timer);
   }
+  throw new ProviderError(lastRateLimit || "Provider rate limit did not clear after bounded retries", {
+    status: 429,
+    code: "RATE_LIMITED",
+  });
 }
 
 async function streamJsonLines(url, runtime, { body, headers = {}, onValue = () => {} } = {}) {
@@ -209,13 +249,82 @@ async function anthropicChat(runtime, messages, tools = [], { maxTokens } = {}) 
   };
 }
 
+// Gemini accepts an OpenAPI 3.0 subset, not full JSON Schema. Unknown keywords
+// are a hard 400, so the tool registry's richer schema is projected down here
+// instead of being weakened at the source.
+const GEMINI_SCHEMA_KEYS = new Set([
+  "type", "format", "description", "nullable", "enum", "items", "properties",
+  "required", "minimum", "maximum", "minItems", "maxItems", "anyOf",
+]);
+
+function geminiSchema(schema) {
+  if (!schema || typeof schema !== "object") return undefined;
+  const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : [];
+  const concrete = types.filter((type) => type !== "null");
+  const out = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (!GEMINI_SCHEMA_KEYS.has(key)) continue;
+    if (key === "type") continue;
+    if (key === "properties") {
+      const properties = {};
+      for (const [name, child] of Object.entries(value || {})) {
+        const mapped = geminiSchema(child);
+        if (mapped) properties[name] = mapped;
+      }
+      if (Object.keys(properties).length) out.properties = properties;
+      continue;
+    }
+    if (key === "items") {
+      const mapped = geminiSchema(value);
+      if (mapped) out.items = mapped;
+      continue;
+    }
+    if (key === "anyOf") {
+      const mapped = (value || []).map(geminiSchema).filter(Boolean);
+      if (mapped.length) out.anyOf = mapped;
+      continue;
+    }
+    out[key] = value;
+  }
+  // A union of scalar types has no OpenAPI equivalent; the widest honest
+  // projection is the first concrete type, with null unions marked nullable.
+  if (concrete.length) out.type = concrete[0].toUpperCase();
+  if (types.includes("null")) out.nullable = true;
+  if (out.type === "OBJECT" && !out.properties) return { type: "OBJECT", nullable: true, description: out.description };
+  if (out.required) out.required = (out.required || []).filter((name) => out.properties?.[name]);
+  if (Array.isArray(out.required) && !out.required.length) delete out.required;
+  return Object.keys(out).length ? out : undefined;
+}
+
+function geminiTools(tools) {
+  const declarations = [];
+  for (const tool of tools) {
+    const fn = tool.function || tool;
+    if (!fn?.name) continue;
+    const parameters = geminiSchema(fn.parameters);
+    const declaration = { name: fn.name, description: fn.description || "" };
+    // Gemini rejects a parameter object with no declared properties, so a
+    // zero-argument tool must omit `parameters` entirely.
+    if (parameters?.properties) declaration.parameters = parameters;
+    declarations.push(declaration);
+  }
+  return declarations;
+}
+
 function geminiContents(messages) {
   const contents = [];
   for (const message of messages.filter((item) => item.role !== "system")) {
     if (message.role === "assistant") {
       const parts = [];
-      if (message.content) parts.push({ text: message.content });
-      for (const call of message.toolCalls || []) parts.push({ functionCall: { name: call.name, args: call.arguments || {} } });
+      // Gemini 3.x rejects a replayed turn whose thought signatures were
+      // dropped, so each part is echoed back exactly as the model produced it.
+      if (message.content) parts.push({ text: message.content, ...(message.signature ? { thoughtSignature: message.signature } : {}) });
+      for (const call of message.toolCalls || []) {
+        parts.push({
+          functionCall: { name: call.name, args: call.arguments || {} },
+          ...(call.signature ? { thoughtSignature: call.signature } : {}),
+        });
+      }
       contents.push({ role: "model", parts });
     } else if (message.role === "tool") {
       contents.push({ role: "user", parts: [{ functionResponse: { name: message.name, response: { result: message.content } } }] });
@@ -235,16 +344,18 @@ async function geminiChat(runtime, messages, tools = [], { maxTokens } = {}) {
       contents: geminiContents(messages),
       ...(maxTokens ? { generationConfig: { maxOutputTokens: maxTokens } } : {}),
       ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-      ...(tools.length ? { tools: [{ functionDeclarations: tools.map((tool) => tool.function) }] } : {}),
+      ...(tools.length ? { tools: [{ functionDeclarations: geminiTools(tools) }] } : {}),
     },
   });
   const parts = payload?.candidates?.[0]?.content?.parts || [];
   return {
     content: parts.map((part) => part.text || "").join(""),
+    signature: parts.find((part) => part.text && part.thoughtSignature)?.thoughtSignature || "",
     toolCalls: parts.filter((part) => part.functionCall).map((part, index) => ({
       id: `gemini_${index}_${Date.now()}`,
       name: part.functionCall.name || "",
       arguments: part.functionCall.args || {},
+      signature: part.thoughtSignature || "",
     })),
     usage: payload.usageMetadata || null,
     raw: payload,
