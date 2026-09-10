@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.1.0 - 2026-09-10
+
+The agent remembers, Gemini streams, and the console stops repeating itself.
+
+- **memory across sessions** — `memory.save` / `memory.recall` / `memory.get` /
+  `memory.list` / `memory.forget`, stored as one Markdown note per fact under
+  `~/.lolm/memory`. The index rides in the system prompt; bodies are fetched on
+  demand. `lolm memory [list|show NAME|forget NAME]` manages the store by hand.
+  Saving needs no confirmation (it is the agent's own store, not the workspace);
+  forgetting does. Recalling a note never counts as evidence. `LOLM_MEMORY=0`
+  keeps the store out of a run and is set for every benchmark run;
+- **Gemini streams** through the same server-sent-event reader as the
+  OpenAI-compatible providers, keeping thought signatures for replay and
+  routing thought parts to the "reasoning" status rather than the transcript;
+- the "Local NFET quality controller ready" line is announced once per session,
+  and the controller's other status messages are shown as themselves instead of
+  being relabelled "ready" — which was why the line appeared twice.
+
 ## 2.0.0 - 2026-09-10
 
 The agent streams, stops, plans, shows its edits, and survives long tasks.

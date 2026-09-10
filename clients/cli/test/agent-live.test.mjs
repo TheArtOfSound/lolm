@@ -236,3 +236,77 @@ test("a plan the model declares and abandons earns exactly one reminder", async 
     assert.equal(result.interventions, 0, "a plan reminder is not an NFET intervention");
   } finally { await close(); }
 });
+
+test("memory round-trips through the tools and never counts as evidence", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "lolm-memory-"));
+  process.env.LOLM_MEMORY_DIR = dir;
+  const runner = createToolRunner({ cwd: dir, yes: true, mode: "trusted", eventSink: () => {} });
+  try {
+    const saved = await runner.execute({ name: "memory__save", arguments: { name: "Deploy target", description: "where the site deploys", body: "rsync to autohustle-aws", tags: ["deploy"] } });
+    assert.equal(saved.ok, true);
+    assert.equal(saved.name, "deploy-target", "names become stable slugs");
+    const found = await runner.execute({ name: "memory__recall", arguments: { query: "autohustle" } });
+    assert.equal(found.notes.length, 1);
+    assert.match(found.notes[0].body, /rsync/);
+    const got = await runner.execute({ name: "memory__get", arguments: { name: "deploy-target" } });
+    assert.equal(got.description, "where the site deploys");
+    assert.equal(runner.evidence, 0, "recalling a note is not evidence about the task");
+    const gone = await runner.execute({ name: "memory__forget", arguments: { name: "deploy-target" } });
+    assert.equal(gone.forgotten, true);
+    assert.equal((await runner.execute({ name: "memory__list", arguments: {} })).notes.length, 0);
+  } finally { await runner.close(); delete process.env.LOLM_MEMORY_DIR; }
+});
+
+test("saved notes are indexed in the system prompt with bodies left on demand", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "lolm-memory-"));
+  process.env.LOLM_MEMORY_DIR = dir;
+  const { saveNote } = await import("../lib/memory.mjs");
+  await saveNote({ name: "python", description: "python3 only", body: "There is no `python` on PATH; use python3." }, { dir });
+  let system = "";
+  const { runtime, close } = await serve((body, res) => { system = body.messages[0].content; json(res, "ok"); });
+  try {
+    await runAgent({ prompt: "what is two plus two", mode: "ask", runtime, maxSteps: 2 });
+    assert.match(system, /Memory \(notes you saved in earlier sessions/);
+    assert.match(system, /- python: python3 only/);
+    assert.doesNotMatch(system, /no `python` on PATH/, "the body stays out of the prompt until recalled");
+  } finally { await close(); delete process.env.LOLM_MEMORY_DIR; }
+});
+
+test("LOLM_MEMORY=0 keeps notes out of the prompt and the toolbox", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "lolm-memory-"));
+  process.env.LOLM_MEMORY_DIR = dir;
+  process.env.LOLM_MEMORY = "0";
+  const { saveNote } = await import("../lib/memory.mjs");
+  await saveNote({ name: "secretish", body: "must not appear" }, { dir });
+  let system = "", toolNames = [];
+  const { runtime, close } = await serve((body, res) => { system = body.messages[0].content; toolNames = (body.tools || []).map((tool) => tool.function.name); json(res, "ok"); });
+  try {
+    await runAgent({ prompt: "what is two plus two", mode: "ask", runtime, maxSteps: 2 });
+    assert.doesNotMatch(system, /secretish/);
+    assert.ok(!toolNames.some((name) => name.startsWith("memory__")), "no memory tools are offered");
+  } finally { await close(); delete process.env.LOLM_MEMORY_DIR; delete process.env.LOLM_MEMORY; }
+});
+
+test("Gemini streams text and function calls from server-sent events", async () => {
+  const { runtime, close } = await serve((body, res) => {
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    for (const event of [
+      { candidates: [{ content: { parts: [{ text: "Hel" }] } }] },
+      { candidates: [{ content: { parts: [{ text: "lo" }] } }] },
+      { candidates: [{ content: { parts: [{ functionCall: { name: "fs__read", args: { path: "a.py" } }, thoughtSignature: "sig1" }] }, finishReason: "STOP" }], usageMetadata: { totalTokenCount: 7 } },
+    ]) res.write(`data: ${JSON.stringify(event)}\n\n`);
+    res.end();
+  });
+  const gemini = { ...runtime, protocol: "gemini", baseUrl: runtime.baseUrl.replace(/\/v1$/, ""), apiKey: "k" };
+  try {
+    const tokens = [];
+    const reply = await chat(gemini, [{ role: "user", content: "hi" }], { onToken: (delta) => tokens.push(delta) });
+    assert.deepEqual(tokens, ["Hel", "lo"]);
+    assert.equal(reply.content, "Hello");
+    assert.equal(reply.toolCalls[0].name, "fs__read");
+    assert.deepEqual(reply.toolCalls[0].arguments, { path: "a.py" });
+    assert.equal(reply.toolCalls[0].signature, "sig1", "the thought signature survives for replay");
+    assert.equal(reply.usage.totalTokenCount, 7);
+    assert.equal(reply.raw.streamed, true);
+  } finally { await close(); }
+});

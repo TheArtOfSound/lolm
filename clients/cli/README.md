@@ -115,7 +115,7 @@ keeps output in your normal scrollback.
 ### While a task runs
 
 Replies **stream** into the transcript as the model writes them, on every
-OpenAI-compatible provider and on Ollama. Text the model produced before
+OpenAI-compatible provider, on Gemini, and on Ollama. Text the model produced before
 deciding to call a tool stays visible, dimmed, so nothing it said disappears.
 `--no-stream` (or `LOLM_NO_STREAM=1`) waits for each reply instead.
 
@@ -132,6 +132,27 @@ plan is not evidence of anything — it never counts toward verification.
 Every `fs.write` and `fs.patch` shows the **diff** it made, coloured, right under
 the tool line. The diff goes to you, not back into the model's context, where it
 would only be a second copy of what it just wrote.
+
+### Memory
+
+The agent keeps notes between sessions in `~/.lolm/memory`, one small Markdown
+file per fact: a preference you stated, a convention this project follows,
+where something lives, a decision and why. It saves them itself with
+`memory.save` as it works, and the index of names and descriptions rides in the
+system prompt so it knows what it knows; the full text is fetched on demand with
+`memory.recall`, so a large store costs nothing until it is needed.
+
+```bash
+lolm memory                # list saved notes
+lolm memory show NAME      # read one
+lolm memory forget NAME    # delete one
+```
+
+Notes never leave this machine except as part of the prompt sent to the
+provider you chose, which is where every other part of the conversation goes
+too. The agent is told never to save secrets. `LOLM_MEMORY=0` keeps the store
+out of a run entirely — it is set for every benchmark run, and it is the right
+setting for automation that should not read or write a person's notes.
 
 ### Long tasks
 

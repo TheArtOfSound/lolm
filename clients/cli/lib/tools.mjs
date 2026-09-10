@@ -64,7 +64,7 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
         commands.push({ command: normalizedCall.arguments?.command, ...value, dry_run: dryRun });
         if (canonical === "terminal.exec" && value.exit_code === 0 && !value.timed_out) verified = true;
       }
-      if ((tool?.risk === "read" && !canonical.startsWith("plan.")) || ["git.status", "git.diff", "terminal.status"].includes(canonical)) evidence++;
+      if ((tool?.risk === "read" && !/^(plan|memory)\./.test(canonical)) || ["git.status", "git.diff", "terminal.status"].includes(canonical)) evidence++;
       return { ok: true, ...value, tool: canonical, duration_ms: result.duration_ms };
     },
   };

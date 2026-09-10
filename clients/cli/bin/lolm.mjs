@@ -14,6 +14,7 @@ import { runAgent, generateDocument, generateHtml } from "../lib/agent.mjs";
 import { CONFIG_PATH, PROVIDERS, loadConfig, publicRuntime, resolveRuntime, saveConfig, normalizeProvider } from "../lib/config.mjs";
 import { listModels, rawGet, ProviderError } from "../lib/providers.mjs";
 import { NfetMonitor, daemonStatus, inspectNfet, stopDaemon } from "../lib/nfet.mjs";
+import { forgetNote, listNotes, readNote } from "../lib/memory.mjs";
 import { createPdf } from "../lib/pdf.mjs";
 import { isRetryPhrase, loadLastTask, saveLastTask } from "../lib/session.mjs";
 import { nativeSecretBackend, storeProviderSecret } from "../lib/secrets.mjs";
@@ -90,6 +91,7 @@ ${ui.bold("COMMANDS")}
   providers                    list built-in and custom providers
   models                       list live models for the selected provider
   nfet status|test|stop        inspect, exercise, or stop the NFET service
+  memory [list|show|forget]    notes the agent keeps between sessions
   doctor                       verify provider, key, model, and NFET runtime
   tools [group]                list typed tools, schemas, and risk classes
   tools inspect NAME           inspect one tool contract
@@ -355,11 +357,18 @@ async function updateSelf(flags) {
 
 function monitorFor(config, flags, surface = null) {
   if (flags.noNfet) return null;
+  // Every status used to be relabelled "ready", and "ready" itself was
+  // announced on every start() — so each task repeated the line. Say what is
+  // actually happening, and say ready once.
+  let announced = false;
   return new NfetMonitor(config, { onStatus: (message) => {
     if (flags.json) return;
     if (!surface) return note(message);
-    if (/^loading/i.test(message)) surface.progress({ thinking: true });
-    else surface.tool("Local NFET quality controller ready");
+    if (/ready/i.test(message)) {
+      if (!announced) { announced = true; surface.tool("Local NFET quality controller ready"); }
+      return;
+    }
+    surface.tool(message);
   } });
 }
 
@@ -607,7 +616,7 @@ async function main() {
   let config = await loadConfig();
   if (!words.length) return process.stdin.isTTY ? interactive(config, flags) : emit(flags, { ok: true, help: true }, HELP);
   let command = words[0].toLowerCase();
-  const known = new Set(["chat", "agent", "run", "runs", "ask", "code", "pdf", "html", "setup", "providers", "models", "nfet", "doctor", "tools", "plugins", "mcp", "config", "request", "update", "help"]);
+  const known = new Set(["memory", "chat", "agent", "run", "runs", "ask", "code", "pdf", "html", "setup", "providers", "models", "nfet", "doctor", "tools", "plugins", "mcp", "config", "request", "update", "help"]);
   let text = words.slice(1).join(" ").trim();
   if (!known.has(command)) { text = words.join(" "); command = taskRoute(text); }
   if (command === "help") return emit(flags, { ok: true, help: true }, HELP);
@@ -652,6 +661,25 @@ async function main() {
   }
   if (command === "doctor") return doctor(config, flags);
   if (command === "update") return updateSelf(flags);
+  if (command === "memory") {
+    const action = words[1] || "list";
+    if (action === "list") {
+      const notes = await listNotes();
+      return emit(flags, { ok: true, notes }, notes.length
+        ? notes.map((note) => `${ui.bold(note.name.padEnd(28))} ${note.description}${note.tags.length ? ui.dim(`  [${note.tags.join(", ")}]`) : ""}`).join("\n")
+        : "No saved notes yet. The agent saves durable facts with memory.save as it works.");
+    }
+    if (action === "show") {
+      const note = await readNote(words[2] || "");
+      if (!note) throw Object.assign(new Error(`No note named ${words[2] || "(missing)"}.`), { exitCode: 2 });
+      return emit(flags, { ok: true, note }, `${ui.bold(note.name)}  ${ui.dim(note.description)}\n\n${note.body}`);
+    }
+    if (action === "forget") {
+      const result = await forgetNote(words[2] || "");
+      return emit(flags, { ok: result.forgotten, ...result }, result.forgotten ? `Forgot ${result.name}.` : `No note named ${result.name}.`);
+    }
+    throw Object.assign(new Error("usage: lolm memory [list|show NAME|forget NAME]"), { exitCode: 2 });
+  }
   if (command === "nfet") {
     const action = words[1] || "status", info = await inspectNfet(config);
     if (action === "status") {

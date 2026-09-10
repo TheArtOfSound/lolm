@@ -352,6 +352,7 @@ def run_trial(
         command = agent_command(agent, prompt_for(task), work, nfet=nfet, max_steps=max_steps)
         env = dict(os.environ)
         env["NO_COLOR"] = "1"
+        env["LOLM_MEMORY"] = "0"  # a benchmark must not read or write the operator's notes
         if agent == "gemini":
             key = gemini_api_key()
             if key:

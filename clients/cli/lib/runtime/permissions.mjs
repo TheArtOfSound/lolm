@@ -57,7 +57,7 @@ function modeAllows(mode, decision) {
   if (decision.risk === "read") return true;
   if (mode === "trusted") return true;
   if (mode === "readonly") return false;
-  if (mode === "standard") return decision.risk === "execute" && decision.approval === "auto";
+  if (mode === "standard") return decision.approval === "auto" && decision.risk !== "external";
   if (mode === "developer") return decision.risk !== "external" && decision.approval !== "explicit";
   return false;
 }

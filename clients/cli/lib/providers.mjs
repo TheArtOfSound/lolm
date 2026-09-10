@@ -528,19 +528,11 @@ function geminiContents(messages) {
   return contents;
 }
 
-async function geminiChat(runtime, messages, tools = [], { maxTokens, signal } = {}) {
-  const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
-  const url = endpoint(runtime.baseUrl, `/v1beta/models/${encodeURIComponent(runtime.model)}:generateContent`);
-  const payload = await request(url, runtime, {
-    signal,
-    headers: { "x-goog-api-key": runtime.apiKey },
-    body: {
-      contents: geminiContents(messages),
-      ...(maxTokens ? { generationConfig: { maxOutputTokens: maxTokens } } : {}),
-      ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-      ...(tools.length ? { tools: [{ functionDeclarations: geminiTools(tools) }] } : {}),
-    },
-  });
+/** One parsed completion from a plain (non-streamed) Gemini payload. */
+function geminiCompletion(payload) {
+  if (payload?.error && !payload?.candidates) {
+    throw new ProviderError(String(payload.error?.message || payload.error), { status: 200, code: payload.error?.code || "PROVIDER_ERROR", body: payload });
+  }
   const parts = payload?.candidates?.[0]?.content?.parts || [];
   return {
     content: parts.map((part) => part.text || "").join(""),
@@ -555,6 +547,69 @@ async function geminiChat(runtime, messages, tools = [], { maxTokens, signal } =
     usage: payload.usageMetadata || null,
     raw: payload,
   };
+}
+
+/** Assemble one completion from Gemini's streamed chunks. Text parts arrive in
+ *  pieces; a function call arrives whole, with its thought signature. */
+async function geminiStream(url, runtime, { headers, body, onToken, signal }) {
+  let content = "";
+  let signature = "";
+  let finish = null;
+  let usage = null;
+  const toolCalls = [];
+  const outcome = await streamSse(url, runtime, {
+    headers,
+    body,
+    signal,
+    onEvent(event) {
+      if (event?.error) {
+        throw new ProviderError(String(event.error?.message || event.error), { status: 200, code: event.error?.code || "PROVIDER_ERROR", body: event });
+      }
+      if (event?.usageMetadata) usage = event.usageMetadata;
+      const candidate = event?.candidates?.[0];
+      if (!candidate) return;
+      for (const part of candidate.content?.parts || []) {
+        if (part.functionCall) {
+          toolCalls.push({ id: `gemini_${toolCalls.length}_${Date.now()}`, name: part.functionCall.name || "", arguments: part.functionCall.args || {}, signature: part.thoughtSignature || "" });
+          continue;
+        }
+        if (typeof part.text !== "string" || !part.text) continue;
+        if (part.thought) { onToken(part.text, { thinking: true }); continue; }
+        content += part.text;
+        onToken(part.text, {});
+        if (part.thoughtSignature) signature = part.thoughtSignature;
+      }
+      if (candidate.finishReason) finish = candidate.finishReason;
+    },
+  });
+  if (!outcome.streamed) {
+    runtime.stream = false;
+    return geminiCompletion(outcome.payload);
+  }
+  return { content, signature, toolCalls, truncated: finish === "MAX_TOKENS", usage, raw: { streamed: true, finish_reason: finish } };
+}
+
+async function geminiChat(runtime, messages, tools = [], { maxTokens, onToken, signal } = {}) {
+  const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
+  const model = encodeURIComponent(runtime.model);
+  const headers = { "x-goog-api-key": runtime.apiKey };
+  const body = {
+    contents: geminiContents(messages),
+    ...(maxTokens ? { generationConfig: { maxOutputTokens: maxTokens } } : {}),
+    ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+    ...(tools.length ? { tools: [{ functionDeclarations: geminiTools(tools) }] } : {}),
+  };
+  const streaming = typeof onToken === "function" && runtime.stream !== false && process.env.LOLM_NO_STREAM !== "1";
+  if (streaming) {
+    try {
+      return await geminiStream(endpoint(runtime.baseUrl, `/v1beta/models/${model}:streamGenerateContent?alt=sse`), runtime, { headers, body, onToken, signal });
+    } catch (error) {
+      if (!(error instanceof ProviderError)) throw error;
+      if (error.status === 400 && /stream/i.test(error.message)) runtime.stream = false;
+      else if (error.code !== "RATE_LIMITED") throw error;
+    }
+  }
+  return geminiCompletion(await request(endpoint(runtime.baseUrl, `/v1beta/models/${model}:generateContent`), runtime, { signal, headers, body }));
 }
 
 function ollamaMessages(messages) {
@@ -638,7 +693,7 @@ export async function chat(runtime, messages, { tools = [], onToken, reasoning, 
     throw new ProviderError(`No API key found for ${runtime.label}. Run 'lolm setup' or set the provider environment variable.`, { code: "AUTH_MISSING" });
   }
   if (runtime.protocol === "anthropic") return anthropicChat(runtime, messages, tools, { maxTokens, signal });
-  if (runtime.protocol === "gemini") return geminiChat(runtime, messages, tools, { maxTokens, signal });
+  if (runtime.protocol === "gemini") return geminiChat(runtime, messages, tools, { maxTokens, onToken, signal });
   if (runtime.protocol === "ollama") return ollamaChat(runtime, messages, tools, { onToken: onToken || (() => {}), reasoning, maxTokens, signal });
   return openAiChat(runtime, messages, tools, { maxTokens, onToken, signal });
 }

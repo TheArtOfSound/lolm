@@ -12,6 +12,7 @@ import { registerCloudflareTools } from "./cloudflare.mjs";
 import { BrowserManager, registerBrowserTools, registerComputerTools } from "./browser.mjs";
 import { registerWebTools } from "./web.mjs";
 import { registerPlanTools } from "./plan.mjs";
+import { registerMemoryTools } from "./memory.mjs";
 import { PluginManager } from "../plugins.mjs";
 import { McpManager } from "../mcp.mjs";
 
@@ -30,6 +31,9 @@ export function createAgentToolbox({ cwd = process.cwd(), mode = "standard", con
   registerComputerTools(registry, shared);
   registerWebTools(registry, shared);
   registerPlanTools(registry, shared);
+  // LOLM_MEMORY=0 keeps the store out of a run entirely — automation and
+  // benchmarks must not read or write a person's notes.
+  if (process.env.LOLM_MEMORY !== "0") registerMemoryTools(registry, shared);
   const plugins = new PluginManager({ root, registry });
   const mcp = new McpManager({ root, registry });
   return {
