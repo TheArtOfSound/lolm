@@ -13,10 +13,11 @@ import { BrowserManager, registerBrowserTools, registerComputerTools } from "./b
 import { registerWebTools } from "./web.mjs";
 import { registerPlanTools } from "./plan.mjs";
 import { registerMemoryTools } from "./memory.mjs";
+import { registerDelegateTools } from "./delegate.mjs";
 import { PluginManager } from "../plugins.mjs";
 import { McpManager } from "../mcp.mjs";
 
-export function createAgentToolbox({ cwd = process.cwd(), mode = "standard", confirm, onAction, eventSink } = {}) {
+export function createAgentToolbox({ cwd = process.cwd(), mode = "standard", confirm, onAction, eventSink, delegate, depth = 0 } = {}) {
   const root = resolve(cwd);
   const processes = new ProcessManager();
   const browser = new BrowserManager({ root });
@@ -34,6 +35,7 @@ export function createAgentToolbox({ cwd = process.cwd(), mode = "standard", con
   // LOLM_MEMORY=0 keeps the store out of a run entirely — automation and
   // benchmarks must not read or write a person's notes.
   if (process.env.LOLM_MEMORY !== "0") registerMemoryTools(registry, shared);
+  registerDelegateTools(registry, { delegate, depth });
   const plugins = new PluginManager({ root, registry });
   const mcp = new McpManager({ root, registry });
   return {

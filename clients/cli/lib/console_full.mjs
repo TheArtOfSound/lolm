@@ -396,6 +396,10 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
     },
     tool(label) { push(`  ${ui.cyan(glyph.arrow)} ${aside(label)}`); },
     activity(event) {
+      // A delegate reports its own start and finish; echoing its internal tool
+      // calls here would double every line of a search the caller delegated
+      // precisely so it would not have to watch it.
+      if (event?.delegated) return;
       // The intent line (↳ name args) already announced the call; a second
       // "started" row between it and the outcome was noise.
       if (event?.type === "tool.completed") {
@@ -406,6 +410,13 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
         if (event.result?.diff) for (const row of renderDiff(event.result.diff)) push(`    ${row}`);
       } else if (event?.type === "tool.failed") {
         push(`  ${ui.red(glyph.err)} ${event.tool} ${ui.red(event.error?.message || "failed")}`);
+      } else if (event?.type === "delegate.started") {
+        push(`  ${ui.violet(glyph.diamond)} ${ui.bold("delegate")} ${aside(event.task)}`);
+      } else if (event?.type === "delegate.finished") {
+        const mark = event.completed ? ui.green(glyph.ok) : ui.amber(glyph.warn);
+        push(`  ${mark} ${aside(`delegate returned after ${event.steps ?? "?"} step(s)`)}`);
+      } else if (event?.type === "tools.batched") {
+        push(`  ${ui.cyan(glyph.arrow)} ${aside(`${event.count} reads in parallel`)}`);
       } else if (event?.type === "plan.updated") {
         plan = event;
         render();

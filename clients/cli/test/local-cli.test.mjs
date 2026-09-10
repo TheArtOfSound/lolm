@@ -194,10 +194,11 @@ test("run routes an explicitly named file task through the write-capable agent",
   const server = await startServer((_req, payload) => {
     if (!payload.messages.some((message) => message.role === "tool")) {
       assert.ok(payload.tools.some((tool) => tool.function.name === "fs__write"));
-      // The focused set is nine local tools plus plan.set/done and
-      // memory.recall/save — the verbs the model acts with. list/get/forget
-      // are for the CLI. Anything beyond thirteen here is drift.
-      assert.ok(payload.tools.length <= 13, `expected a focused local tool set, got ${payload.tools.length}`);
+      // The focused set is nine local tools plus plan.set/done,
+      // memory.recall/save, and agent.delegate — the verbs the model acts
+      // with. list/get/forget are for the CLI. Beyond fourteen here is drift.
+      assert.ok(payload.tools.length <= 14, `expected a focused local tool set, got ${payload.tools.length}`);
+      assert.ok(payload.tools.some((tool) => tool.function.name === "agent__delegate"), "delegation travels with every code run");
       assert.ok(payload.tools.some((tool) => tool.function.name === "plan__set"), "the plan tools travel with every code run");
       assert.ok(payload.tools.some((tool) => tool.function.name === "memory__recall"), "memory travels with every code run");
       assert.ok(!payload.tools.some((tool) => tool.function.name === "memory__forget"), "forgetting is not offered to the model by default");

@@ -12,7 +12,7 @@ function approvalLabel({ tool, args, decision }) {
   return `${tool.name} (${decision.risk}): ${target}\n${decision.reason} Continue?`;
 }
 
-export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = false, mode, onAction = () => {}, eventSink } = {}) {
+export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = false, mode, onAction = () => {}, eventSink, delegate, depth = 0 } = {}) {
   const changes = [];
   const commands = [];
   let evidence = 0;
@@ -20,6 +20,8 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
   let plan = null;
   const toolbox = createAgentToolbox({
     cwd,
+    delegate,
+    depth,
     mode: mode || (yes ? "developer" : "standard"),
     onAction,
     eventSink,
@@ -33,6 +35,11 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
     registry: toolbox.registry,
     ready,
     get tools() { return toolbox.registry.providerDefinitions(); },
+    /** Safe to run beside its siblings: reads nothing can confirm or mutate. */
+    parallelSafe(name) {
+      const tool = toolbox.registry.resolve(name);
+      return Boolean(tool && tool.risk === "read" && (tool.approval || "auto") === "auto" && typeof tool.classify !== "function");
+    },
     get evidence() { return evidence; },
     get plan() { return plan; },
     get verified() { return verified; },
@@ -64,7 +71,7 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
         commands.push({ command: normalizedCall.arguments?.command, ...value, dry_run: dryRun });
         if (canonical === "terminal.exec" && value.exit_code === 0 && !value.timed_out) verified = true;
       }
-      if ((tool?.risk === "read" && !/^(plan|memory)\./.test(canonical)) || ["git.status", "git.diff", "terminal.status"].includes(canonical)) evidence++;
+      if ((tool?.risk === "read" && !/^(plan|memory|agent)\./.test(canonical)) || ["git.status", "git.diff", "terminal.status"].includes(canonical)) evidence++;
       return { ok: true, ...value, tool: canonical, duration_ms: result.duration_ms };
     },
   };

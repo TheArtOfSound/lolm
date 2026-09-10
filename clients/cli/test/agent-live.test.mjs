@@ -8,7 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chat } from "../lib/providers.mjs";
@@ -335,4 +335,166 @@ test("the model is told its step budget and warned once before it runs out", asy
     assert.ok(turns.some((turn) => /2 step\(s\) remain\. Land the task now/.test(turn)), "the warning reaches the model");
     assert.equal(result.ok, false, "a run that never lands still ends at the cap");
   } finally { await close(); }
+});
+
+test("a delegate runs with no history and returns only its conclusion", async () => {
+  const seen = [];
+  const cwd = await mkdtemp(join(tmpdir(), "lolm-delegate-"));
+  const { runtime, close } = await serve((body, res) => {
+    seen.push(body.messages);
+    const reply = (message) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ choices: [{ message, finish_reason: "stop" }] })); };
+    const last = body.messages.at(-1);
+    // The delegate's own turn: it was handed the task with an empty history.
+    if (last.role === "user" && last.content.includes("count the config files")) {
+      return reply({ content: "There are 3 config files: a.json, b.json, c.json.", tool_calls: [] });
+    }
+    if (body.messages.some((message) => message.role === "tool")) return reply({ content: "Done: 3 config files.", tool_calls: [] });
+    return reply({ content: null, tool_calls: [{ id: "d1", type: "function", function: { name: "agent__delegate", arguments: JSON.stringify({ task: "count the config files", mode: "ask" }) } }] });
+  });
+  try {
+    const events = [];
+    const result = await runAgent({ prompt: "how many config files are there", mode: "ask", runtime, cwd, maxSteps: 6, eventSink: (event) => events.push(event) });
+    assert.equal(result.ok, true);
+
+    // The delegate started clean: system, then the task, and nothing else.
+    const subTurn = seen.find((messages) => messages.at(-1)?.content?.includes("count the config files"));
+    assert.ok(subTurn, "the delegate was actually invoked");
+    assert.equal(subTurn.length, 2, "system + task only — none of the caller's history");
+    assert.doesNotMatch(JSON.stringify(subTurn), /how many config files are there/, "the delegate cannot see the caller's request");
+
+    // The caller got the conclusion, not the transcript.
+    const toolResult = JSON.parse(seen.at(-1).find((message) => message.role === "tool").content);
+    assert.match(toolResult.answer, /3 config files/);
+    assert.equal(toolResult.completed, true);
+    assert.equal(toolResult.delegations_left, 5);
+
+    assert.equal(events.filter((event) => event.type === "delegate.started").length, 1);
+    assert.ok(events.some((event) => event.type === "delegate.finished" && event.completed));
+    assert.equal(result.verified, true, "an ask answer with evidence still verifies");
+  } finally { await close(); }
+});
+
+test("a delegate cannot delegate again", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "lolm-delegate-depth-"));
+  let offeredInSub = null;
+  const { runtime, close } = await serve((body, res) => {
+    const names = (body.tools || []).map((tool) => tool.function.name);
+    const last = body.messages.at(-1);
+    const reply = (message) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ choices: [{ message, finish_reason: "stop" }] })); };
+    if (last.role === "user" && last.content.includes("look something up")) {
+      offeredInSub = names;
+      return reply({ content: "Looked it up.", tool_calls: [] });
+    }
+    if (body.messages.some((message) => message.role === "tool")) return reply({ content: "ok", tool_calls: [] });
+    return reply({ content: null, tool_calls: [{ id: "d1", type: "function", function: { name: "agent__delegate", arguments: JSON.stringify({ task: "look something up" }) } }] });
+  });
+  try {
+    await runAgent({ prompt: "find something", mode: "ask", runtime, cwd, maxSteps: 6 });
+    assert.ok(offeredInSub, "the delegate ran");
+    assert.ok(!offeredInSub.includes("agent__delegate"), "the delegate is not offered the delegate tool");
+  } finally { await close(); }
+});
+
+test("independent reads in one turn run together and cost one step", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "lolm-batch-"));
+  await writeFile(join(cwd, "a.txt"), "alpha\n");
+  await writeFile(join(cwd, "b.txt"), "beta\n");
+  let turn = 0;
+  const { runtime, close } = await serve((body, res) => {
+    turn += 1;
+    const reply = (message) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ choices: [{ message, finish_reason: "stop" }] })); };
+    if (turn === 1) {
+      return reply({ content: null, tool_calls: [
+        { id: "r1", type: "function", function: { name: "fs__read", arguments: JSON.stringify({ path: "a.txt" }) } },
+        { id: "r2", type: "function", function: { name: "fs__read", arguments: JSON.stringify({ path: "b.txt" }) } },
+      ] });
+    }
+    return reply({ content: "alpha and beta.", tool_calls: [] });
+  });
+  try {
+    const events = [];
+    const result = await runAgent({ prompt: "read both files", mode: "code", runtime, cwd, maxSteps: 6, eventSink: (event) => events.push(event) });
+    assert.equal(result.steps, 2, "two reads plus the answer is two steps, not three");
+    const batched = events.find((event) => event.type === "tools.batched");
+    assert.equal(batched.count, 2);
+    // Results must still line up with the calls that produced them.
+    const results = result.messages.filter((message) => message.role === "tool").map((message) => JSON.parse(message.content));
+    assert.match(results[0].content, /alpha/);
+    assert.match(results[1].content, /beta/);
+  } finally { await close(); }
+});
+
+test("a turn that writes stays strictly in order", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "lolm-order-"));
+  let turn = 0;
+  const { runtime, close } = await serve((body, res) => {
+    turn += 1;
+    const reply = (message) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ choices: [{ message, finish_reason: "stop" }] })); };
+    if (turn === 1) {
+      return reply({ content: null, tool_calls: [
+        { id: "w1", type: "function", function: { name: "fs__write", arguments: JSON.stringify({ path: "x.txt", content: "one\n" }) } },
+        { id: "w2", type: "function", function: { name: "fs__patch", arguments: JSON.stringify({ path: "x.txt", old_text: "one", new_text: "two" }) } },
+      ] });
+    }
+    return reply({ content: "written.", tool_calls: [] });
+  });
+  try {
+    const events = [];
+    // Writing needs permission; standard mode would deny it and prove nothing.
+    await runAgent({ prompt: "write then patch the file", mode: "code", runtime, cwd, yes: true, permissionMode: "trusted", maxSteps: 6, eventSink: (event) => events.push(event) });
+    assert.ok(!events.some((event) => event.type === "tools.batched"), "writes are never batched");
+    assert.equal(await readFile(join(cwd, "x.txt"), "utf8"), "two\n", "the patch saw what the write produced");
+  } finally { await close(); }
+});
+
+test("a provider that rejects a malformed tool call is recoverable, not fatal", async () => {
+  let turn = 0;
+  const cwd = await mkdtemp(join(tmpdir(), "lolm-reject-"));
+  const { runtime, close } = await serve((body, res) => {
+    turn += 1;
+    if (turn === 1) {
+      // Groq validates tool calls server-side and refuses the whole request.
+      res.writeHead(400, { "content-type": "application/json" });
+      return res.end(JSON.stringify({ error: { code: "tool_use_failed", message: "Tool call validation failed: parameters for tool fs__list did not match schema" } }));
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ choices: [{ message: { content: "Recovered and answered.", tool_calls: [] }, finish_reason: "stop" }] }));
+  });
+  try {
+    const events = [];
+    const result = await runAgent({ prompt: "what is two plus two", mode: "ask", runtime, cwd, maxSteps: 6, eventSink: (event) => events.push(event) });
+    assert.equal(result.ok, true, "the task survives a rejected tool call");
+    assert.equal(result.response, "Recovered and answered.");
+    const rejected = events.filter((event) => event.type === "tool.rejected");
+    assert.equal(rejected.length, 1);
+    assert.match(rejected[0].detail, /did not match schema/, "the provider's reason is carried through");
+  } finally { await close(); }
+});
+
+test("a provider that keeps rejecting stops instead of looping", async () => {
+  let turn = 0;
+  const cwd = await mkdtemp(join(tmpdir(), "lolm-reject-loop-"));
+  const { runtime, close } = await serve((body, res) => {
+    turn += 1;
+    res.writeHead(400, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "tool_use_failed", message: "Tool call validation failed: bad parameters" } }));
+  });
+  try {
+    await assert.rejects(
+      runAgent({ prompt: "what is two plus two", mode: "ask", runtime, cwd, maxSteps: 8 }),
+      (error) => /validation failed/i.test(error.message),
+    );
+    assert.equal(turn, 3, "two corrections attempted, then the real error surfaces");
+  } finally { await close(); }
+});
+
+test("a genuine provider error is never mistaken for a correctable one", async () => {
+  const { correctableToolRejection } = await import("../lib/agent.mjs");
+  const make = (code, message, status) => Object.assign(new Error(message), { name: "ProviderError", code, status });
+  assert.ok(correctableToolRejection(make("tool_use_failed", "parameters did not match", 400)));
+  assert.equal(correctableToolRejection(make("RATE_LIMITED", "Rate limit reached", 429)), "", "a throttle is not a schema mistake");
+  assert.equal(correctableToolRejection(make("AUTH_MISSING", "No API key found", 401)), "");
+  assert.equal(correctableToolRejection(make("HTTP_ERROR", "Bad request: model not found", 400)), "", "a 400 without tool wording is not correctable");
+  assert.ok(correctableToolRejection(make("output_parse_failed", "Parsing failed", 400)), "a provider parse failure is worth one retry");
+  assert.equal(correctableToolRejection(new Error("plain")), "");
 });

@@ -1,5 +1,38 @@
 # Changelog
 
+## 2.3.0 - 2026-09-10
+
+The agent can delegate, read in parallel, and survive a provider refusing a
+tool call.
+
+- **`agent.delegate`** hands one self-contained question to a fresh agent with
+  no history, which returns only its conclusion plus a receipt of what it
+  changed. The point is context, not concurrency: a thirty-file search no longer
+  lives in the caller's history for the rest of the task. A delegate cannot see
+  the calling conversation and cannot delegate further; six per run. It runs
+  without the controller — it is a lookup, not a trajectory worth steering — and
+  delegating never counts as evidence;
+- **independent reads in one turn run together** and cost one step instead of
+  one step per file. Only confirmation-free reads qualify; anything that writes,
+  executes, or could prompt stays strictly in order, so a write followed by a
+  patch of the same file still sees what the write produced;
+- **a provider that refuses a tool call is no longer fatal.** Groq validates
+  tool calls server-side and answers `tool_use_failed` when the model gets a
+  schema wrong, or `output_parse_failed` when it cannot parse the generation —
+  both used to end the task outright. The model is now told what was refused and
+  gets at most two corrections before the real error surfaces. A throttle, a
+  missing key, or a 400 without tool wording is never mistaken for a correctable
+  mistake.
+
+Verified hermetically: seven tests drive the real agent loop and the real HTTP
+transport against localhost servers, asserting that a delegate starts with an
+empty history and never leaks the caller's request, that two reads in one turn
+produce two results in the right order for one step, that a write-bearing turn
+is never batched, and that a rejection recovers once but does not loop. A live
+end-to-end check was not possible today: Gemini's free tier returns 404 across
+every model, Cerebras returns 402, OpenRouter's 50 free requests are spent, and
+Groq's 8,000 tokens-per-minute cannot fit a single tool-using agent request.
+
 ## 2.2.0 - 2026-09-10
 
 The agent knows it has a budget.

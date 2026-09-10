@@ -133,6 +133,30 @@ Every `fs.write` and `fs.patch` shows the **diff** it made, coloured, right unde
 the tool line. The diff goes to you, not back into the model's context, where it
 would only be a second copy of what it just wrote.
 
+### Delegation and parallel reads
+
+`agent.delegate` hands one self-contained question to a fresh agent that starts
+with no history and returns only its conclusion. Answering "where is the timeout
+configured?" across a large repository can cost thirty file reads, and every one
+of them would otherwise stay in the caller's history for the rest of the task.
+A delegate pays that cost in its own context and hands back the answer, the
+files it changed, and how many steps it took — never its transcript. It cannot
+see the conversation that called it and cannot delegate further; a run may
+delegate six times.
+
+A turn made entirely of confirmation-free reads now runs as **one** turn instead
+of one turn per file. Anything that writes, executes, or could prompt stays
+strictly in order, so a write followed by a patch of the same file still sees
+what the write produced.
+
+### Recovering from a provider
+
+Some providers validate tool calls before running anything and reject the whole
+request when the model gets a schema wrong — Groq answers `tool_use_failed`,
+and `output_parse_failed` when it cannot parse what the model generated. Those
+used to end the task. LOLM now tells the model exactly what the provider
+refused and lets it try again, at most twice, before the real error surfaces.
+
 ### Memory
 
 The agent keeps notes between sessions in `~/.lolm/memory`, one small Markdown
