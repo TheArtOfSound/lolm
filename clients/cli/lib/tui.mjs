@@ -70,6 +70,30 @@ export function spread(left, right, width = caps.width) {
   return `${left}${" ".repeat(gap)}${right}`;
 }
 
+/** Colour a unified diff for the transcript: additions green, removals red,
+ *  hunk headers dim. Capped, because a 300-line diff is a wall, not a preview. */
+export function renderDiff(diff, { max = 24 } = {}) {
+  const rows = [];
+  const lines = String(diff || "").split("\n").filter((line) => !/^(\+\+\+|---) /.test(line));
+  for (const line of lines.slice(0, max)) {
+    if (line.startsWith("@@")) rows.push(aside(line));
+    else if (line.startsWith("+")) rows.push(ui.green(line));
+    else if (line.startsWith("-")) rows.push(ui.red(line));
+    else rows.push(aside(line));
+  }
+  if (lines.length > max) rows.push(aside(`… ${lines.length - max} more line(s)`));
+  return rows;
+}
+
+/** A plan as a checklist, one row per step. */
+export function renderPlan(plan) {
+  if (!plan?.items?.length) return [];
+  const done = plan.items.filter((item) => item.done).length;
+  const rows = [`${ui.violet(glyph.diamond)} ${ui.bold("plan")} ${aside(`${done}/${plan.items.length}`)}`];
+  for (const item of plan.items) rows.push(`  ${item.done ? ui.green(glyph.ok) : aside(glyph.small)} ${item.done ? aside(item.text) : item.text}`);
+  return rows;
+}
+
 /** Everything in the console hangs off one two-space gutter. */
 export const GUTTER = "  ";
 
@@ -291,6 +315,7 @@ export function createConsoleSurface({ version = "", provider = "", model = "", 
   // erase the prompt, write above it, and let readline paint it back.
   let line = null;
   let promptLive = false;
+  let cancelFn = null;
   const writeLine = (value = "") => {
     clearProgress();
     const text = asciiSafe(`${value}\n`);
@@ -352,6 +377,11 @@ export function createConsoleSurface({ version = "", provider = "", model = "", 
     // the prompt instead of trampling it.
     attach(instance) { line = instance; },
     setPromptLive(value) { promptLive = Boolean(value); },
+    setCancel(fn) { cancelFn = typeof fn === "function" ? fn : null; },
+    cancelActive() { if (!cancelFn) return false; cancelFn(); return true; },
+    // Token-by-token output is noise to a screen reader and pointless in a
+    // pipe; the linear console waits for the finished reply.
+    stream() {},
     setContext() {},
     /** Read one line, matching the full-screen console's contract. */
     async read() {
@@ -387,8 +417,14 @@ export function createConsoleSurface({ version = "", provider = "", model = "", 
         // rather than as ragged trailing text.
         const detail = `${event.duration_ms || 0}ms${event.result?.id ? ` · ${event.result.id}` : ""}`;
         writeLine(spread(`    ${ui.green(glyph.ok)} ${event.tool}`, aside(detail)));
+        if (event.result?.diff) for (const row of renderDiff(event.result.diff)) writeLine(`      ${row}`);
       } else if (event?.type === "tool.failed") {
         writeLine(spread(`    ${ui.red(glyph.err)} ${event.tool}`, ui.red(event.error?.message || "failed")));
+      } else if (event?.type === "plan.updated") {
+        for (const row of renderPlan(event)) writeLine(`    ${row}`);
+      } else if (event?.type === "context.compacted") {
+        const how = event.tier === "summary" ? `${event.dropped} earlier message(s) folded into a summary` : `${event.trimmed} old tool result(s) trimmed`;
+        writeLine(aside(`    ${glyph.small} Context compacted: ${how}`));
       }
     },
     nfet(result) { writeLine(`    ${nfetSummary(result, { verbose })}`); },

@@ -194,7 +194,10 @@ test("run routes an explicitly named file task through the write-capable agent",
   const server = await startServer((_req, payload) => {
     if (!payload.messages.some((message) => message.role === "tool")) {
       assert.ok(payload.tools.some((tool) => tool.function.name === "fs__write"));
-      assert.ok(payload.tools.length <= 10, `expected a focused local tool set, got ${payload.tools.length}`);
+      // The focused set is nine local tools plus the three plan tools, which are
+      // tiny schemas and part of every code run. Anything beyond that is drift.
+      assert.ok(payload.tools.length <= 12, `expected a focused local tool set, got ${payload.tools.length}`);
+      assert.ok(payload.tools.some((tool) => tool.function.name === "plan__set"), "the plan tools travel with every code run");
       return { body: { choices: [{ message: { role: "assistant", content: null, tool_calls: [{
         id: "w1", type: "function", function: { name: "fs__write", arguments: JSON.stringify({ path: "solution.py", content: "VALUE = 7\n", tool: "fs.write" }) },
       }] } }] } };

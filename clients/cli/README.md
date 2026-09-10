@@ -112,6 +112,38 @@ It degrades rather than dictates: a pipe, a non-TTY, `--plain`, a screen reader,
 or `LOLM_FULLSCREEN=0` all get the linear console, and `LOLM_NO_ALT_SCREEN=1`
 keeps output in your normal scrollback.
 
+### While a task runs
+
+Replies **stream** into the transcript as the model writes them, on every
+OpenAI-compatible provider and on Ollama. Text the model produced before
+deciding to call a tool stays visible, dimmed, so nothing it said disappears.
+`--no-stream` (or `LOLM_NO_STREAM=1`) waits for each reply instead.
+
+Press **`esc` or `^C` to stop** a running task. Stopping is not failure: files
+already written and commands already run are kept and counted, the run is
+recorded as incomplete, and you are back at the prompt. Without a console, one
+`SIGINT` stops the task and a second one exits.
+
+For a task with three or more steps the agent declares a **plan** with the
+`plan.set` tool and ticks steps off with `plan.done`. The full-screen console
+pins that checklist under the header; the linear console prints it. A declared
+plan is not evidence of anything — it never counts toward verification.
+
+Every `fs.write` and `fs.patch` shows the **diff** it made, coloured, right under
+the tool line. The diff goes to you, not back into the model's context, where it
+would only be a second copy of what it just wrote.
+
+### Long tasks
+
+A long task outgrows the context window before it outgrows the step budget. When
+the conversation passes `LOLM_CONTEXT_CHARS` (default 160,000 characters), old
+tool output is trimmed first — it is the bulk and the least valuable. If that is
+not enough, the model compresses the middle of the conversation into a summary
+of what was changed, run, verified, decided, and left unfinished, and continues
+from there. The system message, your original request, and the recent turns are
+never touched, and a tool result is never separated from the call that made it.
+The console reports each compaction.
+
 ## Accessibility
 
 `--plain` (or `LOLM_PLAIN=1`) switches the terminal to linear, append-only text

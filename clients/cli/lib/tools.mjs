@@ -17,6 +17,7 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
   const commands = [];
   let evidence = 0;
   let verified = false;
+  let plan = null;
   const toolbox = createAgentToolbox({
     cwd,
     mode: mode || (yes ? "developer" : "standard"),
@@ -33,6 +34,7 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
     ready,
     get tools() { return toolbox.registry.providerDefinitions(); },
     get evidence() { return evidence; },
+    get plan() { return plan; },
     get verified() { return verified; },
     close: () => toolbox.close(),
     async execute(call) {
@@ -50,7 +52,11 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
       const result = await toolbox.registry.execute(normalizedCall, { approved: yes, dryRun, cwd: toolbox.root });
       if (!result.ok) return { ok: false, ...result.error, error: result.error?.message, tool: result.tool };
       const canonical = result.tool;
-      const value = result.dry_run ? { dry_run: true, permission: result.permission } : (result.result || {});
+      let value = result.dry_run ? { dry_run: true, permission: result.permission } : (result.result || {});
+      // The diff already went to the reader on the tool.completed event; in the
+      // model's context it would only be a second copy of what it just wrote.
+      if (value && typeof value === "object" && "diff" in value) { const { diff, ...rest } = value; value = rest; }
+      if (canonical.startsWith("plan.") && value && Array.isArray(value.items)) plan = value;
       if (canonical.startsWith("fs.") && ["fs.write", "fs.patch", "fs.mkdir", "fs.move", "fs.copy", "fs.delete"].includes(canonical)) {
         changes.push({ action: canonical.slice(3), ...value, dry_run: dryRun });
       }
@@ -58,7 +64,7 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
         commands.push({ command: normalizedCall.arguments?.command, ...value, dry_run: dryRun });
         if (canonical === "terminal.exec" && value.exit_code === 0 && !value.timed_out) verified = true;
       }
-      if (tool?.risk === "read" || ["git.status", "git.diff", "terminal.status"].includes(canonical)) evidence++;
+      if ((tool?.risk === "read" && !canonical.startsWith("plan.")) || ["git.status", "git.diff", "terminal.status"].includes(canonical)) evidence++;
       return { ok: true, ...value, tool: canonical, duration_ms: result.duration_ms };
     },
   };

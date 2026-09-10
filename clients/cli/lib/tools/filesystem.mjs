@@ -4,6 +4,7 @@ import { access, copyFile, cp, mkdir, readFile, readdir, rename, rm, stat, write
 import { dirname, join, relative } from "node:path";
 import { randomUUID } from "node:crypto";
 import { MAX_READ, SKIP_DIRECTORIES, assertReadablePath, objectSchema, pathClassification, resolveUserPath, runFile } from "./shared.mjs";
+import { diffStats, unifiedDiff } from "../textdiff.mjs";
 
 async function walk(root, depth, prefix = "", output = []) {
   if (depth < 0 || output.length >= 1_000) return output;
@@ -122,7 +123,11 @@ export function registerFilesystemTools(registry, { root, onAction = () => {} })
     inputSchema: fileSchema({ content: { type: "string" } }, ["path", "content"]),
     execute: async ({ path: value, content }, context) => {
       const path = resolveUserPath(root, value); onAction(`${context.dryRun ? "Would write" : "Writing"} ${path}`);
-      await atomicWrite(path, content); return { path, bytes: Buffer.byteLength(content) };
+      let previous = null;
+      try { previous = await readFile(path, "utf8"); } catch { previous = null; }
+      await atomicWrite(path, content);
+      const diff = unifiedDiff(previous ?? "", content, { path: relative(root, path), maxLines: 240 });
+      return { path, bytes: Buffer.byteLength(content), created: previous === null, diff, ...diffStats(diff) };
     },
   });
   registry.register({
@@ -145,7 +150,9 @@ export function registerFilesystemTools(registry, { root, onAction = () => {} })
       if (!occurrences) throw Object.assign(new Error("The exact old_text was not found. Read the file with fs.read for its literal bytes; fs.inspect previews are prefixed with line numbers that are not part of the file."), { code: "PATCH_CONTEXT_MISSING" });
       if (occurrences > 1 && !all) throw Object.assign(new Error(`old_text occurs ${occurrences} times; provide more context or set all=true.`), { code: "PATCH_AMBIGUOUS" });
       const next = all ? content.split(old_text).join(new_text) : content.replace(old_text, new_text);
-      await atomicWrite(path, next); return { path, replacements: all ? occurrences : 1, bytes: Buffer.byteLength(next) };
+      await atomicWrite(path, next);
+      const diff = unifiedDiff(content, next, { path: relative(root, path), maxLines: 240 });
+      return { path, replacements: all ? occurrences : 1, bytes: Buffer.byteLength(next), diff, ...diffStats(diff) };
     },
   });
   registry.register({

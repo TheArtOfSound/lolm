@@ -44,13 +44,16 @@ function retryDelayMs(response, payload, text, attempt) {
   return 2_000 * 2 ** attempt;
 }
 
-async function request(url, runtime, { method = "POST", body, headers = {} } = {}) {
+async function request(url, runtime, { method = "POST", body, headers = {}, signal } = {}) {
   let lastRateLimit = null;
   for (let attempt = 0; attempt < RATE_LIMIT_ATTEMPTS; attempt++) {
     // Each attempt gets its own deadline. A single timer spanning the retries
     // would abort a request that was only ever waiting out someone's throttle.
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(new Error("provider request timed out")), runtime.timeoutMs);
+    if (signal?.aborted) { clearTimeout(timer); throw new ProviderError("Stopped by user.", { code: "CANCELLED" }); }
+    const onAbort = () => controller.abort(new Error("cancelled"));
+    signal?.addEventListener("abort", onAbort, { once: true });
     let response;
     let text;
     try {
@@ -62,12 +65,14 @@ async function request(url, runtime, { method = "POST", body, headers = {} } = {
       });
       text = await response.text();
     } catch (error) {
+      if (signal?.aborted) throw new ProviderError("Stopped by user.", { code: "CANCELLED" });
       const timeout = error?.name === "AbortError" || /timed out/i.test(error?.message || "");
       throw new ProviderError(timeout ? "Provider request timed out" : `Provider request failed: ${error.message}`, {
         code: timeout ? "TIMEOUT" : "NETWORK_ERROR",
       });
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
     }
 
     let payload = {};
@@ -83,6 +88,7 @@ async function request(url, runtime, { method = "POST", body, headers = {} } = {
       if (throttled && !quotaIsExhausted(payload, text) && attempt < RATE_LIMIT_ATTEMPTS - 1) {
         lastRateLimit = message;
         await new Promise((resolvePromise) => setTimeout(resolvePromise, Math.min(retryDelayMs(response, payload, text, attempt), MAX_BACKOFF_MS)));
+        if (signal?.aborted) throw new ProviderError("Stopped by user.", { code: "CANCELLED" });
         continue;
       }
       throw new ProviderError(message, { status: 200, code: payload.error?.code || (throttled ? "RATE_LIMITED" : "PROVIDER_ERROR"), body: payload });
@@ -95,6 +101,7 @@ async function request(url, runtime, { method = "POST", body, headers = {} } = {
       lastRateLimit = message;
       const waitMs = Math.min(retryDelayMs(response, payload, text, attempt), MAX_BACKOFF_MS);
       await new Promise((resolvePromise) => setTimeout(resolvePromise, waitMs));
+      if (signal?.aborted) throw new ProviderError("Stopped by user.", { code: "CANCELLED" });
       continue;
     }
     throw new ProviderError(message, {
@@ -109,7 +116,7 @@ async function request(url, runtime, { method = "POST", body, headers = {} } = {
   });
 }
 
-async function streamJsonLines(url, runtime, { body, headers = {}, onValue = () => {} } = {}) {
+async function streamJsonLines(url, runtime, { body, headers = {}, onValue = () => {}, signal } = {}) {
   const controller = new AbortController();
   let timer;
   const armTimeout = () => {
@@ -117,6 +124,9 @@ async function streamJsonLines(url, runtime, { body, headers = {}, onValue = () 
     timer = setTimeout(() => controller.abort(new Error("provider stream became inactive")), runtime.timeoutMs);
   };
   armTimeout();
+  if (signal?.aborted) throw new ProviderError("Stopped by user.", { code: "CANCELLED" });
+  const onAbort = () => controller.abort(new Error("cancelled"));
+  signal?.addEventListener("abort", onAbort, { once: true });
   try {
     const response = await fetch(url, {
       method: "POST",
@@ -151,6 +161,7 @@ async function streamJsonLines(url, runtime, { body, headers = {}, onValue = () 
     buffer += decoder.decode();
     if (buffer.trim()) onValue(JSON.parse(buffer));
   } catch (error) {
+    if (signal?.aborted) throw new ProviderError("Stopped by user.", { code: "CANCELLED" });
     if (error instanceof ProviderError) throw error;
     const timeout = error?.name === "AbortError" || /inactive|timed out/i.test(error?.message || "");
     throw new ProviderError(timeout
@@ -160,6 +171,7 @@ async function streamJsonLines(url, runtime, { body, headers = {}, onValue = () 
     });
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
   }
 }
 
@@ -204,18 +216,92 @@ function openAiMessages(messages) {
   });
 }
 
-async function openAiChat(runtime, messages, tools = [], { maxTokens } = {}) {
-  const suffix = runtime.baseUrl.endsWith("/v1") || runtime.baseUrl.includes("/api/v1")
-    ? "/chat/completions" : "/v1/chat/completions";
-  const payload = await request(endpoint(runtime.baseUrl, suffix), runtime, {
-    headers: runtime.apiKey ? { authorization: `Bearer ${runtime.apiKey}` } : {},
-    body: {
-      model: runtime.model,
-      messages: openAiMessages(messages),
-      ...(maxTokens ? { max_tokens: maxTokens } : {}),
-      ...(tools.length ? { tools, tool_choice: "auto" } : {}),
-    },
-  });
+/** Read a server-sent-event stream, handing each JSON event to `onEvent`. */
+async function streamSse(url, runtime, { body, headers = {}, onEvent = () => {}, signal } = {}) {
+  const controller = new AbortController();
+  let timer;
+  const armTimeout = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(new Error("provider stream became inactive")), runtime.timeoutMs);
+  };
+  armTimeout();
+  if (signal?.aborted) throw new ProviderError("Stopped by user.", { code: "CANCELLED" });
+  const onAbort = () => controller.abort(new Error("cancelled"));
+  signal?.addEventListener("abort", onAbort, { once: true });
+  const handle = (block) => {
+    for (const line of block.split("\n")) {
+      if (!line.startsWith("data:")) continue; // comments (": keep-alive") and event names carry nothing
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      let event;
+      try { event = JSON.parse(data); }
+      catch { throw new ProviderError("Provider returned malformed streaming JSON", { code: "MALFORMED_RESPONSE" }); }
+      onEvent(event);
+    }
+  };
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "text/event-stream", ...headers },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      let payload = {};
+      try { payload = text ? JSON.parse(text) : {}; } catch { payload = { raw: text.slice(0, 1000) }; }
+      const message = payload?.error?.message || payload?.error || payload?.message || `Provider returned HTTP ${response.status}`;
+      const retryable = response.status === 429 || response.status === 503;
+      throw new ProviderError(String(message), { status: response.status, code: payload?.error?.code || (retryable ? "RATE_LIMITED" : "HTTP_ERROR"), body: payload });
+    }
+    // A provider that ignores `stream: true` answers in one piece. That body is
+    // the completion; hand it back rather than asking for it a second time.
+    if (!/text\/event-stream/i.test(response.headers.get("content-type") || "")) {
+      const text = await response.text();
+      let payload;
+      try { payload = JSON.parse(text); }
+      catch { throw new ProviderError("Provider returned a non-JSON body instead of a stream", { code: "MALFORMED_RESPONSE" }); }
+      return { streamed: false, payload };
+    }
+    if (!response.body) throw new ProviderError("Provider response did not contain a stream", { code: "MALFORMED_RESPONSE" });
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      armTimeout();
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+      let boundary;
+      while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+        handle(buffer.slice(0, boundary));
+        buffer = buffer.slice(boundary + 2);
+      }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) handle(buffer);
+    return { streamed: true };
+  } catch (error) {
+    if (signal?.aborted) throw new ProviderError("Stopped by user.", { code: "CANCELLED" });
+    if (error instanceof ProviderError) throw error;
+    const timeout = error?.name === "AbortError" || /inactive|timed out/i.test(error?.message || "");
+    throw new ProviderError(timeout
+      ? `The provider stopped responding for ${Math.round(runtime.timeoutMs / 1000)} seconds.`
+      : `Provider request failed: ${error.message}`, { code: timeout ? "TIMEOUT" : "NETWORK_ERROR" });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onAbort);
+  }
+}
+
+/** One parsed completion from a plain (non-streamed) OpenAI-style payload. */
+function openAiCompletion(payload) {
+  // Routers that answer 200 with an error object are handled like request() does.
+  if (payload?.error && !payload?.choices) {
+    const message = String(payload.error?.message || payload.error);
+    const throttled = /\brate|limit|overloaded|capacity|temporarily|timeout|503|429\b/i.test(message);
+    throw new ProviderError(message, { status: 200, code: payload.error?.code || (throttled ? "RATE_LIMITED" : "PROVIDER_ERROR"), body: payload });
+  }
   const message = payload?.choices?.[0]?.message;
   if (!message) throw new ProviderError("Provider response did not contain a message", { code: "MALFORMED_RESPONSE", body: payload });
   return {
@@ -226,6 +312,83 @@ async function openAiChat(runtime, messages, tools = [], { maxTokens } = {}) {
     usage: payload.usage || null,
     raw: payload,
   };
+}
+
+/** Assemble one completion from OpenAI-style deltas, streaming text as it lands. */
+async function openAiStream(url, runtime, { headers, body, onToken, signal }) {
+  let content = "";
+  let reasoningChars = 0;
+  let finish = null;
+  let usage = null;
+  const calls = new Map();
+  const outcome = await streamSse(url, runtime, {
+    headers,
+    body: { ...body, stream: true, stream_options: { include_usage: true } },
+    signal,
+    onEvent(event) {
+      // OpenRouter and some proxies report an upstream failure as a 200 event.
+      if (event?.error) {
+        throw new ProviderError(String(event.error?.message || event.error), { status: 200, code: event.error?.code || "PROVIDER_ERROR", body: event });
+      }
+      if (event?.usage) usage = event.usage;
+      const choice = event?.choices?.[0];
+      if (!choice) return;
+      const delta = choice.delta || {};
+      if (typeof delta.content === "string" && delta.content) {
+        content += delta.content;
+        onToken(delta.content, {});
+      }
+      const thought = delta.reasoning_content ?? delta.reasoning;
+      if (typeof thought === "string" && thought) {
+        reasoningChars += thought.length;
+        onToken(thought, { thinking: true });
+      }
+      for (const part of delta.tool_calls || []) {
+        const index = part.index ?? calls.size;
+        const entry = calls.get(index) || { id: "", name: "", args: "" };
+        if (part.id) entry.id = part.id;
+        if (part.function?.name && !entry.name) entry.name = part.function.name;
+        if (part.function?.arguments) entry.args += part.function.arguments;
+        calls.set(index, entry);
+      }
+      if (choice.finish_reason) finish = choice.finish_reason;
+    },
+  });
+  if (!outcome.streamed) {
+    // Remember it for the rest of this task so later turns skip the attempt.
+    runtime.stream = false;
+    return openAiCompletion(outcome.payload);
+  }
+  const toolCalls = [...calls.entries()].sort((a, b) => a[0] - b[0]).map(([index, entry]) => toolCall(entry.id, entry.name, entry.args, index));
+  return { content, toolCalls, truncated: finish === "length", usage, raw: { streamed: true, finish_reason: finish, reasoning_chars: reasoningChars } };
+}
+
+async function openAiChat(runtime, messages, tools = [], { maxTokens, onToken, signal } = {}) {
+  const suffix = runtime.baseUrl.endsWith("/v1") || runtime.baseUrl.includes("/api/v1")
+    ? "/chat/completions" : "/v1/chat/completions";
+  const url = endpoint(runtime.baseUrl, suffix);
+  const headers = runtime.apiKey ? { authorization: `Bearer ${runtime.apiKey}` } : {};
+  const body = {
+    model: runtime.model,
+    messages: openAiMessages(messages),
+    ...(maxTokens ? { max_tokens: maxTokens } : {}),
+    ...(tools.length ? { tools, tool_choice: "auto" } : {}),
+  };
+  // Stream whenever someone is listening. Text reaches the reader as it is
+  // written instead of after the whole turn, and a cancellation lands mid-turn.
+  const streaming = typeof onToken === "function" && runtime.stream !== false && process.env.LOLM_NO_STREAM !== "1";
+  if (streaming) {
+    try {
+      return await openAiStream(url, runtime, { headers, body, onToken, signal });
+    } catch (error) {
+      if (!(error instanceof ProviderError)) throw error;
+      // A provider that rejects the stream request outright gets the plain
+      // request from now on; a throttle is retried with backoff by request().
+      if (error.status === 400 && /stream/i.test(error.message)) runtime.stream = false;
+      else if (error.code !== "RATE_LIMITED") throw error;
+    }
+  }
+  return openAiCompletion(await request(url, runtime, { headers, body, signal }));
 }
 
 function anthropicMessages(messages) {
@@ -248,9 +411,10 @@ function anthropicMessages(messages) {
   return out;
 }
 
-async function anthropicChat(runtime, messages, tools = [], { maxTokens } = {}) {
+async function anthropicChat(runtime, messages, tools = [], { maxTokens, signal } = {}) {
   const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
   const payload = await request(endpoint(runtime.baseUrl, "/v1/messages"), runtime, {
+    signal,
     headers: { "x-api-key": runtime.apiKey, "anthropic-version": "2023-06-01" },
     body: {
       model: runtime.model,
@@ -364,10 +528,11 @@ function geminiContents(messages) {
   return contents;
 }
 
-async function geminiChat(runtime, messages, tools = [], { maxTokens } = {}) {
+async function geminiChat(runtime, messages, tools = [], { maxTokens, signal } = {}) {
   const system = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
   const url = endpoint(runtime.baseUrl, `/v1beta/models/${encodeURIComponent(runtime.model)}:generateContent`);
   const payload = await request(url, runtime, {
+    signal,
     headers: { "x-goog-api-key": runtime.apiKey },
     body: {
       contents: geminiContents(messages),
@@ -406,7 +571,7 @@ function ollamaMessages(messages) {
   });
 }
 
-async function ollamaChat(runtime, messages, tools = [], { onToken = () => {}, reasoning, maxTokens } = {}) {
+async function ollamaChat(runtime, messages, tools = [], { onToken = () => {}, reasoning, maxTokens, signal } = {}) {
   let content = "", thinking = "", usage = null;
   const toolCalls = [];
   const requestBody = {
@@ -420,6 +585,7 @@ async function ollamaChat(runtime, messages, tools = [], { onToken = () => {}, r
   };
   let doneReason = "";
   const consume = () => streamJsonLines(endpoint(runtime.baseUrl, "/api/chat"), runtime, {
+    signal,
     body: {
       ...requestBody,
     },
@@ -467,14 +633,14 @@ async function ollamaChat(runtime, messages, tools = [], { onToken = () => {}, r
   };
 }
 
-export async function chat(runtime, messages, { tools = [], onToken = () => {}, reasoning, maxTokens } = {}) {
+export async function chat(runtime, messages, { tools = [], onToken, reasoning, maxTokens, signal } = {}) {
   if (runtime.keyRequired && !runtime.apiKey) {
     throw new ProviderError(`No API key found for ${runtime.label}. Run 'lolm setup' or set the provider environment variable.`, { code: "AUTH_MISSING" });
   }
-  if (runtime.protocol === "anthropic") return anthropicChat(runtime, messages, tools, { maxTokens });
-  if (runtime.protocol === "gemini") return geminiChat(runtime, messages, tools, { maxTokens });
-  if (runtime.protocol === "ollama") return ollamaChat(runtime, messages, tools, { onToken, reasoning, maxTokens });
-  return openAiChat(runtime, messages, tools, { maxTokens });
+  if (runtime.protocol === "anthropic") return anthropicChat(runtime, messages, tools, { maxTokens, signal });
+  if (runtime.protocol === "gemini") return geminiChat(runtime, messages, tools, { maxTokens, signal });
+  if (runtime.protocol === "ollama") return ollamaChat(runtime, messages, tools, { onToken: onToken || (() => {}), reasoning, maxTokens, signal });
+  return openAiChat(runtime, messages, tools, { maxTokens, onToken, signal });
 }
 
 export async function listModels(runtime) {

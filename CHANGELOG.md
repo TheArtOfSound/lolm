@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.0.0 - 2026-09-10
+
+The agent streams, stops, plans, shows its edits, and survives long tasks.
+
+- **streaming** — replies reach the transcript as the model writes them. The
+  OpenAI-compatible path (Cerebras, Groq, OpenRouter, OpenAI, custom endpoints)
+  now reads server-sent events, assembling fragmented tool-call arguments before
+  parsing them; a provider that ignores `stream: true` is detected by its content
+  type and served through the plain path. `--no-stream` opts out;
+- **stopping** — `esc` or `^C` during a task aborts the in-flight request and
+  the loop cleanly. The result is reported as a stop, not a failure, with the
+  files changed and commands run before it kept and counted; `SIGINT` does the
+  same without a console. An abort signal is threaded through every provider
+  adapter, including backoff sleeps;
+- **plans** — `plan.set` / `plan.done` / `plan.get` tools; the console pins the
+  checklist under the header and ticks steps off live. Declaring a plan never
+  counts as evidence toward verification;
+- **diffs** — `fs.write` and `fs.patch` report a unified diff of the change they
+  made, shown coloured under the tool line. It is stripped before the tool
+  result re-enters the model's context;
+- **context compaction** — past `LOLM_CONTEXT_CHARS` (160k) old tool output is
+  trimmed; if still over budget, the middle of the conversation is compressed by
+  the model into a summary and the loop continues. The system message, original
+  request, and recent turns are untouched, and tool-call/result pairs are never
+  split. Each compaction is reported;
+- the linear console deliberately does not stream token by token: it is the
+  path a screen reader hears, and the finished reply reads better than a trickle.
+- a plan the model declares and then abandons earns one reminder to tick or
+  finish its steps before the answer stands; it is never counted as an NFET
+  intervention;
+- a bare Escape no longer both stops a task *and* drops the reader into
+  scrollback — readline echoes the same key about half a second later, and that
+  echo is now ignored; the redundant "started" row per tool call is gone, and a
+  stopped task clears its spinner and notice.
+
 ## 1.9.0 - 2026-08-12
 
 Clipboard routing, vim scrollback navigation, and a settings panel.

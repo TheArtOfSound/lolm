@@ -11,6 +11,7 @@ import { registerGitHubTools } from "./github.mjs";
 import { registerCloudflareTools } from "./cloudflare.mjs";
 import { BrowserManager, registerBrowserTools, registerComputerTools } from "./browser.mjs";
 import { registerWebTools } from "./web.mjs";
+import { registerPlanTools } from "./plan.mjs";
 import { PluginManager } from "../plugins.mjs";
 import { McpManager } from "../mcp.mjs";
 
@@ -28,6 +29,7 @@ export function createAgentToolbox({ cwd = process.cwd(), mode = "standard", con
   registerBrowserTools(registry, shared);
   registerComputerTools(registry, shared);
   registerWebTools(registry, shared);
+  registerPlanTools(registry, shared);
   const plugins = new PluginManager({ root, registry });
   const mcp = new McpManager({ root, registry });
   return {

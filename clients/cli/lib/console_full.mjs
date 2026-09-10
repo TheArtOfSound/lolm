@@ -12,7 +12,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { homedir } from "node:os";
 import { createScreen, fit } from "./screen.mjs";
 import { createEditor } from "./editor.mjs";
-import { caps, glyph, nfetSummary, renderMarkdown, stripAnsi, ui, wordmark, wrap } from "./tui.mjs";
+import { caps, glyph, nfetSummary, renderDiff, renderMarkdown, renderPlan, stripAnsi, ui, wordmark, wrap } from "./tui.mjs";
 import { copyText } from "./clipboard.mjs";
 import { scrollKey, searchTranscript, settingsKey, settingsModel } from "./overlays.mjs";
 
@@ -41,18 +41,31 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
   let notice = "";
   let panel = { rows: [], index: 0, editing: false, buffer: "" };
   let onSetting = null;
+  let live = "";          // text the model is still producing
+  let liveTimer = null;
+  let cancelFn = null;     // set while a task can be stopped
+  let plan = null;
 
   const columns = () => screen.size().columns;
   const inner = () => columns() - 4;
 
+  /** Streamed text that never became the final reply — the model thought out
+   *  loud and then called a tool — is kept, dimmed, so nothing vanishes. */
+  function flushLive() {
+    if (!live) return;
+    for (const line of wrap(live, inner(), "").split("\n")) transcript.push(aside(line));
+    live = "";
+  }
   /** Push already-styled text into the transcript, wrapping to the box width. */
   function push(value = "") {
-    const text = String(value);
-    for (const line of wrap(text, inner(), "").split("\n")) transcript.push(line);
-    // Following the tail is the default; an explicit scroll-back is respected
-    // until the reader returns to the bottom.
-    if (scrollOffset === 0) render();
-    else render();
+    flushLive();
+    for (const line of wrap(String(value), inner(), "").split("\n")) transcript.push(line);
+    render();
+  }
+  // Tokens arrive faster than a terminal can usefully repaint.
+  function scheduleRender() {
+    if (liveTimer) return;
+    liveTimer = setTimeout(() => { liveTimer = null; render(); }, 40);
   }
 
   function headerLines() {
@@ -118,9 +131,11 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
       if (searching) return `  ${ui.violet("/")}${searchQuery}${aside("   ⏎ find · esc cancel")}`;
       return aside("  j k scroll · ^D ^U half · gg top · G bottom · / search · y copy · esc input");
     }
-    const hint = editor.value.includes("\n")
-      ? "⏎ send · ⌥⏎ newline · ^C clear · ^S settings"
-      : "⏎ send · ⌥⏎ newline · esc/^G scroll · ^S settings · /help · /exit";
+    const hint = cancelFn
+      ? "esc or ^C stop the task · ^G scroll · ^S settings"
+      : editor.value.includes("\n")
+        ? "⏎ send · ⌥⏎ newline · ^C clear · ^S settings"
+        : "⏎ send · ⌥⏎ newline · esc/^G scroll · ^S settings · /help · /exit";
     return aside(`  ${hint}`);
   }
 
@@ -142,17 +157,19 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
     if (closed) return;
     const { rows: height, columns: width } = screen.size();
     const header = headerLines();
+    const planRows = uiMode === "settings" ? [] : renderPlan(plan).slice(0, 9).map((row) => fit(`  ${row}`, width));
     const box = inputLines();
     const statusRow = status ? 1 : 0;
     const inputHeight = box.rows.length + 2;          // borders
-    const viewport = Math.max(3, height - header.length - inputHeight - statusRow - 1);
+    const viewport = Math.max(3, height - header.length - planRows.length - inputHeight - statusRow - 1);
 
-    const maxOffset = Math.max(0, transcript.length - viewport);
+    const all = live ? transcript.concat(wrap(live, inner(), "").split("\n")) : transcript;
+    const maxOffset = Math.max(0, all.length - viewport);
     scrollOffset = Math.min(scrollOffset, maxOffset);
-    const top = Math.max(0, transcript.length - viewport - scrollOffset);
-    const visible = transcript.slice(top, top + viewport);
+    const top = Math.max(0, all.length - viewport - scrollOffset);
+    const visible = all.slice(top, top + viewport);
 
-    const lines = [...header];
+    const lines = [...header, ...planRows];
     if (uiMode === "settings") {
       const rows = panelLines(width);
       for (let index = 0; index < viewport; index += 1) lines.push(fit(rows[index] ?? "", width));
@@ -215,6 +232,7 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
       // read, so watching the raw stream is the only way to see the keypress.
       onEscape = (chunk) => {
         if (closed || String(chunk) !== "\x1b") return;
+        if (cancelFn && uiMode === "input") { cancelFn(); notice = "Stopping…"; return render(); }
         if (uiMode === "settings") { uiMode = "input"; return render(); }
         if (uiMode === "scroll") {
           if (searching) { searching = false; searchQuery = ""; return render(); }
@@ -226,6 +244,11 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
       input.on("data", onEscape);
       onKey = (sequence, info = {}) => {
         if (closed) return;
+        // Every Escape is handled on the raw stream above. readline still
+        // reports the same key about half a second later, once it is sure no
+        // sequence followed; acting on that echo would stop a task and then
+        // drop the reader into scrollback, so it is ignored here.
+        if (info.name === "escape") return;
         if (notice) { notice = ""; }
 
         // Settings owns every key while it is open.
@@ -287,6 +310,7 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
         }
 
         // Input mode.
+        if (cancelFn && info.ctrl && info.name === "c") { cancelFn(); notice = "Stopping…"; return render(); }
         if (info.ctrl && info.name === "s") {
           panel = { rows: settingsModel({ ...context, verbose }), index: 0, editing: false, buffer: "" };
           uiMode = "settings";
@@ -323,6 +347,7 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
       if (closed) return;
       closed = true;
       stopTicker();
+      clearTimeout(liveTimer);
       if (onKey) input.off("keypress", onKey);
       if (onEscape) input.off("data", onEscape);
       output.off("resize", onResize);
@@ -342,7 +367,18 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
     onSettingChange(handler) { onSetting = handler; },
     setVerbose(value) { verbose = Boolean(value); },
     get verbose() { return verbose; },
+    /** Text as the model produces it, drawn after the transcript until the reply is final. */
+    stream(delta) { live += String(delta || ""); scheduleRender(); },
+    setCancel(fn) {
+      cancelFn = typeof fn === "function" ? fn : null;
+      // No handler means no task: whatever it left on screen — a spinner, a
+      // "Stopping…" — is stale the moment it ends.
+      if (!cancelFn) { status = ""; statusSince = 0; stopTicker(); if (notice === "Stopping…") notice = ""; }
+      render();
+    },
+    cancelActive() { if (!cancelFn) return false; cancelFn(); return true; },
     user(message) {
+      plan = null;
       push("");
       push(`${ui.indigo("›")} ${ui.bold(String(message || "").trim())}`);
     },
@@ -360,25 +396,34 @@ export function createFullScreenConsole({ version = "", provider = "", model = "
     },
     tool(label) { push(`  ${ui.cyan(glyph.arrow)} ${aside(label)}`); },
     activity(event) {
-      if (event?.type === "tool.started") push(`  ${ui.violet(glyph.small)} ${event.tool}`);
-      else if (event?.type === "tool.completed") {
+      // The intent line (↳ name args) already announced the call; a second
+      // "started" row between it and the outcome was noise.
+      if (event?.type === "tool.completed") {
         const detail = `${event.duration_ms || 0}ms${event.result?.id ? ` · ${event.result.id}` : ""}`;
         const left = `  ${ui.green(glyph.ok)} ${event.tool}`;
         const pad = Math.max(1, inner() - stripAnsi(left).length - detail.length);
         push(`${left}${" ".repeat(pad)}${aside(detail)}`);
+        if (event.result?.diff) for (const row of renderDiff(event.result.diff)) push(`    ${row}`);
       } else if (event?.type === "tool.failed") {
         push(`  ${ui.red(glyph.err)} ${event.tool} ${ui.red(event.error?.message || "failed")}`);
+      } else if (event?.type === "plan.updated") {
+        plan = event;
+        render();
+      } else if (event?.type === "context.compacted") {
+        const how = event.tier === "summary" ? `${event.dropped} earlier message(s) folded into a summary` : `${event.trimmed} old tool result(s) trimmed`;
+        push(aside(`  ${glyph.small} Context compacted: ${how}`));
       }
     },
     nfet(result) { push(`  ${nfetSummary(result, { verbose })}`); },
     assistant(message) {
       status = ""; statusSince = 0; stopTicker();
+      live = "";   // the final reply supersedes what was streaming
       push("");
       push(`${ui.rose(glyph.diamond)} ${ui.bold("LOLM")}`);
       push(renderMarkdown(message));
     },
     success(message) { status = ""; stopTicker(); push(`${ui.green(glyph.ok)} ${message}`); },
-    warning(message) { push(`${ui.amber(glyph.warn)} Warning: ${message}`); },
+    warning(message) { status = ""; stopTicker(); push(`${ui.amber(glyph.warn)} Warning: ${message}`); },
     error(message, { retry = false } = {}) {
       status = ""; stopTicker();
       push(`${ui.red(glyph.err)} Error: ${message}`);

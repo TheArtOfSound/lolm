@@ -30,7 +30,7 @@ const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url),
 const VERSION = pkg.version;
 
 const VALUE_FLAGS = new Set(["--provider", "--model", "--api-key", "--base-url", "--cwd", "--out", "-o", "--timeout", "--max-steps", "--max-tokens", "--mode"]);
-const BOOLEAN_FLAGS = new Set(["--json", "--yes", "-y", "--dry-run", "--check", "--open", "--help", "-h", "--version", "-V", "--no-nfet", "--once", "--plain"]);
+const BOOLEAN_FLAGS = new Set(["--json", "--yes", "-y", "--dry-run", "--check", "--open", "--help", "-h", "--version", "-V", "--no-nfet", "--once", "--plain", "--no-stream"]);
 
 function parse(argv) {
   const flags = { cwd: process.cwd(), maxSteps: 12 };
@@ -45,7 +45,7 @@ function parse(argv) {
       const key = ({ "--provider": "provider", "--model": "model", "--api-key": "apiKey", "--base-url": "baseUrl", "--cwd": "cwd", "--out": "out", "-o": "out", "--timeout": "timeout", "--max-steps": "maxSteps", "--max-tokens": "maxTokens", "--mode": "permissionMode" })[token];
       flags[key] = value;
     } else if (!literal && BOOLEAN_FLAGS.has(token)) {
-      const key = ({ "--json": "json", "--yes": "yes", "-y": "yes", "--dry-run": "dryRun", "--check": "check", "--open": "open", "--help": "help", "-h": "help", "--version": "version", "-V": "version", "--no-nfet": "noNfet", "--once": "once", "--plain": "plain" })[token];
+      const key = ({ "--json": "json", "--yes": "yes", "-y": "yes", "--dry-run": "dryRun", "--check": "check", "--open": "open", "--help": "help", "-h": "help", "--version": "version", "-V": "version", "--no-nfet": "noNfet", "--once": "once", "--plain": "plain", "--no-stream": "noStream" })[token];
       flags[key] = true;
     } else if (!literal && token.startsWith("-")) {
       throw Object.assign(new Error(`unknown flag ${token}`), { exitCode: 2 });
@@ -115,6 +115,7 @@ ${ui.bold("GLOBAL OPTIONS")}
   --once             answer once and return to the shell
   --no-nfet          explicitly run without the local NFET monitor
   --plain            linear, screen-reader friendly output (LOLM_PLAIN=1)
+  --no-stream        wait for each reply instead of streaming it
 
 Flags override environment, then config, then defaults. Keys are never printed. Run ${ui.cyan("lolm setup")} first.`;
 
@@ -364,6 +365,7 @@ function monitorFor(config, flags, surface = null) {
 
 async function executeTask(command, text, config, flags, sharedMonitor = null, history = [], surface = null) {
   const runtime = resolveRuntime(config, flags);
+  runtime.stream = !flags.noStream;
   const store = runStore();
   const run = flags.resumeRunId
     ? (await store.resume(flags.resumeRunId)).meta
@@ -398,6 +400,13 @@ async function executeTask(command, text, config, flags, sharedMonitor = null, h
     else note(label);
   };
   const onProgress = (progress) => { if (!flags.json && surface) surface.progress(progress); };
+  const onDelta = (delta) => { if (!flags.json && surface) surface.stream?.(delta); };
+  // One stop switch for the whole task: the console's Esc or ^C, or a SIGINT
+  // when there is no console. Stopping keeps whatever was already done.
+  const stopper = new AbortController();
+  surface?.setCancel?.(() => stopper.abort());
+  const onSigint = () => { stopper.abort(); process.off("SIGINT", onSigint); };
+  if (!surface) process.on("SIGINT", onSigint);
   // Warm the trained NFET model while the provider works. The first request no
   // longer pays those two startup costs serially, and a shared interactive
   // monitor remains hot for the rest of the conversation.
@@ -453,8 +462,16 @@ async function executeTask(command, text, config, flags, sharedMonitor = null, h
       await store.finish(run.id, "completed", { kind: "html", result_path: out });
       return 0;
     }
-    const result = await runAgent({ prompt: text, mode: command, runtime, monitor, cwd: flags.cwd, yes: flags.yes, dryRun: flags.dryRun, maxSteps: flags.maxSteps, maxTokens: flags.maxTokens, history, onPhase, onTool, onNfet, onProgress, permissionMode: flags.permissionMode, eventSink });
+    const result = await runAgent({ prompt: text, mode: command, runtime, monitor, cwd: flags.cwd, yes: flags.yes, dryRun: flags.dryRun, maxSteps: flags.maxSteps, maxTokens: flags.maxTokens, history, onPhase, onTool, onNfet, onProgress, onDelta, signal: stopper.signal, permissionMode: flags.permissionMode, eventSink });
     result.run_id = run.id;
+    if (result.cancelled) {
+      const summary = `Stopped. ${result.changes.length} file change(s) and ${result.commands.length} command(s) happened before that.`;
+      if (typeof flags.captureResult === "function") flags.captureResult(result);
+      if (surface) surface.warning(summary); else emit(flags, result, summary);
+      await saveLastTask({ ...taskRecord, status: "incomplete", error: "Stopped by user." }).catch(() => {});
+      await store.finish(run.id, "incomplete", { cancelled: true, steps: result.steps, error: "Stopped by user." });
+      return 0;
+    }
     if (typeof flags.captureResult === "function") flags.captureResult(result);
     if (surface) surface.assistant(result.response || result.error);
     else emit(flags, result, renderMarkdown(result.response || result.error));
@@ -466,7 +483,11 @@ async function executeTask(command, text, config, flags, sharedMonitor = null, h
     await saveLastTask({ ...taskRecord, status: "failed", error: error.message }).catch(() => {});
     await store.finish(run.id, "failed", { error: error.message, code: error.code || "TASK_FAILED" }).catch(() => {});
     throw error;
-  } finally { if (!sharedMonitor) await monitor?.close(); }
+  } finally {
+    surface?.setCancel?.(null);
+    process.off("SIGINT", onSigint);
+    if (!sharedMonitor) await monitor?.close();
+  }
 }
 
 async function interactive(config, flags, { seed = null } = {}) {
@@ -512,6 +533,8 @@ async function interactive(config, flags, { seed = null } = {}) {
   // Hand the reader's line editor to the surface so background output redraws
   // the prompt rather than overwriting what is being typed.
   surface.attach(rl);
+  // readline swallows ^C on a TTY; route it to the running task, or leave.
+  rl?.on("SIGINT", () => { if (!surface.cancelActive?.()) rl.close(); });
   const monitor = monitorFor(config, flags, surface);
   // Loading the controller takes real seconds. Spend them while the reader is
   // still typing their first message rather than in the middle of their task.
