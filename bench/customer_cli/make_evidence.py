@@ -157,6 +157,27 @@ def build(runs: list[dict[str, Any]]) -> str:
                        if ablation else f"**`{left}` vs `{right}`**")
             median_left = scores[left]["median_seconds"]
             median_right = scores[right]["median_seconds"]
+            # An ablation is not only about pass rate: a controller that keeps the
+            # score but spends more turns to get there is a cost, not a feature.
+            def effort(agent):
+                rows = [keyed[(agent, task)] for task in shared]
+                steps = [r["agent_receipt"].get("steps") for r in rows if isinstance(r["agent_receipt"].get("steps"), int)]
+                pokes = [r["agent_receipt"].get("interventions") for r in rows if isinstance(r["agent_receipt"].get("interventions"), int)]
+                return (sum(steps) / len(steps) if steps else 0.0, sum(pokes) if pokes else 0)
+            left_steps, left_pokes = effort(left)
+            right_steps, right_pokes = effort(right)
+            if ablation:
+                lines += [
+                    f"{heading} on the {len(shared)} tasks both attempted: "
+                    f"**{left_passed}–{right_passed}**, {verdict}. "
+                    f"`{left}` solved {left_only} that `{right}` missed; `{right}` solved {right_only} that `{left}` missed.",
+                    "",
+                    f"Cost of running the controller: {left_steps:.1f} steps per task against "
+                    f"{right_steps:.1f} without it, and {left_pokes} intervention(s) issued. "
+                    f"Median wall time {median_left:.0f}s against {median_right:.0f}s.",
+                    "",
+                ]
+                continue
             lines += [
                 f"{heading} on the {len(shared)} tasks both attempted: "
                 f"**{left_passed}–{right_passed}**, {verdict}. "

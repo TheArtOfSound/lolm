@@ -312,6 +312,7 @@ def parse_agent_output(agent: str, stdout: str, stderr: str = "") -> dict[str, A
             "model": payload.get("model"),
             "verified": payload.get("verified"),
             "steps": payload.get("steps"),
+            "interventions": payload.get("interventions"),
             "usage": payload.get("usage"),
             "nfet": {key: nfet.get(key) for key in ("available", "text_sha256", "head_trained", "checkpoint", "verified", "decision", "telemetry") if key in nfet},
             "error": payload.get("error"),
