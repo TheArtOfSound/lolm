@@ -43,3 +43,26 @@ between tracks. Three or more trials are needed before the gaps mean anything.
 reproduced here, and these percentages must not be compared with them. Docker
 was not installable on this host — 5.7 GiB free — so neither harness could be
 run locally.
+
+## NFET ablation, 2026-09-10
+
+**The controller did not change the score on this suite.** Same model
+(`gemini-3.1-flash-lite`), same scaffold, same twelve tasks across every tier,
+only the controller toggled: 11/12 with it on, 11/12 with it off. Each side
+solved one task the other missed — `fix_cache_ttl` passed only with the
+controller, `pkg_calc` only without — which on a single trial is
+indistinguishable from noise. Zero interventions fired on either side: after the
+1.6.0 change the controller never forced rework on a verified result, and the
+trained head returned continue/finalize on the rest.
+
+**What it did change was time.** Median wall time was 81s with the controller
+and 60s without. That 21s is the cost of the checkpoints themselves — a few
+seconds per decision, several decisions per task. On this model and this suite
+the controller is a cost without a measured benefit.
+
+**What this does not settle.** One trial per task. The tasks are ones this
+model solves without help, so there was little for a controller to catch; the
+open question is whether it earns its keep on tasks the model gets wrong
+unassisted, and that needs a harder suite or a weaker model, run more than once.
+The build under test was the 1.9.0 CLI, frozen in a snapshot so the working tree
+could be edited while it ran (`LOLM_BENCH_SOURCE`).

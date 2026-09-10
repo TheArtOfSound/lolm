@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-lolm_gemini-pkg_calc-6bhff7vv/_lolm_hidden_check.py", line 30, in <module>
+    evaluate(expression)
+    ~~~~~~~~^^^^^^^^^^^^
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-lolm_gemini-pkg_calc-6bhff7vv/calc/__init__.py", line 45, in evaluate
+    result = expression_parser()
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-lolm_gemini-pkg_calc-6bhff7vv/calc/__init__.py", line 39, in expression_parser
+    right = term()
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-lolm_gemini-pkg_calc-6bhff7vv/calc/__init__.py", line 27, in term
+    val = factor()
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-lolm_gemini-pkg_calc-6bhff7vv/calc/__init__.py", line 14, in factor
+    token = consume()
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-lolm_gemini-pkg_calc-6bhff7vv/calc/__init__.py", line 11, in consume
+    def consume(): nonlocal pos; pos += 1; return tokens[pos-1]
+                                                  ~~~~~~^^^^^^^
+IndexError: list index out of range

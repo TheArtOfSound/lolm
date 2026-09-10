@@ -1,0 +1,13 @@
+hello world
+hello world
+hello
+'quote'
+test1
+test2
+test1
+'start
+end'
+'
+middle'word
+a'b
+a'b'c

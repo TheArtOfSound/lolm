@@ -38,7 +38,9 @@ DEFAULT_TASKS = (
 )
 HIDDEN = "_lolm_hidden_check.py"
 CODEX = "/Applications/ChatGPT.app/Contents/Resources/codex"
-LOLM_SOURCE = str(ROOT / "clients" / "cli" / "bin" / "lolm.mjs")
+# LOLM_BENCH_SOURCE points the harness at a frozen copy of the CLI, so a run
+# measures one build even while the working tree is being edited.
+LOLM_SOURCE = os.environ.get("LOLM_BENCH_SOURCE") or str(ROOT / "clients" / "cli" / "bin" / "lolm.mjs")
 
 # The controlled comparison: LOLM and Google's own CLI driving the identical
 # model, so a score difference is a difference between the two scaffolds rather
