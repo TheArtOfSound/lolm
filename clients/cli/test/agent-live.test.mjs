@@ -310,3 +310,29 @@ test("Gemini streams text and function calls from server-sent events", async () 
     assert.equal(reply.raw.streamed, true);
   } finally { await close(); }
 });
+
+test("the model is told its step budget and warned once before it runs out", async () => {
+  const turns = [];
+  const cwd = await mkdtemp(join(tmpdir(), "lolm-budget-"));
+  const systems = [];
+  const { runtime, close } = await serve((body, res) => {
+    systems.push(body.messages[0].content);
+    turns.push(body.messages.at(-1).content);
+    res.writeHead(200, { "content-type": "application/json" });
+    // Keep calling a tool forever; only the budget can end this.
+    res.end(JSON.stringify({ choices: [{ message: { content: null, tool_calls: [
+      { id: `c${turns.length}`, type: "function", function: { name: "fs__list", arguments: "{}" } },
+    ] }, finish_reason: "tool_calls" }] }));
+  });
+  try {
+    const events = [];
+    const result = await runAgent({ prompt: "keep looking", mode: "code", runtime, cwd, maxSteps: 5, eventSink: (event) => events.push(event) });
+    assert.match(systems[0], /Step budget for this task: 5\./, "the budget is operational context, not part of the request");
+    assert.doesNotMatch(turns[0], /step budget/i, "the person's own words are left verbatim");
+    const warnings = events.filter((event) => event.type === "budget.low");
+    assert.equal(warnings.length, 1, "warned exactly once, not every remaining step");
+    assert.equal(warnings[0].remaining, 2);
+    assert.ok(turns.some((turn) => /2 step\(s\) remain\. Land the task now/.test(turn)), "the warning reaches the model");
+    assert.equal(result.ok, false, "a run that never lands still ends at the cap");
+  } finally { await close(); }
+});

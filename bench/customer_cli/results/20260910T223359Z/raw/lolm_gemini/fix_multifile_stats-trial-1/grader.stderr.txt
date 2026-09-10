@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/private/var/folders/0r/trjshfh531sd05zdr6j620zr0000gn/T/lolm-bench-lolm_gemini-fix_multifile_stats-8udp2oza/_lolm_hidden_check.py", line 4, in <module>
+    assert St.median([1, 2, 3, 4]) == 2.5, St.median([1, 2, 3, 4])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 3

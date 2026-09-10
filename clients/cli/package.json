@@ -1,6 +1,6 @@
 {
   "name": "lolm-cli",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Open-source local computer-use agent: full-screen terminal with live streaming, stoppable tasks, a visible plan, inline diffs, context compaction, 60+ typed tools, provider-agnostic BYOK, and real LOLM-NFET control.",
   "type": "module",
   "bin": {

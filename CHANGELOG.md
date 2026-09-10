@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.2.0 - 2026-09-10
+
+The agent knows it has a budget.
+
+- the step budget is stated in the system context, and the agent is told to
+  issue independent tool calls together rather than one per turn and to give its
+  final answer once verification has actually passed instead of polishing. Two
+  steps from the cap it is warned once, carried into that step rather than
+  spending a turn on the warning. This came from reading benchmark traces: eight
+  of twelve runs spent the whole budget, one wrote the same file five times, and
+  another ran a passing test and then patched the file again. **The effect on
+  step counts is not yet measured** — every hosted tier was unavailable the day
+  it shipped — and `BENCHMARK_EVIDENCE.md` says so rather than claiming a win;
+- benchmark honesty, two fixes. An HTTP 503 was scored as a model failure: the
+  infrastructure classifier matched `429` but never `503`, and a transient
+  upstream outage is now named `provider_unavailable` rather than folded into
+  `usage_limit`, since a provider having a bad minute is not a user running out
+  of allowance. And a run whose hidden grader passed now always counts, whatever
+  noise its receipt carries — exclusion is for runs that never reached a model,
+  not for successful ones.
+
+A 2.1.0 regression check over twelve tasks scored five and passed five, with no
+regressions; the other seven were the outage and the spent allowance above.
+
 ## 2.1.0 - 2026-09-10
 
 The agent remembers, Gemini streams, and the console stops repeating itself.

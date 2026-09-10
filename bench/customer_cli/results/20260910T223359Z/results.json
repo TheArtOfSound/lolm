@@ -1,0 +1,913 @@
+{
+  "schema_version": 1,
+  "run_id": "20260910T223359Z",
+  "created_at": "2026-09-10T22:33:59.507146+00:00",
+  "agents": [
+    "lolm_gemini"
+  ],
+  "tasks": [
+    {
+      "id": "iso_duration",
+      "tier": "impl",
+      "instruction_sha256": "fdcccdff8e4fcae8d99f9f7cd7e2f6d6f37e9202f83470f9da9a59cfa8b8f750",
+      "hidden_test_sha256": "4796fe0596f398a87d271c482b67ca27d378236cf23cff86540b6f347818d7ae",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "semver",
+      "tier": "impl",
+      "instruction_sha256": "cb563d12430dd37e1dcec0ddb6b6ad77a1e995d69b0c58aaa95b7bbe2db69462",
+      "hidden_test_sha256": "8e4025cb0093fddf8455274b077d3aa49742cca29687f991b340d9a2af5c2681",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "lru",
+      "tier": "impl",
+      "instruction_sha256": "8af019b6fae92da46f0f29dbe4815d308ba4cf3b092899b5c36b5641ac786e0e",
+      "hidden_test_sha256": "a24f3abc7b32c965ccffcb125903ffdec843f3bb2b6503c4d2d2775bbb5d9cf1",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "jsonpath",
+      "tier": "impl",
+      "instruction_sha256": "40c14b1b40a29aa06cbfa91c180155444696d6256c065e3c9498b90f72816942",
+      "hidden_test_sha256": "693482138a217036e59ee38aba7bb98e050bb6a66eb08deda4a77c3f69a6f3a5",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "bank_ledger",
+      "tier": "impl",
+      "instruction_sha256": "66644d8247832cc01262c355e1c93d735c67451d8005329ca473900cd03ae4d3",
+      "hidden_test_sha256": "7c3331558b871670d8eea68a7303abe6072f9b9d83253a9f0b9d6897f96740fd",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "graph_topo",
+      "tier": "impl",
+      "instruction_sha256": "e189560aafb73112ff3f8436f116382c1a9520f6987e236cfcd80e49fe4d6623",
+      "hidden_test_sha256": "136d045e81231e38c1e0fb4d1312e8aa5ce310b0c9f8571c79e86f9bdd9603d4",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "fix_multifile_stats",
+      "tier": "fix",
+      "instruction_sha256": "e73e3dc048fd3620bf2f48aa74a798d532a27a1110ad7e87abb2a36a008cabe6",
+      "hidden_test_sha256": "242ec3e7c8353ffda2fb60e8a76f380081fb4a4e9b4425dbe034635d696fa66b",
+      "seed_sha256": "bc51b541e65237e7cdab955867464a024e596a20226ca0fb5b3d8a5a00474f2c"
+    },
+    {
+      "id": "fix_state_machine",
+      "tier": "fix",
+      "instruction_sha256": "ac4c36ed1f7949ab20f80566e4ae5a45b47bc23cc421220cf976fd87ce198e8d",
+      "hidden_test_sha256": "22868bb32643200afb87af5940c6d16724c014921351099094020e8e34cf7817",
+      "seed_sha256": "b82eff05e506e59a7de31042b933805674e04508642342d2338c2afa0cb8663c"
+    },
+    {
+      "id": "fix_cache_ttl",
+      "tier": "fix",
+      "instruction_sha256": "17de2c29ac54b1cefb9d18b26f3ffe83ebcf2eb0964ece8711194653445660b3",
+      "hidden_test_sha256": "c13aafb5d50a15d91633abcd8adc122a070ebbf74360678250ad3b4afcf52a83",
+      "seed_sha256": "836aef95b2654b3c1ae9ae2bfcc4f0947122d81a92ba75e648cc39ee7a1b88ac"
+    },
+    {
+      "id": "refactor_extract",
+      "tier": "refactor",
+      "instruction_sha256": "7337262f1095d2e2c343cdd7124723f100dee9c5517d12c3b8191bda7c4c1763",
+      "hidden_test_sha256": "580d49bddef257804911fc2cf1b9c669f075ad28d237f47d47102761494ad8ef",
+      "seed_sha256": "fe4624511ada3f7b0e35593f499c6ae984171e527a1684263d760a18406e4255"
+    },
+    {
+      "id": "cli_wordfreq",
+      "tier": "cli",
+      "instruction_sha256": "29fd066fd34eb0fea24e0cf55448a1c9e919322a721c4c854317207a887fbf77",
+      "hidden_test_sha256": "7c4e7417fb97421d545dfdbf967d18076a16956a67265ebe732cea0bd397b194",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "pkg_calc",
+      "tier": "package",
+      "instruction_sha256": "ab8e6061fc8e70a7d0631e6be21331e7b9fad7ae1ac7f6730e51f104af6ee342",
+      "hidden_test_sha256": "ecdb8f5d17f76cc8b6690304183961ca6e4b503913b1b57a2fbc693b2940e384",
+      "seed_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ],
+  "settings": {
+    "repeat": 1,
+    "timeout_seconds": 300,
+    "max_steps": 12,
+    "lolm_nfet": true,
+    "provider_cooldown_seconds": 5
+  },
+  "environment": {
+    "platform": "macOS-26.3.1-arm64-arm-64bit-Mach-O",
+    "python": "3.14.6",
+    "git_commit": "013d2deabced1b753e49cf4906c229cf20caf518",
+    "git_dirty": false,
+    "lolm_version": "2.1.0",
+    "codex_version": "codex-cli 0.149.0-alpha.4.3",
+    "gemini_version": "0.40.1",
+    "claude_version": "unavailable: FileNotFoundError: [Errno 2] No such file or directory: 'claude'",
+    "control_model": "gemini-3.1-flash-lite",
+    "lolm_backend": "Ollama qwen3:14b (local)",
+    "lolm_nonfet_backend": "Ollama qwen3:14b (local), NFET disabled (ablation)",
+    "lolm_cerebras_backend": "Cerebras gpt-oss-120b via user-owned key",
+    "lolm_cerebras_nonfet_backend": "Cerebras gpt-oss-120b, NFET disabled (ablation)",
+    "lolm_gemini_backend": "Google gemini-3.1-flash-lite via user-owned key",
+    "lolm_gemini_nonfet_backend": "Google gemini-3.1-flash-lite, NFET disabled (ablation)",
+    "lolm_groq_backend": "Groq openai/gpt-oss-120b via user-owned key",
+    "lolm_groq_nonfet_backend": "Groq openai/gpt-oss-120b, NFET disabled (ablation)",
+    "lolm_openrouter_backend": "OpenRouter nvidia/nemotron-3-super-120b-a12b:free via user-owned key",
+    "lolm_openrouter_nonfet_backend": "OpenRouter nvidia/nemotron-3-super-120b-a12b:free, NFET disabled (ablation)",
+    "codex_backend": "installed Codex CLI with its own local configuration",
+    "gemini_backend": "installed Gemini CLI on gemini-3.1-flash-lite via user-owned key",
+    "claude_backend": "installed Claude Code CLI with its own local credentials"
+  },
+  "results": [
+    {
+      "agent": "lolm_gemini",
+      "task": "iso_duration",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": "provider_unavailable",
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "interventions": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": 503,
+          "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-09-10T22:34:02.219132+00:00",
+        "wall_seconds": 17.773,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/iso_duration-trial-1/agent.stdout.txt",
+          "bytes": 174,
+          "sha256": "fe94cabd7ca2f2c0c96ccd399ee0aa8aa21d0de5cdb8c5523669ee8f7ae47638"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/iso_duration-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/iso_duration-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/iso_duration-trial-1/grader.stderr.txt",
+          "bytes": 262,
+          "sha256": "fb37c2ec3ea8a33f28c3c20ab2ad32857fe08b38c7d5fd748255ec1a0d28d559"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/artifacts/lolm_gemini/iso_duration-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "semver",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": "provider_unavailable",
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "interventions": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": 503,
+          "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-09-10T22:34:25.056958+00:00",
+        "wall_seconds": 12.662,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/semver-trial-1/agent.stdout.txt",
+          "bytes": 174,
+          "sha256": "fe94cabd7ca2f2c0c96ccd399ee0aa8aa21d0de5cdb8c5523669ee8f7ae47638"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/semver-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/semver-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/semver-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "solution.py",
+          "bytes": 1822,
+          "sha256": "a144611a1e3a3ecef58e67eda9b1bb1d594d448962ce48840b0e200fe3f936c4"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/artifacts/lolm_gemini/semver-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "lru",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": "provider_unavailable",
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "interventions": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": 503,
+          "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-09-10T22:34:42.772470+00:00",
+        "wall_seconds": 11.102,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/lru-trial-1/agent.stdout.txt",
+          "bytes": 174,
+          "sha256": "fe94cabd7ca2f2c0c96ccd399ee0aa8aa21d0de5cdb8c5523669ee8f7ae47638"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/lru-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/lru-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/lru-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "solution.py",
+          "bytes": 717,
+          "sha256": "e1cadfb61c0c74a082f468823000edf35aefd8d94a26f7fcf5c1a9c7b827c663"
+        },
+        {
+          "path": "test_solution.py",
+          "bytes": 961,
+          "sha256": "2a615a81ba2be7f31d27e3b6d45f90c3174d10df1713a9b9750e62f1b3475a8c"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/artifacts/lolm_gemini/lru-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "jsonpath",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": "provider_unavailable",
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "interventions": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": 503,
+          "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-09-10T22:34:58.919500+00:00",
+        "wall_seconds": 10.395,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/jsonpath-trial-1/agent.stdout.txt",
+          "bytes": 174,
+          "sha256": "fe94cabd7ca2f2c0c96ccd399ee0aa8aa21d0de5cdb8c5523669ee8f7ae47638"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/jsonpath-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/jsonpath-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/jsonpath-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/solution.cpython-314.pyc",
+          "bytes": 1875,
+          "sha256": "41105a55fad64a8537c6a2d178ca632010549a872d071585ae2f5b41b6d734de"
+        },
+        {
+          "path": "solution.py",
+          "bytes": 1935,
+          "sha256": "0ef2243b0f4223212897aeddf9ab25124cd882b982fdb7d3d21c1bb329f08385"
+        },
+        {
+          "path": "test_solution.py",
+          "bytes": 825,
+          "sha256": "6dd7f51bf961ec00d5249e7ee6697cff701cbe80d709420fb0a6de7a258277be"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/artifacts/lolm_gemini/jsonpath-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "bank_ledger",
+      "tier": "impl",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": "provider_unavailable",
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "interventions": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": 503,
+          "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-09-10T22:35:14.351402+00:00",
+        "wall_seconds": 0.692,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/bank_ledger-trial-1/agent.stdout.txt",
+          "bytes": 174,
+          "sha256": "fe94cabd7ca2f2c0c96ccd399ee0aa8aa21d0de5cdb8c5523669ee8f7ae47638"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/bank_ledger-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/bank_ledger-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/bank_ledger-trial-1/grader.stderr.txt",
+          "bytes": 257,
+          "sha256": "daabbda8dfaadb00f5d35a1907a2ecf6c19a28ebf28dd059e17d6f26c87fad8c"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/artifacts/lolm_gemini/bank_ledger-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "graph_topo",
+      "tier": "impl",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": "usage_limit",
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "interventions": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": 429,
+          "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15, model: gemini-3.1-flash-lite\nPlease retry in 29.258217882s."
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-09-10T22:35:20.090633+00:00",
+        "wall_seconds": 10.689,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/graph_topo-trial-1/agent.stdout.txt",
+          "bytes": 474,
+          "sha256": "a78a3222e48dbe64d47e7d7822bf1599d1e6bf8fba4eb70324e7a7de6942375a"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/graph_topo-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/graph_topo-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/graph_topo-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "test_topo.py",
+          "bytes": 868,
+          "sha256": "e8f78e0a4a85d0efe74e0cae93d9ec57662c3f1c7d30ef378357f757957b2407"
+        },
+        {
+          "path": "topo.py",
+          "bytes": 2540,
+          "sha256": "9fe969fe7ce51f062df4683ac4568c995e612152de7dd4034871c86558609bc3"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/artifacts/lolm_gemini/graph_topo-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "fix_multifile_stats",
+      "tier": "fix",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": "usage_limit",
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "interventions": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": 429,
+          "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15, model: gemini-3.1-flash-lite\nPlease retry in 23.822017214s."
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-09-10T22:35:35.836915+00:00",
+        "wall_seconds": 0.398,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/fix_multifile_stats-trial-1/agent.stdout.txt",
+          "bytes": 474,
+          "sha256": "a84a9da4116047167f1e95aea8655ce824816a3bf23160c4a4720c5ba13c8de4"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/fix_multifile_stats-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/fix_multifile_stats-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/fix_multifile_stats-trial-1/grader.stderr.txt",
+          "bytes": 323,
+          "sha256": "581f440c50b4bed9c9f09a613391af30b16d3402df60891a873955dd019e47fa"
+        }
+      },
+      "output_files": [
+        {
+          "path": "report.py",
+          "bytes": 166,
+          "sha256": "9e314527b3a5dbddaa240e10fbb3ccc30a5456df7f1a47344a31b03b2d497cb7"
+        },
+        {
+          "path": "stats.py",
+          "bytes": 233,
+          "sha256": "638a97aa21b5b31daca382d08a51bf1639066868a2aab4d31561847803d562be"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/artifacts/lolm_gemini/fix_multifile_stats-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "fix_state_machine",
+      "tier": "fix",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": "provider_unavailable",
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "interventions": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": 503,
+          "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-09-10T22:35:41.276825+00:00",
+        "wall_seconds": 5.413,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/fix_state_machine-trial-1/agent.stdout.txt",
+          "bytes": 174,
+          "sha256": "fe94cabd7ca2f2c0c96ccd399ee0aa8aa21d0de5cdb8c5523669ee8f7ae47638"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/fix_state_machine-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/fix_state_machine-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/fix_state_machine-trial-1/grader.stderr.txt",
+          "bytes": 336,
+          "sha256": "6a0fbcd92f16f7fa7f027e2d54aaaa4806e6db244ad598e226285d2cf600f1b8"
+        }
+      },
+      "output_files": [
+        {
+          "path": "orders.py",
+          "bytes": 466,
+          "sha256": "2f12143c70928c59a091574663464aec603e30611fc9d5a442417184911023a2"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/artifacts/lolm_gemini/fix_state_machine-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "fix_cache_ttl",
+      "tier": "fix",
+      "trial": 1,
+      "passed": true,
+      "scoreable": true,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": null,
+        "ok": false,
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "verified": null,
+        "steps": 12,
+        "interventions": 0,
+        "usage": null,
+        "nfet": {},
+        "error": "Agent reached its 12-step limit before a clean finish."
+      },
+      "agent_process": {
+        "started_at": "2026-09-10T22:35:51.754792+00:00",
+        "wall_seconds": 21.952,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 0
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/fix_cache_ttl-trial-1/agent.stdout.txt",
+          "bytes": 20577,
+          "sha256": "ee4d4d20c466c8a60b22429341ac71cc4809645c63bf0d6b0fe4af377619846b"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/fix_cache_ttl-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/fix_cache_ttl-trial-1/grader.stdout.txt",
+          "bytes": 3,
+          "sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/fix_cache_ttl-trial-1/grader.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "output_files": [
+        {
+          "path": "__pycache__/cache.cpython-314.pyc",
+          "bytes": 3000,
+          "sha256": "f2d804f97c2959272aff468cd4e57b558941ef68e0a6bfaabfbb1823fc2d5221"
+        },
+        {
+          "path": "__pycache__/service.cpython-314.pyc",
+          "bytes": 1264,
+          "sha256": "c5c7161953ce62060803be36940699e1f0addcfb58573190dcd528745f7b468a"
+        },
+        {
+          "path": "cache.py",
+          "bytes": 1671,
+          "sha256": "3159b3c37ab013fe43fa0da80a869ed6a2f4de66478759537df0c4988e5135f2"
+        },
+        {
+          "path": "service.py",
+          "bytes": 516,
+          "sha256": "384b9de20084b4c206600a8138b347bc2f9f06cf4b3afbc3b227275b77bab635"
+        },
+        {
+          "path": "test.py",
+          "bytes": 1307,
+          "sha256": "e7548ee2f15c8abfb41703db6e221576d13d3199d5f34d033c0d4225efcc57ff"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/artifacts/lolm_gemini/fix_cache_ttl-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "refactor_extract",
+      "tier": "refactor",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": "usage_limit",
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "interventions": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": 429,
+          "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15, model: gemini-3.1-flash-lite\nPlease retry in 40.899153555s."
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-09-10T22:36:18.737271+00:00",
+        "wall_seconds": 0.416,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/refactor_extract-trial-1/agent.stdout.txt",
+          "bytes": 474,
+          "sha256": "70cd1092822ae6795679e5bb43b13454571c298f74d6a974d8c975e79af4fada"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/refactor_extract-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/refactor_extract-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/refactor_extract-trial-1/grader.stderr.txt",
+          "bytes": 273,
+          "sha256": "cf52ec25d45f797895fa7e9458ff566e327aa21cfba626319a103e6f105f0163"
+        }
+      },
+      "output_files": [
+        {
+          "path": "app.py",
+          "bytes": 719,
+          "sha256": "58d5acaea84cac3d9d0fe72a82562f5ec739cb530435113a1e7d52cfad00dd6a"
+        }
+      ],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/artifacts/lolm_gemini/refactor_extract-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "cli_wordfreq",
+      "tier": "cli",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": "usage_limit",
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "interventions": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": 429,
+          "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15, model: gemini-3.1-flash-lite\nPlease retry in 34.110885474s."
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-09-10T22:36:24.203250+00:00",
+        "wall_seconds": 1.73,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/cli_wordfreq-trial-1/agent.stdout.txt",
+          "bytes": 474,
+          "sha256": "4b290ac97f8103e784ec0f750197a87f47914d4121f7694f3e575bf7ec11dab5"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/cli_wordfreq-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/cli_wordfreq-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/cli_wordfreq-trial-1/grader.stderr.txt",
+          "bytes": 759,
+          "sha256": "8e72776fd4f2f6b9cd8b2ba09829073de2e1fd471f436a1d870b41b890449b6a"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/artifacts/lolm_gemini/cli_wordfreq-trial-1"
+    },
+    {
+      "agent": "lolm_gemini",
+      "task": "pkg_calc",
+      "tier": "package",
+      "trial": 1,
+      "passed": false,
+      "scoreable": false,
+      "agent_receipt": {
+        "parsed": true,
+        "infrastructure_error": "usage_limit",
+        "ok": false,
+        "provider": null,
+        "model": null,
+        "verified": null,
+        "steps": null,
+        "interventions": null,
+        "usage": null,
+        "nfet": {},
+        "error": {
+          "code": 429,
+          "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 15, model: gemini-3.1-flash-lite\nPlease retry in 25.447946877s."
+        }
+      },
+      "agent_process": {
+        "started_at": "2026-09-10T22:36:31.002671+00:00",
+        "wall_seconds": 3.575,
+        "exit_code": 1,
+        "timed_out": false
+      },
+      "grader": {
+        "exit_code": 1
+      },
+      "receipts": {
+        "stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/pkg_calc-trial-1/agent.stdout.txt",
+          "bytes": 474,
+          "sha256": "4e0ea2e14929d4edc57cee5ae30db0e21681e229e1bf0862dd32768f45c849f5"
+        },
+        "stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/pkg_calc-trial-1/agent.stderr.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stdout": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/pkg_calc-trial-1/grader.stdout.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "grader_stderr": {
+          "path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/raw/lolm_gemini/pkg_calc-trial-1/grader.stderr.txt",
+          "bytes": 259,
+          "sha256": "321ddc5db3b5db81f4bd5d0a058c2baeed1743cf389a9f8f068c6319e67d40d6"
+        }
+      },
+      "output_files": [],
+      "artifact_path": "/private/tmp/claude-501/-Users-bry-untitled-folder/fdee056b-58b1-476e-8fcf-1f8246d88bf2/scratchpad/reg21/artifacts/lolm_gemini/pkg_calc-trial-1"
+    }
+  ],
+  "summary": {
+    "lolm_gemini": {
+      "backend": "Google gemini-3.1-flash-lite via user-owned key",
+      "passed": 5,
+      "jobs": 12,
+      "scoreable_jobs": 5,
+      "excluded": 7,
+      "pass_rate": 1.0,
+      "median_wall_seconds": 7.904
+    }
+  },
+  "completed_at": "2026-09-10T22:36:39.632178+00:00"
+}

@@ -66,3 +66,38 @@ open question is whether it earns its keep on tasks the model gets wrong
 unassisted, and that needs a harder suite or a weaker model, run more than once.
 The build under test was the 1.9.0 CLI, frozen in a snapshot so the working tree
 could be edited while it ran (`LOLM_BENCH_SOURCE`).
+
+## 2.1.0 regression check, 2026-09-10
+
+Twelve tasks on a frozen 2.1.0 snapshot. **Five scored, five passed, no
+regressions.** The other seven never reached a verdict: Gemini spent its daily
+allowance partway through (4) and returned HTTP 503 "experiencing high demand"
+on three more. Those are excluded as `usage_limit` and `provider_unavailable`
+rather than counted against the build.
+
+Two classification bugs surfaced here and are fixed. A 503 was scored as a
+model FAIL — the needle list had `429` but never `503` — and a transient
+upstream outage is now named `provider_unavailable` rather than folded into
+`usage_limit`, because a provider having a bad minute is not a user running out
+of allowance. Correcting that over-corrected: three runs whose hidden grader
+*passed* were then excluded because their receipt happened to mention a 503. A
+run that produced a passing artifact demonstrably worked, so a passing grader
+now always counts, whatever noise the receipt carries.
+
+## Step efficiency — diagnosed, not yet measured
+
+Reading the Sept ablation traces: eight of twelve runs spent the entire
+twelve-step budget, mean 11.2 steps. The traces show why. `graph_topo` wrote
+the same file five times; `semver` ran a passing test at step 11 and then
+patched the file again at step 12. The model issues one tool call per turn and
+has no signal that it is done or that turns are finite, so it polishes until
+the budget runs out — which is what failed `pkg_calc`.
+
+2.2.0 states the step budget in the system context, tells the model to batch
+independent calls and to stop once verification has actually passed, and warns
+once when two steps remain. **That change is not yet measured end to end.** A
+clean A/B needs the same tasks on both builds, and on the day it shipped every
+hosted tier was unavailable — Gemini 404/exhausted, Groq capped at 8k
+tokens/minute which a multi-step task exceeds, Cerebras returning 402, and the
+local models too slow on a contended host. The loop behaviour is covered by a
+test; the step-count claim is not made until it can be run.

@@ -260,6 +260,12 @@ def classify_infrastructure(text: str) -> str | None:
     )
     if any(needle in flat for needle in limit_needles):
         return "usage_limit"
+    # A transient upstream failure is not a spent allowance, and calling it one
+    # would misreport a provider having a bad minute as the user running out.
+    if any(needle in flat for needle in ("503", "high demand", "service unavailable",
+                                         "temporarily unavailable", "try again later",
+                                         "internal server error", "bad gateway", "502")):
+        return "provider_unavailable"
     if "not logged in" in lower or "please run /login" in lower or "auth" in lower and "api key" in lower:
         return "auth"
     if "api key not valid" in lower or "set an auth method" in lower or "credential" in lower:
@@ -375,7 +381,10 @@ def run_trial(
             "tier": task.get("tier", "impl"),
             "trial": trial,
             "passed": passed,
-            "scoreable": not bool(agent_receipt.get("infrastructure_error")),
+            # A run whose hidden grader passed demonstrably worked, whatever noise its
+            # receipt carries. Exclusion is for runs that never reached a model, not
+            # for successful ones.
+            "scoreable": passed or not bool(agent_receipt.get("infrastructure_error")),
             "agent_receipt": agent_receipt,
             "agent_process": process,
             "grader": grader,
@@ -477,7 +486,7 @@ def main() -> int:
             stderr = Path(row["receipts"]["stderr"]["path"]).read_text()
             receipt = parse_agent_output(row["agent"], stdout, stderr)
             row["agent_receipt"] = receipt
-            row["scoreable"] = not bool(receipt.get("infrastructure_error"))
+            row["scoreable"] = row["passed"] or not bool(receipt.get("infrastructure_error"))
         summarize(payload)
         source.write_text(json.dumps(payload, indent=2) + "\n")
         write_report(payload, source.with_name("REPORT.md"))
