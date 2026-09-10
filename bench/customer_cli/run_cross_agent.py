@@ -46,7 +46,7 @@ LOLM_SOURCE = os.environ.get("LOLM_BENCH_SOURCE") or str(ROOT / "clients" / "cli
 # model, so a score difference is a difference between the two scaffolds rather
 # than between two model vendors.
 CONTROL_MODEL = os.environ.get("LOLM_BENCH_GEMINI_MODEL", "gemini-3.1-flash-lite")
-GROQ_MODEL = os.environ.get("LOLM_BENCH_GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.environ.get("LOLM_BENCH_GROQ_MODEL", "openai/gpt-oss-120b")  # llama-3.3-70b-versatile was retired
 # The default local model shares the machine with the 4B NFET controller. On a
 # memory-constrained host a 14B model and the controller thrash together, so the
 # ablation model is overridable and defaults small enough to co-reside.

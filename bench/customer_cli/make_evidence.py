@@ -5,6 +5,11 @@ The numbers in the report are read out of the run artifacts rather than typed in
 by hand, so the document cannot drift from what actually happened. Every claim it
 makes is traceable to a `results.json` whose SHA-256 it prints.
 
+Runs are reported separately. Two runs may share an agent name — the same track
+run on a different day — and folding their rows together would turn two
+experiments into one that never happened. A controlled comparison is only ever
+made between rows of the same run.
+
     python3 bench/customer_cli/make_evidence.py RESULTS...  --out EVIDENCE.md
 """
 
@@ -47,15 +52,7 @@ def load(paths: list[Path]) -> list[dict[str, Any]]:
     return runs
 
 
-def rows_by_agent(runs: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for run in runs:
-        for row in run["results"]:
-            grouped.setdefault(row["agent"], []).append({**row, "_run": run})
-    return grouped
-
-
-def score(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def score(rows: list[dict[str, Any]], run: dict[str, Any]) -> dict[str, Any]:
     scoreable = [row for row in rows if row.get("scoreable", True)]
     passed = sum(1 for row in scoreable if row["passed"])
     excluded: dict[str, int] = {}
@@ -70,7 +67,7 @@ def score(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "rate": passed / len(scoreable) if scoreable else None,
         "median_seconds": statistics.median([row["agent_process"]["wall_seconds"] for row in rows]) if rows else 0.0,
         "excluded": excluded,
-        "backend": rows[0]["_run"]["environment"].get(f"{rows[0]['agent']}_backend", "unknown") if rows else "unknown",
+        "backend": run["environment"].get(f"{rows[0]['agent']}_backend", "unknown") if rows else "unknown",
     }
 
 
@@ -97,25 +94,83 @@ def cell(row: dict[str, Any] | None) -> str:
     return "PASS" if row["passed"] else "FAIL"
 
 
-def build(runs: list[dict[str, Any]]) -> str:
-    grouped = rows_by_agent(runs)
+def effort(agent: str, shared: list[str], keyed: dict) -> tuple[float, int]:
+    rows = [keyed[(agent, task)] for task in shared]
+    steps = [r["agent_receipt"].get("steps") for r in rows if isinstance(r["agent_receipt"].get("steps"), int)]
+    pokes = [r["agent_receipt"].get("interventions") for r in rows if isinstance(r["agent_receipt"].get("interventions"), int)]
+    return (sum(steps) / len(steps) if steps else 0.0, sum(pokes) if pokes else 0)
+
+
+def compare(left: str, right: str, tasks: list[str], keyed: dict, scores: dict) -> list[str]:
+    # Head to head only counts tasks BOTH sides actually attempted. A task one
+    # side never reached is not a win for the other side.
+    shared = [
+        task for task in tasks
+        if keyed.get((left, task), {}).get("scoreable", False)
+        and keyed.get((right, task), {}).get("scoreable", False)
+    ]
+    if not shared:
+        return []
+    left_only = sum(1 for task in shared if keyed[(left, task)]["passed"] and not keyed[(right, task)]["passed"])
+    right_only = sum(1 for task in shared if keyed[(right, task)]["passed"] and not keyed[(left, task)]["passed"])
+    left_passed = sum(1 for task in shared if keyed[(left, task)]["passed"])
+    right_passed = sum(1 for task in shared if keyed[(right, task)]["passed"])
+    verdict = ("a tie" if left_only == right_only
+               else f"`{left}` ahead by {left_only - right_only}" if left_only > right_only
+               else f"`{right}` ahead by {right_only - left_only}")
+    # An ablation pairs the same scaffold on the same model with only the
+    # controller toggled, so it measures NFET alone rather than a vendor.
+    ablation = right.endswith("_nonfet") and right.startswith(left)
+    heading = (f"NFET ablation — **`{left}` (controller on) vs `{right}` (controller off)**"
+               if ablation else f"**`{left}` vs `{right}`**")
+    lines = [
+        f"{heading} on the {len(shared)} tasks both attempted: **{left_passed}–{right_passed}**, {verdict}. "
+        f"`{left}` solved {left_only} that `{right}` missed; `{right}` solved {right_only} that `{left}` missed.",
+        "",
+    ]
+    median_left, median_right = scores[left]["median_seconds"], scores[right]["median_seconds"]
+    if ablation:
+        # An ablation is not only about pass rate: a controller that keeps the
+        # score but spends more turns or time to get there is a cost.
+        left_steps, left_pokes = effort(left, shared, keyed)
+        right_steps, _ = effort(right, shared, keyed)
+        lines += [
+            f"Cost of running the controller: {left_steps:.1f} steps per task against {right_steps:.1f} without it, "
+            f"{left_pokes} intervention(s) issued, median wall time {median_left:.0f}s against {median_right:.0f}s.",
+            "",
+        ]
+    else:
+        unscored_left = scores[left]["attempted"] - scores[left]["scored"]
+        unscored_right = scores[right]["attempted"] - scores[right]["scored"]
+        lines += [
+            f"Outside that shared set, `{left}` was blocked on {unscored_left} task(s) and `{right}` on "
+            f"{unscored_right}. Those are excluded from the head-to-head in both directions: a task an agent "
+            f"never reached is not a loss for it and not a win for anyone else, so whole-suite rates in the "
+            f"scorecard are over different task sets and are not comparable to each other.",
+            "",
+        ]
+    return lines
+
+
+def report_run(run: dict[str, Any]) -> list[str]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in run["results"]:
+        grouped.setdefault(row["agent"], []).append(row)
     agents = list(grouped)
-    scores = {agent: score(rows) for agent, rows in grouped.items()}
-    tasks: list[str] = []
-    for run in runs:
-        for task in run["tasks"]:
-            if task["id"] not in tasks:
-                tasks.append(task["id"])
-    tiers = {task["id"]: task["tier"] for run in runs for task in run["tasks"]}
+    scores = {agent: score(rows, run) for agent, rows in grouped.items()}
+    tasks = [task["id"] for task in run["tasks"]]
+    tiers = {task["id"]: task["tier"] for task in run["tasks"]}
     keyed = {(row["agent"], row["task"]): row for rows in grouped.values() for row in rows}
+    environment = run["environment"]
+    settings = run.get("settings", {})
+    marker = " (partial)" if run["_partial"] else ""
+    when = str(run.get("created_at", ""))[:10]
 
     lines = [
-        f"# LOLM benchmark evidence — {datetime.now(timezone.utc).date().isoformat()}",
+        f"## Run `{run['run_id']}`{marker}",
         "",
-        "Generated by `bench/customer_cli/make_evidence.py` from the run artifacts named",
-        "at the bottom. Every number here is read out of those files.",
-        "",
-        "## Scorecard",
+        f"{when} · commit `{environment.get('git_commit', '')[:10]}` · working tree dirty: {environment.get('git_dirty')} · "
+        f"{len(tasks)} task(s) · {settings.get('repeat', '?')} trial(s) per task",
         "",
         "| Track | Backend | Passed | Pass rate | Median wall | Excluded |",
         "|---|---|---:|---:|---:|---|",
@@ -124,102 +179,51 @@ def build(runs: list[dict[str, Any]]) -> str:
         row = scores[agent]
         rate = f"{row['rate']:.0%}" if row["rate"] is not None else "n/a"
         excluded = ", ".join(f"{count}× {name}" for name, count in row["excluded"].items()) or "—"
-        lines.append(
-            f"| `{agent}` | {row['backend']} | {row['passed']}/{row['scored']} | {rate} | "
-            f"{row['median_seconds']:.0f}s | {excluded} |"
-        )
+        lines.append(f"| `{agent}` | {row['backend']} | {row['passed']}/{row['scored']} | {rate} | {row['median_seconds']:.0f}s | {excluded} |")
 
-    lines += ["", "## Controlled comparisons", ""]
-    any_pair = False
+    comparisons: list[str] = []
     for left, right in CONTROLLED_PAIRS:
         if left in scores and right in scores and scores[left]["scored"] and scores[right]["scored"]:
-            any_pair = True
-            # Head to head only counts tasks BOTH sides actually attempted. A task
-            # one side never reached is not a win for the other side.
-            shared = [
-                task for task in tasks
-                if keyed.get((left, task), {}).get("scoreable", False)
-                and keyed.get((right, task), {}).get("scoreable", False)
-            ]
-            left_only = sum(1 for task in shared if keyed[(left, task)]["passed"] and not keyed[(right, task)]["passed"])
-            right_only = sum(1 for task in shared if keyed[(right, task)]["passed"] and not keyed[(left, task)]["passed"])
-            left_passed = sum(1 for task in shared if keyed[(left, task)]["passed"])
-            right_passed = sum(1 for task in shared if keyed[(right, task)]["passed"])
-            verdict = ("a tie" if left_only == right_only == 0
-                       else f"`{left}` ahead by {left_only - right_only}" if left_only > right_only
-                       else f"`{right}` ahead by {right_only - left_only}")
-            unscored_left = scores[left]["attempted"] - scores[left]["scored"]
-            unscored_right = scores[right]["attempted"] - scores[right]["scored"]
-            # An ablation pairs the same scaffold on the same model with the only
-            # controller toggled, so it measures NFET alone rather than a vendor.
-            ablation = right.endswith("_nonfet") and right.startswith(left)
-            heading = (f"NFET ablation — **`{left}` (controller on) vs `{right}` (controller off)**"
-                       if ablation else f"**`{left}` vs `{right}`**")
-            median_left = scores[left]["median_seconds"]
-            median_right = scores[right]["median_seconds"]
-            # An ablation is not only about pass rate: a controller that keeps the
-            # score but spends more turns to get there is a cost, not a feature.
-            def effort(agent):
-                rows = [keyed[(agent, task)] for task in shared]
-                steps = [r["agent_receipt"].get("steps") for r in rows if isinstance(r["agent_receipt"].get("steps"), int)]
-                pokes = [r["agent_receipt"].get("interventions") for r in rows if isinstance(r["agent_receipt"].get("interventions"), int)]
-                return (sum(steps) / len(steps) if steps else 0.0, sum(pokes) if pokes else 0)
-            left_steps, left_pokes = effort(left)
-            right_steps, right_pokes = effort(right)
-            if ablation:
-                lines += [
-                    f"{heading} on the {len(shared)} tasks both attempted: "
-                    f"**{left_passed}–{right_passed}**, {verdict}. "
-                    f"`{left}` solved {left_only} that `{right}` missed; `{right}` solved {right_only} that `{left}` missed.",
-                    "",
-                    f"Cost of running the controller: {left_steps:.1f} steps per task against "
-                    f"{right_steps:.1f} without it, and {left_pokes} intervention(s) issued. "
-                    f"Median wall time {median_left:.0f}s against {median_right:.0f}s.",
-                    "",
-                ]
-                continue
-            lines += [
-                f"{heading} on the {len(shared)} tasks both attempted: "
-                f"**{left_passed}–{right_passed}**, {verdict}. "
-                f"`{left}` solved {left_only} that `{right}` missed; `{right}` solved {right_only} that `{left}` missed. "
-                f"Median wall time {median_left:.0f}s with the controller against {median_right:.0f}s without."
-                if ablation else
-                f"{heading} on the {len(shared)} tasks both agents attempted: "
-                f"**{left_passed}–{right_passed}**, {verdict}. "
-                f"`{left}` solved {left_only} that `{right}` missed; `{right}` solved {right_only} that `{left}` missed.",
-                "",
-                f"Outside that shared set, `{left}` was blocked on {unscored_left} task(s) and `{right}` on "
-                f"{unscored_right}. Those are excluded from the head-to-head in both directions: a task an "
-                f"agent never reached is not a loss for it and not a win for anyone else. Whole-suite rates "
-                f"in the scorecard above are therefore over different task sets and are not comparable to "
-                f"each other.",
-                "",
-            ]
-    if not any_pair:
-        lines += ["No controlled pair completed in these runs.", ""]
+            comparisons += compare(left, right, tasks, keyed, scores)
+    if comparisons:
+        lines += ["", "### Controlled comparisons", ""] + comparisons
 
-    lines += ["## Per-task results", "", "| Task | Tier | " + " | ".join(f"`{a}`" for a in agents) + " |",
+    lines += ["### Per-task results", "", "| Task | Tier | " + " | ".join(f"`{a}`" for a in agents) + " |",
               "|---|---|" + "---|" * len(agents)]
     for task in tasks:
-        cells = " | ".join(cell(keyed.get((agent, task))) for agent in agents)
-        lines.append(f"| `{task}` | {tiers.get(task, '?')} | {cells} |")
+        lines.append(f"| `{task}` | {tiers.get(task, '?')} | " + " | ".join(cell(keyed.get((agent, task))) for agent in agents) + " |")
 
-    lines += ["", "## NFET controller", ""]
+    controller = []
     for agent in agents:
         if not agent.startswith("lolm"):
             continue
         summary = nfet_summary(grouped[agent])
         if not summary["runs_with_live_controller"]:
-            lines.append(f"- `{agent}`: controller not active in any run.")
+            controller.append(f"- `{agent}`: controller not active in any run.")
             continue
         decisions = ", ".join(f"{label} ×{count}" for label, count in summary["decisions"].items()) or "none recorded"
-        lines.append(
+        controller.append(
             f"- `{agent}`: live controller on {summary['runs_with_live_controller']} runs, "
             f"trained head on {summary['trained_head']}; final decisions: {decisions}."
         )
+    if controller:
+        lines += ["", "### NFET controller", ""] + controller
+    lines.append("")
+    return lines
 
-    lines += [
+
+def build(runs: list[dict[str, Any]]) -> str:
+    lines = [
+        f"# LOLM benchmark evidence — {datetime.now(timezone.utc).date().isoformat()}",
         "",
+        "Generated by `bench/customer_cli/make_evidence.py` from the run artifacts named",
+        "at the bottom. Every number here is read out of those files. Each run is",
+        "reported on its own; rows from different runs are never combined.",
+        "",
+    ]
+    for run in runs:
+        lines += report_run(run)
+    lines += [
         "## Method",
         "",
         "Each agent got the same task text and seed files in a fresh temporary directory.",
@@ -239,12 +243,12 @@ def build(runs: list[dict[str, Any]]) -> str:
         "different scaffold configuration. No public leaderboard figure is reproduced here",
         "as though it were measured on this suite.",
         "",
-        "Only a pair sharing one model isolates the agent scaffold. A cross-vendor row",
-        "largely reflects which model is stronger and should not be read as a scaffold",
-        "result.",
+        "Only a pair sharing one model isolates the agent scaffold, and only a pair",
+        "sharing model and scaffold isolates the controller. A cross-vendor row largely",
+        "reflects which model is stronger.",
         "",
-        "Trials per task are listed below. A single trial has high variance; small gaps",
-        "between tracks are not meaningful without repeats.",
+        "A single trial has high variance; small gaps between tracks are not meaningful",
+        "without repeats.",
         "",
         "## Provenance",
         "",
@@ -259,11 +263,7 @@ def build(runs: list[dict[str, Any]]) -> str:
             f"| `{run['run_id']}`{marker} | {len(run['tasks'])} | {settings.get('repeat', '?')} | "
             f"`{environment.get('git_commit', '')[:10]}` | {environment.get('git_dirty')} | `{run['_sha256'][:32]}…` |"
         )
-    lines += [
-        "",
-        "Versions recorded at launch:",
-        "",
-    ]
+    lines += ["", "Versions recorded at launch:", ""]
     seen: set[str] = set()
     for run in runs:
         for key, value in run["environment"].items():
