@@ -18,29 +18,41 @@ No arbitrary shell, file read/write, local memory dump, credential access,
 remote command execution, deployment, or general-purpose agent tools.
 NFET checks can start a local model monitor and consume CPU/GPU resources.
 
-## Step 1 — Find or download the LOLM repo on the Mac
+## Step 1 — Use an isolated LOLM checkout on the Mac
 
-Use the existing LOLM checkout if present. Never overwrite or delete it.
-If there is no checkout, create one (directory must not already exist):
+To avoid disturbing a live LOLM installation or other running services, use
+a **separate** checkout for the ChatGPT bridge. This is a shallow clone with
+no repository history beyond the current main branch:
 
-    cd "$HOME"
-    git clone https://github.com/TheArtOfSound/LOLM.git LOLM
-    cd "$HOME/LOLM"
+    mkdir -p "$HOME/ChatGPT-bridges"
+    git clone --depth 1 --filter=blob:none       https://github.com/TheArtOfSound/LOLM.git       "$HOME/ChatGPT-bridges/lolm"
 
-If an existing LOLM checkout is found, enter it and run:
+If that bridge checkout ALREADY exists, do not clone into it again. Instead
+update it only if its working tree is clean:
 
-    git switch main
+    cd "$HOME/ChatGPT-bridges/lolm"
+    git status --short
     git pull --ff-only origin main
 
-After the new bridge change has been merged into main:
+Do not run git switch, git reset, npm update or deploy scripts in a different,
+active LOLM checkout. In the isolated bridge checkout run:
 
+    cd "$HOME/ChatGPT-bridges/lolm"
     node --version
     node --test integrations/chatgpt-readonly-mcp.test.mjs
     node clients/cli/bin/lolm.mjs doctor --json
     node clients/cli/bin/lolm.mjs nfet status --json
 
-Node 20+ is required. A missing NFET checkpoint may correctly report
-available=false; do not claim a successful NFET check until it actually works.
+Node 20+ is required. The bridge CLI may need its normal npm workspace
+dependencies. If the CLI reports a missing module, install dependencies
+**inside this isolated checkout only**; do not modify live services.
+
+If the trained LOLM/NFET checkpoint is in another active checkout, configure
+LOLM_HOME for this bridge process to point at that existing source directory.
+Do not move or copy multi-gigabyte model files just for tunnel setup.
+
+A missing NFET checkpoint may correctly report available=false; do not claim
+a successful NFET check until it actually works.
 
 ## Step 2 — Secure MCP Tunnel (outbound-only)
 
