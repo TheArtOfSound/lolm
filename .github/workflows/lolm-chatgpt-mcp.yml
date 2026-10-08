@@ -1,0 +1,25 @@
+name: LOLM ChatGPT read-only MCP tests
+on:
+  pull_request:
+    paths:
+      - 'integrations/chatgpt-readonly-mcp.mjs'
+      - 'integrations/chatgpt-readonly-mcp.test.mjs'
+      - '.github/workflows/lolm-chatgpt-mcp.yml'
+  push:
+    paths:
+      - 'integrations/chatgpt-readonly-mcp.mjs'
+      - 'integrations/chatgpt-readonly-mcp.test.mjs'
+      - '.github/workflows/lolm-chatgpt-mcp.yml'
+permissions:
+  contents: read
+jobs:
+  mcp-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test restricted MCP protocol and safety allowlist
+        run: node --test integrations/chatgpt-readonly-mcp.test.mjs
