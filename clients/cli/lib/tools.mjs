@@ -27,7 +27,7 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
     eventSink,
     // --yes is never a substitute for a human confirmation for command
     // execution or external side effects. It may preapprove workspace edits.
-    confirm: (request) => (request.decision.risk === "external" || request.decision.risk === "execute")
+    confirm: (request) => (request.tool.name === "terminal.exec" || request.tool.name === "terminal.spawn" || request.decision.risk === "external" || request.decision.risk === "execute")
       ? confirmPrompt(approvalLabel(request))
       : (yes || confirmPrompt(approvalLabel(request))),
     approveExtension: ({ kind, name, path }) => confirmPrompt(`Trust and launch ${kind} ${name} from ${path}? This runs code with your account permissions. Continue?`),
