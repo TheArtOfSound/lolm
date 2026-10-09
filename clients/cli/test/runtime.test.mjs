@@ -28,13 +28,41 @@ test("registry validates schemas, aliases provider names, and wraps results", as
 });
 
 test("permission modes and command classification distinguish safe, remote, and catastrophic operations", async () => {
-  assert.equal(classifyCommand("npm test").approval, "auto");
+  assert.equal(classifyCommand("npm test").approval, "confirm");
+  assert.equal(classifyCommand("git status").approval, "auto");
+  assert.equal(classifyCommand("git status && git push origin main").approval, "confirm");
+  assert.equal(classifyCommand("echo ok & git push origin main").approval, "confirm");
+  assert.equal(classifyCommand("printenv").risk, "external");
   assert.equal(classifyCommand("git push origin main").risk, "external");
   assert.equal(classifyCommand("rm -rf /").blocked, true);
   const registry = new ToolRegistry({ permissionPolicy: new PermissionPolicy({ mode: "readonly" }) });
   registry.register({ name: "demo.write", description: "Write.", risk: "write", inputSchema: { type: "object", additionalProperties: false }, execute: async () => true });
   const result = await registry.execute({ name: "demo.write", arguments: {} });
   assert.equal(result.error.code, "APPROVAL_REQUIRED");
+});
+
+test("yes/approved flags and trusted mode do not bypass human approval for shell or external tools", async () => {
+  const seen = [];
+  const registry = new ToolRegistry({ permissionPolicy: new PermissionPolicy({ mode: "trusted" }) });
+  registry.register({
+    name: "demo.shell", description: "Potential shell execution", risk: "execute", approval: "confirm",
+    inputSchema: { type: "object", additionalProperties: false },
+    execute: async () => { seen.push("shell"); return true; },
+  });
+  registry.register({
+    name: "demo.remote", description: "Potential external side effect", risk: "external", approval: "explicit",
+    inputSchema: { type: "object", additionalProperties: false },
+    execute: async () => { seen.push("remote"); return true; },
+  });
+  for (const name of ["demo.shell", "demo.remote"]) {
+    const result = await registry.execute({ name, arguments: {} }, { approved: true });
+    assert.equal(result.ok, false, name);
+    assert.equal(result.error.code, "APPROVAL_REQUIRED", name);
+  }
+  assert.deepEqual(seen, []);
+  const approved = new ToolRegistry({ permissionPolicy: new PermissionPolicy({ mode: "trusted", confirm: async () => true }) });
+  approved.register({ name: "demo.remote", description: "Remote", risk: "external", inputSchema: { type: "object", additionalProperties: false }, execute: async () => "approved" });
+  assert.equal((await approved.execute({ name: "demo.remote", arguments: {} })).result, "approved");
 });
 
 test("run store persists redacted structured events and can resume", async () => {
