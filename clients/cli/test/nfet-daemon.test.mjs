@@ -14,6 +14,7 @@ import { connect } from "node:net";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import readline from "node:readline";
 import { daemonSocketPath } from "../lib/nfet.mjs";
