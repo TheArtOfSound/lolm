@@ -84,7 +84,7 @@ test("terminal tools execute foreground commands and preserve background process
   const foreground = await toolbox.registry.execute({ name: "terminal.exec", arguments: { command: `"${process.execPath}" -e "console.log('verified')"` } });
   assert.equal(foreground.ok, true);
   assert.match(foreground.result.stdout, /verified/);
-  const background = await toolbox.registry.execute({ name: "terminal.spawn", arguments: { command: `${JSON.stringify(process.execPath)} -e "setTimeout(() => {}, 5000)"` } });
+  const background = await toolbox.registry.execute({ name: "terminal.spawn", arguments: { command: `"${process.execPath}" -e "setTimeout(() => {}, 5000)"` } });
   assert.match(background.result.id, /^proc_/);
   assert.equal((await toolbox.registry.execute({ name: "terminal.status", arguments: { process_id: background.result.id } })).result.status, "running");
   await toolbox.registry.execute({ name: "terminal.kill", arguments: { process_id: background.result.id } });
