@@ -99,10 +99,13 @@ function reasoningFor(mode, prompt, runtime) {
   return undefined;
 }
 
-function monitorTokenBudget(mode, content) {
+export function monitorTokenBudget(mode, content) {
   if (isGreeting(content)) return 32;
-  if (mode === "document") return 64;
-  return 128;
+  const original = mode === "document" ? 64 : 128;
+  // Opt-in ablation only: smaller windows reduce replay computation but might
+  // miss long-range uncertainty. Never describe this as equivalent by default.
+  if (process.env.LOLM_NFET_FAST_MONITOR !== "1") return original;
+  return Math.min(original, mode === "code" ? 48 : 32);
 }
 
 function representativeDocumentSample(content) {
@@ -404,12 +407,17 @@ export async function runAgent({
   let final = "", usage = null, interventions = 0, nfet = null, lastStallStep = -2, lastStep = 0, planReminded = false, budgetWarned = false, toolRepairs = 0;
   const toolOutcomes = [];
   const runStartedMs = Date.now();
-  const executionMetrics = { provider_calls: 0, provider_ms: 0, nfet_calls: 0, nfet_ms: 0 };
+  const executionMetrics = { provider_calls: 0, provider_ms: 0, nfet_calls: 0, nfet_ms: 0, nfet_analyzed_tokens: 0 };
   const timedNfetDecide = async (...args) => {
     const started = Date.now();
     executionMetrics.nfet_calls += 1;
-    try { return await monitor.decide(...args); }
-    finally { executionMetrics.nfet_ms += Date.now() - started; }
+    try {
+      const result = await monitor.decide(...args);
+      if (result?.available && !result.telemetry_reused && Number.isInteger(result.observed_tokens)) {
+        executionMetrics.nfet_analyzed_tokens += result.observed_tokens;
+      }
+      return result;
+    } finally { executionMetrics.nfet_ms += Date.now() - started; }
   };
   const tools = isGreeting(prompt) ? [] : mode === "code" ? routedCodeTools(runner.tools, prompt) : allowedTools(mode, runner.tools, prompt);
 
@@ -680,6 +688,7 @@ export async function runAgent({
         commands_count: runner.commands.length,
         outcome_evidence: runner.acceptanceEvidence,
         strict_acceptance: process.env.LOLM_STRICT_ACCEPTANCE === "1",
+        nfet_fast_monitor: process.env.LOLM_NFET_FAST_MONITOR === "1",
       });
     } finally {
       await runner.close();
