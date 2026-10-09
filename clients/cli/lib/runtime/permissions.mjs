@@ -25,11 +25,11 @@ const MUTATING = [
   /(?:^|\s)(?:npm|pnpm|yarn|bun)\s+(?:start|dev|serve)\b/i,
 ];
 
+const SHELL_CONTROL = /[&|;<>\r\n`^]|\$\(|%[^%\r\n]+%|![A-Za-z_][A-Za-z0-9_]*!/;
+
 const SAFE_EXECUTE = [
-  /(?:^|\s)(?:npm|pnpm|yarn|bun)\s+(?:test|run\s+(?:test|build|lint|check|typecheck))\b/i,
-  /(?:^|\s)(?:pytest|cargo\s+(?:test|check)|go\s+test|dotnet\s+test|make\s+(?:test|check))\b/i,
   /(?:^|\s)(?:git\s+(?:status|diff|log|show|branch)|gh\s+(?:auth\s+status|pr\s+(?:list|view|checks)|issue\s+(?:list|view)|run\s+(?:list|view)))\b/i,
-  /(?:^|\s)(?:ls|pwd|find|rg|grep|head|tail|wc|which|type|env|printenv|node\s+--version|python3?\s+--version)\b/i,
+  /(?:^|\s)(?:ls|pwd|find|rg|grep|head|tail|wc|which|type|node\s+--version|python3?\s+--version)\b/i,
 ];
 
 export class PermissionDeniedError extends Error {
@@ -44,10 +44,13 @@ export class PermissionDeniedError extends Error {
 export function classifyCommand(command) {
   const value = String(command || "").trim();
   if (!value) return { risk: "execute", approval: "confirm", reason: "Empty commands are not executable." };
+  if (/^(?:env|printenv|set)(?:\s|$)/i.test(value)) return { risk: "external", approval: "explicit", reason: "Environment dumps can expose secrets." };
   if (CATASTROPHIC.some((pattern) => pattern.test(value))) {
     return { risk: "execute", approval: "blocked", blocked: true, reason: "Command blocked because it matches a catastrophic or broadly destructive pattern." };
   }
+  if (SHELL_CONTROL.test(value)) return { risk: "execute", approval: "confirm", reason: "Compound shell syntax and variable expansion cannot be approved automatically." };
   if (EXTERNAL.some((pattern) => pattern.test(value))) return { risk: "external", approval: "explicit", reason: "The command changes remote or production state." };
+  if (/^(?:npm|pnpm|yarn|bun)\s+(?:test|run\s+\S+)|^(?:pytest|cargo\s+(?:test|check)|go\s+test|dotnet\s+test|make\s+(?:test|check))(?:\s|$)/i.test(value)) return { risk: "execute", approval: "confirm", reason: "Project scripts execute code and require approval." };
   if (MUTATING.some((pattern) => pattern.test(value))) return { risk: "write", approval: "confirm", reason: "The command can change local files, dependencies, or long-running state." };
   if (SAFE_EXECUTE.some((pattern) => pattern.test(value))) return { risk: "execute", approval: "auto", reason: "The command is a recognized inspection, test, or build operation." };
   return { risk: "execute", approval: "confirm", reason: "The command is executable but not in LOLM's known-safe catalog." };
@@ -55,10 +58,10 @@ export function classifyCommand(command) {
 
 function modeAllows(mode, decision) {
   if (decision.risk === "read") return true;
-  if (mode === "trusted") return true;
+  if (mode === "trusted") return decision.risk !== "external" && !(decision.risk === "execute" && decision.approval !== "auto");
   if (mode === "readonly") return false;
   if (mode === "standard") return decision.approval === "auto" && decision.risk !== "external";
-  if (mode === "developer") return decision.risk !== "external" && decision.approval !== "explicit";
+  if (mode === "developer") return decision.risk !== "external" && !(decision.risk === "execute" && decision.approval !== "auto") && decision.approval !== "explicit";
   return false;
 }
 
@@ -80,8 +83,11 @@ export class PermissionPolicy {
     if (!RISK_CLASSES.includes(decision.risk)) throw new Error(`Invalid risk class for ${tool.name}: ${decision.risk}`);
     if (decision.blocked || decision.approval === "blocked") throw new PermissionDeniedError(decision.reason, { ...decision, blocked: true, tool: tool.name });
     if (context.dryRun && decision.risk !== "read") return { ...decision, dryRun: true };
-    if (modeAllows(this.mode, decision)) return decision;
-    if (context.approved === true) return decision;
+    // Running a shell command or modifying remote state always needs direct
+    // human approval, regardless of --yes or the selected permission mode.
+    const humanOnly = decision.risk === "external" || (decision.risk === "execute" && decision.approval !== "auto");
+    if (!humanOnly && modeAllows(this.mode, decision)) return decision;
+    if (!humanOnly && context.approved === true && decision.risk === "write") return decision;
     if (typeof this.confirm === "function") {
       const approved = await this.confirm({ tool, args, decision, context });
       if (approved) return decision;
