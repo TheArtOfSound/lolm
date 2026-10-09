@@ -78,6 +78,10 @@ test("run store persists redacted structured events and can resume", async () =>
   assert.equal((await store.resume(run.id)).meta.status, "running");
   const raw = await readFile(join(root, run.id, "events.jsonl"), "utf8");
   assert.doesNotMatch(raw, /must-not-leak|hidden/);
+  await store.append(run.id, { type: "tool.stdout", data: { stdout: "Bearer abcdefghijklmnop123456 and github_pat_abcdefghijklmnop123456 and token=secretvalue" } });
+  const scrubbed = await readFile(join(root, run.id, "events.jsonl"), "utf8");
+  assert.doesNotMatch(scrubbed, /abcdefghijklmnop123456|secretvalue/);
+  assert.match(scrubbed, /\[redacted\]/);
 });
 
 test("process manager tracks background process output and exit status", async () => {
