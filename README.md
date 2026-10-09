@@ -1,5 +1,9 @@
 # LOLM — local intelligence that does not lose the plot
 
+**Official site:** https://lolm.imagineqira.com/  
+**Installation instructions:** https://lolm.imagineqira.com/install  
+**About the project:** https://lolm.imagineqira.com/about
+
 LOLM is an open-source, local-first AI agent with its own terminal interface,
 provider-agnostic API keys, 60+ typed computer-use tools, browser automation,
 durable resumable runs, artifact creation, and a real NFET control loop. The
