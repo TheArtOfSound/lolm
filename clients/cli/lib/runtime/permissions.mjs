@@ -30,7 +30,7 @@ const SHELL_CONTROL = /[&|;<>\r\n`^]|\$\(|%[^%\r\n]+%|![A-Za-z_][A-Za-z0-9_]*!/;
 // Automatic commands are strictly full-string matches. A prefix match would
 // wrongly classify a command with additional executable arguments as safe.
 const SAFE_EXECUTE = [
-  /^(?:pwd|ls(?:\\s+-[alh1]+)?(?:\\s+\\.)?|git\\s+status|node\\s+--version|python3?\\s+--version)\\s*$/i,
+  /^(?:pwd|ls(?:\s+-[alh1]+)?(?:\s+\.)?|git\s+status|node\s+--version|python3?\s+--version)\s*$/i,
 ];
 
 export class PermissionDeniedError extends Error {
