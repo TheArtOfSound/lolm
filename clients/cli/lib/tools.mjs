@@ -25,7 +25,11 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
     mode: mode || (yes ? "developer" : "standard"),
     onAction,
     eventSink,
-    confirm: (request) => yes || confirmPrompt(approvalLabel(request)),
+    // --yes is never a substitute for a human confirmation for command
+    // execution or external side effects. It may preapprove workspace edits.
+    confirm: (request) => (request.decision.risk === "external" || request.decision.risk === "execute")
+      ? confirmPrompt(approvalLabel(request))
+      : (yes || confirmPrompt(approvalLabel(request))),
   });
   const ready = toolbox.loadExtensions();
 
