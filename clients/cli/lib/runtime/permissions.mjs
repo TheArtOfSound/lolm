@@ -27,9 +27,10 @@ const MUTATING = [
 
 const SHELL_CONTROL = /[&|;<>\r\n`^]|\$\(|%[^%\r\n]+%|![A-Za-z_][A-Za-z0-9_]*!/;
 
+// Automatic commands are strictly full-string matches. A prefix match would
+// wrongly classify a command with additional executable arguments as safe.
 const SAFE_EXECUTE = [
-  /(?:^|\s)(?:git\s+(?:status|diff|log|show|branch)|gh\s+(?:auth\s+status|pr\s+(?:list|view|checks)|issue\s+(?:list|view)|run\s+(?:list|view)))\b/i,
-  /(?:^|\s)(?:ls|pwd|find|rg|grep|head|tail|wc|which|type|node\s+--version|python3?\s+--version)\b/i,
+  /^(?:pwd|ls(?:\\s+-[alh1]+)?(?:\\s+\\.)?|git\\s+status|node\\s+--version|python3?\\s+--version)\\s*$/i,
 ];
 
 export class PermissionDeniedError extends Error {
