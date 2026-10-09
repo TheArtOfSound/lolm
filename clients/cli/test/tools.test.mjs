@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import process from "node:process";
 import { join } from "node:path";
 import { createAgentToolbox } from "../lib/tools/index.mjs";
 import { createToolRunner } from "../lib/tools.mjs";
@@ -96,6 +97,21 @@ test("filesystem reads outside the trusted workspace are denied by default", asy
   const result = await toolbox.registry.execute({ name: "fs.read", arguments: { path: join(tmpdir(), "outside.txt") } });
   assert.equal(result.ok, false);
   assert.equal(result.error.code, "OUTSIDE_WORKSPACE");
+  await toolbox.close();
+});
+
+test("symlinked paths cannot silently bypass workspace policy", { skip: process.platform === "win32" }, async () => {
+  const root = await workspace("symlink-scope");
+  const outside = await workspace("outside");
+  await writeFile(join(outside, "private.txt"), "private");
+  await symlink(outside, join(root, "link"), "dir");
+  const toolbox = createAgentToolbox({ cwd: root, mode: "standard" });
+  const read = await toolbox.registry.execute({ name: "fs.read", arguments: { path: "link/private.txt" } });
+  assert.equal(read.ok, false);
+  assert.equal(read.error.code, "OUTSIDE_WORKSPACE");
+  const write = await toolbox.registry.execute({ name: "fs.write", arguments: { path: "link/new.txt", content: "surprise" } });
+  assert.equal(write.ok, false);
+  assert.equal(write.error.code, "APPROVAL_REQUIRED");
   await toolbox.close();
 });
 
