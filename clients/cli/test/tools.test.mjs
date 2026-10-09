@@ -81,7 +81,7 @@ test("agent runner removes provider tool-envelope metadata before strict validat
 test("terminal tools execute foreground commands and preserve background process IDs", async () => {
   const root = await workspace("terminal");
   const toolbox = createAgentToolbox({ cwd: root, mode: "trusted", confirm: async () => true });
-  const foreground = await toolbox.registry.execute({ name: "terminal.exec", arguments: { command: `${JSON.stringify(process.execPath)} -e "console.log('verified')"` } });
+  const foreground = await toolbox.registry.execute({ name: "terminal.exec", arguments: { command: `"${process.execPath}" -e "console.log('verified')"` } });
   assert.equal(foreground.ok, true);
   assert.match(foreground.result.stdout, /verified/);
   const background = await toolbox.registry.execute({ name: "terminal.spawn", arguments: { command: `${JSON.stringify(process.execPath)} -e "setTimeout(() => {}, 5000)"` } });
