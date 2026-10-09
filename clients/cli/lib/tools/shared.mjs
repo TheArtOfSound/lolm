@@ -46,7 +46,15 @@ export function pathClassification(root, values, { destructive = false } = {}) {
 
 export function runFile(command, args = [], { cwd = process.cwd(), env = {}, timeoutMs = 120_000, input } = {}) {
   return new Promise((resolvePromise) => {
-    const child = spawn(command, args, { cwd, env: { ...process.env, ...env }, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+    let child;
+    try {
+      child = spawn(command, args, { cwd, env: { ...process.env, ...env }, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+    } catch (error) {
+      // Windows can reject spawning .cmd/.bat shims synchronously. A failed
+      // diagnostic must be reported as a failed command, not crash the CLI.
+      resolvePromise({ ok: false, error: error.message, code: error.code, timedOut: false, stdout: "", stderr: "" });
+      return;
+    }
     let stdout = "", stderr = "", timedOut = false, settled = false;
     const cap = (current, chunk) => `${current}${chunk}`.slice(-MAX_OUTPUT);
     child.stdout.on("data", (chunk) => { stdout = cap(stdout, chunk); });
