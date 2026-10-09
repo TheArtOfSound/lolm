@@ -43,7 +43,7 @@ export class PluginManager {
     return plugins;
   }
 
-  async loadEnabled() {
+  async loadEnabled({ approve } = {}) {
     const results = [];
     for (const plugin of await this.discover()) {
       if (!plugin.enabled || plugin.error) { results.push({ ...plugin, loaded: false }); continue; }
@@ -52,6 +52,10 @@ export class PluginManager {
         const main = resolve(plugin.directory, plugin.main);
         const escaped = relative(plugin.directory, main).startsWith("..") || isAbsolute(relative(plugin.directory, main));
         if (escaped) throw new Error("Plugin main must stay inside its plugin directory.");
+        // Loading an ES module executes arbitrary code immediately. A manifest
+        // enabled flag is not consent to run code from an opened workspace.
+        const allowed = typeof approve === "function" && await approve({ kind: "plugin", name: plugin.name, path: main });
+        if (!allowed) { results.push({ name: plugin.name, manifest_path: plugin.manifest_path, loaded: false, reason: "approval_required" }); continue; }
         const module = await import(`${pathToFileURL(main).href}?v=${encodeURIComponent(plugin.version)}`);
         if (typeof module.register !== "function") throw new Error("Plugin main must export register(registry, context).");
         const before = new Set(this.registry.list().map((tool) => tool.name));
