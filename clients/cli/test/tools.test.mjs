@@ -79,7 +79,7 @@ test("agent runner removes provider tool-envelope metadata before strict validat
 
 test("terminal tools execute foreground commands and preserve background process IDs", async () => {
   const root = await workspace("terminal");
-  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted" });
+  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted", confirm: async () => true });
   const foreground = await toolbox.registry.execute({ name: "terminal.exec", arguments: { command: `${JSON.stringify(process.execPath)} -e "console.log('verified')"` } });
   assert.equal(foreground.ok, true);
   assert.match(foreground.result.stdout, /verified/);
@@ -105,7 +105,7 @@ test("enabled local plugins contribute typed tools through the registry", async 
   await writeFile(join(plugin, "lolm-plugin.json"), JSON.stringify({ name: "test-plugin", version: "1.0.0", main: "index.mjs", enabled: true }));
   await writeFile(join(plugin, "index.mjs"), `export function register(registry) { registry.register({ name: "test.echo", description: "Echo plugin text.", risk: "read", inputSchema: { type: "object", required: ["text"], properties: { text: { type: "string" } }, additionalProperties: false }, execute: async ({ text }) => ({ text }) }); }`);
   const previous = process.env.LOLM_PLUGIN_PATH; process.env.LOLM_PLUGIN_PATH = plugin;
-  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted" });
+  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted", approveExtension: async () => true });
   try {
     const status = await toolbox.loadExtensions();
     assert.equal(status.plugins[0].loaded, true);
@@ -128,13 +128,38 @@ rl.on("line", (line) => { const message = JSON.parse(line); if (message.id == nu
   else if (message.method === "tools/call") send({ jsonrpc: "2.0", id: message.id, result: { content: [{ type: "text", text: message.params.arguments.text }] } });
 });`);
   await writeFile(join(root, ".mcp.json"), JSON.stringify({ mcpServers: { test: { enabled: true, command: process.execPath, args: [server], risks: { echo: "read" } } } }));
-  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted" });
+  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted", approveExtension: async () => true });
   try {
     const status = await toolbox.loadExtensions();
     assert.equal(status.mcp[0].connected, true);
     const result = await toolbox.registry.execute({ name: "mcp.test_echo", arguments: { text: "from mcp" } });
     assert.equal(result.result.content[0].text, "from mcp");
   } finally { await toolbox.close(); }
+});
+
+test("enabled workspace plugin and MCP cannot execute at startup without explicit trust", async () => {
+  const root = await workspace("untrusted-extension");
+  const plugin = join(root, "plugin"); await mkdir(plugin);
+  const sentinel = join(root, "extension-ran.txt");
+  await writeFile(join(plugin, "lolm-plugin.json"), JSON.stringify({ name: "untrusted", version: "1.0.0", main: "index.mjs", enabled: true }));
+  await writeFile(join(plugin, "index.mjs"), `import {writeFileSync} from "node:fs"; writeFileSync(${JSON.stringify(sentinel)}, "plugin ran"); export function register() {}`);
+  const server = join(root, "hostile.mjs");
+  await writeFile(server, `import {writeFileSync} from "node:fs"; writeFileSync(${JSON.stringify(sentinel)}, "mcp ran");`);
+  await writeFile(join(root, ".mcp.json"), JSON.stringify({ mcpServers: { hostile: { enabled: true, command: process.execPath, args: [server] } } }));
+  const prev = process.env.LOLM_PLUGIN_PATH;
+  process.env.LOLM_PLUGIN_PATH = plugin;
+  try {
+    const toolbox = createAgentToolbox({ cwd: root, mode: "trusted" });
+    const result = await toolbox.loadExtensions();
+    assert.equal(result.plugins[0].loaded, false);
+    assert.equal(result.plugins[0].reason, "approval_required");
+    assert.equal(result.mcp[0].connected, false);
+    assert.equal(result.mcp[0].reason, "approval_required");
+    await assert.rejects(readFile(sentinel, "utf8"), { code: "ENOENT" });
+    await toolbox.close();
+  } finally {
+    if (prev === undefined) delete process.env.LOLM_PLUGIN_PATH; else process.env.LOLM_PLUGIN_PATH = prev;
+  }
 });
 
 test("fs.patch accepts text pasted back from an fs.inspect preview", async () => {
