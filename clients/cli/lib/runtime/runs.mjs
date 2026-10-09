@@ -10,7 +10,15 @@ const MAX_EVENT_STRING = 64 * 1024;
 
 function redact(value, key = "") {
   if (SECRET_KEY.test(key)) return "[redacted]";
-  if (typeof value === "string") return value.length > MAX_EVENT_STRING ? `${value.slice(0, MAX_EVENT_STRING)}\n[truncated]` : value;
+  if (typeof value === "string") {
+    const bounded = value.length > MAX_EVENT_STRING ? `${value.slice(0, MAX_EVENT_STRING)}\n[truncated]` : value;
+    // Event keys alone are insufficient: shell stdout and user prompts can
+    // contain credentials embedded in otherwise ordinary text fields.
+    return bounded
+      .replace(/(Bearer\\s+)[A-Za-z0-9._~+\\/=-]{12,}/gi, "$1[redacted]")
+      .replace(/\\b(?:sk-[A-Za-z0-9_-]{16,}|github_pat_[A-Za-z0-9_]{16,}|gh[opusr]_[A-Za-z0-9_]{16,}|glpat-[A-Za-z0-9_-]{12,})\\b/g, "[redacted]")
+      .replace(/((?:api[-_]?key|authorization|cookie|password|secret|token)\\s*[:=]\\s*["']?)[^"',;\\s]+/gi, "$1[redacted]");
+  }
   if (Array.isArray(value)) return value.map((item) => redact(item));
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([childKey, item]) => [childKey, redact(item, childKey)]));
   return value;
