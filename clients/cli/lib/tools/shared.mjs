@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { spawn } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 export const MAX_OUTPUT = 256 * 1024;
 export const MAX_READ = 2 * 1024 * 1024;
@@ -28,7 +28,7 @@ export function isOutside(root, path) {
   const physicalRoot = physicalAncestor(root);
   const physicalTarget = physicalAncestor(path);
   const value = relative(physicalRoot, physicalTarget);
-  return value === ".." || value.startsWith(".." + (process.platform === "win32" ? "\\\\" : "/")) || isAbsolute(value);
+  return value === ".." || value.startsWith(".." + sep) || isAbsolute(value);
 }
 
 export function assertReadablePath(root, path, context = {}) {
