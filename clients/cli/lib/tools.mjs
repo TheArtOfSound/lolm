@@ -30,6 +30,7 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
     confirm: (request) => (request.decision.risk === "external" || request.decision.risk === "execute")
       ? confirmPrompt(approvalLabel(request))
       : (yes || confirmPrompt(approvalLabel(request))),
+    approveExtension: ({ kind, name, path }) => confirmPrompt(`Trust and launch ${kind} ${name} from ${path}? This runs code with your account permissions. Continue?`),
   });
   const ready = toolbox.loadExtensions();
 
