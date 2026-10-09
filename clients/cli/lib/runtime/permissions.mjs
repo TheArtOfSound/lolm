@@ -85,7 +85,8 @@ export class PermissionPolicy {
     if (context.dryRun && decision.risk !== "read") return { ...decision, dryRun: true };
     // Running a shell command or modifying remote state always needs direct
     // human approval, regardless of --yes or the selected permission mode.
-    const humanOnly = decision.risk === "external" || (decision.risk === "execute" && decision.approval !== "auto");
+    const isShellTool = tool.name === "terminal.exec" || tool.name === "terminal.spawn";
+    const humanOnly = decision.risk === "external" || (isShellTool && decision.approval !== "auto") || (decision.risk === "execute" && decision.approval !== "auto");
     if (!humanOnly && modeAllows(this.mode, decision)) return decision;
     if (!humanOnly && context.approved === true && decision.risk === "write") return decision;
     if (typeof this.confirm === "function") {
