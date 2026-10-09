@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import process from "node:process";
 import { join } from "node:path";
 import { createAgentToolbox } from "../lib/tools/index.mjs";
 import { createToolRunner } from "../lib/tools.mjs";
@@ -79,11 +80,12 @@ test("agent runner removes provider tool-envelope metadata before strict validat
 
 test("terminal tools execute foreground commands and preserve background process IDs", async () => {
   const root = await workspace("terminal");
-  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted" });
-  const foreground = await toolbox.registry.execute({ name: "terminal.exec", arguments: { command: `${JSON.stringify(process.execPath)} -e "console.log('verified')"` } });
+  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted", confirm: async () => true });
+  const foreground = await toolbox.registry.execute({ name: "terminal.exec", arguments: { command: `"${process.execPath}" -e "console.log('verified')"` } });
   assert.equal(foreground.ok, true);
+  assert.equal(foreground.result.exit_code, 0, JSON.stringify(foreground.result));
   assert.match(foreground.result.stdout, /verified/);
-  const background = await toolbox.registry.execute({ name: "terminal.spawn", arguments: { command: `${JSON.stringify(process.execPath)} -e "setTimeout(() => {}, 5000)"` } });
+  const background = await toolbox.registry.execute({ name: "terminal.spawn", arguments: { command: `"${process.execPath}" -e "setTimeout(() => {}, 5000)"` } });
   assert.match(background.result.id, /^proc_/);
   assert.equal((await toolbox.registry.execute({ name: "terminal.status", arguments: { process_id: background.result.id } })).result.status, "running");
   await toolbox.registry.execute({ name: "terminal.kill", arguments: { process_id: background.result.id } });
@@ -99,13 +101,28 @@ test("filesystem reads outside the trusted workspace are denied by default", asy
   await toolbox.close();
 });
 
+test("symlinked paths cannot silently bypass workspace policy", { skip: process.platform === "win32" }, async () => {
+  const root = await workspace("symlink-scope");
+  const outside = await workspace("outside");
+  await writeFile(join(outside, "private.txt"), "private");
+  await symlink(outside, join(root, "link"), "dir");
+  const toolbox = createAgentToolbox({ cwd: root, mode: "standard" });
+  const read = await toolbox.registry.execute({ name: "fs.read", arguments: { path: "link/private.txt" } });
+  assert.equal(read.ok, false);
+  assert.equal(read.error.code, "OUTSIDE_WORKSPACE");
+  const write = await toolbox.registry.execute({ name: "fs.write", arguments: { path: "link/new.txt", content: "surprise" } });
+  assert.equal(write.ok, false);
+  assert.equal(write.error.code, "APPROVAL_REQUIRED");
+  await toolbox.close();
+});
+
 test("enabled local plugins contribute typed tools through the registry", async () => {
   const root = await workspace("plugin");
   const plugin = join(root, "plugin"); await mkdir(plugin);
   await writeFile(join(plugin, "lolm-plugin.json"), JSON.stringify({ name: "test-plugin", version: "1.0.0", main: "index.mjs", enabled: true }));
   await writeFile(join(plugin, "index.mjs"), `export function register(registry) { registry.register({ name: "test.echo", description: "Echo plugin text.", risk: "read", inputSchema: { type: "object", required: ["text"], properties: { text: { type: "string" } }, additionalProperties: false }, execute: async ({ text }) => ({ text }) }); }`);
   const previous = process.env.LOLM_PLUGIN_PATH; process.env.LOLM_PLUGIN_PATH = plugin;
-  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted" });
+  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted", approveExtension: async () => true });
   try {
     const status = await toolbox.loadExtensions();
     assert.equal(status.plugins[0].loaded, true);
@@ -113,6 +130,27 @@ test("enabled local plugins contribute typed tools through the registry", async 
   } finally {
     if (previous === undefined) delete process.env.LOLM_PLUGIN_PATH; else process.env.LOLM_PLUGIN_PATH = previous;
     await toolbox.close();
+  }
+});
+
+test("plugin entrypoint symlinks cannot escape the approved directory", { skip: process.platform === "win32" }, async () => {
+  const root = await workspace("plugin-symlink");
+  const plugin = join(root, "plugin");
+  const outside = await workspace("plugin-external");
+  await mkdir(plugin);
+  await writeFile(join(outside, "evil.mjs"), "export function register() {}");
+  await symlink(join(outside, "evil.mjs"), join(plugin, "index.mjs"));
+  await writeFile(join(plugin, "lolm-plugin.json"), JSON.stringify({ name: "escaped", version: "1", main: "index.mjs", enabled: true }));
+  const prev = process.env.LOLM_PLUGIN_PATH;
+  process.env.LOLM_PLUGIN_PATH = plugin;
+  try {
+    const toolbox = createAgentToolbox({ cwd: root, mode: "standard", approveExtension: async () => true });
+    const status = await toolbox.loadExtensions();
+    assert.equal(status.plugins[0].loaded, false);
+    assert.match(status.plugins[0].error, /physically stay inside/);
+    await toolbox.close();
+  } finally {
+    if (prev === undefined) delete process.env.LOLM_PLUGIN_PATH; else process.env.LOLM_PLUGIN_PATH = prev;
   }
 });
 
@@ -128,13 +166,38 @@ rl.on("line", (line) => { const message = JSON.parse(line); if (message.id == nu
   else if (message.method === "tools/call") send({ jsonrpc: "2.0", id: message.id, result: { content: [{ type: "text", text: message.params.arguments.text }] } });
 });`);
   await writeFile(join(root, ".mcp.json"), JSON.stringify({ mcpServers: { test: { enabled: true, command: process.execPath, args: [server], risks: { echo: "read" } } } }));
-  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted" });
+  const toolbox = createAgentToolbox({ cwd: root, mode: "trusted", approveExtension: async () => true });
   try {
     const status = await toolbox.loadExtensions();
     assert.equal(status.mcp[0].connected, true);
     const result = await toolbox.registry.execute({ name: "mcp.test_echo", arguments: { text: "from mcp" } });
     assert.equal(result.result.content[0].text, "from mcp");
   } finally { await toolbox.close(); }
+});
+
+test("enabled workspace plugin and MCP cannot execute at startup without explicit trust", async () => {
+  const root = await workspace("untrusted-extension");
+  const plugin = join(root, "plugin"); await mkdir(plugin);
+  const sentinel = join(root, "extension-ran.txt");
+  await writeFile(join(plugin, "lolm-plugin.json"), JSON.stringify({ name: "untrusted", version: "1.0.0", main: "index.mjs", enabled: true }));
+  await writeFile(join(plugin, "index.mjs"), `import {writeFileSync} from "node:fs"; writeFileSync(${JSON.stringify(sentinel)}, "plugin ran"); export function register() {}`);
+  const server = join(root, "hostile.mjs");
+  await writeFile(server, `import {writeFileSync} from "node:fs"; writeFileSync(${JSON.stringify(sentinel)}, "mcp ran");`);
+  await writeFile(join(root, ".mcp.json"), JSON.stringify({ mcpServers: { hostile: { enabled: true, command: process.execPath, args: [server] } } }));
+  const prev = process.env.LOLM_PLUGIN_PATH;
+  process.env.LOLM_PLUGIN_PATH = plugin;
+  try {
+    const toolbox = createAgentToolbox({ cwd: root, mode: "trusted" });
+    const result = await toolbox.loadExtensions();
+    assert.equal(result.plugins[0].loaded, false);
+    assert.equal(result.plugins[0].reason, "approval_required");
+    assert.equal(result.mcp[0].connected, false);
+    assert.equal(result.mcp[0].reason, "approval_required");
+    await assert.rejects(readFile(sentinel, "utf8"), { code: "ENOENT" });
+    await toolbox.close();
+  } finally {
+    if (prev === undefined) delete process.env.LOLM_PLUGIN_PATH; else process.env.LOLM_PLUGIN_PATH = prev;
+  }
 });
 
 test("fs.patch accepts text pasted back from an fs.inspect preview", async () => {
