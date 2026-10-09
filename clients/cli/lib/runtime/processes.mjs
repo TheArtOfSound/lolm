@@ -34,9 +34,14 @@ export class ProcessManager {
 
   spawn(command, { cwd = process.cwd(), env = {}, shell = true } = {}) {
     const id = `proc_${randomUUID().slice(0, 10)}`;
+    const options = { cwd, env: { ...process.env, ...env }, stdio: "pipe" };
     const child = shell
-      ? spawnChild(process.platform === "win32" ? "cmd.exe" : (process.env.SHELL || "/bin/sh"), process.platform === "win32" ? ["/d", "/s", "/c", command] : ["-lc", command], { cwd, env: { ...process.env, ...env }, stdio: "pipe" })
-      : spawnChild(command[0], command.slice(1), { cwd, env: { ...process.env, ...env }, stdio: "pipe" });
+      ? process.platform === "win32"
+        // Let Node perform cmd.exe quoting. Hand-constructing /s /c argument
+        // quoting breaks quoted program paths such as Program Files.
+        ? spawnChild(command, { ...options, shell: process.env.ComSpec || "cmd.exe" })
+        : spawnChild(process.env.SHELL || "/bin/sh", ["-lc", command], options)
+      : spawnChild(command[0], command.slice(1), options);
     const record = {
       id, child, command: Array.isArray(command) ? command.join(" ") : command, cwd,
       status: "running", startedAt: new Date().toISOString(), finishedAt: null,
