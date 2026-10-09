@@ -132,6 +132,27 @@ test("enabled local plugins contribute typed tools through the registry", async 
   }
 });
 
+test("plugin entrypoint symlinks cannot escape the approved directory", { skip: process.platform === "win32" }, async () => {
+  const root = await workspace("plugin-symlink");
+  const plugin = join(root, "plugin");
+  const outside = await workspace("plugin-external");
+  await mkdir(plugin);
+  await writeFile(join(outside, "evil.mjs"), "export function register() {}");
+  await symlink(join(outside, "evil.mjs"), join(plugin, "index.mjs"));
+  await writeFile(join(plugin, "lolm-plugin.json"), JSON.stringify({ name: "escaped", version: "1", main: "index.mjs", enabled: true }));
+  const prev = process.env.LOLM_PLUGIN_PATH;
+  process.env.LOLM_PLUGIN_PATH = plugin;
+  try {
+    const toolbox = createAgentToolbox({ cwd: root, mode: "standard", approveExtension: async () => true });
+    const status = await toolbox.loadExtensions();
+    assert.equal(status.plugins[0].loaded, false);
+    assert.match(status.plugins[0].error, /physically stay inside/);
+    await toolbox.close();
+  } finally {
+    if (prev === undefined) delete process.env.LOLM_PLUGIN_PATH; else process.env.LOLM_PLUGIN_PATH = prev;
+  }
+});
+
 test("enabled MCP servers contribute callable tools through the same registry", async () => {
   const root = await workspace("mcp");
   const server = join(root, "server.mjs");
