@@ -223,6 +223,18 @@ class Sandbox:
             self.commands.append(rec)
             self._record("command", rec)
             return rec
+        if os.name == "nt" and not want_jail and os.environ.get("LOLM_ALLOW_UNISOLATED_WINDOWS_EXEC") != "1":
+            rec.update(
+                exit_code=None,
+                stdout="",
+                blocked=True,
+                ended_at=_now(),
+                outcome_class="infrastructure_rejection",
+                stderr="Windows execution is not OS-isolated. Set LOLM_ALLOW_UNISOLATED_WINDOWS_EXEC=1 only for a personally trusted offline development session, or run in a restricted VM/container.",
+            )
+            self.commands.append(rec)
+            self._record("command", rec)
+            return rec
         if isolated and not _HAS_BWRAP:
             rec.update(
                 exit_code=None,

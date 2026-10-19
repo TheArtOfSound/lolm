@@ -186,7 +186,9 @@ test("compound HTML work stays in the agent loop instead of the artifact shortcu
   const result = await exec(process.execPath, [bin, "create", "index.html", "then", "run", "a", "test", "--cwd", root, "--once", "--yes", "--provider", "custom", "--base-url", address(server), "--model", "test", "--api-key", "test", "--no-nfet", "--json"], { env: { ...process.env, LOLM_LAST_TASK: join(root, "last-task.json") } });
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.kind, undefined);
-  assert.equal(payload.verified, true);
+  // Unattended --yes no longer authorizes an arbitrary shell command.
+  // The agent still writes the file, but does not claim command verification.
+  assert.equal(payload.verified, false);
   assert.equal(await readFile(join(root, "index.html"), "utf8"), "<h1>Ready</h1>");
 });
 

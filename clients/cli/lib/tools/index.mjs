@@ -17,7 +17,7 @@ import { registerDelegateTools } from "./delegate.mjs";
 import { PluginManager } from "../plugins.mjs";
 import { McpManager } from "../mcp.mjs";
 
-export function createAgentToolbox({ cwd = process.cwd(), mode = "standard", confirm, onAction, eventSink, delegate, depth = 0 } = {}) {
+export function createAgentToolbox({ cwd = process.cwd(), mode = "standard", confirm, approveExtension, onAction, eventSink, delegate, depth = 0 } = {}) {
   const root = resolve(cwd);
   const processes = new ProcessManager();
   const browser = new BrowserManager({ root });
@@ -41,8 +41,8 @@ export function createAgentToolbox({ cwd = process.cwd(), mode = "standard", con
   return {
     root, registry, processes, browser, plugins, mcp,
     async loadExtensions({ includeDisabledMcp = false } = {}) {
-      const pluginStatus = await plugins.loadEnabled();
-      const mcpStatus = await mcp.connectEnabled({ includeDisabled: includeDisabledMcp });
+      const pluginStatus = await plugins.loadEnabled({ approve: approveExtension });
+      const mcpStatus = await mcp.connectEnabled({ includeDisabled: includeDisabledMcp, approve: approveExtension });
       return { plugins: pluginStatus, mcp: mcpStatus };
     },
     async close() { mcp.close(); processes.close(); await browser.close().catch(() => {}); },
