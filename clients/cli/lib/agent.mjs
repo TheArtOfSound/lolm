@@ -4,6 +4,7 @@
 import { chat } from "./providers.mjs";
 import { TOOL_DEFINITIONS, createToolRunner } from "./tools.mjs";
 import { digest as memoryDigest } from "./memory.mjs";
+import { hasCodeAcceptanceEvidence } from "./runtime/outcome-evidence.mjs";
 
 const BASE_SYSTEM = `You are the language engine inside LOLM, a local open-source computer-use agent runtime—not a language model yourself. LOLM can use a local model or a user's direct provider API key, while its trained local NFET controller monitors the trajectory.
 Be direct, accurate, and useful. Never claim a file was written or a command ran unless a tool result proves it.
@@ -98,10 +99,13 @@ function reasoningFor(mode, prompt, runtime) {
   return undefined;
 }
 
-function monitorTokenBudget(mode, content) {
+export function monitorTokenBudget(mode, content) {
   if (isGreeting(content)) return 32;
-  if (mode === "document") return 64;
-  return 128;
+  const original = mode === "document" ? 64 : 128;
+  // Opt-in ablation only: smaller windows reduce replay computation but might
+  // miss long-range uncertainty. Never describe this as equivalent by default.
+  if (process.env.LOLM_NFET_FAST_MONITOR !== "1") return original;
+  return Math.min(original, mode === "code" ? 48 : 32);
 }
 
 function representativeDocumentSample(content) {
@@ -249,6 +253,9 @@ export function documentIssues(text, { comparison = false, sources = [] } = {}) 
 function verifiedFor(mode, runner, content, prompt) {
   if (!String(content || "").trim()) return false;
   if (["ask", "document"].includes(mode)) return !needsFreshEvidence(prompt) || runner.evidence > 0;
+  if (mode === "code" && process.env.LOLM_STRICT_ACCEPTANCE === "1") {
+    return hasCodeAcceptanceEvidence({ changes: runner.changes.length, priorVerified: runner.verified, testPassed: runner.hasPassedTest });
+  }
   return runner.verified;
 }
 
@@ -399,6 +406,19 @@ export async function runAgent({
   ];
   let final = "", usage = null, interventions = 0, nfet = null, lastStallStep = -2, lastStep = 0, planReminded = false, budgetWarned = false, toolRepairs = 0;
   const toolOutcomes = [];
+  const runStartedMs = Date.now();
+  const executionMetrics = { provider_calls: 0, provider_ms: 0, nfet_calls: 0, nfet_ms: 0, nfet_analyzed_tokens: 0 };
+  const timedNfetDecide = async (...args) => {
+    const started = Date.now();
+    executionMetrics.nfet_calls += 1;
+    try {
+      const result = await monitor.decide(...args);
+      if (result?.available && !result.telemetry_reused && Number.isInteger(result.observed_tokens)) {
+        executionMetrics.nfet_analyzed_tokens += result.observed_tokens;
+      }
+      return result;
+    } finally { executionMetrics.nfet_ms += Date.now() - started; }
+  };
   const tools = isGreeting(prompt) ? [] : mode === "code" ? routedCodeTools(runner.tools, prompt) : allowedTools(mode, runner.tools, prompt);
 
   // Booting the controller costs real seconds of CPU and its first verdict is
@@ -424,6 +444,8 @@ export async function runAgent({
     await eventSink?.({ type: "provider.requested", provider: runtime.provider, model: runtime.model, step, message_count: messages.length });
     let streamedChars = 0;
     let response;
+    const providerStartedMs = Date.now();
+    executionMetrics.provider_calls += 1;
     try {
       response = await chat(runtime, messages, {
       tools,
@@ -447,6 +469,8 @@ export async function runAgent({
       onTool("provider rejected a tool call; correcting");
       messages.push({ role: "user", content: `The provider refused your last response before anything ran: ${rejection}\nIf that was a tool call, re-read the tool's schema and send it again with every required field present and correctly typed. Keep the response simple and well formed.` });
       continue;
+    } finally {
+      executionMetrics.provider_ms += Date.now() - providerStartedMs;
     }
     usage = response.usage || usage;
     await eventSink?.({ type: "provider.responded", provider: runtime.provider, model: runtime.model, step, usage: response.usage || null, tool_calls: response.toolCalls?.length || 0, content_chars: response.content?.length || 0 });
@@ -508,7 +532,7 @@ export async function runAgent({
         let label = "";
         if (monitor) {
           try {
-            const stallCheck = await monitor.decide(trajectory, { checkpoint: "work", verified: false, reuse: true, maxTokens: 256 });
+            const stallCheck = await timedNfetDecide(trajectory, { checkpoint: "work", verified: false, reuse: true, maxTokens: 256 });
             if (stallCheck?.available) {
               nfet = stallCheck;
               onNfet(stallCheck);
@@ -536,7 +560,7 @@ export async function runAgent({
       messages.push({ role: "user", content: "You described work but have not executed it. Inspect the workspace and use the typed tools to complete the requested outcome now. Do not return instructions in place of action." });
       continue;
     }
-    if (mode === "code" && requiresExecutionVerification(prompt) && runner.changes.length > 0 && !runner.verified && step < maxSteps) {
+    if (mode === "code" && requiresExecutionVerification(prompt) && runner.changes.length > 0 && !verifiedFor(mode, runner, "pending-result", prompt) && step < maxSteps) {
       interventions++;
       messages.push({ role: "user", content: "The files changed, but the result is not verified. Run the most relevant tests, build, inspection, or browser check before finishing." });
       continue;
@@ -560,7 +584,7 @@ export async function runAgent({
     const verified = verifiedFor(mode, runner, final, prompt);
     if (monitor) {
       try {
-        nfet = await monitor.decide(final, {
+        nfet = await timedNfetDecide(final, {
           reset: step === 1,
           checkpoint: "work",
           verified: false,
@@ -594,7 +618,7 @@ export async function runAgent({
 
     if (monitor && nfet?.available) {
       try {
-        const resultCheck = await monitor.decide(final, { checkpoint: "result", verified, reuse: true });
+        const resultCheck = await timedNfetDecide(final, { checkpoint: "result", verified, reuse: true });
         nfet = resultCheck;
         onNfet(resultCheck);
         await eventSink?.({ type: "nfet.decision", checkpoint: "result", decision: resultCheck?.decision || null, telemetry: resultCheck?.telemetry || null, verified });
@@ -655,7 +679,20 @@ export async function runAgent({
       messages,
     };
   } finally {
-    await runner.close();
+    try {
+      await eventSink?.({
+        type: "agent.outcome.evidence",
+        elapsed_ms: Date.now() - runStartedMs,
+        ...executionMetrics,
+        changes_count: runner.changes.length,
+        commands_count: runner.commands.length,
+        outcome_evidence: runner.acceptanceEvidence,
+        strict_acceptance: process.env.LOLM_STRICT_ACCEPTANCE === "1",
+        nfet_fast_monitor: process.env.LOLM_NFET_FAST_MONITOR === "1",
+      });
+    } finally {
+      await runner.close();
+    }
   }
 }
 

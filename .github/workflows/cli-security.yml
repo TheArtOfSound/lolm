@@ -76,7 +76,8 @@ jobs:
           npm init -y >/dev/null
           npm install "$RUNNER_TEMP"/lolm-packs/lolm-nfet-client-*.tgz --ignore-scripts --no-audit --no-fund
           npm install "$RUNNER_TEMP"/lolm-packs/lolm-cli-*.tgz --ignore-scripts --no-audit --no-fund
-          ./node_modules/.bin/lolm --version | grep -Fx '1.1.0'
+          LOLM_VERSION="$(node -p 'require(process.env.GITHUB_WORKSPACE + "/clients/cli/package.json").version')"
+          ./node_modules/.bin/lolm --version | grep -Fx "$LOLM_VERSION"
           ./node_modules/.bin/lolm --help | grep -q 'COMMANDS'
           ./node_modules/.bin/lolm providers --json > providers.json
           node -e "const x=require('./providers.json'); if(!x.ok || x.providers.length < 10)process.exit(1)"

@@ -3,6 +3,7 @@
 /** Structured local tools with typed schemas, explicit risk classes, and compatibility aliases. */
 import { confirm as confirmPrompt } from "./tui.mjs";
 import { createAgentToolbox } from "./tools/index.mjs";
+import { createOutcomeEvidence } from "./runtime/outcome-evidence.mjs";
 
 const definitionToolbox = createAgentToolbox({ mode: "readonly" });
 export const TOOL_DEFINITIONS = definitionToolbox.registry.providerDefinitions();
@@ -15,6 +16,7 @@ function approvalLabel({ tool, args, decision }) {
 export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = false, mode, onAction = () => {}, eventSink, delegate, depth = 0 } = {}) {
   const changes = [];
   const commands = [];
+  const outcomeEvidence = createOutcomeEvidence();
   let evidence = 0;
   let verified = false;
   let plan = null;
@@ -43,6 +45,8 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
     get evidence() { return evidence; },
     get plan() { return plan; },
     get verified() { return verified; },
+    get hasPassedTest() { return outcomeEvidence.testPassed; },
+    get acceptanceEvidence() { return outcomeEvidence.snapshot(); },
     close: () => toolbox.close(),
     async execute(call) {
       await ready;
@@ -69,6 +73,7 @@ export function createToolRunner({ cwd = process.cwd(), yes = false, dryRun = fa
       }
       if (canonical === "terminal.exec" || canonical === "terminal.spawn") {
         commands.push({ command: normalizedCall.arguments?.command, ...value, dry_run: dryRun });
+        if (canonical === "terminal.exec") outcomeEvidence.observe(normalizedCall.arguments?.command, value);
         if (canonical === "terminal.exec" && value.exit_code === 0 && !value.timed_out) verified = true;
       }
       if ((tool?.risk === "read" && !/^(plan|memory|agent)\./.test(canonical)) || ["git.status", "git.diff", "terminal.status"].includes(canonical)) evidence++;
