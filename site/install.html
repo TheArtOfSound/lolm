@@ -1,32 +1,30 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Install LOLM</title><meta name="description" content="Install the open-source LOLM local AI agent from npm or source."><meta name="theme-color" content="#07080b"><link rel="stylesheet" href="/lolm-ds.css"><script src="/lolm-ds.js" defer></script>
 <style>body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6}.shell{max-width:850px;margin:auto;padding:32px 22px 90px}nav{display:flex;justify-content:space-between}nav a,a{color:var(--accent2);text-decoration:none}h1{font-size:clamp(40px,7vw,68px);line-height:1;margin:85px 0 18px;letter-spacing:-.05em}.lede{font-size:19px;color:var(--dim);max-width:650px}section{margin:58px 0}h2{font-size:25px}pre{background:#050608;border:1px solid var(--line-2);border-radius:14px;padding:18px;overflow:auto;color:#d5dbea;font:14px/1.7 var(--mono)}.step{font:11px var(--mono);color:var(--accent2);letter-spacing:.12em}.note{border-left:3px solid var(--accent2);padding:3px 16px;color:var(--dim)}code{font-family:var(--mono)}</style><link rel="stylesheet" href="/qira-product-bar.css?v=20261016">
+<style>.shell pre{color:var(--ink)}.shell summary{cursor:pointer;font-weight:650;color:var(--accent2);padding:12px 0}.shell details{border:1px solid var(--line-2);padding:12px 20px;border-radius:12px}</style>
 </head>
 <body><div class="qira-product-bar" role="navigation" aria-label="Qira ecosystem"><div class="qira-product-bar__inner"><div class="qira-product-bar__brand"><a href="https://imagineqira.com/" aria-label="Qira home">QIRA</a><span aria-hidden="true">/</span><span>LOLM</span></div><div class="qira-product-bar__links"><a href="https://imagineqira.com/products/">All products</a><a href="https://imagineqira.com/start/?goal=lolm">Getting started</a><a href="https://imagineqira.com/account/">Qira account</a></div></div></div><main class="shell"><nav><a href="/"><b>LOLM</b></a><a href="/docs.html">Documentation →</a></nav><h1>Install once.<br>Use it naturally.</h1><p class="lede">LOLM runs on your computer. The website does not execute prompts, touch files, or store provider credentials.</p>
 <section><div class="step">01 · INSTALL</div><h2>Install the command</h2><pre>npm install -g lolm-cli
 lolm --version</pre><p>Node.js 20 or newer is required.</p></section>
-<section><div class="step">02 · PROVIDER</div><h2>Connect any model</h2><pre>lolm setup
-lolm doctor</pre><p>Choose a built-in provider, Ollama, or a custom OpenAI-compatible endpoint. You can also use the provider's normal environment variable.</p><pre>export OPENAI_API_KEY=...
-lolm setup openai
-
-export ANTHROPIC_API_KEY=...
+<section><div class="step">02 · PROVIDER</div><h2>Connect your model</h2><pre>lolm setup
+lolm doctor</pre><p>The guided setup works in Windows PowerShell, macOS, and Linux. Choose a built-in provider, Ollama, or a custom OpenAI-compatible endpoint. Your credentials stay in your local setup.</p><details><summary>Other provider options</summary><pre>lolm setup openai
 lolm setup anthropic
-
-lolm setup ollama</pre></section>
+lolm setup ollama</pre><p>You can also use your provider's normal environment variable. Set it using your shell's syntax; PowerShell and bash use different commands.</p></details></section>
 <section><div class="step">03 · USE</div><h2>Open the terminal UI</h2><pre>lolm
 lolm tools
-lolm doctor</pre><p>Keep talking in the same session. LOLM records durable local runs and can use typed terminal, filesystem, Git, GitHub, Cloudflare, browser, and computer tools. Say <code>try again</code> after a failed task, or use <code>lolm run</code> for one autonomous request:</p><pre>lolm run "fix the tests, deploy, and verify it in Chrome"
+lolm doctor</pre><p>Keep talking in the same session. LOLM records durable local runs and can use typed terminal, filesystem, Git, GitHub, Cloudflare, browser, and computer tools. Say <code>try again</code> after a failed task, or use <code>lolm run</code> for one task in your project folder. Start with a small change, then inspect the files and checks:</p><pre>lolm run "inspect this project and explain how to run its tests"
 lolm "answer this question…" --once
 lolm "make me a PDF and put it on my Desktop"
 lolm "code a polished HTML page here" --cwd ./project
 lolm "update yourself"</pre></section>
-<section><div class="step">04 · NFET</div><h2>Enable the full local controller</h2><p>The npm command works by itself. To use the trained NFET graft, clone the source and point LOLM at it:</p><pre>git clone https://github.com/TheArtOfSound/LOLM.git
+<section><details><summary>Advanced: enable the trained local controller</summary><h2>Optional NFET setup</h2><p>The npm command works by itself. To use the trained NFET graft, clone the source and point LOLM at it:</p><pre>git clone https://github.com/TheArtOfSound/LOLM.git
 cd LOLM
 python3 -m venv .venv
 .venv/bin/pip install -r requirements-agent.txt
 export LOLM_HOME="$PWD"
 lolm nfet status
-lolm nfet test "verified result text"</pre><p class="note">LOLM reports NFET unavailable when the model or checkpoint is missing. It never substitutes fake telemetry.</p></section>
+lolm nfet test "verified result text"</pre><p class="note">LOLM reports NFET unavailable when the model or checkpoint is missing. It never substitutes fake telemetry.</p></details></section>
+<section><div class="step">WITH QIRA</div><h2>Continue the same workflow</h2><p>Have a Flows plan? Copy its current instruction into LOLM, work in your project folder, then return the diff and test output to the same Flows run. Your local provider setup is separate from your Qira account.</p><p><a href="https://flows.oortstack.com/app/evidence">Return to your Flows evidence →</a> · <a href="https://imagineqira.com/journey/">See how Qira fits together →</a></p></section>
 <section><div class="step">UPDATE</div><h2>Keep it current</h2><pre>lolm update --check
 lolm update
 # or simply
