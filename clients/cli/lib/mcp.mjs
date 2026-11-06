@@ -59,10 +59,14 @@ class McpClient {
 export class McpManager {
   constructor({ root, registry }) { this.root = resolve(root); this.registry = registry; this.clients = []; this.status = []; }
 
-  async connectEnabled({ includeDisabled = false } = {}) {
+  async connectEnabled({ includeDisabled = false, approve } = {}) {
     const config = await readMcpConfig(this.root); const results = [];
     for (const [name, spec] of Object.entries(config.mcpServers || {})) {
       if (spec.enabled !== true && !includeDisabled) { results.push({ name, enabled: false, connected: false }); continue; }
+      // MCP servers execute their configured process before any tool call.
+      // Require human trust approval first; enabled=true is insufficient.
+      const allowed = typeof approve === "function" && await approve({ kind: "mcp", name, path: String(spec.command), args: spec.args || [] });
+      if (!allowed) { results.push({ name, enabled: true, connected: false, reason: "approval_required" }); continue; }
       const client = new McpClient(name, spec, this.root);
       try {
         await client.start(); const listed = await client.request("tools/list", {}); const tools = listed?.tools || [];

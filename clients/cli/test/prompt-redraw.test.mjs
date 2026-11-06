@@ -51,7 +51,7 @@ test("the prompt and its rule are one coherent block", () => {
   }
   const plain = stripAnsi(prompt);
   assert.match(plain, /YOU/, "the reader's turn is labelled");
-  assert.ok(plain.trimEnd().endsWith("›"), "the caret is the last thing before the cursor");
+  assert.ok(plain.trimEnd().endsWith(caps.unicode ? "›" : ">"), "the caret is the last thing before the cursor");
 });
 
 test("spread pins a detail to the right edge without overlapping", () => {

@@ -14,6 +14,7 @@ import { connect } from "node:net";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import readline from "node:readline";
 import { daemonSocketPath } from "../lib/nfet.mjs";
@@ -41,7 +42,7 @@ async function startDaemon() {
   const root = await mkdtemp(join(tmpdir(), "lolm-nfetd-"));
   const stub = join(root, "stub-bridge.mjs");
   await writeFile(stub, STUB_BRIDGE);
-  const socket = join(root, "nfet.sock");
+  const socket = process.platform === "win32" ? String.raw`\\.\pipe\lolm-nfet-test-${randomUUID()}` : join(root, "nfet.sock");
   // Node stands in for the interpreter and LOLM_NFET_BRIDGE for the script, so
   // the daemon runs its real code path against a bridge that answers instantly.
   const child = spawn(process.execPath, [

@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Bryan Leonard & Brandyn Leonard
 // SPDX-License-Identifier: AGPL-3.0-or-later
 import { spawn } from "node:child_process";
-import { isAbsolute, relative, resolve } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 export const MAX_OUTPUT = 256 * 1024;
 export const MAX_READ = 2 * 1024 * 1024;
@@ -11,9 +12,23 @@ export function resolveUserPath(root, value = ".") {
   return resolve(root, String(value || "."));
 }
 
+function physicalAncestor(path) {
+  let current = resolve(path);
+  // Resolve the nearest existing component so a workspace symlink cannot hide
+  // an out-of-workspace target even when the final file does not yet exist.
+  while (!existsSync(current)) {
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  try { return realpathSync(current); } catch { return current; }
+}
+
 export function isOutside(root, path) {
-  const value = relative(resolve(root), resolve(path));
-  return value.startsWith("..") || isAbsolute(value);
+  const physicalRoot = physicalAncestor(root);
+  const physicalTarget = physicalAncestor(path);
+  const value = relative(physicalRoot, physicalTarget);
+  return value === ".." || value.startsWith(".." + sep) || isAbsolute(value);
 }
 
 export function assertReadablePath(root, path, context = {}) {
@@ -31,7 +46,15 @@ export function pathClassification(root, values, { destructive = false } = {}) {
 
 export function runFile(command, args = [], { cwd = process.cwd(), env = {}, timeoutMs = 120_000, input } = {}) {
   return new Promise((resolvePromise) => {
-    const child = spawn(command, args, { cwd, env: { ...process.env, ...env }, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+    let child;
+    try {
+      child = spawn(command, args, { cwd, env: { ...process.env, ...env }, stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"] });
+    } catch (error) {
+      // Windows can reject spawning .cmd/.bat shims synchronously. A failed
+      // diagnostic must be reported as a failed command, not crash the CLI.
+      resolvePromise({ ok: false, error: error.message, code: error.code, timedOut: false, stdout: "", stderr: "" });
+      return;
+    }
     let stdout = "", stderr = "", timedOut = false, settled = false;
     const cap = (current, chunk) => `${current}${chunk}`.slice(-MAX_OUTPUT);
     child.stdout.on("data", (chunk) => { stdout = cap(stdout, chunk); });
