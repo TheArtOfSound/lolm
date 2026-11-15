@@ -21,5 +21,6 @@ jobs:
           node --check qira_event_horizon/engine.mjs
           node --check qira_event_horizon/worker.mjs
           node --check qira_event_horizon/robustness.mjs
+          node --check qira_event_horizon/mcp.mjs
       - name: Run policy, integrity, security and UI tests
         run: node --test qira_event_horizon/*.test.mjs
