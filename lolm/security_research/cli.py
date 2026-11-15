@@ -10,6 +10,8 @@ from .ocsf import as_jsonl, map_jsonl
 from .observer import check_manifest, fit_benign, parse_tokens, shadow_evaluate
 from .stress import stress_benchmark
 from .fixtures import write_study
+from .falsification import evaluate_falsification
+from .stress import Case
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,6 +37,18 @@ def main(argv: list[str] | None = None) -> int:
     observe_cmd.add_argument("--alpha", type=float, default=0.1)
     observe_cmd.add_argument("--checkpoint", type=Path, help="local checkpoint file; required for claimed checkpoint-generated traces")
     observe_cmd.add_argument("--expected-checkpoint", help="SHA-256 pin supplied independently of manifests")
+    falsify_cmd = group.add_parser("falsify", help="run offline incident-label permutation and telemetry shuffle controls")
+    falsify_cmd.add_argument("--train-events", type=Path, required=True)
+    falsify_cmd.add_argument("--train-trace", type=Path, required=True)
+    falsify_cmd.add_argument("--train-manifest", type=Path, required=True)
+    falsify_cmd.add_argument("--test-events", type=Path, required=True)
+    falsify_cmd.add_argument("--test-trace", type=Path, required=True)
+    falsify_cmd.add_argument("--test-manifest", type=Path, required=True)
+    falsify_cmd.add_argument("--scenarios", type=Path, required=True)
+    falsify_cmd.add_argument("--ack-known-benign", action="store_true")
+    falsify_cmd.add_argument("--alpha", type=float, default=0.1)
+    falsify_cmd.add_argument("--checkpoint", type=Path)
+    falsify_cmd.add_argument("--expected-checkpoint")
     simulate_cmd = group.add_parser("simulate", help="write synthetic JSONL fixtures")
     simulate_cmd.add_argument("path", type=Path)
     simulate_cmd.add_argument("--seed", type=int, default=37)
@@ -61,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         result = stress_benchmark()
     elif args.cmd == "make-study":
         result = write_study(args.out_dir, args.reference_events)
-    elif args.cmd == "observe":
+    elif args.cmd in ("observe", "falsify"):
         if not args.ack_known_benign:
             parser.error("--ack-known-benign required; labels defaulting to false is not proof")
         def load_bundle(event_path, trace_path, manifest_path):
@@ -90,12 +104,24 @@ def main(argv: list[str] | None = None) -> int:
         test_provenance = check_manifest(test_manifest, test_events, test_tokens,
                                          checkpoint_path=args.checkpoint,
                                          expected_checkpoint=args.expected_checkpoint)
-        calibration = fit_benign(train_events, train_tokens, alpha=args.alpha)
-        result = shadow_evaluate(calibration, train_events, test_events, test_tokens)
+        if args.cmd == "observe":
+            calibration = fit_benign(train_events, train_tokens, alpha=args.alpha)
+            result = shadow_evaluate(calibration, train_events, test_events, test_tokens)
+            result["reference_count"] = calibration.reference_count
+            result["calibration_count"] = calibration.calibration_count
+        else:
+            raw = json.loads(args.scenarios.read_text(encoding="utf8"))
+            if not isinstance(raw, list) or not 1 <= len(raw) <= 18:
+                parser.error("scenario labels must contain 1..18 records")
+            if any(not isinstance(row, dict) or set(row) != set(Case.__dataclass_fields__)
+                   for row in raw):
+                parser.error("scenario metadata must contain exactly the Case fields")
+            scenarios = [Case(**row) for row in raw]
+            result = evaluate_falsification(train_events, train_tokens,
+                                            test_events, test_tokens, scenarios,
+                                            alpha=args.alpha)
         result["train_provenance"] = train_provenance
         result["test_provenance"] = test_provenance
-        result["reference_count"] = calibration.reference_count
-        result["calibration_count"] = calibration.calibration_count
     elif args.cmd == "headlines":
         with args.path.open("r", encoding="utf8") as stream:
             result = headline_audit(parse_claims(stream), args.since)
