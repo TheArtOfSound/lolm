@@ -7,6 +7,8 @@ from pathlib import Path
 from .lab import analyze, benchmark, parse_jsonl, synthetic_scenarios, verify_receipts
 from .headlines import headline_audit, parse_claims
 from .ocsf import as_jsonl, map_jsonl
+from .observer import check_manifest, fit_benign, parse_tokens, shadow_evaluate
+from .stress import stress_benchmark
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -16,6 +18,19 @@ def main(argv: list[str] | None = None) -> int:
     analyze_cmd.add_argument("path", type=Path)
     analyze_cmd.add_argument("--mode", choices=["rules", "shift", "hybrid"], default="hybrid")
     group.add_parser("benchmark", help="compare baselines on fictional data")
+    group.add_parser("stress", help="expose false positives on adversarial fictional data")
+    observe_cmd = group.add_parser("observe", help="score offline LOLM NFET token telemetry (shadow-only)")
+    observe_cmd.add_argument("--train-events", type=Path, required=True)
+    observe_cmd.add_argument("--train-trace", type=Path, required=True)
+    observe_cmd.add_argument("--train-manifest", type=Path, required=True)
+    observe_cmd.add_argument("--test-events", type=Path, required=True)
+    observe_cmd.add_argument("--test-trace", type=Path, required=True)
+    observe_cmd.add_argument("--test-manifest", type=Path, required=True)
+    observe_cmd.add_argument("--ack-known-benign", action="store_true",
+                             help="assert calibration events are verified benign, not merely unlabeled")
+    observe_cmd.add_argument("--alpha", type=float, default=0.1)
+    observe_cmd.add_argument("--checkpoint", type=Path, help="local checkpoint file; required for claimed checkpoint-generated traces")
+    observe_cmd.add_argument("--expected-checkpoint", help="SHA-256 pin supplied independently of manifests")
     simulate_cmd = group.add_parser("simulate", help="write synthetic JSONL fixtures")
     simulate_cmd.add_argument("path", type=Path)
     simulate_cmd.add_argument("--seed", type=int, default=37)
@@ -38,6 +53,43 @@ def main(argv: list[str] | None = None) -> int:
             result = analyze(parse_jsonl(stream), args.mode)
     elif args.cmd == "benchmark":
         result = benchmark()
+    elif args.cmd == "stress":
+        result = stress_benchmark()
+    elif args.cmd == "observe":
+        if not args.ack_known_benign:
+            parser.error("--ack-known-benign required; labels defaulting to false is not proof")
+        def load_bundle(event_path, trace_path, manifest_path):
+            with event_path.open("r", encoding="utf8") as handle:
+                events = parse_jsonl(handle)
+            with trace_path.open("r", encoding="utf8") as handle:
+                tokens = parse_tokens(handle, len(events))
+            manifest = json.loads(manifest_path.read_text(encoding="utf8"))
+            return events, tokens, manifest
+        train_events, train_tokens, train_manifest = load_bundle(
+            args.train_events, args.train_trace, args.train_manifest)
+        test_events, test_tokens, test_manifest = load_bundle(
+            args.test_events, args.test_trace, args.test_manifest)
+        if train_manifest.get("source_type") != test_manifest.get("source_type"):
+            parser.error("train and test trace origins must match")
+        if train_manifest.get("checkpoint_sha256") != test_manifest.get("checkpoint_sha256"):
+            parser.error("train and test checkpoints must match")
+        if train_manifest.get("source_type") == "checkpoint-generated":
+            if args.checkpoint is None or args.expected_checkpoint is None:
+                parser.error("checkpoint-generated traces require --checkpoint and independent --expected-checkpoint")
+        if args.checkpoint is not None and args.expected_checkpoint is None:
+            parser.error("--checkpoint requires --expected-checkpoint")
+        train_provenance = check_manifest(train_manifest, train_events, train_tokens,
+                                          checkpoint_path=args.checkpoint,
+                                          expected_checkpoint=args.expected_checkpoint)
+        test_provenance = check_manifest(test_manifest, test_events, test_tokens,
+                                         checkpoint_path=args.checkpoint,
+                                         expected_checkpoint=args.expected_checkpoint)
+        calibration = fit_benign(train_events, train_tokens, alpha=args.alpha)
+        result = shadow_evaluate(calibration, train_events, test_events, test_tokens)
+        result["train_provenance"] = train_provenance
+        result["test_provenance"] = test_provenance
+        result["reference_count"] = calibration.reference_count
+        result["calibration_count"] = calibration.calibration_count
     elif args.cmd == "headlines":
         with args.path.open("r", encoding="utf8") as stream:
             result = headline_audit(parse_claims(stream), args.since)
