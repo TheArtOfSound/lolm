@@ -3,13 +3,13 @@ on:
   push:
     paths:
       - 'lolm/security_research/**'
-      - 'tests/test_security_research.py'
+      - 'tests/test_security_*.py'
       - 'doc/security_research_lab.md'
       - '.github/workflows/security-research-lab.yml'
   pull_request:
     paths:
       - 'lolm/security_research/**'
-      - 'tests/test_security_research.py'
+      - 'tests/test_security_*.py'
       - 'doc/security_research_lab.md'
       - '.github/workflows/security-research-lab.yml'
 jobs:
@@ -24,6 +24,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Run isolated offline unit tests
-        run: python -m unittest discover -s tests -p test_security_research.py -v
+        run: python -m unittest discover -s tests -p test_security_*.py -v
       - name: Run baseline benchmark
         run: python -m lolm.security_research.cli benchmark > security-research-benchmark.json
