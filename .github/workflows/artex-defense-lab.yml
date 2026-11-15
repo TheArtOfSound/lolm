@@ -1,0 +1,28 @@
+name: LOLM defensive incident lab
+on:
+  push:
+    paths:
+      - 'research/artex_defense_lab/**'
+      - 'research/__init__.py'
+      - '.github/workflows/artex-defense-lab.yml'
+  pull_request:
+    paths:
+      - 'research/artex_defense_lab/**'
+      - 'research/__init__.py'
+      - '.github/workflows/artex-defense-lab.yml'
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate with standard library only
+        run: python -m unittest discover -s research/artex_defense_lab/tests -v
+      - name: Run fixture replay
+        run: |
+          python -m research.artex_defense_lab generate --out out/artex-defense --seed 20261115 --repeats 8
+          python -m research.artex_defense_lab evaluate --input out/artex-defense --out out/artex-defense
