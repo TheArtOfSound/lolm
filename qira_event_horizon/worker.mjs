@@ -11,7 +11,7 @@ return String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><me
 <nav class="tabs" aria-label="Research views"><button class="tab active" data-tab="observatory">01 / Observatory</button><button class="tab" data-tab="frontier">02 / Control Frontier</button><button class="tab" data-tab="robustness">03 / Uncertainty Lab</button><button class="tab" data-tab="proof">04 / Evidence Receipt</button></nav>
 <div class="metrics"><div class="metric"><div class="label">Unprotected harm</div><div class="val" id="metric-base">—</div><div class="hint">Modeled impact units</div></div><div class="metric"><div class="label">Residual harm</div><div class="val rose" id="metric-risk">—</div><div class="hint">Across fictional adversarial cases</div></div><div class="metric"><div class="label">Prevention effect</div><div class="val accent" id="metric-prevent">—</div><div class="hint">Baseline minus residual harm</div></div><div class="metric"><div class="label">Legitimate friction</div><div class="val amber" id="metric-friction">—</div><div class="hint">Model-defined effort points</div></div></div>
 <section class="content-grid" id="observatory">
-<aside class="panel"><div class="panel-header"><span class="panel-title">Defender control plane</span><span class="small muted" id="active-count">0 enabled</span></div><div id="controls" class="controls"></div><div class="footnote">These policies modify the simulated environment only. No real identity provider, network, or customer data is accessed.<div class="actions" style="margin-top:13px"><button class="secondary" id="reset">Reset</button><button class="primary" id="all-controls">Enable all</button></div></div></aside>
+<aside class="panel"><div class="panel-header"><span class="panel-title">Defender control plane</span><span class="small muted" id="active-count">0 enabled</span></div><div id="controls" class="controls"></div><div class="footnote">These policies modify the simulated environment only. No real identity provider, network, or customer data is accessed.<div class="actions" style="margin-top:13px"><button class="secondary" id="reset">Reset</button><button class="primary" id="all-controls">Enable all</button><button class="secondary" id="share">Share exact state</button></div></div></aside>
 <div class="panel"><div class="panel-header"><span class="panel-title">One scenario / two worlds</span><span class="small muted" id="case-kind">SELECT A CASE</span></div><div class="panel-body">
 <div class="casehead"><div><h2 id="case-title">Loading scenario</h2><p id="case-desc"></p></div><select aria-label="Choose fictional scenario" id="scenario"></select></div>
 <div class="kicker">Sequential decision trace / after controls</div><div id="steps"></div><div class="outline"><div class="note"><b>Counterfactual difference</b><p id="difference">—</p></div><div class="note"><b>Minimal modeled stopping controls</b><div id="minimal"><span class="muted">—</span></div></div></div>
@@ -39,6 +39,7 @@ return String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><me
 "use strict";
 const $=id=>document.getElementById(id);
 const state={meta:null,policy:{},scenarioId:"credential-cascade",report:null,tab:"observatory",riskWeight:70,requestId:0};
+const initialParams=new URLSearchParams(location.search);
 let currentReceipt=null, recommended=null;
 const names={auth_failure:"Auth failure",login:"Session login",token_use:"Token accepted",grant:"Privilege grant",export:"Data export",read:"Normal read"};
 function el(tag,className,txt){const v=document.createElement(tag);if(className)v.className=className;if(txt!==undefined)v.textContent=String(txt);return v;}
@@ -118,7 +119,10 @@ async function run(){
  try{const response=await fetch("/api/evaluate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenarioId:state.scenarioId,policy:state.policy})});
  if(!response.ok)throw new Error("Evaluation request failed ("+response.status+")");
  const data=await response.json();if(runid!==state.requestId)return;
- currentReceipt=data;state.report=data;renderControls();
+ currentReceipt=data;state.report=data;
+ const mask=state.meta.controls.reduce((acc,c,i)=>acc|(state.policy[c.id]?(1<<i):0),0);
+ history.replaceState(null,"",location.pathname+"?case="+encodeURIComponent(state.scenarioId)+"&policy="+mask);
+ renderControls();
  putMetric("metric-base",data.summary.baselineHarm);putMetric("metric-risk",data.summary.harm);
  putMetric("metric-prevent",data.summary.preventedHarm);putMetric("metric-friction",data.summary.friction);
  renderCase();scatter();recommend();renderRobustness();renderProof();$("status").textContent="Model evaluated. All figures are fictional utility units, not forecasts."; }
@@ -127,6 +131,10 @@ async function run(){
 $("reset").addEventListener("click",()=>{state.policy={};renderControls();run();});
 $("all-controls").addEventListener("click",()=>{for(const c of state.meta.controls)state.policy[c.id]=true;renderControls();run();});
 $("apply-robust").addEventListener("click",()=>{if(state.report?.robustness)applyMask(state.report.robustness.minimax.mask);});
+$("share").addEventListener("click",async()=>{
+ try{await navigator.clipboard.writeText(location.href);$("status").textContent="Exact fictional scenario and defender policy link copied.";}
+ catch{$("status").textContent="Link ready in address bar; clipboard access was denied.";}
+});
 $("riskWeight").addEventListener("input",e=>{state.riskWeight=Number(e.target.value);if(state.report)recommend();});
 $("verify").addEventListener("click",async()=>{if(!currentReceipt)return;const {receipt,...payload}=currentReceipt;
  const computed=await digest(payload);const good=computed===receipt.digest;$("receipt-status").textContent=good?"SHA-256 matches this downloaded model output. Authenticity and assumptions remain unverified.":"Digest mismatch — results modified."; $("receipt-status").className="status-message "+(good?"ok":"error");});
@@ -134,7 +142,13 @@ $("download").addEventListener("click",()=>{if(!currentReceipt)return;const blob
  const a=document.createElement("a");a.href=url;a.download="qira-event-horizon-"+state.scenarioId+"-receipt.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),500);});
 $("copy").addEventListener("click",async()=>{if(!currentReceipt)return;try{await navigator.clipboard.writeText(currentReceipt.receipt.digest);$("receipt-status").textContent="Digest copied.";}catch{$("receipt-status").textContent="Clipboard unavailable; select the digest above to copy."; }});
 (async()=>{try{const r=await fetch("/api/meta");if(!r.ok)throw Error("Unable to load scenarios");
- state.meta=await r.json();renderSelect();renderControls();await run();}catch(e){$("status").textContent=e.message;}})();
+ state.meta=await r.json();
+ const caseParam=initialParams.get("case"),maskText=initialParams.get("policy");
+ if(state.meta.scenarios.some(s=>s.id===caseParam))state.scenarioId=caseParam;
+ if(maskText!==null&&/^(?:[0-9]|[12][0-9]|3[01])$/.test(maskText)){
+  const mask=Number(maskText);state.meta.controls.forEach((c,i)=>state.policy[c.id]=Boolean(mask&(1<<i)));
+ }
+ renderSelect();renderControls();await run();}catch(e){$("status").textContent=e.message;}})();
 })();
 </script></body></html>`;
 }
