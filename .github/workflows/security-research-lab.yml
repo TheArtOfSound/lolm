@@ -32,3 +32,5 @@ jobs:
         run: python -m lolm.security_research.cli stress > security-research-stress.json
       - name: Validate local capture exporter syntax
         run: python -m py_compile scripts/capture_security_nfet_trace.py
+      - name: Generate split synthetic event study
+        run: python -m lolm.security_research.cli make-study /tmp/security-study > /tmp/security-study-manifest.json
