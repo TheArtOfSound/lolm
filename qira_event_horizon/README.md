@@ -4,7 +4,9 @@
 
 **Live URL:** https://horizon.imagineqira.com/  
 **Cloudflare Worker:** `qira-event-horizon-research`  
-**Public MCP endpoint:** `https://horizon.imagineqira.com/mcp` (stateless, experimental)  
+**Public MCP endpoint:** `https://horizon.imagineqira.com/mcp` (stateless, experimental)
+**OpenAPI contract:** https://horizon.imagineqira.com/openapi.json
+**Shareable study example:** https://horizon.imagineqira.com/?case=credential-cascade&policy=31  
 **Source:** `qira_event_horizon/` inside the LOLM repository  
 **Development branch:** `research/artex-defense-lab-2026-11-15`; draft PR #59
 
@@ -29,6 +31,7 @@ scoring an attack in isolation, it asks:
 - Exact minimax-regret over declared worlds with stated utility convention
 - SHA-256 integrity receipt covering returned result; **not a signature or model attestation**
 - Read-only public API and narrow MCP JSON-RPC adapter
+- Reproducible query links that preserve scenario ID and 0–31 policy bitmask
 
 **Intentional counterexample:** An approved insider export survives all
 modeled controls. No user should infer real detection accuracy or promised
@@ -53,6 +56,8 @@ GitHub Actions workflow: `.github/workflows/event-horizon-worker.yml`.
 `GET /health`: read-only deployment status.
 
 `GET /api/meta`: fixed scenario and policy manifest.
+
+`GET /openapi.json`: constrained machine-readable OpenAPI 3.1 contract.
 
 `POST /api/evaluate` (JSON body): `{"scenarioId":"credential-cascade","policy":{"mfa":true}}`.
 
