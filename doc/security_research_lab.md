@@ -231,3 +231,20 @@ with \`--ack-known-benign --checkpoint ... --expected-checkpoint ...\`.
 specifically excludes \`truth\` and scenario-coded actor names from its prompt.
 An observer score here would still be on fictional events and does not prove
 operational cybersecurity improvement or actual generated-trace provenance.
+
+
+## Phase 3 — Falsification and native-model capture
+
+`falsify` uses the same checked train/test bundles as `observe`, plus
+the separately stored `scenario-labels.json` from `make-study`.
+It enumerates exact scenario-label permutations and tests whether properly
+aligned telemetry beats seven whole-event-trace shuffles.
+No p-value is a deployment claim. See
+`doc/security_phase3_falsification.md`.
+
+A second source-specific capture script,
+`scripts/capture_security_lolm_native.py`, extracts the original
+LOLM-304M gate/regime/logit/hidden tensors, requiring a separately
+pinned trusted complete model checkpoint. The native drift definition
+is not numerically equivalent to the Qwen graft's drift. The loader
+was not run on real weights in this phase.
