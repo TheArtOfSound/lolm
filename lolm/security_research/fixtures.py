@@ -31,10 +31,12 @@ def write_study(directory: Path, n: int = 60) -> dict:
     if directory.exists():
         raise FileExistsError("refusing to overwrite study directory")
     train,test = study_events(n)
+    _,scenarios = cases()
     directory.mkdir(parents=True,exist_ok=False)
     for name,items in (("reference-events.jsonl",train),("heldout-events.jsonl",test)):
         (directory/name).write_text(
             "".join(json.dumps(asdict(e),sort_keys=True)+"\n" for e in items),encoding="utf8")
+    (directory/"scenario-labels.json").write_text(json.dumps([asdict(x) for x in scenarios],indent=2)+"\n",encoding="utf8")
     (directory/"README.txt").write_text(
         "Fictional synthetic defensive security study. Reference is known benign; "
         "held-out contains 3 suspicious and 5 benign scenarios. No results from this "
@@ -44,5 +46,6 @@ def write_study(directory: Path, n: int = 60) -> dict:
         "reference_events":len(train),"test_events":len(test),
         "reference_path":str(directory/"reference-events.jsonl"),
         "heldout_path":str(directory/"heldout-events.jsonl"),
+        "scenario_labels":str(directory/"scenario-labels.json"),
         "data_origin":"fictional",
     }
