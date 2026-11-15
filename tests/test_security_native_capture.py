@@ -1,5 +1,8 @@
 import unittest
-import torch
+try:
+    import torch
+except ImportError:
+    torch = None  # optional heavyweight dependency; offline CI covers other gates
 from lolm.security_research.native_capture import capture_native
 from lolm.security_research.lab import Event
 from lolm.security_research.observer import check_manifest
@@ -31,6 +34,7 @@ class DummyNativeModel:
         return out
 
 
+@unittest.skipUnless(torch is not None, "native tensor checks require optional PyTorch")
 class NativeCaptureTests(unittest.TestCase):
     def test_real_tensor_path_without_model_loading(self):
         e=[Event(100,'PRIVATE','login_failed',source='synthetic',truth=True)]
