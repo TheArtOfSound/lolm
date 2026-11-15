@@ -7,7 +7,7 @@ function rpc(id,method,params={},options={}){
  const request={jsonrpc:"2.0",id,method,params};
  const headers={"Content-Type":"application/json","Accept":"application/json, text/event-stream",
                 "MCP-Protocol-Version":"2026-07-28","Mcp-Method":method,...options.headers};
- if(method==="tools/call")headers["Mcp-Name"]=params.name;
+ if(method==="tools/call"&&!headers["Mcp-Name"])headers["Mcp-Name"]=params.name;
  return worker.fetch(new Request(endpoint,{method:"POST",headers,body:JSON.stringify(request)}));
 }
 test("2026 MCP initializes with stateless, read-only tools",async()=>{
