@@ -9,6 +9,7 @@ from .headlines import headline_audit, parse_claims
 from .ocsf import as_jsonl, map_jsonl
 from .observer import check_manifest, fit_benign, parse_tokens, shadow_evaluate
 from .stress import stress_benchmark
+from .fixtures import write_study
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -19,6 +20,9 @@ def main(argv: list[str] | None = None) -> int:
     analyze_cmd.add_argument("--mode", choices=["rules", "shift", "hybrid"], default="hybrid")
     group.add_parser("benchmark", help="compare baselines on fictional data")
     group.add_parser("stress", help="expose false positives on adversarial fictional data")
+    study_cmd = group.add_parser("make-study", help="write split synthetic reference and held-out event sets")
+    study_cmd.add_argument("out_dir", type=Path)
+    study_cmd.add_argument("--reference-events", type=int, default=60)
     observe_cmd = group.add_parser("observe", help="score offline LOLM NFET token telemetry (shadow-only)")
     observe_cmd.add_argument("--train-events", type=Path, required=True)
     observe_cmd.add_argument("--train-trace", type=Path, required=True)
@@ -55,6 +59,8 @@ def main(argv: list[str] | None = None) -> int:
         result = benchmark()
     elif args.cmd == "stress":
         result = stress_benchmark()
+    elif args.cmd == "make-study":
+        result = write_study(args.out_dir, args.reference_events)
     elif args.cmd == "observe":
         if not args.ack_known_benign:
             parser.error("--ack-known-benign required; labels defaulting to false is not proof")
