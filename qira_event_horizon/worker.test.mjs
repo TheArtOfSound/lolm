@@ -86,6 +86,9 @@ test("Worker serves standalone responsive UI under CSP",async()=>{
  assert.match(html,/id="verify"/);
  assert.match(html,/id="robustness"/);
  assert.match(html,/id="apply-robust"/);
+ assert.match(html,/id="share"/);
+ assert.match(html,/new URLSearchParams\(location.search\)/);
+ assert.match(html,/history.replaceState/);
  assert.doesNotMatch(html,/__NONCE__/);
 });
 test("methods restricted and no state mutation endpoint",async()=>{
