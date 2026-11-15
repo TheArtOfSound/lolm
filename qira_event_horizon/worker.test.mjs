@@ -78,7 +78,7 @@ test("Worker serves standalone responsive UI under CSP",async()=>{
  assert.match(res.headers.get("Content-Security-Policy"),/nonce-/);
  const html=await res.text();
  assert.match(html,/What actually/);
- assert.match(html,/Synthetic/);
+ assert.match(html,/FICTIONAL DATA ONLY/);
  assert.match(html,/id="scenario"/);
  assert.match(html,/id="verify"/);
  assert.doesNotMatch(html,/__NONCE__/);
