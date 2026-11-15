@@ -1,5 +1,6 @@
 import {CONTROL_INFO,SCENARIOS,evaluate} from "./engine.mjs";
 import {robustAnalysis} from "./robustness.mjs";
+import {handleMcp} from "./mcp.mjs";
 
 function renderPage(nonce){
 return String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>EVENT HORIZON / Qira Research</title><meta name="description" content="A synthetic, counterfactual security policy observatory. Model defender tradeoffs without targeting real systems."><style nonce="__NONCE__">
@@ -151,6 +152,7 @@ function jsonResponse(data,status=200){
 async function fetchHandler(request){
  const url=new URL(request.url);
  try{
+ if(url.pathname==="/mcp")return handleMcp(request);
  if(url.pathname==="/health"&&request.method==="GET"){
   return jsonResponse({ok:true,service:"Qira Event Horizon",version:"synthetic-v1",data:"fictional",mode:"read-only",persistence:false});
  }
