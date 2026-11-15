@@ -72,3 +72,18 @@ or real ARTEX identification has occurred in this phase. The rules can be
 spoofed or evaded, and benign high-volume behavior can be misclassified.
 The fixed fictional attack schedule makes the synthetic benchmark especially
 weak evidence of generalization.
+
+## Cyber-news provenance auditing (Phase 1.1)
+
+An offline headline ledger separates publication timestamps from event occurrence,
+deduplicates multiple reports on one incident, and keeps official/vendor
+confirmations separate from attacker claims. Advisories are not counted as new
+discrete intrusions. The count is **confirmed incidents among the supplied
+claims only**: it cannot prove worldwide first disclosure.
+
+Usage:
+    python -m lolm.security_research.cli headlines claims.jsonl --since 2026-11-15T11:24:00-07:00
+
+Claims are JSONL records requiring incident_id, title, published_at,
+source_url, source_class, status, category; occurred_at and ai_role are
+optional. Source URLs are references, never fetched by this code.
