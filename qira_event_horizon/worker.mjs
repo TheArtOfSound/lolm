@@ -1,4 +1,5 @@
 import {CONTROL_INFO,SCENARIOS,evaluate} from "./engine.mjs";
+import {robustAnalysis} from "./robustness.mjs";
 
 function renderPage(nonce){
 return String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>EVENT HORIZON / Qira Research</title><meta name="description" content="A synthetic, counterfactual security policy observatory. Model defender tradeoffs without targeting real systems."><style nonce="__NONCE__">
@@ -6,7 +7,7 @@ return String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><me
 </style></head><body><div class="shell">
 <header class="top"><div class="brand">QIRA <span>/ EVENT HORIZON</span></div><div class="topright"><span class="pulse"></span> EDGE SIMULATOR <span>R&D / 001</span></div></header>
 <div class="hero"><div><div class="kicker">Counterfactual security observatory</div><h1>What actually <em>stops the loss?</em></h1><p>Explore hypothetical incident paths, intervene on the defender's controls, and expose the operational price of prevention. A simulation lab, not a live attack feed.</p></div><div class="pill">FICTIONAL DATA ONLY</div></div>
-<nav class="tabs" aria-label="Research views"><button class="tab active" data-tab="observatory">01 / Observatory</button><button class="tab" data-tab="frontier">02 / Control Frontier</button><button class="tab" data-tab="proof">03 / Evidence Receipt</button></nav>
+<nav class="tabs" aria-label="Research views"><button class="tab active" data-tab="observatory">01 / Observatory</button><button class="tab" data-tab="frontier">02 / Control Frontier</button><button class="tab" data-tab="robustness">03 / Uncertainty Lab</button><button class="tab" data-tab="proof">04 / Evidence Receipt</button></nav>
 <div class="metrics"><div class="metric"><div class="label">Unprotected harm</div><div class="val" id="metric-base">—</div><div class="hint">Modeled impact units</div></div><div class="metric"><div class="label">Residual harm</div><div class="val rose" id="metric-risk">—</div><div class="hint">Across fictional adversarial cases</div></div><div class="metric"><div class="label">Prevention effect</div><div class="val accent" id="metric-prevent">—</div><div class="hint">Baseline minus residual harm</div></div><div class="metric"><div class="label">Legitimate friction</div><div class="val amber" id="metric-friction">—</div><div class="hint">Model-defined effort points</div></div></div>
 <section class="content-grid" id="observatory">
 <aside class="panel"><div class="panel-header"><span class="panel-title">Defender control plane</span><span class="small muted" id="active-count">0 enabled</span></div><div id="controls" class="controls"></div><div class="footnote">These policies modify the simulated environment only. No real identity provider, network, or customer data is accessed.<div class="actions" style="margin-top:13px"><button class="secondary" id="reset">Reset</button><button class="primary" id="all-controls">Enable all</button></div></div></aside>
@@ -15,6 +16,21 @@ return String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><me
 <div class="kicker">Sequential decision trace / after controls</div><div id="steps"></div><div class="outline"><div class="note"><b>Counterfactual difference</b><p id="difference">—</p></div><div class="note"><b>Minimal modeled stopping controls</b><div id="minimal"><span class="muted">—</span></div></div></div>
 </div></div></section>
 <section class="cols hidden" id="frontier"><div class="panel"><div class="panel-header"><span class="panel-title">Policy frontier</span><span class="small muted">All 32 combinations tested</span></div><div class="panel-body"><p class="muted small">Each point is one defensive policy. Lower and further left is better. Dominance is calculated across harm, friction, and control complexity. This is a toy structural model.</p><svg class="axis" viewBox="0 0 550 285" role="img" aria-label="Pareto frontier scatter chart" id="scatter"></svg><div class="kicker">HORIZONTAL / legitimate friction &nbsp;&nbsp; VERTICAL / residual harm</div></div></div><div class="panel"><div class="panel-header"><span class="panel-title">Choose a portfolio</span><span class="small muted" id="frontier-count"></span></div><div class="panel-body"><div class="field"><label for="riskWeight">Prevention priority</label><input type="range" min="0" max="100" step="5" id="riskWeight" value="70"><span id="riskValue" class="mono">70%</span></div><div class="accent-line" id="portfolio-recommendation">Select the policy you want to compare.</div></div><div class="frontier-list" id="frontier-list"></div></div></section>
+<section class="cols hidden" id="robustness">
+<div class="panel"><div class="panel-header"><span class="panel-title">Uncertainty worlds</span><span class="small muted">Six deliberate assumption failures</span></div>
+<div class="panel-body"><div class="kicker">What if the defense model is wrong?</div>
+<h2 style="font-size:27px;letter-spacing:-.04em;font-weight:550">Stress your assumptions.</h2>
+<p class="muted small">We disable fictional controls and challenge approval metadata. We do not assign real probabilities to these failures, and this is not an attacker playbook.</p>
+<div class="frontier-list" id="robust-worlds" style="padding:0;max-height:370px"></div></div></div>
+<div class="panel"><div class="panel-header"><span class="panel-title">Minimax-regret policy</span><span class="small muted">32 × 6 simulations</span></div>
+<div class="panel-body">
+<div class="kicker">Selected policy / worst-case harm</div><div class="val" style="font-size:35px;letter-spacing:-.04em" id="robust-current">—</div>
+<div class="small muted" id="robust-explain" style="margin:14px 0 23px"></div>
+<div class="kicker">Least worst regret under declared assumptions</div><div class="val accent" style="font-size:35px;letter-spacing:-.04em" id="robust-best">—</div>
+<p class="small muted" id="robust-description"></p>
+<button class="primary" id="apply-robust">Apply minimax portfolio</button>
+<div class="readout small warn">A good synthetic minimax policy is not an empirically validated defense. No results here estimate the actual probability of compromise.</div>
+</div></div></section>
 <section class="cols hidden" id="proof"><div class="panel"><div class="panel-header"><span class="panel-title">Tamper-evident result receipt</span><span class="small muted">SHA-256 / deterministic payload</span></div><div class="panel-body"><p class="muted small">The SHA-256 covers the returned scenario, intervention settings, results and model disclaimer. It verifies bytes have not changed; it does <strong>not</strong> prove the simulation is correct or that Cloudflare witnessed an actual incident.</p><div class="readout"><span class="kicker">Current digest</span><div class="mono" id="digest">—</div></div><div class="actions"><button class="primary" id="verify">Verify in browser</button><button class="secondary" id="download">Save JSON receipt</button><button class="secondary" id="copy">Copy digest</button></div><p class="status-message" id="receipt-status"></p></div></div><div class="panel"><div class="panel-header"><span class="panel-title">Evidence and limitations</span></div><div class="panel-body"><p class="small muted">Provenance claims must survive independent testing. In this public version, scenario assumptions are authored, not inferred. Interventions are deterministic changes to those assumptions; they are not causal estimates learned from real environments.</p><p class="small muted">An approved insider export intentionally remains harmful under every modeled control. A defender that claims total prevention from this toy data is incorrect.</p><pre id="receipt-preview">Waiting for simulation…</pre></div></div></section>
 <footer><span>QIRA LAB / EXPERIMENTAL / NO REAL CUSTOMER TELEMETRY</span><span>Deterministic structural counterfactuals ≠ demonstrated causal effects</span></footer><p class="status-message" id="status"></p>
 </div><script nonce="__NONCE__">
@@ -25,7 +41,7 @@ const state={meta:null,policy:{},scenarioId:"credential-cascade",report:null,tab
 let currentReceipt=null, recommended=null;
 const names={auth_failure:"Auth failure",login:"Session login",token_use:"Token accepted",grant:"Privilege grant",export:"Data export",read:"Normal read"};
 function el(tag,className,txt){const v=document.createElement(tag);if(className)v.className=className;if(txt!==undefined)v.textContent=String(txt);return v;}
-function tab(name){state.tab=name;for(const id of ["observatory","frontier","proof"])$(id).classList.toggle("hidden",id!==name);
+function tab(name){state.tab=name;for(const id of ["observatory","frontier","robustness","proof"])$(id).classList.toggle("hidden",id!==name);
  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));}
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>tab(b.dataset.tab)));
 function renderControls(){const wrap=$("controls");wrap.replaceChildren();for(const c of state.meta.controls){
@@ -84,6 +100,16 @@ function recommend(){
 function applyMask(mask){state.meta.controls.forEach((c,i)=>{state.policy[c.id]=Boolean(mask&(1<<i));});renderControls();run();tab("observatory");}
 async function digest(obj){const bytes=new TextEncoder().encode(JSON.stringify(obj));const hash=await crypto.subtle.digest("SHA-256",bytes);
  return Array.from(new Uint8Array(hash),x=>x.toString(16).padStart(2,"0")).join("");}
+function renderRobustness(){if(!state.report||!state.report.robustness)return;
+ const r=state.report.robustness;const wrap=$("robust-worlds");wrap.replaceChildren();
+ for(const world of r.selected.worldOutcomes){const row=el("div","frontier-row");
+ const name=el("span","small",world.label);name.title=world.assumptions;
+ row.append(name,el("b",null,world.harm+" harm"),el("span",null,world.friction+" friction"));wrap.append(row);}
+ $("robust-current").textContent=r.selected.worstCaseHarm+" units";
+ $("robust-best").textContent=r.minimax.worstCaseHarm+" units";
+ $("robust-explain").textContent="Current worst scenario: "+r.selected.worstCaseHarm+" modeled harm units; maximum cross-world regret: "+r.selected.maxRegret+".";
+ $("robust-description").textContent="Least worst-regret portfolio: "+(r.minimax.controls.length?r.minimax.controls.map(id=>state.meta.controls.find(x=>x.id===id).name).join(", "):"No controls")+". Maximum modeled regret: "+r.minimax.maxRegret+".";
+}
 function renderProof(){if(!currentReceipt)return;$("digest").textContent=currentReceipt.receipt.digest;
  $("receipt-preview").textContent=JSON.stringify({schema:currentReceipt.schema,selected:currentReceipt.selected.scenario.id,policy:currentReceipt.policy,summary:currentReceipt.summary,receipt:currentReceipt.receipt},null,2);}
 async function run(){
@@ -94,11 +120,12 @@ async function run(){
  currentReceipt=data;state.report=data;renderControls();
  putMetric("metric-base",data.summary.baselineHarm);putMetric("metric-risk",data.summary.harm);
  putMetric("metric-prevent",data.summary.preventedHarm);putMetric("metric-friction",data.summary.friction);
- renderCase();scatter();recommend();renderProof();$("status").textContent="Model evaluated. All figures are fictional utility units, not forecasts."; }
+ renderCase();scatter();recommend();renderRobustness();renderProof();$("status").textContent="Model evaluated. All figures are fictional utility units, not forecasts."; }
  catch(error){if(runid===state.requestId)$("status").textContent=error.message;}
 }
 $("reset").addEventListener("click",()=>{state.policy={};renderControls();run();});
 $("all-controls").addEventListener("click",()=>{for(const c of state.meta.controls)state.policy[c.id]=true;renderControls();run();});
+$("apply-robust").addEventListener("click",()=>{if(state.report?.robustness)applyMask(state.report.robustness.minimax.mask);});
 $("riskWeight").addEventListener("input",e=>{state.riskWeight=Number(e.target.value);if(state.report)recommend();});
 $("verify").addEventListener("click",async()=>{if(!currentReceipt)return;const {receipt,...payload}=currentReceipt;
  const computed=await digest(payload);const good=computed===receipt.digest;$("receipt-status").textContent=good?"SHA-256 matches this downloaded model output. Authenticity and assumptions remain unverified.":"Digest mismatch — results modified."; $("receipt-status").className="status-message "+(good?"ok":"error");});
@@ -118,7 +145,7 @@ async function sha256Json(payload){
 }
 
 function jsonResponse(data,status=200){
- return new Response(JSON.stringify(data),{status,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer","Access-Control-Allow-Origin":"null"}});
+ return new Response(JSON.stringify(data),{status,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer"}});
 }
 
 async function fetchHandler(request){
@@ -137,7 +164,7 @@ async function fetchHandler(request){
   let body;try{body=JSON.parse(raw);}catch{return jsonResponse({error:"Malformed JSON"},400);}
   if(!body||typeof body!=="object"||Array.isArray(body)||Object.keys(body).some(k=>k!=="scenarioId"&&k!=="policy"))return jsonResponse({error:"Unknown request shape"},400);
   if(typeof body.scenarioId!=="string"||body.scenarioId.length>80)return jsonResponse({error:"Invalid scenarioId"},400);
-  let payload;try{payload=evaluate(body.policy||{},body.scenarioId);}catch(e){return jsonResponse({error:e.message},400);}
+  let payload;try{payload={...evaluate(body.policy||{},body.scenarioId),robustness:robustAnalysis(body.policy||{})};}catch(e){return jsonResponse({error:e.message},400);}
   const digest=await sha256Json(payload);
   return jsonResponse({...payload,receipt:{algorithm:"SHA-256",digest,meaning:"Integrity of returned synthetic policy model result only"}});
  }
