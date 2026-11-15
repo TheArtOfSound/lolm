@@ -94,7 +94,7 @@ def main() -> None:
     (args.out_dir/'events.jsonl').write_text(''.join(json.dumps(asdict(e),sort_keys=True)+'\n' for e in events),encoding='utf8')
     (args.out_dir/'trace.jsonl').write_text(''.join(json.dumps(asdict(t),sort_keys=True)+'\n' for t in tokens),encoding='utf8')
     (args.out_dir/'manifest.json').write_text(json.dumps(manifest,indent=2,sort_keys=True)+'\n',encoding='utf8')
-    print(json.dumps({'output':str(args.out_dir),'events':len(events),'tokens':len(tokens,
+    print(json.dumps({'output':str(args.out_dir),'events':len(events),'tokens':len(tokens),
                       'model_family':'native-LOLM','runtime_seconds':seconds,
                       'checkpoint_bytes_verified':True,'trace_origin_attested':False},indent=2))
 
