@@ -31,7 +31,7 @@ Writes `events.jsonl`, `labels.jsonl`, `results.json`, `report.html`. All output
 
 ## Required next research milestones
 
-1. **Source audit:** Inspect ARTEX's graph schema, planner state and authorization checks *without running the offensive system*. Record exact versions and lines under `docs/ARTEX_LOLM_SOURCE_AUDIT.md`.
+1. **Source audit:** Inspect ARTEX's graph schema, planner state and authorization checks *without running the offensive system*. Record exact versions and lines under `research/artex_defense_lab/ARTEX_LOLM_SOURCE_AUDIT.md`.
 2. **Dataset independence:** Separate developer and evaluator, use held-out synthetic generators and real consented/appropriately licensed defensive telemetry. No private/leaked user data or harvested credential material.
 3. **True LOLM evaluation:** Feed identical sanitized timelines into the LOLM monitor on a controlled, isolated host, record loaded checkpoint and `head_trained`, preserve raw receipts, and compare against all baselines. If model unavailable: mark unavailable, not simulated success.
 4. **Longitudinal tests:** Measure time to first alert, precision/recall, false positive burden, compute usage, regime-drift quality, calibration, and performance by scenario type with confidence intervals.
@@ -39,4 +39,4 @@ Writes `events.jsonl`, `labels.jsonl`, `results.json`, `report.html`. All output
 
 ## License/provenance
 
-This module is original research code, inspired by documented defensive concepts in ARTEX and public incident reporting, **not a copy of ARTEX source**. It resides inside LOLM and inherits the containing repository's AGPL-3.0-or-later licensing. See `docs/ARTEX_LOLM_SOURCE_AUDIT.md` for independent sources and limitations.
+This module is original research code, inspired by documented defensive concepts in ARTEX and public incident reporting, **not a copy of ARTEX source**. It resides inside LOLM and inherits the containing repository's AGPL-3.0-or-later licensing. See `research/artex_defense_lab/ARTEX_LOLM_SOURCE_AUDIT.md` for independent sources and limitations.
