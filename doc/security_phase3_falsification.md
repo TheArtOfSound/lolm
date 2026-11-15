@@ -76,3 +76,35 @@ A credible positive result requires an actually trained frozen graft, a
 rights-cleared corpus of independent real incidents, incident-level splitting,
 matched non-neural baselines, credible telemetry provenance, compute/latency
 comparisons and successful negative controls. These conditions are not met.
+
+
+## Native LOLM-304M research path
+
+The public model card for [Bryan237l/LOLM-304M](https://huggingface.co/Bryan237l/LOLM-304M)
+describes the original 304M base-model checkpoint and a local `ckpt_26000.pt`
+loader. This file was **not downloaded or inspected** in this work session.
+
+The repository's native `LOLMOutput` exposes `logits`, `h`,
+`gate_values` and `regime_probs`. A separate,
+strictly fictional-event adapter now extracts these via
+`lolm/security_research/native_capture.py`.
+**Native hidden drift** is surface-h lag-one MSE, not the Qwen graft's
+corrected-hidden drift; treat these as distinct feature definitions.
+
+`scripts/capture_security_lolm_native.py` hashes checkpoint bytes before
+deserialization, loads with `torch.load(weights_only=True)`, requires
+`strict=True` complete weights, seeds regime sampling per event and
+refuses real-world event inputs. Run on a local trusted checkout, with
+`torch`, `PyYAML`, and `tiktoken` installed:
+
+```bash
+python scripts/capture_security_lolm_native.py \
+  --events runs/security_lab/study_001/reference-events.jsonl \
+  --checkpoint /trusted/ckpt_26000.pt \
+  --expected-sha <verified-independent-sha256> \
+  --out-dir runs/security_lab/native_reference --device mps
+```
+
+Repeat for the held-out events with the same checkpoint and seed, then
+apply `falsify` to the two output bundles. No original native pretrained
+checkpoint was executed or evaluated here.
