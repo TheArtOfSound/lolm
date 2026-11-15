@@ -105,3 +105,64 @@ https://github.com/OTRF/Security-Datasets
 Never commit raw user identities, salt files, or sensitive event data. Public
 datasets must be evaluated separately for licensing, label quality, leakage,
 and privacy before making any model-performance claims.
+
+
+## Phase 2: negative-control stress suite
+
+Run \`python -m lolm.security_research.cli stress\` to compare identical
+fictional scenarios under rules, shift and hybrid detection. The eight cases
+intentionally include authorized admin migrations, legitimate lockouts,
+spoofed ARTEX User-Agents and remote batch jobs next to fictional intrusions.
+No threshold is optimized using these stress labels. A spoofable User-Agent
+is **not** attribution to ARTEX.
+
+## Phase 2: offline NFET telemetry shadow observer
+
+\`lolm/security_research/observer.py\` accepts per-token observations matching
+\`NFETState\` from \`lolm/nfet_graft.py\`:
+\`logit_entropy\`, \`hidden_drift\`, \`gate_mean\`, \`regime_entropy\`.
+Every token must supply \`event_index\` and \`token_index\` explicitly.
+Unaligned, incomplete, nonfinite or out-of-range frames fail closed.
+
+Each event bundle must contain a JSONL event stream, aligned JSONL token
+trace and a manifest. Example manifest:
+
+\`\`\`json
+{
+  "schema": "lolm-nfet-observer/v1",
+  "source_type": "synthetic",
+  "events_sha256": "<sha256>",
+  "trace_sha256": "<sha256>"
+}
+\`\`\`
+
+The event digest excludes evaluation \`truth\` labels. A
+\`checkpoint-generated\` trace additionally needs a \`checkpoint_sha256\`,
+a local checkpoint file and an independent expected SHA-256 pin. Verifying
+checkpoint file bytes is **not proof that a model actually generated the
+reported trace**. The observer is a read-only analysis stage, NOT a model
+runner or neural-inference attestation.
+
+A separate explicitly known-benign stream is required. Its first half
+estimates robust reference values; the second half calibrates the threshold.
+The test stream is disjoint. There is no formal false-positive guarantee
+unless the calibration and test scores satisfy exchangeability assumptions.
+
+\`\`\`bash
+python -m lolm.security_research.cli observe \
+  --train-events train-events.jsonl \
+  --train-trace train-trace.jsonl \
+  --train-manifest train-manifest.json \
+  --test-events test-events.jsonl \
+  --test-trace test-trace.jsonl \
+  --test-manifest test-manifest.json \
+  --ack-known-benign --alpha 0.1
+\`\`\`
+
+For checkpoint-generated traces, append:
+\`--checkpoint /path/to/checkpoint.pt --expected-checkpoint <trusted-64-hex>\`.
+
+No real LOLM checkpoint has been run or proven to improve security detection
+in this phase. Only synthetic trace validation and shadow analysis have been
+tested. A trusted model-run receipt and held-out, rights-cleared real events
+remain required before attribution to the neural LOLM architecture.
