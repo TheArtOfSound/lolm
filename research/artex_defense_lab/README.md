@@ -13,11 +13,12 @@ From the LOLM repository root:
 ```bash
 python -m research.artex_defense_lab generate --out out/artex-defense --seed 20261115 --repeats 8
 python -m research.artex_defense_lab evaluate --input out/artex-defense --out out/artex-defense
+python -m research.artex_defense_lab graph --input out/artex-defense --out out/artex-defense
 python -m unittest discover -s research/artex_defense_lab/tests -v
 open out/artex-defense/report.html  # macOS; otherwise open in your browser
 ```
 
-Writes `events.jsonl`, `labels.jsonl`, `results.json`, `report.html`. All outputs are local. `out/` should not be committed. The HTML report is static (no scripts, external assets, or trackers).
+Writes `events.jsonl`, `labels.jsonl`, `results.json`, `report.html`, and optionally `evidence_graph.json`. Graph snapshots use case-scoped hashes in node IDs and preserve event/lineage references. Hashes are NOT anonymization (dictionary attacks remain possible); it does not feed the numerical baselines yet. All outputs are local. `out/` should not be committed. The HTML report is static (no scripts, external assets, or trackers).
 
 ## Experimental integrity
 
