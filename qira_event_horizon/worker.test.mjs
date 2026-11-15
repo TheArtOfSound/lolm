@@ -91,6 +91,15 @@ test("Worker serves standalone responsive UI under CSP",async()=>{
  assert.match(html,/history.replaceState/);
  assert.doesNotMatch(html,/__NONCE__/);
 });
+test("OpenAPI contract is read-only and cannot accept arbitrary targets",async()=>{
+ const r=await worker.fetch(new Request(origin+"/openapi.json"));
+ assert.equal(r.status,200);
+ const doc=await r.json();
+ assert.equal(doc.openapi,"3.1.0");
+ assert.equal(doc.paths["/api/evaluate"].post.requestBody.content["application/json"].schema.additionalProperties,false);
+ assert.equal(doc.components.schemas.Policy.additionalProperties,false);
+ assert.ok(!("target" in doc.components.schemas.Policy.properties));
+});
 test("methods restricted and no state mutation endpoint",async()=>{
  assert.equal((await worker.fetch(new Request(origin+"/api/evaluate"))).status,404);
  assert.equal((await worker.fetch(new Request(origin+"/not-a-page"))).status,404);
