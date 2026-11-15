@@ -26,3 +26,4 @@ jobs:
         run: |
           python -m research.artex_defense_lab generate --out out/artex-defense --seed 20261115 --repeats 8
           python -m research.artex_defense_lab evaluate --input out/artex-defense --out out/artex-defense
+          python -m research.artex_defense_lab graph --input out/artex-defense --out out/artex-defense
