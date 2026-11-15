@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from .lab import analyze, benchmark, parse_jsonl, synthetic_scenarios, verify_receipts
 from .headlines import headline_audit, parse_claims
+from .ocsf import as_jsonl, map_jsonl
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -18,12 +19,20 @@ def main(argv: list[str] | None = None) -> int:
     simulate_cmd = group.add_parser("simulate", help="write synthetic JSONL fixtures")
     simulate_cmd.add_argument("path", type=Path)
     simulate_cmd.add_argument("--seed", type=int, default=37)
+    ocsf_cmd = group.add_parser("ocsf-map", help="pseudonymize OCSF authentication records")
+    ocsf_cmd.add_argument("path", type=Path)
+    ocsf_cmd.add_argument("--salt-file", type=Path, required=True, help="local key bytes (>=16 bytes)")
     headlines_cmd = group.add_parser("headlines", help="audit cyber news claim provenance")
     headlines_cmd.add_argument("path", type=Path)
     headlines_cmd.add_argument("--since", required=True, help="ISO-8601 timestamp with timezone")
     verify_cmd = group.add_parser("verify", help="verify saved analysis receipt chain")
     verify_cmd.add_argument("path", type=Path)
     args = parser.parse_args(argv)
+    if args.cmd == "ocsf-map":
+        with args.path.open("r", encoding="utf8") as stream:
+            events, _counts = map_jsonl(stream, args.salt_file.read_bytes())
+        print(as_jsonl(events), end="")
+        return 0
     if args.cmd == "analyze":
         with args.path.open("r", encoding="utf8") as stream:
             result = analyze(parse_jsonl(stream), args.mode)
