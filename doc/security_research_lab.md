@@ -166,3 +166,31 @@ No real LOLM checkpoint has been run or proven to improve security detection
 in this phase. Only synthetic trace validation and shadow analysis have been
 tested. A trusted model-run receipt and held-out, rights-cleared real events
 remain required before attribution to the neural LOLM architecture.
+
+
+## Phase 2.1 — local real-generation exporter (synthetic data only)
+
+\`scripts/capture_security_nfet_trace.py\` drives existing
+\`local_ui.server.generation_loop\` from a locally trusted checkpoint. It
+collects only the per-token entropy/drift/gate/regime telemetry, refuses
+\`used_graft=false\`, and rejects missing completion or graft failures.
+
+The model prompt contains only the \`ts\`, \`kind\` and \`remote\` fields.
+**Event truth labels, actor names, User-Agents and freeform payloads are
+excluded**. Only \`source=synthetic\` events are accepted because the existing
+LOLM generation loop may persist prompts and responses in local logs.
+An independently pinned SHA-256 verifies checkpoint bytes, but does not
+cryptographically attest trace generation.
+
+\`\`\`bash
+python scripts/capture_security_nfet_trace.py \
+  --events fictional-events.jsonl \
+  --checkpoint /trusted/path/to/checkpoint.pt \
+  --expected-sha <independent-sha256> \
+  --out-dir runs/security_lab/capture_001
+\`\`\`
+
+This command requires the full LOLM checkout, model dependencies, matching
+profile/backend and available model weights. It has NOT been run against a
+trained checkpoint in this environment. Five mock-generator tests cover
+fallback refusal, completion, sensitive-field exclusion and source gating.
