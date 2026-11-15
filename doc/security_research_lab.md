@@ -194,3 +194,40 @@ This command requires the full LOLM checkout, model dependencies, matching
 profile/backend and available model weights. It has NOT been run against a
 trained checkpoint in this environment. Five mock-generator tests cover
 fallback refusal, completion, sensitive-field exclusion and source gating.
+
+
+## Fully staged fictional checkpoint study (Phase 2.2)
+
+Create two disjoint, deterministic event streams: 60 earlier known-benign
+reference events and 109 separately labeled fictional stress events.
+
+\`\`\`bash
+python -m lolm.security_research.cli make-study runs/security_lab/study_001
+\`\`\`
+
+Once an actual trusted graft checkpoint is available on a local machine,
+capture each group using the same checkpoint, profile and token budget:
+
+\`\`\`bash
+python scripts/capture_security_nfet_trace.py \
+  --events runs/security_lab/study_001/reference-events.jsonl \
+  --checkpoint /trusted/path/graft.pt \
+  --expected-sha <independent-sha256> \
+  --out-dir runs/security_lab/reference_capture
+
+python scripts/capture_security_nfet_trace.py \
+  --events runs/security_lab/study_001/heldout-events.jsonl \
+  --checkpoint /trusted/path/graft.pt \
+  --expected-sha <independent-sha256> \
+  --out-dir runs/security_lab/heldout_capture
+\`\`\`
+
+Then call \`python -m lolm.security_research.cli observe\` using
+\`reference_capture/events.jsonl\`, \`trace.jsonl\`, \`manifest.json\`
+for \`--train-*\` and corresponding \`heldout_capture/*\` for \`--test-*\`,
+with \`--ack-known-benign --checkpoint ... --expected-checkpoint ...\`.
+
+**Do not feed the ground-truth labels to the model.** The capture exporter
+specifically excludes \`truth\` and scenario-coded actor names from its prompt.
+An observer score here would still be on fictional events and does not prove
+operational cybersecurity improvement or actual generated-trace provenance.
