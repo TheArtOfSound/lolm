@@ -27,3 +27,5 @@ jobs:
         run: python -m unittest discover -s tests -p test_security_*.py -v
       - name: Run baseline benchmark
         run: python -m lolm.security_research.cli benchmark > security-research-benchmark.json
+      - name: Run deliberately adversarial stress suite
+        run: python -m lolm.security_research.cli stress > security-research-stress.json
