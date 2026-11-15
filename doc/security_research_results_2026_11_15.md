@@ -45,3 +45,33 @@ A trained LOLM checkpoint was NOT part of this experiment.
    analyst time saved and failure modes.
 6. Attribute any gain to LOLM only after rigorous ablations and held-out
    performance checks.
+
+
+## Phase 2 — adversarial synthetic stress results
+
+Eight fictional scenarios (three suspicious, five benign), 109 events.
+Benign lookalikes: legitimate lockout, approved migration, spoofed User-Agent,
+ordinary remote automation.
+
+| Method | Precision | Event recall | Event FPR | Incident recall | Benign cases alerted |
+|---|---:|---:|---:|---:|---:|
+| Rules | 0.4286 | 0.2400 | 0.0952 | 0.3333 | 3/5 |
+| Shift | 0.5000 | 0.0800 | 0.0238 | 0.3333 | 1/5 |
+| Hybrid | 0.4286 | 0.2400 | 0.0952 | 0.3333 | 3/5 |
+
+**Negative result:** The hybrid does not beat the rules baseline and is
+vulnerable to benign lookalikes. The rule-based detector misses the
+low-and-slow fictional scenario. These values are designed to reveal
+failure modes and MUST NOT be presented as real-world accuracy.
+
+## Phase 2 — LOLM/NFET observer validation
+
+An offline token-to-event telemetry bridge, manifest integrity checks,
+optional independently pinned local checkpoint byte verification, training
+vs test separation, and reference/calibration splitting were implemented.
+
+**No trained LOLM neural checkpoint was executed.** Synthetic trace tests
+cannot demonstrate a model advantage. Trace hashing is not proof of inference
+provenance. Strict next gate: execute a frozen checkpoint on responsibly
+sourced, independently labeled, temporally held-out security data, with
+matched traditional baselines.
