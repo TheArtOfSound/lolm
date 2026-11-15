@@ -70,6 +70,9 @@ test("worker public API returns reality-labeled data and verifiable integrity di
  const computed=Buffer.from(buffer).toString("hex");
  assert.equal(computed,receipt.digest);
  assert.equal(receipt.algorithm,"SHA-256");
+ assert.equal(value.robustness.worlds.length,6);
+ assert.equal(value.robustness.controlCombinations,32);
+ assert.equal(value.robustness.schema,"qira-event-horizon/assumption-robustness-v1");
 });
 test("Worker serves standalone responsive UI under CSP",async()=>{
  const res=await worker.fetch(new Request(origin+"/"));
@@ -81,6 +84,8 @@ test("Worker serves standalone responsive UI under CSP",async()=>{
  assert.match(html,/FICTIONAL DATA ONLY/);
  assert.match(html,/id="scenario"/);
  assert.match(html,/id="verify"/);
+ assert.match(html,/id="robustness"/);
+ assert.match(html,/id="apply-robust"/);
  assert.doesNotMatch(html,/__NONCE__/);
 });
 test("methods restricted and no state mutation endpoint",async()=>{
