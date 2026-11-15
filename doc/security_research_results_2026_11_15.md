@@ -75,3 +75,11 @@ cannot demonstrate a model advantage. Trace hashing is not proof of inference
 provenance. Strict next gate: execute a frozen checkpoint on responsibly
 sourced, independently labeled, temporally held-out security data, with
 matched traditional baselines.
+
+
+## Phase 2.1 capture module
+
+The synthetic-only generation-loop adapter and checkpoint-pinned export CLI
+are implemented. Five fake-generator tests were added. Passing these tests
+does not demonstrate checkpoint inference; **no trained LOLM checkpoint was
+loaded** in this phase.
