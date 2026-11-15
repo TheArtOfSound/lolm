@@ -5,6 +5,7 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 from .lab import analyze, benchmark, parse_jsonl, synthetic_scenarios, verify_receipts
+from .headlines import headline_audit, parse_claims
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -17,6 +18,9 @@ def main(argv: list[str] | None = None) -> int:
     simulate_cmd = group.add_parser("simulate", help="write synthetic JSONL fixtures")
     simulate_cmd.add_argument("path", type=Path)
     simulate_cmd.add_argument("--seed", type=int, default=37)
+    headlines_cmd = group.add_parser("headlines", help="audit cyber news claim provenance")
+    headlines_cmd.add_argument("path", type=Path)
+    headlines_cmd.add_argument("--since", required=True, help="ISO-8601 timestamp with timezone")
     verify_cmd = group.add_parser("verify", help="verify saved analysis receipt chain")
     verify_cmd.add_argument("path", type=Path)
     args = parser.parse_args(argv)
@@ -25,6 +29,9 @@ def main(argv: list[str] | None = None) -> int:
             result = analyze(parse_jsonl(stream), args.mode)
     elif args.cmd == "benchmark":
         result = benchmark()
+    elif args.cmd == "headlines":
+        with args.path.open("r", encoding="utf8") as stream:
+            result = headline_audit(parse_claims(stream), args.since)
     elif args.cmd == "simulate":
         if args.path.exists():
             parser.error("refusing to overwrite existing path")
