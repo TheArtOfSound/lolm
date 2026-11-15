@@ -87,3 +87,21 @@ Usage:
 Claims are JSONL records requiring incident_id, title, published_at,
 source_url, source_class, status, category; occurred_at and ai_role are
 optional. Source URLs are references, never fetched by this code.
+
+## OCSF authentication bridge (Phase 1.2)
+
+OCSF IAM Authentication class_uid 3002 uses time in epoch milliseconds and
+status_id 1=success / 2=failure. The adapter converts only these known cases;
+other events/status values are skipped rather than guessed. User IDs are keyed
+HMAC pseudonyms using a local salt at least 16 bytes long, and no source log
+collection or network access is performed.
+
+    python -m lolm.security_research.cli ocsf-map local-ocsf.jsonl --salt-file local-secret.bin > normalized.jsonl
+
+Sources:
+https://github.com/ocsf/ocsf-schema/blob/main/events/iam/authentication.json
+https://github.com/OTRF/Security-Datasets
+
+Never commit raw user identities, salt files, or sensitive event data. Public
+datasets must be evaluated separately for licensing, label quality, leakage,
+and privacy before making any model-performance claims.
