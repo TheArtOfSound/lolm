@@ -83,3 +83,17 @@ The synthetic-only generation-loop adapter and checkpoint-pinned export CLI
 are implemented. Five fake-generator tests were added. Passing these tests
 does not demonstrate checkpoint inference; **no trained LOLM checkpoint was
 loaded** in this phase.
+
+
+## Phase 3 — negative control and original LOLM capture adapter
+
+The deliberately uninformative synthetic event-aligned trace produced
+0/25 suspicious-event detections, no false alerts, and 7/7 shuffled
+controls at least as discriminative. The descriptive scenario permutation
+p-value is 1.0 across 56 assignments; this is NOT evidence about a
+trained LOLM checkpoint.
+
+A native LOLM-304M tensor extraction adapter and SHA-pinned strict loader
+were implemented and unit tested with synthetic PyTorch tensors. No actual
+304M checkpoint was loaded or benchmarked in this session; performance
+claims remain prohibited. The focused local suite comprises 69 tests.
