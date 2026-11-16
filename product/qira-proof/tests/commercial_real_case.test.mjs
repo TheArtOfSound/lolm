@@ -117,7 +117,7 @@ test("case study homepage integration preserves public purchase CTA, invoice and
  const response=await worker.fetch(new Request("https://proof.imagineqira.com/"),{QIRA_PROOF_CHECKOUT_URL:link});
  assert.equal(response.status,200);
  const html=await response.text();
- assert.match(html,/A real repository, with links to the exact lines/);
+ assert.match(html,/An observation you can verify/);
  assert.match(html,/href="\/case-study"/);
  assert.match(html,/href="\/sample-report"/);
  assert.match(html,/id="buyLink"/);
