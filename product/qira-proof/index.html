@@ -180,7 +180,21 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
       <summary>Prefer to review a local file?</summary>
       <div class="advanced-content">
        <p class="mini">Use a JSON snapshot produced by our <a href="https://github.com/TheArtOfSound/lolm/blob/product/qira-proof-pilot-2026-11-15/product/qira-proof/README.md" target="_blank" rel="noopener noreferrer">read-only collector</a>. Imported files stay in your browser.</p>
+       <div class="field"><label for="providerGuide">Choose an infrastructure provider</label>
+        <select id="providerGuide" class="picker" aria-label="Read-only local collector provider">
+         <option value="github">GitHub / repository workflows</option>
+         <option value="cloudflare">Cloudflare / Worker settings</option>
+         <option value="vercel">Vercel / project and deployments</option>
+         <option value="combined">Multiple providers / one report</option>
+        </select>
+       </div>
+       <p class="mini">These collection commands run on your computer after you download the <a href="https://github.com/TheArtOfSound/lolm/blob/product/qira-proof-github-app-auth-2026-11-15/product/qira-proof/collector.py" target="_blank" rel="noopener noreferrer">source collector</a>. Put read-only credentials in your local environment, never in this website or a screenshot.</p>
+       <pre class="mini" id="providerCommand" style="white-space:pre-wrap;overflow-wrap:anywhere;background:#f2f6f4;border:1px solid #dce6e1;padding:10px;border-radius:8px"></pre>
+       <div class="controls"><button type="button" class="btn" id="copyProviderCommand">Copy collector command</button></div>
+       <div class="mini" role="status" aria-live="polite" id="providerCommandStatus"></div>
        <div class="field"><label for="baselineInput">Initial snapshot</label><div class="file-upload"><span>Choose local JSON file</span><small>Browse</small><input id="baselineInput" type="file" accept=".json,application/json"></div></div>
+       <div class="field"><label for="augmentInput">Add another provider's evidence to this review</label><div class="file-upload"><span>Choose additional local JSON</span><small>Browse</small><input id="augmentInput" type="file" accept=".json,application/json"></div></div>
+       <p class="mini">Add evidence from GitHub, Cloudflare, or Vercel without starting a new review. The browser rejects conflicting facts or snapshots taken more than 24 hours apart.</p>
        <div class="field"><label for="followupInput">Later snapshot (optional)</label><div class="file-upload"><span>Choose follow-up JSON file</span><small>Browse</small><input id="followupInput" type="file" accept=".json,application/json"></div></div>
       </div>
      </details>
