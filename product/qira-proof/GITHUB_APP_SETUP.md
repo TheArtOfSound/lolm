@@ -1,11 +1,45 @@
 # QIRA Proof — GitHub App activation (owner-controlled)
 
-**Status:** GitHub authorization code and UI have passed mocked tests. Live GitHub App authorization has NOT been exercised because an actual GitHub App has not been registered in this deployment.
+**Status (November 15, 2026):** The GitHub App named **QIRA Proof Research** has been registered by its owner. The Client ID, App slug, Cloudflare public origin, and session key are configured. The GitHub **client secret binding has not been verified as installed** in Cloudflare, so live GitHub OAuth remains disabled. All authorization flow tests are mocked; no successful live GitHub App login has been claimed.
 
 **Auth preview origin:**
 https://qira-proof-auth-lab-20261115.bryanleonard237.workers.dev
 
-## 1. Register a GitHub App
+## 1. Registered App — owner activation remaining
+
+App name: **QIRA Proof Research**  
+Slug: `qira-proof-research`  
+App ID: `5777446`  
+Client ID: `Iv23liy3qicZNDLN7JUV`  
+Owner: **TheArtOfSound**  
+
+The following values are **not secrets** and are already configured: App slug,
+Client ID, and the exact HTTPS callback origin.
+
+Complete the remaining owner-only actions:
+
+1. In [GitHub App settings](https://github.com/settings/apps/qira-proof-research),
+   generate the **private key** if GitHub still requires it before installation.
+   Store the downloaded key locally. Our user-to-server OAuth flow does **not**
+   require uploading this key to Cloudflare.
+2. Disable **Active webhooks**; the app does not process webhook deliveries.
+3. Confirm **Contents: Read-only**, **Metadata: Read-only**, and no unnecessary
+   write-level permissions.
+4. In the [Cloudflare Dashboard](https://dash.cloudflare.com/), open Worker
+   `qira-proof-auth-lab-20261115`, then add a protected Secret binding named
+   `GITHUB_APP_CLIENT_SECRET`. Use the owner-generated GitHub App client
+   secret directly in Cloudflare's protected secret field. Never include its
+   value in GitHub commits, URLs, troubleshooting screenshots, or chat output.
+5. After the Worker reports **Ready**, open the preview, authorize your GitHub
+   account and install the App on a selected test repository only.
+
+Do **not** put the client secret in ordinary text variables; use the Worker
+**Secret** type. OAuth activation is not complete until the binding exists and
+a real authorization callback succeeds.
+
+## 2. Original registration reference (completed)
+
+
 
 From GitHub: Settings → Developer settings → GitHub Apps → New GitHub App.
 
