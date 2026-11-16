@@ -3,16 +3,16 @@ import assert from "node:assert/strict";
 import worker from "../commercial/landing.mjs";
 import {purgeOldOrderRows} from "../commercial/payments.mjs";
 class ExpiringD1 {
- constructor(now){this.events=new Map([["evt_old",{received:now-181*86400}],["evt_new",{received:now-5*86400}]]);this.orders=new Map([["cs_live_old",{updated:now-181*86400}],["cs_live_new",{updated:now-3*86400}]]);this.failing=false;}
+ constructor(now){this.events=new Map([["evt_old",{received:now-181*86400}],["evt_new",{received:now-5*86400}]]);this.orders=new Map([["cs_live_old",{updated:now-181*86400}],["cs_live_new",{updated:now-3*86400}]]);this.intakes=new Map([["cs_live_old",{submitted:now-181*86400}],["cs_live_new",{submitted:now-3*86400}]]);this.failing=false;}
  prepare(sql){return {bind:(cutoff)=>({sql,cutoff})};}
  async batch(statements){
   if(this.failing)throw Error("db failure");
-  assert.equal(statements.length,2);
+  assert.equal(statements.length,3);
   for(const s of statements){
-   const target=s.sql.includes("qira_events")?this.events:this.orders;
-   for(const [k,v]of target.entries())if((v.received??v.updated)<s.cutoff)target.delete(k);
+   const target=s.sql.includes("qira_events")?this.events:s.sql.includes("qira_intakes")?this.intakes:this.orders;
+   for(const [k,v]of target.entries())if((v.received??v.updated??v.submitted)<s.cutoff)target.delete(k);
   }
-  return [{success:true},{success:true}];
+  return [{success:true},{success:true},{success:true}];
  }
 }
 const now=Math.floor(Date.now()/1000);
@@ -21,6 +21,7 @@ test("180-day D1 retention deletes only expired webhook IDs and receipt handles"
  assert.equal(await purgeOldOrderRows(db,now),true);
  assert.deepEqual([...db.events.keys()],["evt_new"]);
  assert.deepEqual([...db.orders.keys()],["cs_live_new"]);
+ assert.deepEqual([...db.intakes.keys()],["cs_live_new"]);
 });
 test("retention rejects missing database and propagates storage errors for observability",async()=>{
  await assert.rejects(()=>purgeOldOrderRows(null,now),/retention_unavailable/);
