@@ -24,6 +24,11 @@ const custom={
   description:"Explore an explicitly synthetic GitHub Actions security review report with source excerpts, evidence limits, review recommendations and coverage boundaries.",
   kind:"webpage"
  },
+ "/start-review":{
+  title:"Start Your Paid Workflow Review | Qira Proof",
+  description:"A post-purchase intake guide for Qira Proof buyers. Payment verification and review fulfillment are confirmed manually.",
+  kind:"webpage"
+ },
  "/privacy":{
   title:"Privacy and Data Handling | Qira Proof",
   description:"How Qira Proof handles repository review information, Stripe-hosted payments, customer intake and limitations of the public preview.",
