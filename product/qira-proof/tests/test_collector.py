@@ -18,6 +18,8 @@ def reader(url,token,provider):
     if provider=="github":
         if url.endswith("/repos/org/repository"):
             return {"default_branch":"development"}
+        if "/commits/development" in url:
+            return {"sha":"0123456789abcdef0123456789abcdef01234567"}
         if "/branches/development/protection" in url:
             raise collector.ProviderError("resource forbidden")
         if "/contents/" in url:
@@ -62,9 +64,10 @@ class CollectorTests(unittest.TestCase):
           github_workflows=["org/repository:.github/workflows/deploy-production.yml"],
           github_token="x",reader=tracking,when=WHEN)
         self.assertTrue(out["facts"])
-        self.assertTrue(any("?ref=development" in x for x in seen))
+        self.assertTrue(any("/commits/development" in x for x in seen))
+        self.assertTrue(any("?ref=0123456789abcdef0123456789abcdef01234567" in x for x in seen))
         self.assertTrue(any("/branches/development/protection" in x for x in seen))
-        self.assertTrue(any("/blob/development/" in f["source_url"] for f in out["facts"] if f["signal"]=="runtime_ssh_keyscan"))
+        self.assertTrue(any("/blob/0123456789abcdef0123456789abcdef01234567/" in f["source_url"] for f in out["facts"] if f["signal"]=="runtime_ssh_keyscan"))
 
     def test_reject_duplicate_repository_selection(self):
         with self.assertRaises(ValueError):
