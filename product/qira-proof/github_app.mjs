@@ -112,6 +112,11 @@ async function sessionFor(request,env,clock=now){
 function checkHost(request,env){
  return publicOrigin(env)!==null&&new URL(request.url).origin===publicOrigin(env);
 }
+// Distinguish an absent or hidden workflow folder (404) from server failures
+// without exposing GitHub response bodies or tokens.
+class GitHubReadError extends Error {
+ constructor(status){super("GitHub metadata unavailable");this.status=status;}
+}
 async function githubGet(path,token,fetcher=fetch){
  if(!path.startsWith("/")||path.startsWith("//")||path.includes("..")||path.includes("\\"))
   throw Error("GitHub request path rejected");
@@ -123,7 +128,7 @@ async function githubGet(path,token,fetcher=fetch){
  // and a no-redirect policy preserve the original security requirement.
  if(response.status>=300&&response.status<400||response.type==="opaqueredirect")
   throw Error("GitHub API redirect rejected");
- if(!response.ok)throw Error("GitHub metadata unavailable");
+ if(!response.ok)throw new GitHubReadError(response.status);
  const text=await response.text();
  if(text.length>MAX_RESPONSE_BYTES)throw Error("GitHub metadata exceeded budget");
  return JSON.parse(text);
@@ -156,11 +161,21 @@ async function listWorkflows(token,installationId,repo,fetcher){
  const [owner,name]=repo.split("/");
  const uri="/repos/"+encodeURIComponent(owner)+"/"+encodeURIComponent(name)+
    "/contents/.github/workflows?ref="+encodeURIComponent(selected.branch);
- const raw=await githubGet(uri,token,fetcher);
+ let raw;
+ try{raw=await githubGet(uri,token,fetcher)}
+ catch(error){
+  // GitHub returns 404 when .github/workflows is absent, but may also hide
+  // an inaccessible folder. Never misrepresent this as a confirmed absence.
+  if(error instanceof GitHubReadError&&error.status===404)
+   return {repo,branch:selected.branch,workflows:[],truncated:false,
+    availability:"directory_not_found_or_inaccessible"};
+  throw error;
+ }
  if(!Array.isArray(raw))throw Error("workflow metadata unavailable");
  const workflows=raw.filter(x=>x.type==="file"&&workflowSafe(x.path)).slice(0,100)
    .map(x=>({path:x.path}));
- return {repo,branch:selected.branch,workflows,truncated:raw.length>100};
+ return {repo,branch:selected.branch,workflows,truncated:raw.length>100,
+  availability:workflows.length?"available":"no_supported_workflows"};
 }
 function sourceUrl(repo,branch,workflow){
  return "https://github.com/"+repo+"/blob/"+encodeURIComponent(branch)+"/"+workflow;
