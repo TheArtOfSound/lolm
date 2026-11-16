@@ -144,7 +144,7 @@ test("post-checkout page reports verified payment without treating it as custome
  assert.equal(page.status,200);
  const html=await page.text();
  assert.match(html,/Stripe payment received/);
- assert.match(html,/Qira still confirm purchaser identity/);
+ assert.match(html,/Qira will still confirm purchaser identity/);
  assert.match(html,/value="cs_live_1234567890abcdefghijklmnop"/);
  assert.match(html,/does not verify payment or grant an entitlement/);
  assert.equal(page.headers.get("cache-control"),"no-store");
