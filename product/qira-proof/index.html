@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#090f17">
+<meta name="description" content="QIRA Proof: evidence-backed infrastructure assessments, offline in your browser.">
+<title>QIRA Proof — Evidence, not alarms</title>
+<style>
+:root{color-scheme:dark;--bg:#080e16;--ink:#ecf1f4;--mute:#95a5b2;--line:#263540;--panel:#111d28;--panel2:#172633;--cream:#e7c995;--mint:#9be0cc;--amber:#f2bc80;--red:#ec9b91}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;min-height:100vh;font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:radial-gradient(circle at 100% -30%,#203c4b 0%,transparent 46%),var(--bg);color:var(--ink)}
+button,a,input{font:inherit}
+button{cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--cream);outline-offset:3px}
+a{color:var(--cream);text-underline-offset:3px}
+header{height:76px;display:flex;justify-content:space-between;align-items:center;padding:0 clamp(20px,5vw,76px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:14px;text-decoration:none;color:inherit}
+.logo{width:36px;height:36px;border:1px solid #d1b17a;transform:rotate(-45deg);display:grid;place-items:center;border-radius:8px;flex:none}
+.logo span{font-size:14px;font-weight:820;color:var(--cream);transform:rotate(45deg)}
+.brandname{font-size:14px;font-weight:820;letter-spacing:.15em}.brandname em{font-style:normal;font-weight:500;letter-spacing:.01em;color:var(--mute);margin-left:9px}
+.topright{display:flex;align-items:center;gap:15px;color:var(--mute);font-size:12px}
+.light{height:8px;width:8px;border-radius:100%;background:var(--mint);box-shadow:0 0 16px #88c9b8}
+main{max-width:1440px;padding:44px clamp(20px,5vw,76px) 65px;margin:auto}
+.kicker{font-size:11px;font-weight:750;letter-spacing:.17em;text-transform:uppercase;color:var(--cream)}
+h1{font-weight:560;line-height:1.06;letter-spacing:-.05em;font-size:clamp(39px,5vw,72px);margin:13px 0}
+h1 span{color:var(--cream)}
+.lead{max-width:700px;font-size:16px;color:#b2c0ca;margin:16px 0 23px}
+.topline{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:24px 0 30px}
+.chip{border:1px solid #344654;border-radius:99px;padding:5px 11px;font-size:11px;color:#b5c5cf;background:#10202b}
+.chip.good{border-color:#376254;color:#b6e6d6}
+.workspace{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px}
+.panel{border:1px solid var(--line);background:linear-gradient(130deg,#111e29,#0d1720);border-radius:12px;overflow:hidden}
+.panel-title{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}
+.panel-title strong{font-size:13px;font-weight:680}
+.panel-body{padding:20px}
+.mini{font-size:11px;color:var(--mute)}
+.section-label{font-size:10px;text-transform:uppercase;letter-spacing:.15em;color:var(--cream);font-weight:750;margin-bottom:8px}
+.source{border:1px solid #354550;border-radius:10px;padding:14px;margin:0 0 13px}
+.source-head{display:flex;justify-content:space-between;align-items:center;margin:0 0 7px}
+.source-head strong{font-size:13px}
+.mark{font-size:10px;color:var(--mute);border:1px solid #3e4b59;border-radius:6px;padding:2px 7px}
+.field{display:flex;flex-direction:column;gap:8px;margin:17px 0}
+.field label{font-size:12px;color:#c6d4dd;font-weight:600}
+.file-upload{position:relative;display:flex;align-items:center;justify-content:space-between;padding:12px 14px;color:var(--ink);background:#182532;border:1px dashed #5b7585;border-radius:9px;gap:12px;cursor:pointer}
+.file-upload:hover{border-color:var(--cream)}
+.file-upload span{font-size:12px;overflow-wrap:anywhere}
+.file-upload input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.file-upload small{font-size:11px;color:var(--cream);white-space:nowrap}
+.note{font-size:11px;color:#a9b9c5;line-height:1.7;background:#162530;border-left:2px solid #b49460;padding:11px 13px;border-radius:3px;margin:18px 0 0}
+.pilotline{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #273743;padding:8px 0;font-size:12px;color:#a6b7c3}
+.pilotline strong{color:var(--ink);font-weight:580}
+.tabnav{display:flex;gap:7px;flex-wrap:wrap}
+.tab{background:transparent;color:#afc0cb;border:1px solid transparent;padding:7px 11px;border-radius:7px}
+.tab.active{border-color:#546a79;background:#213342;color:var(--cream)}
+.dashboard{padding:22px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:22px}
+.metric{background:#152530;border:1px solid #2d404c;border-radius:9px;padding:17px}
+.metric small{display:block;color:var(--mute);font-size:11px}
+.metric strong{font-size:29px;letter-spacing:-.05em;font-weight:550;display:block;margin-top:2px}
+.metric .caution{color:var(--amber)}.metric .calm{color:var(--mint)}
+.divider{border-top:1px solid var(--line);margin:20px 0}
+.cards{display:grid;gap:11px}
+.finding{border:1px solid #364752;border-radius:10px;background:#152330;overflow:hidden}
+.finding-head{padding:15px 17px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.finding-title{font-weight:660;line-height:1.35;font-size:14px;letter-spacing:-.015em}
+.finding-meta{margin-top:5px;color:var(--mute);font-size:11px;overflow-wrap:anywhere}
+.severity{flex:none;border:1px solid #776048;border-radius:6px;font-size:10px;padding:3px 8px;text-transform:uppercase;color:var(--amber);letter-spacing:.06em}
+.severity.unknown{color:#bcc9d0;border-color:#56656f}.severity.high{color:var(--red);border-color:#815550}
+.finding-body{border-top:1px solid #2d3e49;padding:15px 17px;font-size:12px;color:#bac8d2}
+.finding-body p{margin:0 0 11px}.evidence{display:flex;gap:8px;flex-wrap:wrap;padding-top:8px}
+.evidence a{font-size:11px;border:1px solid #435665;color:#d4deea;border-radius:6px;text-decoration:none;padding:5px 9px;overflow-wrap:anywhere}
+.evidence a:hover{border-color:var(--cream)}.state{font-size:11px;color:var(--mint);font-weight:700}
+.controls{display:flex;gap:9px;flex-wrap:wrap;margin:15px 0}.btn{border:1px solid #63798a;background:transparent;color:var(--ink);border-radius:8px;padding:11px 14px;font-weight:650;font-size:12px}.btn.primary{background:var(--cream);border-color:var(--cream);color:#111a23}.btn:hover{filter:brightness(1.09)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.empty{background:#132330;border:1px dashed #496272;padding:30px 22px;border-radius:10px;color:var(--mute);font-size:13px}
+.empty strong{display:block;color:var(--ink);font-size:15px;margin-bottom:5px}
+.statustext{min-height:25px;color:#c6d1dc;font-size:12px;margin-top:12px}
+.codebox{font:11px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;color:#b5d7d5;background:#101d26;border:1px solid #314351;border-radius:8px;padding:14px;word-break:break-all;white-space:pre-wrap;max-height:230px;overflow:auto}
+.delta{padding:13px 0;border-bottom:1px solid #293d48}
+.delta:last-child{border:0}.delta b{display:block;font-size:13px}.delta span{font-size:11px;color:var(--mute)}
+.delta .label{color:var(--cream);font-size:11px;font-weight:750}
+footer{border-top:1px solid var(--line);padding-top:23px;margin-top:29px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;font-size:12px;color:var(--mute)}
+.visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:1040px){.workspace{grid-template-columns:280px minmax(0,1fr)}.metrics{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:760px){header{padding:0 18px}.brandname em,.topright span{display:none}.workspace{grid-template-columns:1fr}.dashboard{padding:16px}.metrics{grid-template-columns:repeat(2,1fr)}.metric{padding:12px}main{padding:30px 18px 50px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+<script type="module" src="/app.mjs"></script>
+</head>
+<body>
+<header><a class="brand" href="/" aria-label="QIRA Proof home"><span class="logo"><span>Q</span></span><span class="brandname">QIRA <em>/ Proof</em></span></a>
+<div class="topright"><i class="light" aria-hidden="true"></i><span>Local-first assessment</span><span class="chip good">Research pilot</span></div></header>
+<main>
+<div class="kicker">Infrastructure assurance / Evidence engine 01</div>
+<h1>Not another alarm.<br><span>A reason to act.</span></h1>
+<p class="lead">Turn configuration evidence into reviewable findings, compare it after a change, and export a reproducible record. No infrastructure scans from this website. No customer data is uploaded.</p>
+<div class="topline"><span class="chip">GitHub workflows</span><span class="chip">Cloudflare Workers</span><span class="chip">Read-only evidence</span><span class="chip">Before / after checks</span><span class="chip">SHA-256 verification</span></div>
+<div class="workspace">
+<aside class="panel">
+  <div class="panel-title"><strong>Evidence workspace</strong><span class="mark">LOCAL</span></div>
+  <div class="panel-body">
+    <div class="section-label">Source state</div>
+    <div class="source"><div class="source-head"><strong>Baseline snapshot</strong><span class="mark" id="baselineState">Sample</span></div><div class="mini" id="baselineName">Fictional demonstration loaded</div></div>
+    <div class="source"><div class="source-head"><strong>Follow-up snapshot</strong><span class="mark" id="followupState">Empty</span></div><div class="mini" id="followupName">Compare when configuration changes</div></div>
+    <div class="field"><label for="baselineInput">Load baseline evidence</label><div class="file-upload"><span>Choose QIRA JSON snapshot</span><small>Browse</small><input id="baselineInput" type="file" accept=".json,application/json"></div></div>
+    <div class="field"><label for="followupInput">Load a later recheck</label><div class="file-upload"><span>Choose follow-up snapshot</span><small>Browse</small><input id="followupInput" type="file" accept=".json,application/json"></div></div>
+    <div class="controls"><button type="button" id="demoButton" class="btn">Reset to demo</button><button type="button" id="clearFollowup" class="btn">Clear recheck</button></div>
+    <div class="section-label" style="margin-top:23px">Privacy contract</div>
+    <div class="pilotline"><span>Analysis</span><strong>In this browser</strong></div>
+    <div class="pilotline"><span>Uploads to QIRA</span><strong>None</strong></div>
+    <div class="pilotline"><span>Credentials needed here</span><strong>None</strong></div>
+    <div class="pilotline"><span>Actual production fixes</span><strong>Manual approval</strong></div>
+    <div class="note">The included demonstration is fictional. Real findings require an authorized, locally collected snapshot. A reported condition is not proof of exploitation.</div>
+  </div>
+</aside>
+<section class="panel">
+ <div class="panel-title"><strong id="workTitle">Assessment</strong><div class="tabnav" role="tablist" aria-label="Workspace views">
+ <button class="tab active" type="button" data-tab="assessment" role="tab" aria-selected="true">Assessment</button>
+ <button class="tab" type="button" data-tab="recheck" role="tab" aria-selected="false">Recheck</button>
+ <button class="tab" type="button" data-tab="evidence" role="tab" aria-selected="false">Evidence</button></div></div>
+ <div class="dashboard">
+ <section id="assessment" class="tabcontent" role="tabpanel">
+   <div class="metrics"><div class="metric"><small>Assets represented</small><strong id="assetsCount">—</strong></div>
+   <div class="metric"><small>Review candidates</small><strong id="reviewCount" class="caution">—</strong></div>
+   <div class="metric"><small>Coverage gaps</small><strong id="unknownCount">—</strong></div>
+   <div class="metric"><small>Observed facts</small><strong id="factsCount" class="calm">—</strong></div></div>
+   <div class="section-label">Evidence-based findings</div><div id="findings" class="cards" aria-live="polite"></div>
+ </section>
+ <section id="recheck" class="tabcontent" role="tabpanel" hidden><div class="section-label">After an approved configuration change</div>
+   <p class="lead" style="font-size:13px;margin:8px 0 18px">A disappeared indicator is not proof the system is secure. Rechecks report what authoritative configuration facts do or do not show.</p>
+   <div id="deltas" aria-live="polite"></div>
+ </section>
+ <section id="evidence" class="tabcontent" role="tabpanel" hidden><div class="section-label">Independent deterministic verification</div>
+   <p class="lead" style="font-size:13px;margin:8px 0 16px">Generate an evidence file locally, then verify that its hash and findings match the contents. This is not a provider signature or proof of prevented attacks.</p>
+   <div class="controls"><button class="btn primary" id="exportButton" type="button">Export evidence report</button><button class="btn" id="verifyButton" type="button">Verify evidence file</button>
+   <input type="file" class="visually-hidden" id="verifyInput" accept=".json,application/json" tabindex="-1"></div>
+   <div class="section-label" style="margin-top:21px">Latest report digest</div><div class="codebox" id="digestValue">No evidence file generated yet.</div>
+   <div id="verificationState" class="statustext" aria-live="polite"></div>
+ </section>
+ <div id="status" class="statustext" role="status" aria-live="polite"></div>
+ </div>
+</section>
+</div>
+<footer><span>QIRA Proof / Research pilot. Configuration analysis only; not a penetration test, verified exploit, or certified security assessment.</span>
+<span><a href="https://github.com/TheArtOfSound/lolm/tree/product/qira-proof-pilot-2026-11-15/product/qira-proof" target="_blank" rel="noopener noreferrer">Source & local collector</a></span></footer>
+</main></body></html>
