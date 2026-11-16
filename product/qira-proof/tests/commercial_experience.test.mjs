@@ -59,7 +59,7 @@ test("the full sample report switches source, recommendation, limitation and sta
   b.handlers.click();
   assert.equal(elements.reportTitle.textContent,item.title);
   assert.match(elements.reportPosition.textContent,/QIRA PROOF \/ EXAMPLE REPORT \/ 0[1-3] OF 03/);
-  assert.match(elements.reportAnnounce.textContent,/selected; [1-3] of 03/);
+  assert.match(elements.reportAnnounce.textContent,/selected; 0[1-3] of 03/);
   assert.ok(elements.reportSource.textContent.endsWith(item.reference));
   assert.ok(elements.reportCode.textContent.includes(item.code));
   assert.match(elements.reportNext.textContent,new RegExp(item.next,"i"));
