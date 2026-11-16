@@ -103,7 +103,57 @@ async function readSnapshot(file){
 el("baselineInput").addEventListener("change",async e=>{
  const file=e.target.files?.[0];
  if(!file)return;
- try{state.before=await readSnapshot(file);state.after=null;state.mode="private";const git={connected:false,csrf:null};
+ try{state.before=await readSnapshot(file);state.after=null;state.mode="private";render();buttonTab("assessment");}
+ catch(error){status("Baseline was rejected: "+error.message,true)}
+ e.target.value="";
+});
+el("followupInput").addEventListener("change",async e=>{
+ const file=e.target.files?.[0];if(!file)return;
+ try{
+  if(state.mode==="demo")throw Error("Load a real baseline before comparing a real follow-up");
+  state.after=await readSnapshot(file);render();buttonTab("recheck");
+ }catch(error){status("Follow-up rejected: "+error.message,true)}
+ e.target.value="";
+});
+el("demoButton").addEventListener("click",()=>{state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="demo";render();buttonTab("assessment")});
+el("demoRecheck").addEventListener("click",()=>{
+ if(state.mode!=="demo"){status("Reset to the fictional demo to load its sample follow-up",true);return}
+ state.after=normalizeSnapshot(sampleAfter());render();buttonTab("recheck");
+});
+el("clearFollowup").addEventListener("click",()=>{state.after=null;render();buttonTab("assessment")});
+document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>buttonTab(b.dataset.tab)));
+function downloadJson(data,filename){
+ const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+ const url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download=filename;a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+el("exportButton").addEventListener("click",async()=>{
+ try{
+  const artifact=await proof(state.before,state.after);
+  state.last=artifact;
+  el("digestValue").textContent=artifact.sha256;
+  el("verificationState").textContent="Locally generated. Hash is not a digital signature or provider authentication.";
+  downloadJson(artifact,"qira-proof-evidence.json");
+ }catch(error){el("verificationState").textContent="Unable to generate evidence: "+error.message;}
+});
+el("verifyButton").addEventListener("click",()=>el("verifyInput").click());
+el("verifyInput").addEventListener("change",async event=>{
+ const f=event.target.files?.[0];if(!f)return;
+ try{
+  if(f.size>1_000_000)throw Error("Evidence exceeds 1 MB");
+  const artifact=JSON.parse(await f.text());
+  const okay=await verifyProof(artifact);
+  el("verificationState").textContent=okay?
+   "PASS: document, source facts, findings, and digest match a fresh local deterministic calculation. Provider origin is not verified.":
+   "FAIL: evidence does not match the deterministic proof calculation, or its fields were altered.";
+  el("digestValue").textContent=okay?artifact.sha256:"Verification failed";
+  buttonTab("evidence");
+ }catch(error){el("verificationState").textContent="Evidence rejected: "+error.message}
+ event.target.value="";
+});
+
+const git={connected:false,csrf:null};
 function gitMessage(value,isError=false){
  const out=el("gitMessage");out.textContent=value;out.style.color=isError?"#f2b1aa":"";
 }
@@ -211,53 +261,4 @@ el("gitDisconnect").addEventListener("click",async()=>{
 const githubResult=new URL(location.href).searchParams.get("github");
 if(githubResult==="failed")gitMessage("GitHub authorization could not be completed. Check App permissions and try again.",true);
 if(githubResult){const cleaned=new URL(location.href);cleaned.searchParams.delete("github");history.replaceState(null,"",cleaned.pathname+cleaned.search+cleaned.hash);}
-render();buttonTab("assessment");githubConnectionStatus();}
- catch(error){status("Baseline was rejected: "+error.message,true)}
- e.target.value="";
-});
-el("followupInput").addEventListener("change",async e=>{
- const file=e.target.files?.[0];if(!file)return;
- try{
-  if(state.mode==="demo")throw Error("Load a real baseline before comparing a real follow-up");
-  state.after=await readSnapshot(file);render();buttonTab("recheck");
- }catch(error){status("Follow-up rejected: "+error.message,true)}
- e.target.value="";
-});
-el("demoButton").addEventListener("click",()=>{state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="demo";render();buttonTab("assessment")});
-el("demoRecheck").addEventListener("click",()=>{
- if(state.mode!=="demo"){status("Reset to the fictional demo to load its sample follow-up",true);return}
- state.after=normalizeSnapshot(sampleAfter());render();buttonTab("recheck");
-});
-el("clearFollowup").addEventListener("click",()=>{state.after=null;render();buttonTab("assessment")});
-document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>buttonTab(b.dataset.tab)));
-function downloadJson(data,filename){
- const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
- const url=URL.createObjectURL(blob),a=document.createElement("a");
- a.href=url;a.download=filename;a.click();
- setTimeout(()=>URL.revokeObjectURL(url),1000);
-}
-el("exportButton").addEventListener("click",async()=>{
- try{
-  const artifact=await proof(state.before,state.after);
-  state.last=artifact;
-  el("digestValue").textContent=artifact.sha256;
-  el("verificationState").textContent="Locally generated. Hash is not a digital signature or provider authentication.";
-  downloadJson(artifact,"qira-proof-evidence.json");
- }catch(error){el("verificationState").textContent="Unable to generate evidence: "+error.message;}
-});
-el("verifyButton").addEventListener("click",()=>el("verifyInput").click());
-el("verifyInput").addEventListener("change",async event=>{
- const f=event.target.files?.[0];if(!f)return;
- try{
-  if(f.size>1_000_000)throw Error("Evidence exceeds 1 MB");
-  const artifact=JSON.parse(await f.text());
-  const okay=await verifyProof(artifact);
-  el("verificationState").textContent=okay?
-   "PASS: document, source facts, findings, and digest match a fresh local deterministic calculation. Provider origin is not verified.":
-   "FAIL: evidence does not match the deterministic proof calculation, or its fields were altered.";
-  el("digestValue").textContent=okay?artifact.sha256:"Verification failed";
-  buttonTab("evidence");
- }catch(error){el("verificationState").textContent="Evidence rejected: "+error.message}
- event.target.value="";
-});
-render();buttonTab("assessment");
+render();buttonTab("assessment");document.body.dataset.qiraBoot="ready";githubConnectionStatus();
