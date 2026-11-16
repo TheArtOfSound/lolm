@@ -71,6 +71,7 @@ test("connected visitor can select an installation, repo and workflow, and see r
  assert.equal(el("sampleBanner").hidden,true);
  assert.equal(el("assetsCount").textContent,1);
  assert.equal(el("reviewCount").textContent,1);
+ assert.equal(el("observationsCount").textContent,1);
  assert.match(el("gitMessage").textContent,/Assessment ready/);
  assert.equal(el("findings").children[0].tagName,"details");
  assert.equal(el("findings").children[0].open,true);
@@ -93,6 +94,7 @@ test("connected visitor can select an installation, repo and workflow, and see r
  assert.match(el("baselineName").textContent,/Connected GitHub workflow/);
  assert.match(el("gitMessage").textContent,/Reviewed all 1 discovered workflows/);
  assert.equal(el("reviewCount").textContent,1);
+ assert.equal(el("observationsCount").textContent,1);
  assert.equal(el("unknownCount").textContent,1);
  assert.equal(document.body.dataset.reportType,"customer");
  assert.equal(el("gitScanAll").disabled,false);
