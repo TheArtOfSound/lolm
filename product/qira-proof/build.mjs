@@ -9,11 +9,15 @@ export function assemble(){
  const report=fs.readFileSync(path.join(base,"report.mjs"),"utf8");
  const core=fs.readFileSync(path.join(base,"core.mjs"),"utf8");
  const auth=fs.readFileSync(path.join(base,"github_app.mjs"),"utf8");
+ const workflowScanner=fs.readFileSync(path.join(base,"workflow_static.mjs"),"utf8");
  const authBundled=auth.replace(/^import \{SCHEMA,normalizeSnapshot\} from "\.\/core\.mjs";\s*/m,"")
+   .replace(/^import \{scanWorkflowSyntax\} from "\.\/workflow_static\.mjs";\s*/m,"")
    .replace("export async function handleGitHubApp(", "async function handleGitHubApp(");
- if(authBundled.includes('import {SCHEMA')||authBundled.includes('export async function handleGitHubApp'))
+ if(authBundled.includes('import {SCHEMA')||authBundled.includes('import {scanWorkflowSyntax')||
+    authBundled.includes('export async function handleGitHubApp'))
    throw Error("GitHub App source transformation failed");
  const coreBundled=core.replace(/^export /gm,"");
+ const scannerBundled=workflowScanner.replace(/^export /gm,"");
  return [
   "// QIRA Proof local-first pilot with opt-in server-side, read-only GitHub connection.",
   "const HTML="+JSON.stringify(html)+";",
@@ -21,6 +25,7 @@ export function assemble(){
   "const REPORT="+JSON.stringify(report)+";",
   "const CORE="+JSON.stringify(core)+";",
   coreBundled,
+  scannerBundled,
   authBundled,
   "const JSON_HEADERS={ 'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff' };",
   "const JS_HEADERS={ 'content-type':'text/javascript; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff' };",
