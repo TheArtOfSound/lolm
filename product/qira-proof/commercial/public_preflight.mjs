@@ -50,10 +50,12 @@ export async function publicRepositoryPreflight(request,env={},fetcher=fetch){
  if(cache){
   try{const hit=await cache.match(cacheKey);if(hit){const text=await hit.text();return new Response(request.method==="HEAD"?null:text,{headers:noStore});}}catch{}
  }
+ let phase="setup";
  const controller=new AbortController();
  const timer=setTimeout(()=>controller.abort(),timeout);
  try{
   const root="/repos/"+encodeURIComponent(parsed.owner)+"/"+encodeURIComponent(parsed.name);
+  phase="repository_lookup";
   const repoResponse=await githubJSON(root,fetcher,controller.signal);
   if(repoResponse.kind!=="ok"){
    const status=repoResponse.kind==="not_found"?"not_public":repoResponse.kind==="limited"?"rate_limited":"unavailable";
@@ -61,6 +63,7 @@ export async function publicRepositoryPreflight(request,env={},fetcher=fetch){
   }
   const details=repoResponse.data;
   if(details?.private!==false||details?.full_name?.toLowerCase()!==parsed.key)return output({status:"not_public"},404);
+  phase="workflow_lookup";
   const contents=await githubJSON(root+"/contents/.github/workflows?ref="+encodeURIComponent(details.default_branch||"HEAD"),fetcher,controller.signal);
   let count=null;
   if(contents.kind==="not_found")count=0;
@@ -81,7 +84,7 @@ export async function publicRepositoryPreflight(request,env={},fetcher=fetch){
    try{await cache.put(cacheKey,new Response(text,{headers:{"content-type":"application/json","cache-control":"public, max-age=300"}}));}catch{}
   }
   return new Response(request.method==="HEAD"?null:text,{headers:noStore});
- }catch{
-  return output({status:"unavailable",message:"The public lookup is temporarily unavailable. You can still request a review."},503);
+ }catch(error){
+  return output({status:"unavailable",message:"The public lookup is temporarily unavailable. You can still request a review.",diagnostic:{phase,error:String(error?.name||"Unknown").slice(0,32),timed_out:controller.signal.aborted}},503);
  }finally{clearTimeout(timer);}
 }
