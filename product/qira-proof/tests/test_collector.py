@@ -55,6 +55,25 @@ class CollectorTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_KEY",json.dumps(out))
         self.assertNotIn("private",json.dumps(out))
 
+    def test_python_collector_retains_exact_write_scopes_with_commit_links(self):
+        def scoped_reader(url,token,provider):
+            if provider=="github" and "/contents/" in url:
+                source="\\n".join(["name: Release","on: workflow_dispatch",
+                  "permissions:","  contents: read","  issues: write",
+                  "  id-token: write","jobs:","  build:","    steps:","      - run: echo okay"])
+                return {"encoding":"base64","content":base64.b64encode(source.encode()).decode()}
+            return reader(url,token,provider)
+        result=collector.build_snapshot(
+          github_workflows=["org/repository:.github/workflows/release.yml"],
+          github_token="x",reader=scoped_reader,when=WHEN)
+        self.assertEqual(len(result["permission_inventory"]),1)
+        inventory=result["permission_inventory"][0]
+        self.assertEqual(inventory["asset"],"org/repository")
+        self.assertEqual([x["scope"] for x in inventory["scopes"]],["issues","id-token"])
+        self.assertTrue(inventory["scopes"][0]["source_url"].endswith("#L5"))
+        self.assertTrue(inventory["scopes"][1]["source_url"].endswith("#L6"))
+        self.assertNotIn("on: workflow_dispatch",json.dumps(result))
+
     def test_non_main_branch_and_explicit_workflow_selection(self):
         seen=[]
         def tracking(url,token,provider):
