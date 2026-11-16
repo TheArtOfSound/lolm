@@ -133,3 +133,30 @@ production cybersecurity efficacy, causal identification from observational
 logs, validated financial savings, uniqueness, or market demand.
 
 See `doc/event_horizon_commercial_thesis.md` for a pilot and commercialization plan.
+
+## Phase 4 research: observed configuration without public ingestion
+
+A separate **offline** Cloudflare configuration posture module now exists:
+- cloudflare_posture.mjs: schema-strict control findings and drift analysis
+- cloudflare_posture_cli.mjs: bounded, no-network CLI
+- cloudflare_posture.schema.json: published JSON Schema 2020-12
+- cloudflare_posture.example.json: fictional-only example
+- doc/cloudflare_posture_readonly_protocol.md: collection, provenance,
+  authorization and no-disruption runbook
+
+This code does NOT query Cloudflare and is not deployed to the public Worker.
+An operator provides a sanitized, explicitly allowlisted observation JSON.
+The auditor reports observed edge TLS, SSL certificate-verification mode,
+HTTPS redirect, managed/custom/rate-limit ruleset entrypoint presence, and
+public vs private Access context. It will *not* declare a real attack blocked,
+infer unknown statuses as off, or attest who created the snapshot.
+
+~~~bash
+node qira_event_horizon/cloudflare_posture_cli.mjs --current \
+  qira_event_horizon/cloudflare_posture.example.json
+node --test qira_event_horizon/cloudflare_posture*.test.mjs
+~~~
+
+Do not commit actual Cloudflare customer/account evidence into this public
+repository or upload it to the public synthetic demo. This is an independent
+observation research gate only, and no production settings are mutated.
