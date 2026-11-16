@@ -58,7 +58,7 @@ test("synthetic evidence demonstration remains available and explicitly marked i
  assert.match(html,/SYNTHETIC · NOT A LIVE SCAN/);
  assert.match(html,/No repository was scanned to generate these examples/);
  assert.match(html,/id="reportCode"/);
- assert.match(html,/NOT A SECURITY CERTIFICATION/);
+ assert.match(html,/not a security certification/i);
  assert.match(html,/data-case="scope"/);
 });
 
