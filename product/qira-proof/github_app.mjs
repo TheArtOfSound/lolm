@@ -134,6 +134,21 @@ async function accessibleRepos(token,installationId,fetcher){
  .map(x=>({name:x.full_name,branch:x.default_branch}));
  return {repos,truncated:payload.total_count>payload.repositories.length};
 }
+async function listWorkflows(token,installationId,repo,fetcher){
+ if(!repoSafe(repo))throw Error("invalid repository");
+ const allowed=await accessibleRepos(token,installationId,fetcher);
+ if(!allowed)throw Error("installation not authorized");
+ const selected=allowed.repos.find(x=>x.name===repo);
+ if(!selected)throw Error("repository not within verified authorized installation");
+ const [owner,name]=repo.split("/");
+ const uri="/repos/"+encodeURIComponent(owner)+"/"+encodeURIComponent(name)+
+   "/contents/.github/workflows?ref="+encodeURIComponent(selected.branch);
+ const raw=await githubGet(uri,token,fetcher);
+ if(!Array.isArray(raw))throw Error("workflow metadata unavailable");
+ const workflows=raw.filter(x=>x.type==="file"&&workflowSafe(x.path)).slice(0,100)
+   .map(x=>({path:x.path}));
+ return {repo,branch:selected.branch,workflows,truncated:raw.length>100};
+}
 function sourceUrl(repo,branch,workflow){
  return "https://github.com/"+repo+"/blob/"+encodeURIComponent(branch)+"/"+workflow;
 }
@@ -252,6 +267,10 @@ export async function handleGitHubApp(request,env,{fetcher=fetch,clock=now}={}){
    if(path==="/api/github/repos"){
     const data=await accessibleRepos(session.token,id,fetcher);
     return data?json(data):fail("Installation not authorized",403);
+   }
+   if(path==="/api/github/workflows"){
+    const data=await listWorkflows(session.token,id,url.searchParams.get("repo"),fetcher);
+    return json(data);
    }
    if(path==="/api/github/assessment"){
     const data=await assess(session.token,id,url.searchParams.get("repo"),url.searchParams.get("workflow"),fetcher,clock);
