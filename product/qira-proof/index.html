@@ -42,7 +42,7 @@ h1 span{color:var(--cream)}
 .source-head strong{font-size:13px}
 .mark{font-size:10px;color:var(--mute);border:1px solid #3e4b59;border-radius:6px;padding:2px 7px}
 .field{display:flex;flex-direction:column;gap:8px;margin:17px 0}
-.field label{font-size:12px;color:#c6d4dd;font-weight:600}
+.field label{font-size:12px;color:#c6d4dd;font-weight:600}.picker{width:100%;border:1px solid #415865;border-radius:7px;color:var(--ink);background:#1a2b39;padding:10px 12px}.picker:disabled{opacity:.55}
 .file-upload{position:relative;display:flex;align-items:center;justify-content:space-between;padding:12px 14px;color:var(--ink);background:#182532;border:1px dashed #5b7585;border-radius:9px;gap:12px;cursor:pointer}
 .file-upload:hover{border-color:var(--cream)}
 .file-upload span{font-size:12px;overflow-wrap:anywhere}
@@ -94,7 +94,7 @@ footer{border-top:1px solid var(--line);padding-top:23px;margin-top:29px;display
 <main>
 <div class="kicker">Infrastructure assurance / Evidence engine 01</div>
 <h1>Not another alarm.<br><span>A reason to act.</span></h1>
-<p class="lead">Turn configuration evidence into reviewable findings, compare it after a change, and export a reproducible record. No infrastructure scans from this website. No customer data is uploaded.</p>
+<p class="lead">Turn configuration evidence into reviewable findings, compare it after a change, and export a reproducible record. Manual files stay in your browser; optional GitHub connections use temporary read-only access through our Worker.</p>
 <div class="topline"><span class="chip">GitHub workflows</span><span class="chip">Cloudflare Workers</span><span class="chip">Read-only evidence</span><span class="chip">Before / after checks</span><span class="chip">SHA-256 verification</span></div>
 <div class="workspace">
 <aside class="panel">
@@ -106,15 +106,38 @@ footer{border-top:1px solid var(--line);padding-top:23px;margin-top:29px;display
     <div class="field"><label for="baselineInput">Load baseline evidence</label><div class="file-upload"><span>Choose QIRA JSON snapshot</span><small>Browse</small><input id="baselineInput" type="file" accept=".json,application/json"></div></div>
     <div class="field"><label for="followupInput">Load a later recheck</label><div class="file-upload"><span>Choose follow-up snapshot</span><small>Browse</small><input id="followupInput" type="file" accept=".json,application/json"></div></div>
     <div class="controls"><button type="button" id="demoButton" class="btn">Reset to demo</button><button type="button" id="demoRecheck" class="btn">Sample recheck</button><button type="button" id="clearFollowup" class="btn">Clear recheck</button></div>
+    <div class="section-label" style="margin-top:23px">GitHub App connection</div>
+    <div class="source">
+      <div class="source-head"><strong>Authorized read-only access</strong><span class="mark" id="gitBadge">Checking</span></div>
+      <div id="gitStatus" class="mini" role="status" aria-live="polite">Checking connection availability…</div>
+      <div class="controls">
+        <a href="/connect/github" class="btn primary" id="gitConnect" hidden>Connect GitHub</a>
+        <a href="#" class="btn" id="gitInstall" target="_blank" rel="noopener noreferrer" hidden>Install read-only App</a>
+        <button type="button" id="gitDisconnect" class="btn" hidden>Disconnect</button>
+      </div>
+      <div id="gitPicker" hidden>
+        <div class="field"><label for="gitInstallation">Installation</label>
+          <select id="gitInstallation" class="picker" aria-label="Authorized GitHub installation"><option value="">Choose installation</option></select>
+        </div>
+        <div class="field"><label for="gitRepository">Repository</label>
+          <select id="gitRepository" class="picker" disabled aria-label="Authorized repository"><option value="">Choose repository</option></select>
+        </div>
+        <div class="field"><label for="gitWorkflow">Workflow</label>
+          <select id="gitWorkflow" class="picker" disabled aria-label="Authorized workflow"><option value="">Choose workflow</option></select>
+        </div>
+        <button type="button" class="btn primary" id="gitAssess" disabled>Assess selected workflow</button>
+      </div>
+      <div id="gitMessage" class="mini" role="status" aria-live="polite"></div>
+    </div>
     <div class="section-label" style="margin-top:23px">Start with your own infrastructure</div>
     <p class="mini">Run the read-only collector on your machine, then load its JSON output here. No API tokens enter this website.</p>
     <p class="mini"><a href="https://github.com/TheArtOfSound/lolm/blob/product/qira-proof-pilot-2026-11-15/product/qira-proof/README.md" target="_blank" rel="noopener noreferrer">Open the setup and permissions guide</a></p>
     <div class="section-label" style="margin-top:23px">Privacy contract</div>
     <div class="pilotline"><span>Analysis</span><strong>In this browser</strong></div>
-    <div class="pilotline"><span>Uploads to QIRA</span><strong>None</strong></div>
-    <div class="pilotline"><span>Credentials needed here</span><strong>None</strong></div>
+    <div class="pilotline"><span>Manual file uploads</span><strong>None</strong></div>
+    <div class="pilotline"><span>GitHub credentials in page</span><strong>Never</strong></div>
     <div class="pilotline"><span>Actual production fixes</span><strong>Manual approval</strong></div>
-    <div class="note">The included demonstration is fictional. Real findings require an authorized, locally collected snapshot. A reported condition is not proof of exploitation.</div>
+    <div class="note">The included demonstration is fictional. Real findings require an authorized snapshot. Connected metadata passes transiently through the Worker but is not stored; manual files never leave the browser. No finding proves exploitation.</div>
   </div>
 </aside>
 <section class="panel">
