@@ -15,10 +15,12 @@ spec.loader.exec_module(collector)
 class WorkflowAccuracyCorpus(unittest.TestCase):
     def test_shared_curated_examples(self):
         corpus=json.loads((HERE/"fixtures"/"workflow_accuracy.json").read_text())
+        holdout=json.loads((HERE/"fixtures"/"workflow_adjudication_holdout.json").read_text())
         self.assertEqual(corpus["schema"],"qira-proof/accuracy-fixtures-v1")
-        self.assertGreaterEqual(len(corpus["fixtures"]),60)
+        self.assertEqual(holdout["schema"],"qira-proof/adjudication-holdout-v1")
+        self.assertEqual(len(corpus["fixtures"])+len(holdout["fixtures"]),100)
         ids=set()
-        for case in corpus["fixtures"]:
+        for case in corpus["fixtures"]+holdout["fixtures"]:
             with self.subTest(case=case["id"]):
                 self.assertNotIn(case["id"],ids)
                 ids.add(case["id"])

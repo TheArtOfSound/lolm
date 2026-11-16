@@ -1,0 +1,360 @@
+{
+  "schema": "qira-proof/adjudication-holdout-v1",
+  "authorship": "New manually specified second holdout; NOT externally or professionally reviewed",
+  "limitations": "Rules-based adversarial test, not population precision or recall estimate",
+  "fixtures": [
+    {
+      "id": "holdout-ssh-display-name",
+      "domain": "ssh",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - name: ssh-keyscan is a label\n        run: echo ok",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Step display names do not execute host discovery."
+    },
+    {
+      "id": "holdout-ssh-root-env",
+      "domain": "ssh",
+      "workflow": "name: Review\non: push\nenv:\n  TOOL: ssh-keyscan -H host\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Root environment contents are not shell commands."
+    },
+    {
+      "id": "holdout-ssh-step-with",
+      "domain": "ssh",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\n        with:\n          note: ssh-keyscan",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Action input data cannot be assumed to run."
+    },
+    {
+      "id": "holdout-ssh-step-if",
+      "domain": "ssh",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - if: contains(github.ref, 'ssh-keyscan')\n        run: echo ok",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Conditional expression is metadata, not shell."
+    },
+    {
+      "id": "holdout-ssh-real-block",
+      "domain": "ssh",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          echo hi\n          ssh-keyscan -H host",
+      "expected": {
+        "ssh": true
+      },
+      "rationale": "Real run block contains SSH host discovery."
+    },
+    {
+      "id": "holdout-ssh-metadata",
+      "domain": "ssh",
+      "workflow": "name: Review\non: push\ndescription: ssh-keyscan\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Workflow metadata string is not a run command."
+    },
+    {
+      "id": "holdout-ssh-input-literal",
+      "domain": "ssh",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\n        with:\n          commands: |\n            ssh-keyscan -H host",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Step input literal is not proven to be executable shell."
+    },
+    {
+      "id": "holdout-ssh-env-literal",
+      "domain": "ssh",
+      "workflow": "name: Review\non: push\nenv:\n  NOTES: |\n    ssh-keyscan -H host\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Root YAML environment literal is inert text."
+    },
+    {
+      "id": "holdout-ssh-step-env",
+      "domain": "ssh",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n        env:\n          COMMAND: ssh-keyscan",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Step environment is not a shell command."
+    },
+    {
+      "id": "holdout-ssh-direct-run",
+      "domain": "ssh",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ssh-keyscan -H host",
+      "expected": {
+        "ssh": true
+      },
+      "rationale": "Inline run is an actual shell command."
+    },
+    {
+      "id": "holdout-ssh-comment",
+      "domain": "ssh",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          # ssh-keyscan -H host\n          echo ok",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Shell-only comments do not execute discovery."
+    },
+    {
+      "id": "holdout-ssh-shell-echo",
+      "domain": "ssh",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ssh-keyscan",
+      "expected": {
+        "ssh": true
+      },
+      "rationale": "Indicator observes text within real run steps without proving execution."
+    },
+    {
+      "id": "holdout-action-matrix",
+      "domain": "action",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    strategy:\n      matrix:\n        include:\n          - uses: attacker/repo@v1\n    steps:\n      - run: echo ok",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Strategy matrix metadata is not step execution."
+    },
+    {
+      "id": "holdout-action-input-block",
+      "domain": "action",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\n        with:\n          script: |\n            uses: attacker/repo@v1",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Action input literal must not create action evidence."
+    },
+    {
+      "id": "holdout-action-step-id",
+      "domain": "action",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - id: action\n        uses: attacker/repo@v1",
+      "expected": {
+        "mutable": true
+      },
+      "rationale": "Direct uses field under a real step is executable."
+    },
+    {
+      "id": "holdout-action-local",
+      "domain": "action",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ./actions/build",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Relative local actions are outside this external-reference rule."
+    },
+    {
+      "id": "holdout-action-nested-env",
+      "domain": "action",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          uses: attacker/repo@v1\n        run: echo ok",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Nested step environment uses key is data."
+    },
+    {
+      "id": "holdout-action-pinned-reusable",
+      "domain": "action",
+      "workflow": "name: Review\non: push\njobs:\n  call:\n    with:\n      uses: attacker/repo@v1\n    uses: owner/repo/.github/workflows/test.yml@0123456789abcdef0123456789abcdef01234567",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Input data and pinned reusable workflow are not mutable."
+    },
+    {
+      "id": "holdout-action-job-env-literal",
+      "domain": "action",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    env:\n      NOTES: |\n        uses: attacker/repo@v1\n    steps:\n      - run: echo ok",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Job environment literal cannot execute external action."
+    },
+    {
+      "id": "holdout-action-mixed",
+      "domain": "action",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    steps:\n      - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\n      - name: Cache\n        uses: actions/cache@v4",
+      "expected": {
+        "mutable": true
+      },
+      "rationale": "Second action is mutable even when first is pinned."
+    },
+    {
+      "id": "holdout-action-inline-comment",
+      "domain": "action",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi # uses: attacker/repo@v1",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Shell inline text does not constitute uses declaration."
+    },
+    {
+      "id": "holdout-action-second-job",
+      "domain": "action",
+      "workflow": "name: Review\non: push\njobs:\n  first:\n    steps:\n      - run: echo hi\n  second:\n    steps:\n      - uses: owner/repo@v2",
+      "expected": {
+        "mutable": true
+      },
+      "rationale": "Second job still contains actionable external reference."
+    },
+    {
+      "id": "holdout-perm-with",
+      "domain": "permission",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\n        with:\n          permissions:\n            issues: write",
+      "expected": {
+        "write": "unknown",
+        "restricted": "unknown",
+        "scopes": []
+      },
+      "rationale": "Action inputs named permissions have no token scope authority."
+    },
+    {
+      "id": "holdout-perm-root-inline-job",
+      "domain": "permission",
+      "workflow": "name: Review\non: push\npermissions: { contents: read }\njobs:\n  build:\n    permissions:\n      issues: write",
+      "expected": {
+        "write": true,
+        "restricted": false,
+        "scopes": [
+          "issues"
+        ]
+      },
+      "rationale": "Certain job write remains visible despite ambiguous root map."
+    },
+    {
+      "id": "holdout-perm-job-read",
+      "domain": "permission",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    permissions:\n      contents: read\n    steps:\n      - run: echo ok",
+      "expected": {
+        "write": false,
+        "restricted": true,
+        "scopes": []
+      },
+      "rationale": "Job declares read permission explicitly."
+    },
+    {
+      "id": "holdout-perm-job-oidc",
+      "domain": "permission",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    permissions:\n      id-token: write\n    steps:\n      - run: echo ok",
+      "expected": {
+        "write": true,
+        "restricted": false,
+        "scopes": [
+          "id-token"
+        ]
+      },
+      "rationale": "Job explicitly declares token minting capability."
+    },
+    {
+      "id": "holdout-perm-root-write-job-read",
+      "domain": "permission",
+      "workflow": "name: Review\non: push\npermissions:\n  contents: write\njobs:\n  build:\n    permissions:\n      contents: read",
+      "expected": {
+        "write": true,
+        "restricted": false,
+        "scopes": [
+          "contents"
+        ]
+      },
+      "rationale": "Inventory observes root write even when a job narrows it."
+    },
+    {
+      "id": "holdout-perm-step-env",
+      "domain": "permission",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ok\n        env:\n          permissions: write-all",
+      "expected": {
+        "write": "unknown",
+        "restricted": "unknown",
+        "scopes": []
+      },
+      "rationale": "Step environment cannot grant GitHub token permissions."
+    },
+    {
+      "id": "holdout-perm-expression",
+      "domain": "permission",
+      "workflow": "name: Review\non: push\npermissions: ${{ github.event.inputs.mode }}\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": "unknown",
+        "restricted": "unknown",
+        "scopes": []
+      },
+      "rationale": "Unsupported dynamic permissions must stay unknown."
+    },
+    {
+      "id": "holdout-perm-comment",
+      "domain": "permission",
+      "workflow": "name: Review\non: push\npermissions:\n  contents: read # comment\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": false,
+        "restricted": true,
+        "scopes": []
+      },
+      "rationale": "Inline comment does not change read declaration."
+    },
+    {
+      "id": "holdout-perm-job-none",
+      "domain": "permission",
+      "workflow": "name: Review\non: push\njobs:\n  build:\n    permissions:\n      contents: none",
+      "expected": {
+        "write": false,
+        "restricted": true,
+        "scopes": []
+      },
+      "rationale": "An explicit none does not grant write privilege."
+    },
+    {
+      "id": "holdout-perm-two-writes",
+      "domain": "permission",
+      "workflow": "name: Review\non: push\npermissions:\n  contents: write\n  issues: write\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": true,
+        "restricted": false,
+        "scopes": [
+          "contents",
+          "issues"
+        ]
+      },
+      "rationale": "Root permissions record multiple source-linked writes."
+    },
+    {
+      "id": "holdout-trigger-comment",
+      "domain": "trigger",
+      "workflow": "on:\n  push:\n  # pull_request_target:\njobs:\n  build:\n    steps:\n      - run: echo ok",
+      "expected": {
+        "target": false
+      },
+      "rationale": "Commented trigger must not activate privileged event."
+    },
+    {
+      "id": "holdout-trigger-quoted",
+      "domain": "trigger",
+      "workflow": "'on':\n  pull_request_target:\njobs:\n  build:\n    steps:\n      - run: echo ok",
+      "expected": {
+        "target": true
+      },
+      "rationale": "Quoted on mapping key is still trigger declaration."
+    },
+    {
+      "id": "holdout-trigger-dispatch",
+      "domain": "trigger",
+      "workflow": "name: Test\non: workflow_dispatch\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "target": false
+      },
+      "rationale": "Explicit manual dispatch lacks privileged PR target."
+    },
+    {
+      "id": "holdout-trigger-alias",
+      "domain": "trigger",
+      "workflow": "on: [push, *special]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "target": "unknown"
+      },
+      "rationale": "Unknown YAML alias makes negative conclusion unsupported."
+    }
+  ]
+}
