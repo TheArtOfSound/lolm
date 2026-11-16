@@ -210,7 +210,7 @@ async function exchangeToken(env,code,verifier,fetcher){
  return {token:parsed.access_token,ttl:Math.min(SESSION_TTL_MS,parsed.expires_in*1000)};
 }
 function cspGet(request){return ["GET","HEAD"].includes(request.method)}
-export async function handleGitHubApp(request,env,{fetcher=fetch,clock=now}={}){
+export async function handleGitHubApp(request,env={}, {fetcher=fetch,clock=now}={}){
  const url=new URL(request.url),path=url.pathname;
  if(path==="/api/github/status"){
   const setup=configured(env);
