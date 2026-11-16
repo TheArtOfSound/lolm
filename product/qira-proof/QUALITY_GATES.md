@@ -13,9 +13,15 @@ or attested statement from GitHub/Cloudflare/Vercel. Never imply these.
 - [x] New v2 receipts record analysis policy version; archived deterministic v1 receipts remain verifiable.
 - [x] Report and JSON receipts clearly distinguish observed conditions from verified vulnerabilities.
 - [x] Declared read-only permissions and privileged trigger context can be observed conservatively, with unsupported syntax producing unknown rather than safe.
-- [ ] Build a reviewed 100-workflow fixture corpus spanning anchors, multiline scripts, reusable workflows, unusual permissions, GitHub policy variants, and adversarial YAML.
+- [ ] Build a reviewed 100-workflow fixture corpus spanning anchors, multiline scripts, reusable workflows, unusual permissions, GitHub policy variants, and adversarial YAML. Initial nested-permission and event-sequence adversarial fixtures are covered; the larger corpus and manual adjudication remain outstanding.
 - [ ] Publish precision/recall and false-positive rates with explicit denominators and human adjudication.
 - [ ] Independently corroborate every new rule against a pinned provider fixture and a second implementation.
+
+### Real owner scan verification (November 16)
+
+The owner supplied a successful live `TheArtOfSound/lolm` scan of 20/20 workflows at `f9700d2e661640da4a8d0cf2bb9c046d77f8a06b`: 109 source-linked facts, 27 review observations under two patterns, and 13 workflows with recognized read-only permission declarations. A separate authorized GitHub read corroborated those 13 actual root-level `contents: read` declarations. These are **syntactic observations**, not independently attested provider policy.
+
+Latest improvement: a separately labeled authorization inventory identifies explicit write permissions (including potentially appropriate OIDC scopes) and ambiguous permissions without treating them as vulnerabilities. Both local and hosted scanners now refuse to classify nested `env` / `with` permission-shaped keys as effective GitHub permissions, and treat unsupported inline event YAML as unknown. The owner has **not yet run the latest patched scanner through the browser**.
 
 ## 2. Security and privacy
 - [x] GitHub OAuth state, PKCE, callback validation, encrypted short-lived browser session, CSRF protection, server-only token exchange.
