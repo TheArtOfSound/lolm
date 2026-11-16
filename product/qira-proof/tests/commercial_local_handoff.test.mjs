@@ -41,7 +41,7 @@ test("one click shows an instant review-request summary and exact live Stripe li
  assert.match(deepText(ui.target),/not confirmed this repository exists/);
  assert.match(deepText(ui.target),/Continue to Stripe — \$299/);
  assert.equal(ui.store.get("qira_proof_repo"),"TheArtOfSound/lolm");
- const actions=ui.target.children.find(x=>x.attrs?.class==="ux-result-actions");
+ const actions=ui.target.children.find(x=>x.className==="ux-result-actions");
  assert.ok(actions);
  assert.equal(actions.children[0].href,"https://buy.stripe.com/9B63cvexo0ts3OBfyv7kc07");
 });
