@@ -8,7 +8,7 @@ test("commercial page is branded and commercial health is explicit",async()=>{
  assert.equal(page.status,200);
  const html=await page.text();
  assert.match(html,/Qira Proof \| Know what your workflows trust/);
- assert.match(html,/A TOOL IN THE IMAGINEQIRA ECOSYSTEM/);
+ assert.match(html,/A tool in the ImagineQira ecosystem/i);
  assert.match(html,/Founding workflow review/i);
  assert.match(html,/\$299/);
  assert.match(html,/https:\/\/imagineqira.com/);
