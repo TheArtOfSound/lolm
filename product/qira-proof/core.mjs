@@ -6,11 +6,15 @@ export const SCHEMA="qira-proof/snapshot-v1";
 const MAX_FACTS=150;
 const SIGNALS=new Set(["runtime_ssh_keyscan","ssh_host_key_pinned",
  "worker_preview_enabled","worker_public_enabled","worker_privileged_bindings",
- "repo_branch_protection_verifiable","workflow_token_write_permission",
+ "repo_branch_protection_verifiable","workflow_unpinned_actions","workflow_token_write_permission",
  "workflow_untrusted_pull_request","vercel_recent_preview_observed",
  "vercel_deployment_protection_configured","vercel_latest_production_errored"]);
 export const MODES={ready:"observed",unknown:"not_verified"};
 const checks=[
+ {key:"workflow_action_integrity",title:"Third-party CI actions use mutable version references",
+  category:"Build supply-chain integrity",level:"review",
+  description:"One or more non-local GitHub Actions in the selected workflow use a tag or branch rather than a complete 40-character commit SHA. These references can change over time. This is a hardening opportunity, not proof of a malicious update.",
+  next:"Inspect each external uses: reference in the selected workflow and pin its reviewed full commit SHA. Maintain a controlled update process for those pins."},
  {key:"ssh_host_trust",title:"Deployment SSH trust requires verification",
   category:"Deployment integrity",level:"review",
   description:"A deployment workflow appears to populate SSH known_hosts at runtime using ssh-keyscan. Without an independently trusted fingerprint, the first connection may trust an attacker-controlled host.",
@@ -108,6 +112,10 @@ export function analyzeSnapshot(input){
   const no=x=>observations.get(x)?.value===false;
   const f=x=>observations.get(x);
   if(provider==="github"){
+   if(yes("workflow_unpinned_actions")){
+    emit(findings,asset,"workflow_action_integrity",[f("workflow_unpinned_actions")],
+      ["workflow_unpinned_actions"]);
+   }
    if(yes("runtime_ssh_keyscan")&&!yes("ssh_host_key_pinned")){
     emit(findings,asset,"ssh_host_trust",[f("runtime_ssh_keyscan"),...(f("ssh_host_key_pinned")?[f("ssh_host_key_pinned")]:[])],
       ["runtime_ssh_keyscan","ssh_host_key_pinned"]);
