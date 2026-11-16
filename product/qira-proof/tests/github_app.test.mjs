@@ -35,7 +35,7 @@ function mockFetch(input,options={}){
           {path:".github/workflows/publish.yml",type:"file"},
           {path:".github/workflows/subfolder/malicious.yml",type:"dir"}];
  }else if(url.includes("/repos/TheArtOfSound/lolm/contents/")){
-   const body="name: Deploy\njobs:\n  deploy:\n    steps:\n    - uses: actions/checkout@v4\n    - run: ssh-keyscan -H example.org >> ~/.ssh/known_hosts\n";
+   const body="name: Deploy\njobs:\n  deploy:\n    steps:\n      - uses: actions/checkout@v4\n      - run: ssh-keyscan -H example.org >> ~/.ssh/known_hosts\n";
    value={encoding:"base64",content:Buffer.from(body).toString("base64")};
  }else throw Error("unexpected provider URL: "+url);
  return Promise.resolve(new Response(JSON.stringify(value),{status:200,headers:{"content-type":"application/json"}}));
