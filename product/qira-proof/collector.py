@@ -158,7 +158,7 @@ def build_snapshot(github_repos=(),cloudflare_workers=(),github_token=None,cloud
             raise ValueError("use --github-workflow owner/repo:.github/workflows/name.yml")
         name,workflow=entry.split(":",1)
         selected.append((name,workflow))
-    selected=list(dict.fromkeys(selected))
+    # Repeated selections are rejected instead of silently double-counted.
     seen_repos=set()
     for repo,workflow in selected:
         if repo in seen_repos:
