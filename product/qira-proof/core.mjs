@@ -79,6 +79,58 @@ function normalizeCoverage(v){
   assessed:v.assessed,skipped:v.skipped,limit:v.limit,complete:v.complete,
   truncated:v.truncated,commit:v.commit.toLowerCase()};
 }
+// A bounded provider-declared scope inventory. Each entry is a recognized
+// permission name, with an immutable source line. This is source evidence,
+// not verification of effective GitHub token permissions.
+const WRITABLE_SCOPES=new Set(["actions","artifact-metadata","attestations","checks",
+ "code-quality","contents","copilot-requests","deployments","discussions",
+ "id-token","issues","packages","pages","pull-requests","security-events",
+ "statuses","write-all"]);
+function normalizePermissionInventory(entries,facts){
+ if(!Array.isArray(entries)||entries.length===0||entries.length>20)
+  throw Error("Invalid bounded permission inventory");
+ const known=new Set(),normalized=[];
+ for(const item of entries){
+  if(!plain(item)||Object.keys(item).length!==2||
+     !Object.hasOwn(item,"asset")||!Object.hasOwn(item,"scopes")||
+     !checkString(item.asset,180)||!Array.isArray(item.scopes)||
+     item.scopes.length===0||item.scopes.length>36||known.has(item.asset))
+   throw Error("Invalid permission inventory entry");
+  known.add(item.asset);
+  const observed=facts.find(f=>f.provider==="github"&&f.asset===item.asset&&
+    f.signal==="workflow_token_write_permission"&&f.value===true);
+  if(!observed)throw Error("Permission inventory has no matching write observation");
+  const [repo,workflow]=item.asset.split(":.github/workflows/");
+  const repository=repo;
+  if(!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository))
+   throw Error("Permission inventory repository invalid");
+  const canonicalRoot="https://github.com/"+repository+"/blob/";
+  const unique=new Set(),scopes=[];
+  for(const entry of item.scopes){
+   if(!plain(entry)||Object.keys(entry).length!==2||
+      !WRITABLE_SCOPES.has(entry.scope)||!checkUrl(entry.source_url)||
+      !/^#L[1-9][0-9]{0,5}$/.test(new URL(entry.source_url).hash)||
+      !entry.source_url.startsWith(canonicalRoot))
+    throw Error("Invalid permission inventory scope or source");
+   const parsed=new URL(entry.source_url),segments=parsed.pathname.split("/");
+   if(!/^[a-fA-F0-9]{40}$/.test(segments[4]||"")||
+      !parsed.pathname.includes("/.github/workflows/"))
+    throw Error("Permission inventory source not commit pinned");
+   const observedUrl=new URL(observed.source_url);
+   if(parsed.pathname!==observedUrl.pathname)
+    throw Error("Permission inventory workflow mismatch");
+   if(workflow&&parsed.pathname!=="/"+repository+"/blob/"+segments[4]+"/.github/workflows/"+workflow)
+    throw Error("Permission inventory asset mismatch");
+   const key=entry.scope+"|"+entry.source_url;
+   if(unique.has(key))throw Error("Duplicate permission inventory declaration");
+   unique.add(key);scopes.push({scope:entry.scope,source_url:entry.source_url});
+  }
+  scopes.sort((a,b)=>(a.scope+"|"+a.source_url).localeCompare(b.scope+"|"+b.source_url));
+  normalized.push({asset:item.asset,scopes});
+ }
+ normalized.sort((a,b)=>a.asset.localeCompare(b.asset));
+ return normalized;
+}
 export function normalizeSnapshot(raw){
  if(!plain(raw)||raw.schema!==SCHEMA||!Array.isArray(raw.facts)||raw.facts.length>MAX_FACTS||
  !checkDate(raw.captured_at))throw Error("Invalid QIRA snapshot envelope");
@@ -111,6 +163,9 @@ export function normalizeSnapshot(raw){
      !==normalized.coverage.assessed)
    throw Error("Repository coverage does not match observed workflow facts");
  }
+ if(raw.permission_inventory!==undefined){
+  normalized.permission_inventory=normalizePermissionInventory(raw.permission_inventory,normalized.facts);
+ }
  return normalized;
 }
 export function mergeSnapshots(...inputs){
@@ -124,7 +179,9 @@ export function mergeSnapshots(...inputs){
   throw Error("Source snapshots were captured more than 24 hours apart; recapture before combining");
  const all=sources.flatMap(x=>x.facts);
  if(all.length>MAX_FACTS)throw Error("Combined snapshot exceeds evidence fact limit");
- return normalizeSnapshot({schema:SCHEMA,captured_at:new Date(latest).toISOString(),facts:all});
+ const inventory=sources.flatMap(x=>x.permission_inventory||[]);
+ return normalizeSnapshot({schema:SCHEMA,captured_at:new Date(latest).toISOString(),facts:all,
+  permission_inventory:inventory.length?inventory:undefined});
 }
 function factsMap(snapshot){
  const out=new Map();
@@ -276,6 +333,17 @@ async function historicalV1Proof(snapshot,followup=null){
   attestation:"self-contained deterministic calculation, NOT source authentication, a signature, or proof of prevention"};
  return {...payload,sha256:await sha256(canonical(payload))};
 }
+// v2 is retained for checksums already issued with the first permission rule set.
+async function historicalV2Proof(snapshot,followup=null){
+ const baseline=normalizeSnapshot(snapshot),after=followup?normalizeSnapshot(followup):null;
+ if(baseline.permission_inventory||after?.permission_inventory)
+  throw Error("v2 receipts cannot contain new permission inventories");
+ const assessment=analyzeSnapshot(baseline),comparison=after?compareSnapshots(baseline,after):null;
+ const payload={schema:"qira-proof/evidence-v3",policy_version:"2026-11-16-source-scopes-v3",
+  baseline,after,assessment,comparison,
+  attestation:"self-contained deterministic calculation, NOT source authentication, a signature, or proof of prevention"};
+ return {...payload,sha256:await sha256(canonical(payload))};
+}
 export async function proof(snapshot,followup=null){
  const baseline=normalizeSnapshot(snapshot),after=followup?normalizeSnapshot(followup):null;
  const assessment=analyzeSnapshot(baseline),comparison=after?compareSnapshots(baseline,after):null;
@@ -288,7 +356,8 @@ export async function verifyProof(doc){
  if(!plain(doc)||typeof doc.sha256!=="string"||!/^[a-fA-F0-9]{64}$/.test(doc.sha256))
   return false;
  try{
-  const fresh=doc.schema==="qira-proof/evidence-v2"?await proof(doc.baseline,doc.after):
+  const fresh=doc.schema==="qira-proof/evidence-v3"?await proof(doc.baseline,doc.after):
+   doc.schema==="qira-proof/evidence-v2"?await historicalV2Proof(doc.baseline,doc.after):
    doc.schema==="qira-proof/evidence-v1"?await historicalV1Proof(doc.baseline,doc.after):null;
   return !!fresh&&canonical(fresh)===canonical(doc);
  }catch{return false}
