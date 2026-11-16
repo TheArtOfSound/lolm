@@ -17,7 +17,8 @@ function activeLines(text){
   const pad=indent(raw),clean=raw.trim(),number=i+1;
   if(pad<0)return {text:"",pad:-1,line:number};
   if(literalIndent>=0){
-   if(!clean||pad>literalIndent)return {text:"",pad,line:number};
+   if(!clean||pad>literalIndent)
+    return {text:"",shell:clean.startsWith("#")?"":clean,pad,line:number};
    literalIndent=-1;
   }
   if(!clean||clean.startsWith("#"))return {text:"",pad,line:number};
@@ -69,10 +70,11 @@ export function scanWorkflowSyntax(text){
  const rows=activeLines(text);
  const mutable=[],ssh=[];
  for(const r of rows){
-  if(!r.text)continue;
-  const action=ACTION.exec(r.text);
+  if(!r.text&&!r.shell)continue;
+  const action=r.text?ACTION.exec(r.text):null;
   if(action&&!/^[a-fA-F0-9]{40}$/.test(action[2]))mutable.push(r.line);
-  if(SSH.test(r.text))ssh.push(r.line);
+  // Shell blocks are not YAML declarations, but can contain the SSH command.
+  if(SSH.test(r.shell||r.text))ssh.push(r.line);
  }
  const permissions=permissionDeclarations(rows);
  const target=triggerDeclaration(rows);
