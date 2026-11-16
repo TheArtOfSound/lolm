@@ -1,4 +1,4 @@
-import {SCHEMA,normalizeSnapshot,mergeSnapshots,analyzeSnapshot,compareSnapshots,proof,verifyProof}
+import {SCHEMA,normalizeSnapshot,mergeSnapshots,analyzeSnapshot,compareSnapshots,proof,verifyProof,groupReviewFindings}
 from "./core.mjs";
 import {renderHumanReport} from "./report.mjs";
 
@@ -72,7 +72,9 @@ function render(){
  el("followupName").textContent=state.after?"Follow-up · "+state.after.captured_at:"No later snapshot selected";
  const findings=el("findings");clear(findings);
  if(!report.findings.length){findings.appendChild(node("div","empty","No configured rule matched these facts. This is not a clean bill of health."));}
- report.findings.forEach((x,index)=>{
+ const visibleFindings=state.mode==="connected"&&state.before.coverage?
+  groupReviewFindings(report.findings):report.findings;
+ visibleFindings.forEach((x,index)=>{
   const card=node("details","finding");
   card.open=index===0;
   const head=node("summary","finding-head"),label=node("div"),title=node("div","finding-title",x.title);
@@ -88,7 +90,9 @@ function render(){
   const evidence=node("div","evidence");
   x.evidence.forEach(f=>{
    if(state.mode==="demo"){evidence.appendChild(node("span","chip","Fictional · "+f.signal+" = "+String(f.observed_value)));return;}
-   const a=node("a","",f.signal+" = "+String(f.observed_value));
+   const workflowName=typeof f.asset==="string"&&f.asset.includes(":.github/workflows/")?
+    f.asset.split(":.github/workflows/")[1]+" · ":"";
+   const a=node("a","",workflowName+f.signal+" = "+String(f.observed_value));
    a.href=f.source_url;a.target="_blank";a.rel="noopener noreferrer";
    a.title="Open declared provider evidence: "+f.source_url;
    evidence.appendChild(a);
