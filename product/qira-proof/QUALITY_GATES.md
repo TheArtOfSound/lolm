@@ -21,7 +21,7 @@ or attested statement from GitHub/Cloudflare/Vercel. Never imply these.
 
 The owner supplied a successful live `TheArtOfSound/lolm` scan of 20/20 workflows at `f9700d2e661640da4a8d0cf2bb9c046d77f8a06b`: 109 source-linked facts, 27 review observations under two patterns, and 13 workflows with recognized read-only permission declarations. A separate authorized GitHub read corroborated those 13 actual root-level `contents: read` declarations. These are **syntactic observations**, not independently attested provider policy.
 
-Latest improvement: a separately labeled authorization inventory identifies explicit write permissions (including potentially appropriate OIDC scopes) and ambiguous permissions without treating them as vulnerabilities. Both local and hosted scanners now refuse to classify nested `env` / `with` permission-shaped keys as effective GitHub permissions, and treat unsupported inline event YAML as unknown. The owner has **not yet run the latest patched scanner through the browser**.
+Latest improvement: the write authorization inventory now enumerates specific recognized scopes (for example `contents: write`, `issues: write`, and `id-token: write`) with exact source lines in v3 evidence receipts. It separately identifies ambiguous declarations without treating them as vulnerabilities. Both local and hosted scanners now refuse to classify nested `env` / `with` permission-shaped keys as effective GitHub permissions, and treat unsupported inline event YAML as unknown. The owner has **not yet run the new v3 exact-scope collector through the browser**.
 
 ## 2. Security and privacy
 - [x] GitHub OAuth state, PKCE, callback validation, encrypted short-lived browser session, CSRF protection, server-only token exchange.
