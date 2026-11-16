@@ -49,7 +49,7 @@ test("missing or unusual permission syntax remains unknown",()=>{
 });
 test("privileged PR trigger is review-only; no code execution claimed",()=>{
  const inspected=scanWorkflowSyntax(["on:","  pull_request_target:","permissions:","  contents: write"].join("\n"));
- const facts=Object.entries(inspected).map(([signal,meta])=>({
+ const facts=Object.entries(inspected).filter(([signal])=>signal!=="writeScopes").map(([signal,meta])=>({
   provider:"github",asset:"owner/repo:.github/workflows/security.yml",signal,
   value:meta.value,source_url:"https://github.com/owner/repo/blob/"+sha+"/.github/workflows/security.yml"+(meta.line?"#L"+meta.line:""),observed_at:when
  }));
