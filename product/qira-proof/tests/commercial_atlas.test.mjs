@@ -12,7 +12,7 @@ test("task-first homepage presents one accessible repository entry instead of co
  assert.match(html,/id="repoUrl"[^>]*required maxlength="240"/);
  assert.match(html,/id="repoSubmit" type="submit"/);
  assert.match(html,/id="repoResult" role="status" aria-live="polite"/);
- assert.match(html,/Private repository\? Skip lookup/);
+ assert.match(html,/Private repository\? Continue directly/);
  assert.doesNotMatch(html,/role="img" aria-label="Example workflow graph/);
  assert.doesNotMatch(html,/ILLUSTRATIVE \/ NOT YOUR REPO/);
  assert.match(html,/No repository is accessed/);
