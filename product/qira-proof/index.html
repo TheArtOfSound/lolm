@@ -235,6 +235,11 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
       <div id="assessmentData" hidden>
       <div class="metrics"><div class="metric"><small>Evidence scopes</small><strong id="assetsCount">—</strong></div><div class="metric"><small>Review patterns</small><strong id="reviewCount" class="caution">—</strong></div><div class="metric"><small>Review observations</small><strong id="observationsCount">—</strong></div><div class="metric"><small>Visibility gaps</small><strong id="unknownCount">—</strong></div><div class="metric"><small>Evidence facts</small><strong id="factsCount" class="calm">—</strong></div></div>
       <div class="note" id="scanCoverage" hidden role="status" aria-live="polite"></div>
+      <section id="workflowTriage" hidden aria-labelledby="workflowTriageTitle" style="margin:26px 0 28px">
+       <h3 id="workflowTriageTitle" class="section-label">Workflow review order</h3>
+       <p class="mini">Groups overlap-related configuration observations, not confirmed vulnerabilities. More indicators do not necessarily mean greater exploitability. Missing evidence is never treated as safe.</p>
+       <div id="workflowTriageGroups" class="cards"></div>
+      </section>
       <div class="section-label">What deserves a closer look?</div>
       <div id="findings" class="cards" aria-live="polite"></div>
       <section id="positiveControlsSection" hidden aria-labelledby="positiveControlsTitle" style="margin-top:27px">
