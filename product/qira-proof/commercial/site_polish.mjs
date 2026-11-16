@@ -95,6 +95,7 @@ export function addLegalNavigation(html){
   return '<h2 id="'+id+'">'+text+'</h2>';
  });
  const headings=[...result.matchAll(/<h2 id="([^"]+)">([^<]+)</h2>/g)];
+ if(!headings.length)return result;
  const links=headings.slice(0,7).map(m=>'<a href="#'+m[1]+'">'+m[2]+'</a>').join("");
  return result.replace(/</h1>/,'</h1><nav class="site-toc" aria-label="On this page"><span>On this page</span>'+links+'</nav>');
 }
