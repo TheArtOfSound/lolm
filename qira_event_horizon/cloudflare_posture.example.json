@@ -1,0 +1,29 @@
+{
+  "schema": "qira-edge-inventory/v1",
+  "zone_alias": "fictional-example",
+  "observed_at": "2026-11-15T18:00:00Z",
+  "origin": "operator-exported-cloudflare-readonly",
+  "settings": {
+    "min_tls_version": "1.2",
+    "ssl": "strict",
+    "always_use_https": "on",
+    "legacy_waf": null
+  },
+  "entrypoints": {
+    "account": {
+      "http_request_firewall_managed": "unknown",
+      "http_request_firewall_custom": "unknown",
+      "http_ratelimit": "unknown"
+    },
+    "zone": {
+      "http_request_firewall_managed": "unknown",
+      "http_request_firewall_custom": "unknown",
+      "http_ratelimit": "unknown"
+    }
+  },
+  "surface": {
+    "purpose": "public-synthetic-demo",
+    "access_application_present": false,
+    "worker_binding_count": 0
+  }
+}
