@@ -18,6 +18,40 @@ function evaluateWorld(policy,world){
  return {world:world.id,label:world.label,harm,friction:Number(friction.toFixed(2)),blocked,assumptions:world.explanation,cases};
 }
 
+function certifyMinimax(rows, chosen) {
+  // This is deterministic sensitivity analysis of declared synthetic worlds.
+  // It cannot establish identification, probability, or observed effectiveness.
+  const eps = 1e-9;
+  const globalMin = Math.min(...rows.map(row => row.maxRegret));
+  const fullWinnerMasks = rows.filter(row => Math.abs(row.maxRegret - globalMin) < eps).map(row => row.mask);
+  const leaveOneWorldOut = WORLDS.map((excluded, omit) => {
+    const retained = WORLDS.map((_, i) => i).filter(i => i !== omit);
+    const ideals = retained.map(i => Math.min(...rows.map(row => row.utility[i])));
+    const scores = rows.map(row => ({mask: row.mask,
+      maxRegret: Math.max(...retained.map((i, j) => row.utility[i] - ideals[j]))}));
+    const minimum = Math.min(...scores.map(row => row.maxRegret));
+    const optimalMasks = scores.filter(row => Math.abs(row.maxRegret - minimum) < eps).map(row => row.mask);
+    return {omittedWorld: excluded.id, retainedWorlds: retained.length,
+      minimumMaxRegret: Number(minimum.toFixed(6)), optimalMasks,
+      fullSelectionStillOptimal: optimalMasks.includes(chosen.mask)};
+  });
+  const disagreementWorlds = leaveOneWorldOut.filter(row => !row.fullSelectionStillOptimal).map(row => row.omittedWorld);
+  const multipleGlobalOptima = fullWinnerMasks.length > 1;
+  return {
+    schema: "qira-event-horizon/decision-sensitivity-v1",
+    test: "leave-one-declared-world-out; exact 32-policy enumeration with floating-point tolerance",
+    allWorldsOptimalMasks: fullWinnerMasks,
+    leaveOneWorldOut,
+    selectionStableUnderSingleWorldRemoval: disagreementWorlds.length === 0,
+    disagreementWorlds,
+    multipleGlobalOptima,
+    status: multipleGlobalOptima || disagreementWorlds.length
+      ? "abstain_from_unique_policy_claim"
+      : "stable_within_declared_synthetic_worlds_only",
+    limitation: "Sensitivity to six fictional assumptions only; no learned probabilities, out-of-sample evidence, or actual control efficacy"
+  };
+}
+
 function robustAnalysis(policy){
  const active=normalizePolicy(policy);
  const portfolioMasks=Array.from({length:1<<CONTROL_INFO.length},(_,mask)=>mask);
@@ -44,6 +78,7 @@ function robustAnalysis(policy){
     worlds:WORLDS.map(x=>({id:x.id,label:x.label,explanation:x.explanation})),
     selected:{mask,controls:selected.controls,worstCaseHarm:selected.worstCaseHarm,meanHarm:selected.meanHarm,maxRegret:selected.maxRegret,worldOutcomes:selected.worlds},
     minimax:{mask:best.mask,controls:best.controls,worstCaseHarm:best.worstCaseHarm,meanHarm:best.meanHarm,maxRegret:best.maxRegret},
+    decisionCertificate:certifyMinimax(rows,best),
     controlCombinations:rows.length,
     caution:"No zero-risk guarantee; attacker adaptation and organizational context are not modeled"};
 }
