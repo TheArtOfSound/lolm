@@ -47,3 +47,11 @@ test("no secrets or simulated revenue/success claims are baked into landing",()=
  assert.doesNotMatch(html,/GITHUB_APP_CLIENT_SECRET|QIRA_SESSION_KEY|ghu_[A-Za-z0-9]+/);
  assert.doesNotMatch(html,/guaranteed prevention|billions earned|unhackable/i);
 });
+
+test("GitHub installation action is accessible outside collapsible or hidden starter card",()=>{
+ const start=html.indexOf('id="startCard"'),end=html.indexOf('class="conn-summary"');
+ const install=html.indexOf('id="gitInstall"');
+ assert.ok(start>=0&&end>start&&install>end,
+   "install link must not be hidden by the authenticated state of the starter card");
+ assert.ok(install<html.indexOf('id="gitPicker"'));
+});
