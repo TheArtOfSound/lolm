@@ -60,6 +60,7 @@ test("connected visitor can select an installation, repo and workflow, and see r
  assert.equal(el("gitAssess").disabled,false);
  await el("gitAssess").events.click();
  assert.equal(document.body.dataset.reportType,"customer");
+ assert.match(el("baselineName").textContent,/Connected GitHub workflow/);
  assert.equal(el("sampleBanner").hidden,true);
  assert.equal(el("assetsCount").textContent,1);
  assert.equal(el("reviewCount").textContent,1);
