@@ -115,7 +115,7 @@ function renderRobustness(){if(!state.report||!state.report.robustness)return;
  const c=r.decisionCertificate;
  if(c){const unstable=c.disagreementWorlds.length;
   $("robust-description").textContent+=c.status==="abstain_from_unique_policy_claim"
-   ?" Uncertainty warning: "+c.allWorldsOptimalMasks.length+" policies tie under all worlds; " +unstable+" single-world removals displace the displayed choice. No unique policy claim is justified."
+   ?" Uncertainty warning: "+(c.multipleGlobalOptima?c.allWorldsOptimalMasks.length+" policies tie under all worlds":"the all-world choice is unique")+"; "+unstable+" single-world removals displace the displayed choice. No unique policy claim is justified."
    :" Sensitivity check: the choice stays optimal after each of six single-world omissions, within fictional assumptions only.";
  }
 }
