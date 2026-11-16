@@ -21,7 +21,7 @@ test("all original functional controls remain uniquely addressable",()=>{
  "baselineState","baselineName","followupState","followupName","workTitle",
  "assetsCount","reviewCount","unknownCount","factsCount","findings","deltas",
  "exportButton","verifyButton","verifyInput","digestValue","verificationState","status",
- "jumpDemo","sampleBanner"
+ "jumpDemo","sampleBanner","reportIntro","assessmentData","startSample"
  ];
  const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);
  for(const id of required)assert.equal(ids.filter(x=>x===id).length,1,"unique id: "+id);
