@@ -30,7 +30,7 @@ return String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8"><me
 <div class="small muted" id="robust-explain" style="margin:14px 0 23px"></div>
 <div class="kicker">Least worst regret under declared assumptions</div><div class="val accent" style="font-size:35px;letter-spacing:-.04em" id="robust-best">—</div>
 <p class="small muted" id="robust-description"></p>
-<button class="primary" id="apply-robust">Apply minimax portfolio</button>
+<button class="primary" id="apply-robust">Explore minimax portfolio</button>
 <div class="readout small warn">A good synthetic minimax policy is not an empirically validated defense. No results here estimate the actual probability of compromise.</div>
 </div></div></section>
 <section class="cols hidden" id="proof"><div class="panel"><div class="panel-header"><span class="panel-title">Tamper-evident result receipt</span><span class="small muted">SHA-256 / deterministic payload</span></div><div class="panel-body"><p class="muted small">The SHA-256 covers the returned scenario, intervention settings, results and model disclaimer. It verifies bytes have not changed; it does <strong>not</strong> prove the simulation is correct or that Cloudflare witnessed an actual incident.</p><div class="readout"><span class="kicker">Current digest</span><div class="mono" id="digest">—</div></div><div class="actions"><button class="primary" id="verify">Verify in browser</button><button class="secondary" id="download">Save JSON receipt</button><button class="secondary" id="copy">Copy digest</button></div><p class="status-message" id="receipt-status"></p></div></div><div class="panel"><div class="panel-header"><span class="panel-title">Evidence and limitations</span></div><div class="panel-body"><p class="small muted">Provenance claims must survive independent testing. In this public version, scenario assumptions are authored, not inferred. Interventions are deterministic changes to those assumptions; they are not causal estimates learned from real environments.</p><p class="small muted">An approved insider export intentionally remains harmful under every modeled control. A defender that claims total prevention from this toy data is incorrect.</p><pre id="receipt-preview">Waiting for simulation…</pre></div></div></section>
@@ -112,6 +112,12 @@ function renderRobustness(){if(!state.report||!state.report.robustness)return;
  $("robust-best").textContent=r.minimax.worstCaseHarm+" units";
  $("robust-explain").textContent="Current worst scenario: "+r.selected.worstCaseHarm+" modeled harm units; maximum cross-world regret: "+r.selected.maxRegret+".";
  $("robust-description").textContent="Least worst-regret portfolio: "+(r.minimax.controls.length?r.minimax.controls.map(id=>state.meta.controls.find(x=>x.id===id).name).join(", "):"No controls")+". Maximum modeled regret: "+r.minimax.maxRegret+".";
+ const c=r.decisionCertificate;
+ if(c){const unstable=c.disagreementWorlds.length;
+  $("robust-description").textContent+=c.status==="abstain_from_unique_policy_claim"
+   ?" Uncertainty warning: "+c.allWorldsOptimalMasks.length+" policies tie under all worlds; " +unstable+" single-world removals displace the displayed choice. No unique policy claim is justified."
+   :" Sensitivity check: the choice stays optimal after each of six single-world omissions, within fictional assumptions only.";
+ }
 }
 function renderProof(){if(!currentReceipt)return;$("digest").textContent=currentReceipt.receipt.digest;
  $("receipt-preview").textContent=JSON.stringify({schema:currentReceipt.schema,selected:currentReceipt.selected.scenario.id,policy:currentReceipt.policy,summary:currentReceipt.summary,receipt:currentReceipt.receipt},null,2);}
