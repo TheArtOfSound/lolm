@@ -86,5 +86,6 @@ test("multiple workflow findings appear as concise groups without losing either 
  assert.match(html,/2 workflows: Third-party CI actions/);
  assert.match(html,/ci.yml/);
  assert.match(html,/release.yml/);
- assert.equal((html.match(/class="finding"/g)||[]).length,2);
+ assert.equal((html.match(/<article class="finding"><header>/g)||[]).length,2,
+  "Triage groups do not count as additional observed findings");
 });
