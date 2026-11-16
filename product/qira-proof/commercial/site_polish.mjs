@@ -38,6 +38,7 @@ footer{background:#233a36;color:#e8f1eb;border-top:1px solid #1e352e}
 .site-route-actions a:first-child{color:#fff;background:#233e35;padding:12px 16px;text-decoration:none;border-radius:3px}
 .report-intro{background:#edf1ed!important;color:#213b35!important;padding:54px 0 52px!important}
 .report-intro h1{color:#213b35!important;font:400 clamp(44px,5vw,66px)/1.13 Georgia,"Times New Roman",serif!important;text-transform:none!important;letter-spacing:-.05em!important}
+.report-intro .eyebrow{color:#844b3d!important}.report-intro .eyebrow:before{background:#8f4b37!important}
 .report-intro p{color:#526d62!important;font:450 16px/1.7 system-ui,Arial,sans-serif!important}
 .report-stamp{display:none!important}
 .report-stage{padding-top:32px!important}
