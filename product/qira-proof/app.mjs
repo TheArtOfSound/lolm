@@ -357,7 +357,14 @@ if(githubResult==="failed"){
   callback_mismatch:"GitHub rejected Qira's callback URL. The site owner must correct the exact callback address in GitHub App settings.",
   token_expiration_disabled:"This GitHub App returned a non-expiring token, which Qira refuses. The site owner must enable user-to-server token expiration.",
   token_invalid:"GitHub returned an unsupported token response. The site owner must check the App's authorization configuration.",
-  provider_unavailable:"Qira could not complete GitHub's secure token exchange. Retry once; if it repeats, contact Qira support.",
+  authorization_code_rejected:"GitHub rejected the one-time authorization code. Start Connect GitHub again from Qira; do not reload or reuse a callback URL.",
+  email_unverified:"GitHub requires a verified primary email address for this account. Verify it in GitHub, then reconnect.",
+  app_suspended:"GitHub reports that the Qira App is suspended. The App owner must resolve this with GitHub.",
+  exchange_transport:"Qira could not establish the token-exchange connection to GitHub. The site owner must inspect Cloudflare Worker connectivity.",
+  exchange_http_4xx:"GitHub returned an HTTP client error without a recognized OAuth error code. The Qira owner must check the App registration and exchange configuration.",
+  exchange_http_5xx:"GitHub returned a server error during authorization. Try a new connection later.",
+  provider_rejected:"GitHub refused the token exchange with an unrecognized error code. The Qira owner must inspect the sanitized Worker diagnostics.",
+  provider_unavailable:"An unexpected OAuth exchange error occurred. The Qira owner must inspect the sanitized Worker diagnostics.",
   session_unavailable:"Qira could not protect the returned session. The site owner needs to repair the secure session configuration."
  };
  gitMessage(reasons[githubParams.get("reason")]||
