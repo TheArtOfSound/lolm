@@ -100,7 +100,7 @@ export function renderRealCaseStudy(){
  +'<div><span>Snapshot commit</span><strong><a href="https://github.com/TheArtOfSound/lolm/commit/'+r.commit+'" rel="noopener noreferrer"><code>'+r.commit.slice(0,12)+'</code></a></strong></div>'
  +'<div><span>Coverage</span><strong>1 workflow + 1 supporting script</strong></div>'
  +'<div><span>Verification</span><strong>First-party source cross-check</strong></div></div></div></section>'
- +'<div class="shell rc-content"><aside class="rc-note" aria-label="What this review does and does not establish">'
+ +'<div class="shell rc-content"><div class="rc-overview"><strong>5 sourced observations</strong><span>3 workflow patterns · 2 separate manual findings</span><nav class="rc-jumps" aria-label="Jump to findings"><a href="#rcWorkflow">Workflow observations</a><a href="#rcManual">Manual review</a><a href="/methodology">Method</a></nav></div><aside class="rc-note" aria-label="What this review does and does not establish">'
  +'<h2>A real source review. Not a certification.</h2>'
  +'<p>These observations refer to the repository&#39;s state at the commit above. They are not current-state findings, a customer assessment, a live exploitation test, or an independent third-party audit. No secrets, cloud credentials, branch protections or actual production release outcomes were verified.</p>'
  +'<p>We compared the workflow scanner&#39;s flags with the exact YAML lines. The Python findings were assessed separately by reading source control flow; the scanner does not claim to find them.</p>'
