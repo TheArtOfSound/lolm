@@ -185,6 +185,28 @@ export function analyzeSnapshot(input){
            unknown:findings.filter(x=>x.level==="unknown").length},
    conclusion:"Configuration review candidates. Not confirmed compromises, exploitable vulnerabilities, or causal effectiveness."};
 }
+// Pure presentation-only grouping. Raw per-workflow findings remain in the
+// signed-by-hash receipt; no finding is silently merged away.
+export function groupReviewFindings(findings){
+ if(!Array.isArray(findings))throw Error("Invalid report findings");
+ const groups=new Map();
+ for(const item of findings){
+  const key=item.provider+"|"+item.check+"|"+item.level;
+  let group=groups.get(key);
+  if(!group){
+   group={...item,evidence:[],affected:0};
+   groups.set(key,group);
+  }
+  group.affected++;
+  for(const fact of item.evidence)group.evidence.push({...fact,asset:item.asset});
+ }
+ return [...groups.values()].map(group=>{
+  if(group.affected>1)return {...group,
+   title:group.affected+" workflows: "+group.title,
+   asset:group.affected+" workflow files"};
+  return group;
+ });
+}
 export function compareSnapshots(beforeInput,afterInput){
  const before=normalizeSnapshot(beforeInput),after=normalizeSnapshot(afterInput);
  const oldReport=analyzeSnapshot(before),newReport=analyzeSnapshot(after);
