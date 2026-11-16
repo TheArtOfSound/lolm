@@ -233,7 +233,8 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
      </section>
      <section id="evidence" class="tabcontent" role="tabpanel" hidden>
       <div class="section-label">Keep a checkable record</div><p class="lead">Save your evidence locally and verify it hasn't been altered. The report hash is not a digital signature or proof that any vulnerability was prevented.</p>
-      <div class="controls"><button class="btn primary" type="button" id="exportButton">Export evidence report</button><button class="btn" type="button" id="verifyButton">Verify an existing report</button><input type="file" class="visually-hidden" id="verifyInput" accept=".json,application/json" tabindex="-1"></div>
+      <div class="controls"><button class="btn primary" type="button" id="humanReportButton" disabled>Download printable report</button><button class="btn" type="button" id="exportButton" disabled>Download evidence JSON</button><button class="btn" type="button" id="verifyButton">Verify an existing report</button><input type="file" class="visually-hidden" id="verifyInput" accept=".json,application/json" tabindex="-1"></div>
+      <p class="mini">The printable report is a self-contained HTML file with no scripts or external resources. Open it and select Print → Save as PDF. Download the evidence JSON separately if you need reproducible integrity verification.</p>
       <div class="section-label">Latest report fingerprint</div><div class="codebox" id="digestValue">No report generated yet.</div><div id="verificationState" class="statustext" aria-live="polite"></div>
      </section>
      <div id="status" class="statustext" role="status" aria-live="polite"></div>
