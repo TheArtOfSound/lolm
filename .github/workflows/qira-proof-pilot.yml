@@ -1,7 +1,7 @@
 name: QIRA Proof privacy and functionality pilot
 on:
   push:
-    branches: ['product/qira-proof-pilot-2026-11-15']
+    branches: ['product/qira-proof-pilot-2026-11-15', 'product/qira-proof-github-app-auth-2026-11-15']
     paths:
       - 'product/qira-proof/**'
       - '.github/workflows/qira-proof-pilot.yml'
@@ -36,8 +36,9 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           source = Path('product/qira-proof/dist/worker.mjs').read_text()
-          assert "connect-src 'none'" in source
+          assert "connect-src 'self'" in source
           assert "uploads_enabled:false" in source
+          assert "handleGitHubApp(request,env)" in source
           assert "request.method!=='GET'" in source
           assert 'GITHUB_TOKEN' not in source
           assert 'CLOUDFLARE_API_TOKEN' not in source
