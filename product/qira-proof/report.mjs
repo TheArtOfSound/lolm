@@ -11,7 +11,10 @@ const nice=value=>escapeHTML(value);
 function safeHref(value){
  try{
   const u=new URL(value);
-  return u.protocol==="https:"&&!u.username&&!u.password&&!u.search&&!u.hash?
+  const lineAnchor=!u.hash||(u.hostname==="github.com"&&
+   /^#L[1-9][0-9]{0,5}$/.test(u.hash)&&
+   /^\/[^/?#]+\/[^/?#]+\/blob\/[a-fA-F0-9]{40}\/\.github\/workflows\/[^?#]+$/.test(u.pathname));
+  return u.protocol==="https:"&&!u.username&&!u.password&&!u.search&&lineAnchor?
    escapeHTML(u.href):null;
  }catch{return null;}
 }
@@ -34,6 +37,20 @@ function findingView(item,index){
   <p>${nice(item.interpretation)}</p>
   <h4>Recommended verification</h4><p>${nice(item.next)}</p>
   <h4>Observed evidence</h4><ul>${observations}</ul></article>`;
+}
+function controlsView(controls){
+ if(!controls?.length)return '<p class="muted">No explicit read-only permission declarations were recognized in the supplied evidence. This does not prove token permissions are unsafe.</p>';
+ const groups=groupReviewFindings(controls.map(x=>({...x,check:x.key,level:"good"})));
+ return groups.map(item=>{
+  const links=item.evidence.map(f=>{
+   const href=safeHref(f.source_url);
+   const file=typeof f.asset==="string"&&f.asset.includes(":.github/workflows/")?
+    f.asset.split(":.github/workflows/")[1]:"workflow";
+   return href?`<li><a href="${href}" rel="noopener noreferrer" target="_blank">${nice(file)} — declared permission source</a></li>`:
+    `<li>${nice(file)} — evidence source unavailable</li>`;
+  }).join("");
+  return `<article class="finding"><h3>${nice(item.title)}</h3><p>${nice(item.interpretation)}</p><ul>${links}</ul></article>`;
+ }).join("");
 }
 function coverageView(facts){
  const providers=[...new Set(facts.map(x=>x.provider))].sort();
@@ -114,6 +131,7 @@ export async function renderHumanReport(receipt,{sample=false}={}){
  ${repositoryCoverageView(baseline.coverage)}
  <p class="muted">Some providers may have been omitted. Facts from different cloud services are not automatically linked to a single application.</p>
  <h2>Observations and recommended verification</h2>${findings}
+ <h2>Recognized safeguards</h2><p class="muted">These are source declarations, not independent confirmation of effective permissions, organization policy or overall security.</p>${controlsView(assessment.controls)}
  <h2>Follow-up comparison</h2>${comparisonView(comparison)}
  <h2>Evidence receipt</h2><p>Reproduce this review using the companion JSON evidence receipt. The hash is only meaningful when verified against that JSON.</p>
  <div class="hash"><code>SHA-256: ${escapeHTML(sha256)}</code></div>
