@@ -116,9 +116,13 @@ async function githubGet(path,token,fetcher=fetch){
  if(!path.startsWith("/")||path.startsWith("//")||path.includes("..")||path.includes("\\"))
   throw Error("GitHub request path rejected");
  const u="https://api.github.com"+path;
- const response=await fetcher(u,{method:"GET",redirect:"error",
+ const response=await fetcher(u,{method:"GET",redirect:"manual",
    headers:{"authorization":"Bearer "+token,"accept":"application/vnd.github+json",
       "x-github-api-version":"2026-03-10","user-agent":"qira-proof-readonly-pilot"}});
+ // Cloudflare Workers does not support redirect:'error'. Explicit manual mode
+ // and a no-redirect policy preserve the original security requirement.
+ if(response.status>=300&&response.status<400||response.type==="opaqueredirect")
+  throw Error("GitHub API redirect rejected");
  if(!response.ok)throw Error("GitHub metadata unavailable");
  const text=await response.text();
  if(text.length>MAX_RESPONSE_BYTES)throw Error("GitHub metadata exceeded budget");
@@ -213,10 +217,14 @@ async function exchangeToken(env,code,verifier,fetcher){
  });
  let response;
  try {response=await fetcher("https://github.com/login/oauth/access_token",{
-  method:"POST",redirect:"error",headers:{"accept":"application/json",
+  method:"POST",redirect:"manual",headers:{"accept":"application/json",
     "content-type":"application/x-www-form-urlencoded","user-agent":"qira-proof-readonly-pilot"},
   body:body.toString()
  });}catch{throw oauthError("exchange_transport");}
+ // Never follow the OAuth POST to an unexpected host, even if GitHub issues a
+ // redirect. Do not read or echo Location headers or token response bodies.
+ if(response.status>=300&&response.status<400||response.type==="opaqueredirect")
+  throw oauthError("exchange_http_4xx");
  let parsed;
  try {
   const raw=await response.text();
