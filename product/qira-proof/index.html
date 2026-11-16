@@ -166,9 +166,8 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
       <h3>Connect GitHub securely.</h3>
       <p>Choose an installation, a repository, and a workflow. QIRA inspects authorized configuration metadata only.</p>
       <a href="/connect/github" id="gitConnect" class="btn primary" hidden>Connect GitHub <span>↗</span></a>
-      <a href="#" id="gitInstall" class="btn" target="_blank" rel="noopener noreferrer" hidden>Install the GitHub App ↗</a>
      </div>
-     <div class="conn-summary"><div id="gitStatus" class="mini" role="status" aria-live="polite">Checking whether GitHub is ready…</div></div>
+     <div class="conn-summary"><div id="gitStatus" class="mini" role="status" aria-live="polite">Checking whether GitHub is ready…</div><div class="controls"><a href="#" id="gitInstall" class="btn" target="_blank" rel="noopener noreferrer" hidden>Install the GitHub App ↗</a></div></div>
      <div id="gitPicker" hidden>
       <div class="field"><label for="gitInstallation">1. Select your GitHub account</label><select id="gitInstallation" class="picker" aria-label="Authorized GitHub installation"><option value="">Choose account</option></select></div>
       <div class="field"><label for="gitRepository">2. Choose what to review</label><select id="gitRepository" class="picker" disabled aria-label="Authorized repository"><option value="">Choose repository</option></select></div>
