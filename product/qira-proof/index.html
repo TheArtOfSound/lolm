@@ -170,8 +170,11 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
      <div class="conn-summary"><div id="gitStatus" class="mini" role="status" aria-live="polite">Checking whether GitHub is ready…</div><div class="controls"><a href="#" id="gitInstall" class="btn" target="_blank" rel="noopener noreferrer" hidden>Install the GitHub App ↗</a></div></div>
      <div id="gitPicker" hidden>
       <div class="field"><label for="gitInstallation">1. Select your GitHub account</label><select id="gitInstallation" class="picker" aria-label="Authorized GitHub installation"><option value="">Choose account</option></select></div>
+      <div class="field"><label for="gitRepoSearch">Find an authorized repository</label>
+       <input id="gitRepoSearch" class="picker" type="search" placeholder="Filter by name, e.g. lolm" disabled autocomplete="off" aria-describedby="gitRepoCount">
+       <p id="gitRepoCount" class="mini" role="status" aria-live="polite">Choose an account to see its repositories.</p></div>
       <div class="field"><label for="gitRepository">2. Choose what to review</label><select id="gitRepository" class="picker" disabled aria-label="Authorized repository"><option value="">Choose repository</option></select></div>
-      <div class="field"><label for="gitWorkflow">3. Select a deployment workflow</label><select id="gitWorkflow" class="picker" disabled aria-label="Authorized workflow"><option value="">Choose workflow</option></select></div>
+      <div class="field"><label for="gitWorkflow">3. Select a workflow (optional for repository-wide review)</label><select id="gitWorkflow" class="picker" disabled aria-label="Authorized workflow"><option value="">Choose workflow</option></select></div>
       <div class="controls" style="margin:11px 0 4px">
        <button class="btn primary" id="gitScanAll" type="button" disabled>Review repository workflows <span>→</span></button>
        <button class="btn" id="gitAssess" type="button" disabled>Review selected workflow</button>
