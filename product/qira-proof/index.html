@@ -201,9 +201,17 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
     <div class="dashboard">
      <div id="sampleBanner" class="demo-note"><span aria-hidden="true">◎</span><span><strong>Example report.</strong> These results describe fictional infrastructure. Connect GitHub or import your own evidence to see a real configuration review.</span></div>
      <section id="assessment" class="tabcontent" role="tabpanel">
+      <div class="empty" id="reportIntro" style="padding:37px 30px;background:#f5f8f7;border-color:#c9d9d1">
+       <div class="section-label">Welcome to QIRA Proof</div>
+       <strong style="font-size:22px;letter-spacing:-.04em">Your first clear review starts here.</strong>
+       <p>Connect GitHub to examine a workflow you own. Or explore the fictional example to understand how findings work. Nothing is changed automatically.</p>
+       <button type="button" class="btn primary" id="startSample">See a sample report <span>→</span></button>
+      </div>
+      <div id="assessmentData" hidden>
       <div class="metrics"><div class="metric"><small>Systems represented</small><strong id="assetsCount">—</strong></div><div class="metric"><small>Things to review</small><strong id="reviewCount" class="caution">—</strong></div><div class="metric"><small>Can't yet verify</small><strong id="unknownCount">—</strong></div><div class="metric"><small>Evidence facts</small><strong id="factsCount" class="calm">—</strong></div></div>
       <div class="section-label">What deserves a closer look?</div>
       <div id="findings" class="cards" aria-live="polite"></div>
+      </div>
      </section>
      <section id="recheck" class="tabcontent" role="tabpanel" hidden>
       <div class="section-label">Compare evidence after a change</div><p class="lead">See which review indicators remain or disappear after an approved configuration change. This does not certify your systems as secure.</p>
