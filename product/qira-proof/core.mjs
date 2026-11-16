@@ -265,17 +265,31 @@ export async function sha256(s){
  const digest=await globalThis.crypto.subtle.digest("SHA-256",buf);
  return Array.from(new Uint8Array(digest)).map(x=>x.toString(16).padStart(2,"0")).join("");
 }
-export async function proof(snapshot,followup=null){
+// Keep deterministic compatibility for receipts exported before the 2026-11-16
+// policy expansion. Earlier v1 assessment documents had no "controls" field.
+async function historicalV1Proof(snapshot,followup=null){
  const baseline=normalizeSnapshot(snapshot),after=followup?normalizeSnapshot(followup):null;
- const assessment=analyzeSnapshot(baseline),comparison=after?compareSnapshots(baseline,after):null;
+ const current=analyzeSnapshot(baseline);
+ const {controls, ...assessment}=current;
+ const comparison=after?compareSnapshots(baseline,after):null;
  const payload={schema:"qira-proof/evidence-v1",baseline,after,assessment,comparison,
   attestation:"self-contained deterministic calculation, NOT source authentication, a signature, or proof of prevention"};
  return {...payload,sha256:await sha256(canonical(payload))};
 }
+export async function proof(snapshot,followup=null){
+ const baseline=normalizeSnapshot(snapshot),after=followup?normalizeSnapshot(followup):null;
+ const assessment=analyzeSnapshot(baseline),comparison=after?compareSnapshots(baseline,after):null;
+ const payload={schema:"qira-proof/evidence-v2",policy_version:"2026-11-16-static-workflow-v2",
+  baseline,after,assessment,comparison,
+  attestation:"self-contained deterministic calculation, NOT source authentication, a signature, or proof of prevention"};
+ return {...payload,sha256:await sha256(canonical(payload))};
+}
 export async function verifyProof(doc){
- if(!plain(doc)||doc.schema!=="qira-proof/evidence-v1"||typeof doc.sha256!=="string")return false;
+ if(!plain(doc)||typeof doc.sha256!=="string"||!/^[a-fA-F0-9]{64}$/.test(doc.sha256))
+  return false;
  try{
-  const fresh=await proof(doc.baseline,doc.after);
-  return canonical(fresh)===canonical(doc);
+  const fresh=doc.schema==="qira-proof/evidence-v2"?await proof(doc.baseline,doc.after):
+   doc.schema==="qira-proof/evidence-v1"?await historicalV1Proof(doc.baseline,doc.after):null;
+  return !!fresh&&canonical(fresh)===canonical(doc);
  }catch{return false}
 }
