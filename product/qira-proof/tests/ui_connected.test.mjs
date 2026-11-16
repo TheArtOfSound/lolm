@@ -33,6 +33,11 @@ test("connected visitor can select an installation, repo and workflow, and see r
   else if(url==="/api/github/installations")response={items:[{id:123,account:"Sample owner",selection:"selected"}],truncated:false};
   else if(url==="/api/github/repos")response={repos:[{name:"sample-owner/test-repo",branch:"main"}],truncated:false};
   else if(url==="/api/github/workflows")response={workflows:[{path:".github/workflows/deploy.yml"}],truncated:false};
+  else if(url==="/api/github/assessment"&&JSON.parse(opts.body||"{}").workflow==="__all__")response={
+   snapshot:{schema:"qira-proof/snapshot-v1",captured_at:"2026-11-15T19:00:00Z",facts:[
+    {provider:"github",asset:"sample-owner/test-repo:.github/workflows/deploy.yml",signal:"workflow_unpinned_actions",value:true,source_url:"https://github.com/sample-owner/test-repo/blob/0123456789abcdef0123456789abcdef01234567/.github/workflows/deploy.yml",observed_at:"2026-11-15T19:00:00Z"},
+    {provider:"github",asset:"sample-owner/test-repo",signal:"repo_branch_protection_verifiable",value:"unknown",source_url:"https://github.com/sample-owner/test-repo/settings/branches",observed_at:"2026-11-15T19:00:00Z"}
+   ]},coverage:{mode:"bounded-repository-workflows",repository:"sample-owner/test-repo",discovered:1,selected:1,assessed:1,skipped:0,limit:20,complete:true,truncated:false,commit:"0123456789abcdef0123456789abcdef01234567"}};
   else if(url==="/api/github/assessment")response={snapshot:{schema:"qira-proof/snapshot-v1",captured_at:"2026-11-15T19:00:00Z",facts:[
    {provider:"github",asset:"sample-owner/test-repo",signal:"runtime_ssh_keyscan",value:true,source_url:"https://github.com/sample-owner/test-repo/blob/main/.github/workflows/deploy.yml",observed_at:"2026-11-15T19:00:00Z"},
    {provider:"github",asset:"sample-owner/test-repo",signal:"ssh_host_key_pinned",value:"unknown",source_url:"https://github.com/sample-owner/test-repo/blob/main/.github/workflows/deploy.yml",observed_at:"2026-11-15T19:00:00Z"}
@@ -55,6 +60,8 @@ test("connected visitor can select an installation, repo and workflow, and see r
  el("gitRepository").value="sample-owner/test-repo";
  await el("gitRepository").events.change({target:{value:"sample-owner/test-repo"}});
  assert.equal(el("gitWorkflow").disabled,false);
+ assert.equal(el("gitScanAll").disabled,false);
+ assert.match(el("gitScanAll").textContent,/Review 1 repository workflows/);
  el("gitWorkflow").value=".github/workflows/deploy.yml";
  el("gitWorkflow").events.change({target:{value:".github/workflows/deploy.yml"}});
  assert.equal(el("gitAssess").disabled,false);
@@ -80,6 +87,15 @@ test("connected visitor can select an installation, repo and workflow, and see r
  const receipt=JSON.parse(await downloads[1].text());
  assert.equal(receipt.schema,"qira-proof/evidence-v1");
  assert.match(receipt.sha256,/^[a-f0-9]{64}$/);
+ await el("gitScanAll").events.click();
+ assert.equal(el("scanCoverage").hidden,false);
+ assert.match(el("scanCoverage").textContent,/1 of 1 discovered workflows assessed/);
+ assert.match(el("baselineName").textContent,/Connected GitHub workflow/);
+ assert.match(el("gitMessage").textContent,/Reviewed all 1 discovered workflows/);
+ assert.equal(el("reviewCount").textContent,1);
+ assert.equal(el("unknownCount").textContent,1);
+ assert.equal(document.body.dataset.reportType,"customer");
+ assert.equal(el("gitScanAll").disabled,false);
  await el("gitDisconnect").events.click();
  assert.equal(document.body.dataset.githubConnection,"ready");
  assert.equal(document.body.dataset.reportType,"unstarted");
