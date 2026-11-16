@@ -201,6 +201,83 @@ test("An existing directory without recognized YAML workflows is a valid empty s
  assert.equal(body.availability,"no_supported_workflows");
 });
 
+test("bounded repository workflow review keeps workflow-specific, immutable evidence",async()=>{
+ const s=await session();
+ visited=[];
+ const response=await scoped(s,"/api/github/assessment",{
+  installation_id:123,repo:"TheArtOfSound/lolm",workflow:"__all__"
+ });
+ assert.equal(response.status,200);
+ const data=await response.json();
+ assert.equal(data.coverage.mode,"bounded-repository-workflows");
+ assert.equal(data.coverage.assessed,2);
+ assert.equal(data.coverage.discovered,2);
+ assert.equal(data.coverage.skipped,0);
+ assert.equal(data.coverage.complete,true);
+ assert.equal(data.coverage.truncated,false);
+ assert.equal(data.coverage.commit,"0123456789abcdef0123456789abcdef01234567");
+ const a=data.snapshot.facts;
+ assert.equal(a.filter(x=>x.signal==="workflow_unpinned_actions").length,2);
+ assert.equal(a.filter(x=>x.signal==="repo_branch_protection_verifiable").length,1);
+ assert.ok(a.some(x=>x.asset==="TheArtOfSound/lolm:.github/workflows/deploy-production.yml"));
+ assert.ok(a.some(x=>x.asset==="TheArtOfSound/lolm:.github/workflows/publish.yml"));
+ assert.ok(a.filter(x=>x.signal==="workflow_unpinned_actions").every(x=>
+  x.source_url.includes("/blob/0123456789abcdef0123456789abcdef01234567/")));
+ assert.ok(visited.filter(v=>v.url.includes("/commits/main")).length===1);
+ assert.ok(!JSON.stringify(data).includes(tok));
+});
+test("bounded scan is explicitly partial when one workflow becomes inaccessible",async()=>{
+ const s=await session();
+ const fake=(url,options={})=>String(url).includes("/contents/.github/workflows/publish.yml?")?
+  Promise.resolve(new Response(JSON.stringify({message:"Not Found",private:"never-export"}),{status:404})):
+  mockFetch(url,options);
+ const response=await scoped(s,"/api/github/assessment",{installation_id:123,
+  repo:"TheArtOfSound/lolm",workflow:"__all__"},{fetcher:fake});
+ assert.equal(response.status,200);
+ const data=await response.json();
+ assert.equal(data.coverage.assessed,1);
+ assert.equal(data.coverage.skipped,1);
+ assert.equal(data.coverage.complete,false);
+ assert.equal(data.coverage.truncated,false);
+ assert.ok(!data.snapshot.facts.some(f=>f.asset.includes("publish.yml")));
+ assert.ok(!JSON.stringify(data).includes("never-export"));
+});
+test("more than 20 workflows is reported as truncated; no more than 20 are read",async()=>{
+ const s=await session();
+ let fetches=0;
+ const fake=(url,options={})=>{
+  if(String(url).includes("/contents/.github/workflows?")){
+   const workflows=Array.from({length:25},(_,i)=>({
+    type:"file",path:".github/workflows/test-"+String(i).padStart(2,"0")+".yml"}));
+   return Promise.resolve(Response.json(workflows));
+  }
+  if(String(url).includes("/contents/.github/workflows/test-"))fetches++;
+  return mockFetch(url,options);
+ };
+ const response=await scoped(s,"/api/github/assessment",{
+  installation_id:123,repo:"TheArtOfSound/lolm",workflow:"__all__"
+ },{fetcher:fake});
+ assert.equal(response.status,200);
+ const data=await response.json();
+ assert.equal(data.coverage.discovered,25);
+ assert.equal(data.coverage.assessed,20);
+ assert.equal(data.coverage.selected,20);
+ assert.equal(data.coverage.truncated,true);
+ assert.equal(data.coverage.complete,false);
+ assert.equal(fetches,20);
+ assert.ok(data.snapshot.facts.length<=150);
+});
+test("bulk review refuses false success when every file fetch fails",async()=>{
+ const s=await session();
+ const fake=(url,options={})=>String(url).includes("/contents/.github/workflows/")?
+  Promise.resolve(new Response("access unavailable",{status:403})):mockFetch(url,options);
+ const response=await scoped(s,"/api/github/assessment",{
+  installation_id:123,repo:"TheArtOfSound/lolm",workflow:"__all__"
+ },{fetcher:fake});
+ assert.equal(response.status,502);
+ assert.ok(!(await response.text()).includes("access unavailable"));
+});
+
 test("Selection endpoints forbid GET URLs and CSRF-less cross-site POSTs",async()=>{
  const s=await session();
  for(const path of ["/api/github/repos","/api/github/workflows","/api/github/assessment"]){
