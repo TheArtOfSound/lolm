@@ -53,6 +53,8 @@ function mockProvider(url,options={}){
   payload={total_count:1,repositories:[{full_name:repository,default_branch:"main"}]};
  } else if(text.includes("/user/installations?")){
   payload={total_count:1,installations:[{id:123,account:{login:"example-owner"},repository_selection:"selected"}]};
+ } else if(text.includes("/repos/example-owner/example-repo/commits/main")){
+  payload={sha:"0123456789abcdef0123456789abcdef01234567"};
  } else if(text.includes("/repos/example-owner/example-repo/contents/.github/workflows?")){
   payload=[{type:"file",path:file}];
  } else if(text.includes("/repos/example-owner/example-repo/contents/.github/workflows/deploy.yml?")){
