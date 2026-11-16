@@ -104,7 +104,7 @@ test("intake composer is local-only, labeled and does not claim payment confirma
  assert.match(html,/Email your receipt reference/);
  assert.match(html,/does not verify payment or grant an entitlement/);
  assert.match(html,/No data has been sent by this website/);
- assert.match(response.headers.get("content-security-policy"),/form-action 'self'/);
+ assert.match(response.headers.get("content-security-policy"),/form-action 'none'/);
  assert.doesNotMatch(html,/<form[^>]*action="https?:/);
 });
 
