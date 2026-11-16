@@ -86,7 +86,7 @@ details.advanced summary:after{content:"+";font-size:20px;color:var(--accent)}de
 .finding-head::-webkit-details-marker{display:none}
 .finding-head:after{content:"⌄";font-size:18px;color:#677c7e;order:3}.finding[open] .finding-head:after{content:"⌃"}
 .finding-title{font-weight:745;font-size:14px;line-height:1.36;letter-spacing:-.012em}.finding-meta{font-size:11px;color:#6c7c7e;margin-top:7px;overflow-wrap:anywhere}
-.severity{font-size:10px;text-transform:uppercase;letter-spacing:.035em;padding:5px 9px;border-radius:100px;background:#fff2e5;color:#8a5425;font-weight:800;white-space:nowrap;border:1px solid #f1d7b9}.severity.unknown{background:#edf2f5;color:#587180;border-color:#dce5eb}.severity.high{background:#fce7e6;color:#ad3a3b;border-color:#f3ccca}
+.severity{font-size:10px;text-transform:uppercase;letter-spacing:.035em;padding:5px 9px;border-radius:100px;background:#fff2e5;color:#8a5425;font-weight:800;white-space:nowrap;border:1px solid #f1d7b9}.severity.unknown{background:#edf2f5;color:#587180;border-color:#dce5eb}.severity.good{background:#edf7f2;color:#276343;border-color:#c9e1d4}.severity.high{background:#fce7e6;color:#ad3a3b;border-color:#f3ccca}
 .finding-body{border-top:1px solid var(--stroke);padding:18px;font-size:12px;line-height:1.72;color:#43565c}.finding-body p{margin:0 0 14px}
 .evidence{display:flex;gap:8px;flex-wrap:wrap;padding-top:5px}.evidence a,.evidence .chip{border:1px solid #dbe5e1;border-radius:7px;background:#f5f8f6;padding:6px 10px;color:#3a4b50;text-decoration:none;font-size:11px;overflow-wrap:anywhere}
 .evidence a:hover{border-color:#8a9faf}
@@ -230,6 +230,11 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
       <div class="note" id="scanCoverage" hidden role="status" aria-live="polite"></div>
       <div class="section-label">What deserves a closer look?</div>
       <div id="findings" class="cards" aria-live="polite"></div>
+      <section id="positiveControlsSection" hidden aria-labelledby="positiveControlsTitle" style="margin-top:27px">
+       <h3 id="positiveControlsTitle" class="section-label">Explicit safeguards observed</h3>
+       <p class="mini">These are positive declarations in the reviewed workflow files—not independently verified effective permissions, organization policy, or proof that the workflows are secure.</p>
+       <div id="positiveControls" class="cards"></div>
+      </section>
       </div>
      </section>
      <section id="recheck" class="tabcontent" role="tabpanel" hidden>
