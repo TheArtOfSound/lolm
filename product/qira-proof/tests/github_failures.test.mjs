@@ -80,6 +80,17 @@ test("provider errors, invalid bodies and outages remain fail closed",async()=>{
  assert.equal(reason(network),"exchange_transport");
 });
 
+test("OAuth exchange explicitly rejects redirects without following them",async()=>{
+ const ctx=await start();
+ const fetcher=async(url,opts)=>{
+  assert.equal(opts.redirect,"manual");
+  assert.equal(opts.method,"POST");
+  return new Response(null,{status:302,headers:{location:"https://attacker.invalid/capture"}});
+ };
+ const res=await finish(ctx,fetcher);
+ assert.equal(reason(res),"exchange_http_4xx");
+ assert.ok(!res.headers.get("location").includes("attacker.invalid"));
+});
 test("provider codes are classified even when GitHub returns non-2xx HTTP statuses",async()=>{
  const ctx=await start();
  for(const [status,error,expected] of [
