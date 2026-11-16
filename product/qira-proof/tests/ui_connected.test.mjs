@@ -86,7 +86,7 @@ test("connected visitor can select an installation, repo and workflow, and see r
  await el("exportButton").events.click();
  assert.equal(downloads.length,2);
  const receipt=JSON.parse(await downloads[1].text());
- assert.equal(receipt.schema,"qira-proof/evidence-v1");
+ assert.equal(receipt.schema,"qira-proof/evidence-v2");
  assert.match(receipt.sha256,/^[a-f0-9]{64}$/);
  await el("gitScanAll").events.click();
  assert.equal(el("scanCoverage").hidden,false);
