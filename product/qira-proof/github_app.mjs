@@ -180,6 +180,48 @@ async function listWorkflows(token,installationId,repo,fetcher){
 function sourceUrl(repo,branch,workflow){
  return "https://github.com/"+repo+"/blob/"+encodeURIComponent(branch)+"/"+workflow;
 }
+const BULK_WORKFLOW_LIMIT=20;
+const BULK_BATCH_SIZE=4;
+// Boolean facts are limited to syntactic evidence visible in each selected file.
+// Policy outcomes, provider access, and the execution context are NOT inferred.
+function workflowFacts(text,repo,workflow,commit,timestamp,asset){
+ const lines=text.split(/\r?\n/).filter(x=>!x.trimStart().startsWith("#"));
+ const runtimeScan=lines.some(x=>/(^|[^A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)/.test(x));
+ const actionRef=/^\s*(?:-\s*)?uses:\s*['"]?([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_./-]+)?)@([A-Za-z0-9_.-]{1,128})['"]?(?:\s*(?:#.*)?)?$/;
+ const unpinned=lines.some(line=>{
+  const m=actionRef.exec(line);
+  return !!m&&!/^[a-fA-F0-9]{40}$/.test(m[2]);
+ });
+ const url=sourceUrl(repo,commit,workflow);
+ const facts=[
+  {provider:"github",asset,signal:"runtime_ssh_keyscan",value:runtimeScan,source_url:url,observed_at:timestamp},
+  {provider:"github",asset,signal:"workflow_unpinned_actions",value:unpinned,source_url:url,observed_at:timestamp}
+ ];
+ if(runtimeScan)facts.push({provider:"github",asset,signal:"ssh_host_key_pinned",value:"unknown",source_url:url,observed_at:timestamp});
+ return facts;
+}
+async function resolveWorkflowCommit(apiRepo,branch,token,fetcher){
+ const revision=await githubGet(apiRepo+"/commits/"+encodeURIComponent(branch),token,fetcher);
+ if(!revision||typeof revision.sha!=="string"||!/^[a-fA-F0-9]{40}$/.test(revision.sha))
+  throw Error("GitHub workflow revision could not be verified");
+ return revision.sha.toLowerCase();
+}
+async function readWorkflowFacts(token,repo,workflow,commit,asset,timestamp,fetcher){
+ const [owner,name]=repo.split("/");
+ const apiRepo="/repos/"+encodeURIComponent(owner)+"/"+encodeURIComponent(name);
+ const path=apiRepo+"/contents/"+workflow.split("/").map(encodeURIComponent).join("/")+"?ref="+commit;
+ const data=await githubGet(path,token,fetcher);
+ if(data?.encoding!=="base64"||typeof data.content!=="string"||data.content.length>MAX_WORKFLOW_BYTES*2)
+  throw Error("workflow not returned as bounded base64");
+ const bytes=atob(data.content.replace(/\s/g,""));
+ if(bytes.length>MAX_WORKFLOW_BYTES)throw Error("workflow size budget exceeded");
+ const text=new TextDecoder("utf-8",{fatal:true}).decode(Uint8Array.from(bytes,c=>c.charCodeAt(0)));
+ return workflowFacts(text,repo,workflow,commit,timestamp,asset);
+}
+function visibilityFact(repo,timestamp){
+ return {provider:"github",asset:repo,signal:"repo_branch_protection_verifiable",value:"unknown",
+  source_url:"https://github.com/"+repo+"/settings/branches",observed_at:timestamp};
+}
 async function assess(token,installationId,repo,workflow,fetcher,clock=now){
  if(!repoSafe(repo)||!workflowSafe(workflow))throw Error("repository or workflow selector invalid");
  const allowed=await accessibleRepos(token,installationId,fetcher);
@@ -188,38 +230,44 @@ async function assess(token,installationId,repo,workflow,fetcher,clock=now){
  if(!selected)throw Error("repository not within verified authorized installation page");
  const [owner,name]=repo.split("/");
  const apiRepo="/repos/"+encodeURIComponent(owner)+"/"+encodeURIComponent(name);
- // Resolve the branch once, then read the exact revision. A live branch link
- // is not immutable evidence, and can point to changed code after assessment.
- const revision=await githubGet(apiRepo+"/commits/"+encodeURIComponent(selected.branch),token,fetcher);
- if(!revision||typeof revision.sha!=="string"||!/^[a-fA-F0-9]{40}$/.test(revision.sha))
-  throw Error("GitHub workflow revision could not be verified");
- const commit=revision.sha.toLowerCase();
- const path=apiRepo+"/contents/"+workflow.split("/").map(encodeURIComponent).join("/")+"?ref="+commit;
- const data=await githubGet(path,token,fetcher);
- if(data?.encoding!=="base64"||typeof data.content!=="string"||data.content.length>MAX_WORKFLOW_BYTES*2)throw Error("workflow not returned as bounded base64");
- const bytes=atob(data.content.replace(/\s/g,""));
- if(bytes.length>MAX_WORKFLOW_BYTES)throw Error("workflow size budget exceeded");
- const text=new TextDecoder("utf-8",{fatal:true}).decode(Uint8Array.from(bytes,c=>c.charCodeAt(0)));
- const lines=text.split(/\r?\n/).filter(x=>!x.trimStart().startsWith("#"));
- const runtimeScan=lines.some(x=>/(^|[^A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)/.test(x));
- // A narrow review-only reference check: do not read source outside
- // the selected GitHub Actions workflow or claim a malicious dependency.
- const actionRef=/^\s*(?:-\s*)?uses:\s*['"]?([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_./-]+)?)@([A-Za-z0-9_.-]{1,128})['"]?(?:\s*(?:#.*)?)?$/;
- const unpinned=lines.some(line=>{
-  const m=actionRef.exec(line);
-  return !!m&&!/^[a-fA-F0-9]{40}$/.test(m[2]);
- });
+ const commit=await resolveWorkflowCommit(apiRepo,selected.branch,token,fetcher);
  const timestamp=new Date(clock()).toISOString();
- const url=sourceUrl(repo,commit,workflow);
- const facts=[
-  {provider:"github",asset:repo,signal:"runtime_ssh_keyscan",value:runtimeScan,source_url:url,observed_at:timestamp},
-  {provider:"github",asset:repo,signal:"workflow_unpinned_actions",value:unpinned,source_url:url,observed_at:timestamp},
-  {provider:"github",asset:repo,signal:"repo_branch_protection_verifiable",value:"unknown",
-   source_url:"https://github.com/"+repo+"/settings/branches",observed_at:timestamp}
- ];
- if(runtimeScan)facts.push({provider:"github",asset:repo,signal:"ssh_host_key_pinned",value:"unknown",
-   source_url:url,observed_at:timestamp});
+ const facts=await readWorkflowFacts(token,repo,workflow,commit,repo,timestamp,fetcher);
+ facts.push(visibilityFact(repo,timestamp));
  return normalizeSnapshot({schema:SCHEMA,captured_at:timestamp,facts});
+}
+async function assessRepository(token,installationId,repo,fetcher,clock=now){
+ if(!repoSafe(repo))throw Error("repository selector invalid");
+ const listed=await listWorkflows(token,installationId,repo,fetcher);
+ if(!listed.workflows.length)
+  throw Error("No accessible GitHub Actions workflow to review");
+ const all=listed.workflows.map(x=>x.path);
+ const selected=all.slice(0,BULK_WORKFLOW_LIMIT);
+ const [owner,name]=repo.split("/");
+ const apiRepo="/repos/"+encodeURIComponent(owner)+"/"+encodeURIComponent(name);
+ const commit=await resolveWorkflowCommit(apiRepo,listed.branch,token,fetcher);
+ const timestamp=new Date(clock()).toISOString();
+ const facts=[visibilityFact(repo,timestamp)];
+ let assessed=0,skipped=0;
+ for(let offset=0;offset<selected.length;offset+=BULK_BATCH_SIZE){
+  const slice=selected.slice(offset,offset+BULK_BATCH_SIZE);
+  const responses=await Promise.allSettled(slice.map(workflow=>{
+   const asset=repo+":"+workflow;
+   // Strictly reject long assets rather than truncating names and conflating scopes.
+   if(asset.length>180)throw Error("Workflow asset exceeds bound");
+   return readWorkflowFacts(token,repo,workflow,commit,asset,timestamp,fetcher);
+  }));
+  responses.forEach(result=>{
+   if(result.status==="fulfilled"){facts.push(...result.value);assessed++}
+   else skipped++;
+  });
+ }
+ if(!assessed)throw Error("No selected workflow could be inspected");
+ const snapshot=normalizeSnapshot({schema:SCHEMA,captured_at:timestamp,facts});
+ return {snapshot,coverage:{mode:"bounded-repository-workflows",repository:repo,
+  discovered:all.length,selected:selected.length,assessed,skipped,
+  limit:BULK_WORKFLOW_LIMIT,complete:!listed.truncated&&selected.length===all.length&&skipped===0,
+  truncated:listed.truncated||all.length>BULK_WORKFLOW_LIMIT,commit}};
 }
 function responseRedirect(to,setCookies=[]){
  const h=new Headers(RESP_HEADERS);
@@ -374,6 +422,10 @@ export async function handleGitHubApp(request,env={}, {fetcher=fetch,clock=now}=
    }
    if(path==="/api/github/workflows")
     return json(await listWorkflows(session.token,fields.installation_id,fields.repo,fetcher));
+   if(path==="/api/github/assessment"&&fields.workflow==="__all__"){
+    const result=await assessRepository(session.token,fields.installation_id,fields.repo,fetcher,clock);
+    return json({...result,note:"Bounded read-only repository workflow review; browser analysis required"});
+   }
    const data=await assess(session.token,fields.installation_id,
       fields.repo,fields.workflow,fetcher,clock);
    return json({snapshot:data,note:"Authorized read-only GitHub metadata; browser analysis required"});
