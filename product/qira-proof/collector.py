@@ -123,9 +123,25 @@ def scan_workflow_syntax(text):
         if ssh.search(row["shell"] or row["text"]):
             scan.append(row["line"])
     starts=[i for i,row in enumerate(rows) if re.match(r"^permissions:\s*",row["text"])]
-    permission_line=rows[starts[0]]["line"] if starts else None
-    writes=False;unknown=False
-    for i in starts:
+    def authorized_permission(index):
+        row=rows[index]
+        if row["pad"]==0:
+            return True
+        if row["pad"]!=4:
+            return False
+        jobs=False;job=False
+        for prior in rows[:index]:
+            if not prior["text"]:continue
+            if prior["pad"]==0:
+                jobs=bool(re.fullmatch(r"jobs:\s*(?:#.*)?",prior["text"]))
+                job=False
+            elif jobs and prior["pad"]==2:
+                job=bool(re.fullmatch(r"[A-Za-z0-9_-]+:\s*(?:#.*)?",prior["text"]))
+        return jobs and job
+    valid=[i for i in starts if authorized_permission(i)]
+    permission_line=rows[valid[0]]["line"] if valid else None
+    writes=False;unknown=len(valid)!=len(starts)
+    for i in valid:
         row=rows[i]
         value=re.match(r"^permissions:\s*(.*?)\s*$",row["text"]).group(1).strip()
         if value in ("read-all","{}"):
@@ -149,26 +165,40 @@ def scan_workflow_syntax(text):
             if match.group(2)=="write":
                 writes=True;permission_line=sub["line"]
         if not count:unknown=True
-    restricted=(False if writes else "unknown" if unknown or not starts else True)
-    write=(True if writes else "unknown" if unknown or not starts else False)
+    restricted=False if writes else ("unknown" if unknown or not valid else True)
+    write=True if writes else ("unknown" if unknown or not valid else False)
     trigger="unknown";trigger_line=None
     event_header=re.compile(r"^(?:on|\"on\"|'on'):\s*(.*?)\s*$")
-    for i,row in enumerate(rows):
-        header=event_header.match(row["text"]) if row["pad"]==0 else None
-        if not header:continue
-        inline=header.group(1)
-        pattern=r"(?:^|[,\[\s])pull_request_target(?=$|[,\]\s:#])"
+    headers=[row for row in rows if row["pad"]==0 and event_header.match(row["text"])]
+    if len(headers)==1:
+        header=headers[0]
+        inline=event_header.match(header["text"]).group(1).strip()
         if inline:
-            trigger=bool(re.search(pattern,inline))
-            if trigger:trigger_line=row["line"]
+            if re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*",inline):
+                trigger=inline=="pull_request_target"
+                trigger_line=header["line"] if trigger else None
+            elif re.fullmatch(r"\[[^\]{}]*\]",inline):
+                items=[x.strip() for x in inline[1:-1].split(",")]
+                if items and all(re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*",x) for x in items):
+                    trigger="pull_request_target" in items
+                    trigger_line=header["line"] if trigger else None
         else:
-            trigger=False
-            for following in rows[i+1:]:
-                if not following["text"]:continue
-                if following["pad"]==0:break
-                if following["pad"]==2 and re.match(r"^pull_request_target\s*:",following["text"]):
-                    trigger=True;trigger_line=following["line"];break
-        break
+            observed=False;unclear=False;matched=None
+            for row in rows:
+                if row["line"]<=header["line"] or not row["text"]:continue
+                if row["pad"]==0:break
+                if row["pad"]!=2:continue
+                mapping=re.match(r"^([A-Za-z][A-Za-z0-9_-]*):(?:\s|$)",row["text"])
+                sequence=re.fullmatch(r"-\s+([A-Za-z][A-Za-z0-9_-]*)\s*(?:#.*)?",row["text"])
+                event=mapping.group(1) if mapping else sequence.group(1) if sequence else None
+                if not event:
+                    unclear=True;continue
+                observed=True
+                if event=="pull_request_target":matched=row["line"]
+            if matched is not None:
+                trigger=True;trigger_line=matched
+            elif observed and not unclear:
+                trigger=False
     return {
        "runtime_ssh_keyscan":(bool(scan),scan[0] if scan else None),
        "workflow_unpinned_actions":(bool(mutable),mutable[0] if mutable else None),
