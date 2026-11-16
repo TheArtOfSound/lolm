@@ -263,11 +263,12 @@ async function assessRepository(token,installationId,repo,fetcher,clock=now){
   });
  }
  if(!assessed)throw Error("No selected workflow could be inspected");
- const snapshot=normalizeSnapshot({schema:SCHEMA,captured_at:timestamp,facts});
- return {snapshot,coverage:{mode:"bounded-repository-workflows",repository:repo,
+ const coverage={mode:"bounded-repository-workflows",repository:repo,
   discovered:all.length,selected:selected.length,assessed,skipped,
   limit:BULK_WORKFLOW_LIMIT,complete:!listed.truncated&&selected.length===all.length&&skipped===0,
-  truncated:listed.truncated||all.length>BULK_WORKFLOW_LIMIT,commit}};
+  truncated:listed.truncated||all.length>BULK_WORKFLOW_LIMIT,commit};
+ const snapshot=normalizeSnapshot({schema:SCHEMA,captured_at:timestamp,facts,coverage});
+ return {snapshot,coverage};
 }
 function responseRedirect(to,setCookies=[]){
  const h=new Headers(RESP_HEADERS);
