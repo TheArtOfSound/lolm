@@ -54,7 +54,10 @@ test("known GitHub provider errors never expose response payloads",async()=>{
  for(const [providerError,expected] of [
   ["incorrect_client_credentials","client_credentials"],
   ["redirect_uri_mismatch","callback_mismatch"],
-  ["bad_verification_code","provider_unavailable"]
+  ["bad_verification_code","authorization_code_rejected"],
+  ["unverified_user_email","email_unverified"],
+  ["application_suspended","app_suspended"],
+  ["unexpected_server_specific_error","provider_rejected"]
  ]){
   const fetcher=async()=>new Response(JSON.stringify({error:providerError,
    error_description:"secret-sensitive-details"}),{status:200});
@@ -74,5 +77,32 @@ test("provider errors, invalid bodies and outages remain fail closed",async()=>{
  const invalid=await finish(s,async()=>new Response("not json",{status:200}));
  assert.equal(reason(invalid),"token_invalid");
  const network=await finish(s,async()=>{throw Error("private-network-detail")});
- assert.equal(reason(network),"provider_unavailable");
+ assert.equal(reason(network),"exchange_transport");
+});
+
+test("provider codes are classified even when GitHub returns non-2xx HTTP statuses",async()=>{
+ const ctx=await start();
+ for(const [status,error,expected] of [
+  [400,"incorrect_client_credentials","client_credentials"],
+  [401,"bad_verification_code","authorization_code_rejected"],
+  [403,"redirect_uri_mismatch","callback_mismatch"],
+  [503,"temporarily_unavailable","provider_rejected"]
+ ]){
+  const res=await finish(ctx,async()=>new Response(JSON.stringify({
+   error,error_description:"SENSITIVE-PROVIDER-TEXT-never-public"
+  }),{status}));
+  assert.equal(reason(res),expected);
+  assert.doesNotMatch(res.headers.get("location"),/SENSITIVE|bad_verification_code/);
+ }
+});
+test("non-JSON HTTP errors are classified without copying provider bodies",async()=>{
+ const ctx=await start();
+ for(const [status,expected] of [
+  [403,"exchange_http_4xx"],
+  [502,"exchange_http_5xx"]
+ ]){
+  const res=await finish(ctx,async()=>new Response("<html>never-share-secret</html>",{status}));
+  assert.equal(reason(res),expected);
+  assert.doesNotMatch(res.headers.get("location"),/never-share-secret/);
+ }
 });
