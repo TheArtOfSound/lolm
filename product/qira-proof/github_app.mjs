@@ -26,7 +26,8 @@ const RESP_HEADERS={
 };
 const json=(value,status=200,extra={})=>new Response(JSON.stringify(value),{status,headers:{...RESP_HEADERS,"content-type":"application/json; charset=utf-8",...extra}});
 const fail=(reason,status)=>json({error:reason},status);
-const OAUTH_REASONS = new Set(["authorization_denied","state_missing","state_expired","state_mismatch","code_missing","client_credentials","callback_mismatch","token_expiration_disabled","token_invalid","provider_unavailable","session_unavailable"]);
+const OAUTH_REASONS = new Set(["authorization_denied","state_missing","state_expired","state_mismatch","code_missing","client_credentials","callback_mismatch","token_expiration_disabled","token_invalid","provider_unavailable","session_unavailable",
+ "authorization_code_rejected","email_unverified","app_suspended","exchange_transport","exchange_http_4xx","exchange_http_5xx","provider_rejected"]);
 class OAuthFailure extends Error {
  constructor(reason){super("OAuth failed");this.reason=OAUTH_REASONS.has(reason)?reason:"provider_unavailable";}
 }
@@ -215,20 +216,31 @@ async function exchangeToken(env,code,verifier,fetcher){
   method:"POST",redirect:"error",headers:{"accept":"application/json",
     "content-type":"application/x-www-form-urlencoded","user-agent":"qira-proof-readonly-pilot"},
   body:body.toString()
- });}catch{throw oauthError("provider_unavailable");}
- if(!response.ok)throw oauthError("provider_unavailable");
+ });}catch{throw oauthError("exchange_transport");}
  let parsed;
  try {
   const raw=await response.text();
   if(raw.length>5000)throw Error("Over budget");
   parsed=JSON.parse(raw);
- }catch{throw oauthError("token_invalid");}
- if(parsed?.error) {
-  const reason=parsed.error==="incorrect_client_credentials"?"client_credentials":
-   parsed.error==="redirect_uri_mismatch"?"callback_mismatch":"provider_unavailable";
-  throw oauthError(reason);
+ }catch{
+  if(!response.ok)throw oauthError(response.status>=500?"exchange_http_5xx":"exchange_http_4xx");
+  throw oauthError("token_invalid");
  }
- if(parsed?.expires_in===undefined)throw oauthError("token_expiration_disabled");
+ if(parsed&&typeof parsed==="object"&&typeof parsed.error==="string"){
+  const errors={
+   incorrect_client_credentials:"client_credentials",
+   redirect_uri_mismatch:"callback_mismatch",
+   bad_verification_code:"authorization_code_rejected",
+   unverified_user_email:"email_unverified",
+   application_suspended:"app_suspended"
+  };
+  // GitHub's error_description, error_uri, and any raw response contents
+  // must never reach the redirect URL, logs, client or exported reports.
+  throw oauthError(Object.hasOwn(errors,parsed.error)?errors[parsed.error]:"provider_rejected");
+ }
+ if(!response.ok)throw oauthError(response.status>=500?"exchange_http_5xx":"exchange_http_4xx");
+ if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))throw oauthError("token_invalid");
+ if(parsed.expires_in===undefined)throw oauthError("token_expiration_disabled");
  if(typeof parsed.access_token!=="string"||parsed.access_token.length<20||
  typeof parsed.token_type!=="string"||parsed.token_type.toLowerCase()!=="bearer"||
  !Number.isInteger(parsed.expires_in)||parsed.expires_in<120||parsed.expires_in>28800)
@@ -271,7 +283,13 @@ export async function handleGitHubApp(request,env={}, {fetcher=fetch,clock=now}=
   if(!urlSafe(code)||code.length>256)return oauthFailureRedirect(env,"code_missing");
   let token;
   try{token=await exchangeToken(env,code,pending.verifier,fetcher)}
-  catch(error){return oauthFailureRedirect(env,error instanceof OAuthFailure?error.reason:"provider_unavailable")}
+  catch(error){
+   const reason=error instanceof OAuthFailure?error.reason:"provider_unavailable";
+   // Deliberately log ONLY the fixed reason code. Never log request URLs,
+   // authorization codes, client credentials, provider bodies, or cookie data.
+   console.warn("qira.github.oauth_exchange_failure",reason);
+   return oauthFailureRedirect(env,reason);
+  }
   try{
    const session=await seal(env,"session",{v:1,token:token.token,exp:clock()+token.ttl,csrf:random(24)});
    if(session.length>3600)throw Error("session over cookie bound");
