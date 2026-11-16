@@ -7,7 +7,7 @@ const view=async(path,env={})=>await (await worker.fetch(new Request(origin+path
 test("homepage leads with bounded human-reviewed service, not fictitious scanner theater",async()=>{
  const html=await view("/");
  assert.match(html,/<h1 id="heroTitle">Understand what your workflows trust\.<\/h1>/);
- assert.match(html,/An independent, human-reviewed assessment/);
+ assert.match(html,/A focused, human-reviewed assessment/);
  assert.match(html,/What the review covers/);
  assert.match(html,/Up to 20 GitHub Actions workflows/);
  assert.match(html,/one-time, tax-inclusive/);
@@ -44,4 +44,13 @@ test("live purchase link and customer evidence paths remain intact after restruc
  assert.match(html,/href="\/start-review"/);
  const health=await worker.fetch(new Request(origin+"/health"),{QIRA_PROOF_CHECKOUT_URL:url});
  assert.equal((await health.json()).checkout_configured,true);
+});
+
+test("phone navigation favors one clear action and the intake stays human-readable",async()=>{
+ const home=await view("/");
+ assert.match(home,/\.navi a:not\(\.navbuy\)\{display:none\}/);
+ const intake=await view("/start-review");
+ assert.match(intake,/From payment<br>to review\./);
+ assert.match(intake,/Your review,<br>step by step\./);
+ assert.doesNotMatch(intake,/LET'S<br>GET TO<br>/);
 });
