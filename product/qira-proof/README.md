@@ -184,7 +184,30 @@ The product cannot claim a fix succeeded because a flag disappeared. A follow-up
 - build.mjs: reproducible standalone Cloudflare Worker.
 - tests/: Node and Python regression checks.
 
-The Worker serves static HTML/JavaScript and a narrowly scoped GitHub App OAuth pilot. It permits authenticated, CSRF-protected GitHub metadata POST selectors, but no arbitrary uploads or provider-token intake. There is no customer SaaS billing, subscription, or application database. GitHub live owner-authorization success has not been established.
+The Worker serves static HTML/JavaScript and a narrowly scoped GitHub App OAuth pilot. It permits authenticated, CSRF-protected GitHub metadata POST selectors, but no arbitrary uploads or provider-token intake. There is no customer SaaS billing, subscription, or application database. A real owner-authorized GitHub session, single workflow selection and resulting assessment have now been observed; independent customer onboarding and end-to-end security validation remain incomplete.
+
+## Verified owner connection and repository-wide workflow review (November 16, 2026)
+
+The owner completed a **real** Qira GitHub App authorization, selected
+`TheArtOfSound/lolm` and `.github/workflows/cli-security.yml`, and
+returned a genuine three-fact review with a mutable-GitHub-Action recommendation
+and an explicitly unknown branch-protection status. The live finding was
+independently corroborated against that workflow using an authorized GitHub read.
+
+An optional **Review repository workflows** control now scans up to 20
+discovered GitHub Actions YAML files in one owner-authorized repository.
+Each workflow is read at one resolved, immutable commit. Workflow-specific
+evidence scopes avoid mixing distinct files into one finding. The report
+records `discovered`, `selected`, `assessed`, `skipped`, `truncated`,
+and `complete` in the normalized evidence receipt; the printable report
+discloses incomplete coverage. A 404 or 403 on an individual file cannot
+silently produce a claim that it was inspected. No source code is persisted
+on the Qira server.
+
+The scan **does not** certify a repository as secure. It reads a bounded
+subset of workflow configuration files, not all code, policies, Actions
+history or secrets. Existing controls, permission boundaries, GitHub token
+revocation, and overall policy compliance require separate analysis.
 
 ## Commercial readiness gates
 
