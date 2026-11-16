@@ -58,7 +58,7 @@ class CollectorTests(unittest.TestCase):
     def test_python_collector_retains_exact_write_scopes_with_commit_links(self):
         def scoped_reader(url,token,provider):
             if provider=="github" and "/contents/" in url:
-                source="\\n".join(["name: Release","on: workflow_dispatch",
+                source="\n".join(["name: Release","on: workflow_dispatch",
                   "permissions:","  contents: read","  issues: write",
                   "  id-token: write","jobs:","  build:","    steps:","      - run: echo okay"])
                 return {"encoding":"base64","content":base64.b64encode(source.encode()).decode()}
