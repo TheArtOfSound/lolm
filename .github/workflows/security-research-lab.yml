@@ -3,6 +3,8 @@ on:
   push:
     paths:
       - 'lolm/security_research/**'
+      - 'cloudflare/causal-observatory/**'
+      - 'tests/causal_worker.test.mjs'
       - 'tests/test_security_*.py'
       - 'scripts/capture_security_nfet_trace.py'
       - 'scripts/capture_security_lolm_native.py'
@@ -36,3 +38,7 @@ jobs:
         run: python -m py_compile scripts/capture_security_nfet_trace.py scripts/capture_security_lolm_native.py
       - name: Generate split synthetic event study
         run: python -m lolm.security_research.cli make-study /tmp/security-study > /tmp/security-study-manifest.json
+      - name: Test Cloudflare Worker API and deterministic receipts
+        run: node --test tests/causal_worker.test.mjs
+      - name: Verify Worker module parses correctly
+        run: node --check cloudflare/causal-observatory/worker.js
