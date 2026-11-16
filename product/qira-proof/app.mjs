@@ -145,6 +145,36 @@ function render(){
    body.appendChild(evidence);card.appendChild(body);positiveBox.appendChild(card);
   });
  }
+ const writeSection=el("writeAccessSection");
+ const writeBox=el("writeAccessInventory");clear(writeBox);
+ const declaredWrite=state.before.facts.filter(f=>f.provider==="github"&&
+  f.signal==="workflow_token_write_permission"&&f.value===true);
+ const unresolvedPermission=state.before.facts.filter(f=>f.provider==="github"&&
+  f.signal==="workflow_token_write_permission"&&f.value==="unknown");
+ writeSection.hidden=!showing||(!declaredWrite.length&&!unresolvedPermission.length);
+ if(!writeSection.hidden){
+  const details=node("details","finding");details.open=true;
+  const heading=node("summary","finding-head"),label=node("div");
+  label.appendChild(node("div","finding-title",declaredWrite.length+
+   " workflows declare write-level permissions"+
+   (unresolvedPermission.length?" · "+unresolvedPermission.length+" cannot be classified":"")));
+  heading.appendChild(label);
+  heading.appendChild(node("span","severity unknown","Authorization inventory"));
+  details.appendChild(heading);
+  const body=node("div","finding-body");
+  body.appendChild(node("p","",
+   "Inspect the actual scopes and trigger context at each source. A write declaration may be intentional, including OIDC publishing; these are not automatically vulnerabilities. Unknown declarations need manual validation."));
+  const links=node("div","evidence");
+  for(const f of [...declaredWrite,...unresolvedPermission]){
+   const name=f.asset.includes(":.github/workflows/")?
+    f.asset.split(":.github/workflows/")[1]:f.asset;
+   const a=node("a","",name+" · "+(f.value===true?"write declared":"unverified"));
+   a.href=f.source_url;a.target="_blank";a.rel="noopener noreferrer";
+   a.title="Open declared workflow permissions at source";
+   links.appendChild(a);
+  }
+  body.appendChild(links);details.appendChild(body);writeBox.appendChild(details);
+ }
  const deltaBox=el("deltas");clear(deltaBox);
  if(!state.after){
   const empty=node("div","empty");
