@@ -172,7 +172,11 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
       <div class="field"><label for="gitInstallation">1. Select your GitHub account</label><select id="gitInstallation" class="picker" aria-label="Authorized GitHub installation"><option value="">Choose account</option></select></div>
       <div class="field"><label for="gitRepository">2. Choose what to review</label><select id="gitRepository" class="picker" disabled aria-label="Authorized repository"><option value="">Choose repository</option></select></div>
       <div class="field"><label for="gitWorkflow">3. Select a deployment workflow</label><select id="gitWorkflow" class="picker" disabled aria-label="Authorized workflow"><option value="">Choose workflow</option></select></div>
-      <button class="btn primary" id="gitAssess" type="button" disabled>Generate my review <span>→</span></button>
+      <div class="controls" style="margin:11px 0 4px">
+       <button class="btn primary" id="gitScanAll" type="button" disabled>Review repository workflows <span>→</span></button>
+       <button class="btn" id="gitAssess" type="button" disabled>Review selected workflow</button>
+      </div>
+      <p class="mini">Repository review examines up to 20 accessible GitHub Actions YAML workflows at one commit. It reports skipped files and limits, and does not read application source or make changes.</p>
      </div>
      <div id="gitMessage" class="statustext" role="status" aria-live="polite"></div>
      <button type="button" id="gitDisconnect" class="btn mini-button" hidden>End local session</button><p class="mini">Ending the local session does not revoke the GitHub App authorization. <a href="https://github.com/settings/installations" target="_blank" rel="noopener noreferrer">Manage installed GitHub Apps</a> if you want to revoke access.</p>
@@ -222,7 +226,8 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
        <button type="button" class="btn primary" id="startSample">See a sample report <span>→</span></button>
       </div>
       <div id="assessmentData" hidden>
-      <div class="metrics"><div class="metric"><small>Systems represented</small><strong id="assetsCount">—</strong></div><div class="metric"><small>Things to review</small><strong id="reviewCount" class="caution">—</strong></div><div class="metric"><small>Can't yet verify</small><strong id="unknownCount">—</strong></div><div class="metric"><small>Evidence facts</small><strong id="factsCount" class="calm">—</strong></div></div>
+      <div class="metrics"><div class="metric"><small>Evidence scopes represented</small><strong id="assetsCount">—</strong></div><div class="metric"><small>Things to review</small><strong id="reviewCount" class="caution">—</strong></div><div class="metric"><small>Can't yet verify</small><strong id="unknownCount">—</strong></div><div class="metric"><small>Evidence facts</small><strong id="factsCount" class="calm">—</strong></div></div>
+      <div class="note" id="scanCoverage" hidden role="status" aria-live="polite"></div>
       <div class="section-label">What deserves a closer look?</div>
       <div id="findings" class="cards" aria-live="polite"></div>
       </div>
