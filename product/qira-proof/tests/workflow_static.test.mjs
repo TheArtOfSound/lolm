@@ -84,3 +84,41 @@ test("read-only declaration makes a reproducible positive-control observation",a
  assert.equal(receipt.assessment.controls.length,1);
  assert.match(receipt.assessment.controls[0].interpretation,/not independent proof/);
 });
+
+test("nested env or with permissions keys are not misreported as effective read-only scopes",()=>{
+ const fakeEnv=[
+  "on: push","env:","  permissions:","    contents: read",
+  "jobs:","  inspect:","    runs-on: ubuntu-latest",
+  "    steps:","      - uses: actions/checkout@v4",
+  "        with:","          permissions:","            contents: read"].join("\n");
+ const data=scanWorkflowSyntax(fakeEnv);
+ assert.equal(data.workflow_explicit_read_only_permissions.value,"unknown");
+ assert.equal(data.workflow_token_write_permission.value,"unknown");
+});
+test("an authoritative read-only declaration is not promoted to safe when nested ambiguous permissions exist",()=>{
+ const workflow=[
+  "on: push","permissions:","  contents: read",
+  "jobs:","  inspect:","    runs-on: ubuntu-latest",
+  "    steps:","      - run: |",
+  "          permissions:","            contents: write"
+ ].join("\n");
+ const data=scanWorkflowSyntax(workflow);
+ // The shell payload must not become a GitHub Actions permission declaration.
+ assert.equal(data.workflow_explicit_read_only_permissions.value,true);
+ assert.equal(data.workflow_token_write_permission.value,false);
+});
+test("valid sequence-style pull_request_target is detected, not marked safe",()=>{
+ const sequence=["on:","  - push","  - pull_request_target","permissions:","  contents: write"].join("\n");
+ const data=scanWorkflowSyntax(sequence);
+ assert.equal(data.workflow_pull_request_target_trigger.value,true);
+ assert.equal(data.workflow_pull_request_target_trigger.line,3);
+});
+test("unsupported inline event maps and quoted events remain unknown",()=>{
+ for(const on of ["on: { pull_request_target: {} }","on: 'pull_request_target'","on: [push, *event_alias]"]){
+  assert.equal(scanWorkflowSyntax(on).workflow_pull_request_target_trigger.value,"unknown");
+ }
+});
+test("non-pull-request-target workflow event maps are recognized as false only when structurally valid",()=>{
+ const workflow=["on:","  schedule:","    - cron: '15 5 * * *'","  workflow_dispatch:","jobs:","  test:"].join("\n");
+ assert.equal(scanWorkflowSyntax(workflow).workflow_pull_request_target_trigger.value,false);
+});
