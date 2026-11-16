@@ -100,6 +100,35 @@ function render(){
   });
   body.appendChild(evidence);card.appendChild(body);findings.appendChild(card);
  });
+ const positiveSection=el("positiveControlsSection");
+ const positiveBox=el("positiveControls");clear(positiveBox);
+ positiveSection.hidden=!showing||!report.controls?.length;
+ if(!positiveSection.hidden){
+  const controls=state.before.coverage?
+   groupReviewFindings(report.controls.map(x=>({...x,check:x.key,level:"good"}))):
+   report.controls.map(x=>({...x,check:x.key,level:"good"}));
+  controls.forEach((x,index)=>{
+   const card=node("details","finding");card.open=index===0;
+   const header=node("summary","finding-head"),label=node("div");
+   label.appendChild(node("div","finding-title",x.title));
+   label.appendChild(node("div","finding-meta",x.provider.toUpperCase()+" / "+x.asset+" · declared safeguard"));
+   header.appendChild(label);
+   header.appendChild(node("span","severity good","Observed"));
+   card.appendChild(header);
+   const body=node("div","finding-body");
+   body.appendChild(node("p","",x.interpretation));
+   const evidence=node("div","evidence");
+   x.evidence.forEach(f=>{
+    const file=typeof f.asset==="string"&&f.asset.includes(":.github/workflows/")?
+      f.asset.split(":.github/workflows/")[1]+" · ":"";
+    const a=node("a","",file+"declaration");
+    a.href=f.source_url;a.target="_blank";a.rel="noopener noreferrer";
+    a.title="Open exact declared evidence source";
+    evidence.appendChild(a);
+   });
+   body.appendChild(evidence);card.appendChild(body);positiveBox.appendChild(card);
+  });
+ }
  const deltaBox=el("deltas");clear(deltaBox);
  if(!state.after){
   const empty=node("div","empty");
