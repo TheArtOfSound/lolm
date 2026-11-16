@@ -89,6 +89,94 @@ def fact(provider,asset,signal,value,url,when):
     return dict(provider=provider,asset=asset,signal=signal,value=value,
                 source_url=url,observed_at=when)
 
+def scan_workflow_syntax(text):
+    """Conservative static YAML observations, never execution or full policy validation."""
+    if not isinstance(text,str) or len(text.encode("utf-8"))>128000:
+        raise ProviderError("invalid bounded workflow text")
+    rows=[]
+    literal_indent=None
+    for lineno,raw in enumerate(text.lstrip("\ufeff").splitlines(),start=1):
+        whitespace=re.match(r"^[ \t]*",raw).group(0)
+        pad=-1 if "\t" in whitespace else len(whitespace)
+        content=raw.strip()
+        if pad<0:
+            rows.append(dict(text="",shell="",pad=-1,line=lineno))
+            continue
+        if literal_indent is not None:
+            if not content or pad>literal_indent:
+                rows.append(dict(text="",shell="" if content.startswith("#") else content,pad=pad,line=lineno))
+                continue
+            literal_indent=None
+        if not content or content.startswith("#"):
+            rows.append(dict(text="",shell="",pad=pad,line=lineno))
+            continue
+        if re.search(r":\s*[|>][+-]?[1-9]?\s*(?:#.*)?$",raw):
+            literal_indent=pad
+        rows.append(dict(text=raw[pad:],shell="",pad=pad,line=lineno))
+    action=re.compile(r"^\s*(?:-\s*)?uses:\s*['\"]?([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_./-]+)?)@([A-Za-z0-9_.-]{1,128})['\"]?(?:\s*(?:#.*)?)?$")
+    ssh=re.compile(r"(^|[^A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)")
+    mutable=[];scan=[]
+    for row in rows:
+        match=action.fullmatch(row["text"])
+        if match and re.fullmatch(r"[a-fA-F0-9]{40}",match.group(2)) is None:
+            mutable.append(row["line"])
+        if ssh.search(row["shell"] or row["text"]):
+            scan.append(row["line"])
+    starts=[i for i,row in enumerate(rows) if re.match(r"^permissions:\s*",row["text"])]
+    permission_line=rows[starts[0]]["line"] if starts else None
+    writes=False;unknown=False
+    for i in starts:
+        row=rows[i]
+        value=re.match(r"^permissions:\s*(.*?)\s*$",row["text"]).group(1).strip()
+        if value in ("read-all","{}"):
+            continue
+        if value=="write-all":
+            writes=True;permission_line=row["line"]
+            continue
+        if value:
+            unknown=True
+            continue
+        count=0
+        for sub in rows[i+1:]:
+            if not sub["text"]:continue
+            if sub["pad"]<=row["pad"]:break
+            if sub["pad"]!=row["pad"]+2:
+                unknown=True;continue
+            match=re.fullmatch(r"([a-z][a-z-]{1,40}):\s*(read|write|none)\s*(?:#.*)?",sub["text"])
+            if not match:
+                unknown=True;continue
+            count+=1
+            if match.group(2)=="write":
+                writes=True;permission_line=sub["line"]
+        if not count:unknown=True
+    restricted=(False if writes else "unknown" if unknown or not starts else True)
+    write=(True if writes else "unknown" if unknown or not starts else False)
+    trigger="unknown";trigger_line=None
+    event_header=re.compile(r"^(?:on|\"on\"|'on'):\s*(.*?)\s*$")
+    for i,row in enumerate(rows):
+        header=event_header.match(row["text"]) if row["pad"]==0 else None
+        if not header:continue
+        inline=header.group(1)
+        pattern=r"(?:^|[,\[\s])pull_request_target(?=$|[,\]\s:#])"
+        if inline:
+            trigger=bool(re.search(pattern,inline))
+            if trigger:trigger_line=row["line"]
+        else:
+            trigger=False
+            for following in rows[i+1:]:
+                if not following["text"]:continue
+                if following["pad"]==0:break
+                if following["pad"]==2 and re.match(r"^pull_request_target\s*:",following["text"]):
+                    trigger=True;trigger_line=following["line"];break
+        break
+    return {
+       "runtime_ssh_keyscan":(bool(scan),scan[0] if scan else None),
+       "workflow_unpinned_actions":(bool(mutable),mutable[0] if mutable else None),
+       "workflow_explicit_read_only_permissions":(restricted,permission_line),
+       "workflow_token_write_permission":(write,permission_line),
+       "workflow_pull_request_target_trigger":(trigger,trigger_line),
+    }
+
 def github_facts(repo,workflow,token,reader=fetch_json,when=None):
     if not GITHUB_RE.fullmatch(repo):
         raise ValueError("repository must be owner/name")
@@ -115,21 +203,16 @@ def github_facts(repo,workflow,token,reader=fetch_json,when=None):
     if len(text)>128_000:
         raise ProviderError("workflow file exceeds 128 KB")
     text=text.decode("utf-8")
-    active_lines=[x for x in text.splitlines() if not x.lstrip().startswith("#")]
-    has_scan=any(re.search(r"(?<![A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)",line) for line in active_lines)
-    # Review-only syntactic test. Only GitHub owner/repo@ref forms; local
-    # composite actions and Docker images need separate checks.
-    action_ref=re.compile(r"^\s*(?:-\s*)?uses:\s*['\"]?([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_./-]+)?)@([A-Za-z0-9_.-]{1,128})['\"]?(?:\s*(?:#.*)?)?$")
-    unpinned=any((match:=action_ref.fullmatch(line)) is not None and
-                 re.fullmatch(r"[a-fA-F0-9]{40}",match.group(2)) is None
-                 for line in active_lines)
+    observations=scan_workflow_syntax(text)
     source=f"https://github.com/{repo}/blob/{sha}/{workflow}"
-    facts=[fact("github",repo,"runtime_ssh_keyscan",has_scan,source,when),
-           fact("github",repo,"workflow_unpinned_actions",unpinned,source,when)]
-    if has_scan:
-        # Proving SSH host-key pinning requires authoritative key material and
-        # a trusted out-of-band comparison, NOT a string search.
-        facts.append(fact("github",repo,"ssh_host_key_pinned","unknown",source,when))
+    facts=[]
+    for signal,(value,line) in observations.items():
+        url=source+(f"#L{line}" if isinstance(line,int) and 0<line<=100000 else "")
+        facts.append(fact("github",repo,signal,value,url,when))
+    if observations["runtime_ssh_keyscan"][0]:
+        # Text presence does NOT establish trusted host-key pinning.
+        facts.append(fact("github",repo,"ssh_host_key_pinned","unknown",
+                          next(x["source_url"] for x in facts if x["signal"]=="runtime_ssh_keyscan"),when))
     try:
         reader(base+"/branches/"+branch_encoded+"/protection",token,"github")
         status=True
