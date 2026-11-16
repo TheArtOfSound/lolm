@@ -2,7 +2,7 @@
  * Client only, no network requests, no third-party fonts/scripts, no tracking.
  * Do not turn a SHA-256 integrity receipt into a claim of provider authentication.
  */
-import {verifyProof,groupReviewFindings} from "./core.mjs";
+import {verifyProof,groupReviewFindings,workflowTriage} from "./core.mjs";
 
 const escapeHTML=value=>String(value??"").replace(/[&<>"']/g,c=>({
  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
@@ -70,6 +70,24 @@ function writeScopeInventory(facts,inventory=[]){
  }).join("");
  return `<p>${write.length} workflow(s) declare write-level permissions; ${unknown.length} workflow(s) have unknown permission declarations.</p>
  <p class="muted">This is an authorization inventory, not a vulnerability count. An id-token: write scope may be intentional for OIDC publishing. Inspect source and event context before deciding what to change.</p><ul>${rows}</ul>`;
+}
+function workflowTriageView(snapshot){
+ if(!snapshot.coverage)return "";
+ const groups=workflowTriage(snapshot);
+ if(!groups.length)return "";
+ const content=groups.map(g=>{
+  const entries=g.workflows.map(item=>{
+   const href=safeHref(item.source_url);
+   const label=nice(item.workflow)+(item.unknown_count?" — incomplete evidence":"");
+   return href?`<li><a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a></li>`:
+    `<li>${label} (source link unavailable)</li>`;
+  }).join("");
+  return `<article class="finding"><h3>${g.workflows.length} workflow(s) · ${nice(g.label)}</h3>
+   <p class="muted">${g.indicator_count} overlapping observed indicators. This is a triage grouping, not a severity score.</p>
+   <ul>${entries}</ul></article>`;
+ }).join("");
+ return `<h2>Workflow review order</h2>
+ <p class="muted">Groups related observed configuration conditions to guide verification. More indicators do not establish greater exploitability; missing information is never treated as secure.</p>${content}`;
 }
 function coverageView(facts){
  const providers=[...new Set(facts.map(x=>x.provider))].sort();
@@ -149,6 +167,7 @@ export async function renderHumanReport(receipt,{sample=false}={}){
  <h2>Scope of evidence</h2><div>${coverageView(baseline.facts)}</div>
  ${repositoryCoverageView(baseline.coverage)}
  <p class="muted">Some providers may have been omitted. Facts from different cloud services are not automatically linked to a single application.</p>
+ ${workflowTriageView(baseline)}
  <h2>Observations and recommended verification</h2>${findings}
  <h2>Recognized safeguards</h2><p class="muted">These are source declarations, not independent confirmation of effective permissions, organization policy or overall security.</p>${controlsView(assessment.controls)}
  <h2>Declared write-level permission inventory</h2>${writeScopeInventory(baseline.facts,baseline.permission_inventory)}
