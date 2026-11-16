@@ -59,7 +59,7 @@ async function scoped(s,path,selection,extra={}){
  const csrf=(await status.json()).csrf;
  return handleGitHubApp(req(path,{method:"POST",headers:{
    ...s.headers,origin,"content-type":"application/json","x-qira-csrf":csrf,
-   ...(extra.headers||{})},body:JSON.stringify(selection)}),env,{fetcher:mockFetch,clock});
+   ...(extra.headers||{})},body:JSON.stringify(selection)}),env,{fetcher:extra.fetcher||mockFetch,clock});
 }
 test("disabled connector never redirects visitors to fake GitHub login",async()=>{
   const disabled=await handleGitHubApp(req("/api/github/status"),{},{fetcher:mockFetch,clock});
@@ -146,6 +146,59 @@ test("Malformed paths and unauthorized repositories are rejected",async()=>{
   assert.ok([400,403,502].includes(resp.status),resp.status);
  }
 });
+
+test("Missing or inaccessible .github/workflows is a documented empty selector, not a 502",async()=>{
+ const s=await session();
+ for(const code of [404]){
+  const fallback=async(input,options={})=>{
+   const u=String(input);
+   if(u.includes("/repos/TheArtOfSound/lolm/contents/.github/workflows?")){
+    assert.equal(options.method,"GET");
+    return new Response(JSON.stringify({message:"Not Found",sensitive:"should-not-surface"}),{
+     status:code,headers:{"content-type":"application/json"}});
+   }
+   return mockFetch(input,options);
+  };
+  const result=await scoped(s,"/api/github/workflows",{
+   installation_id:123,repo:"TheArtOfSound/lolm"
+  },{fetcher:fallback});
+  assert.equal(result.status,200);
+  const json=await result.json();
+  assert.deepEqual(json.workflows,[]);
+  assert.equal(json.branch,"main");
+  assert.equal(json.availability,"directory_not_found_or_inaccessible");
+  assert.equal(json.truncated,false);
+  assert.ok(!JSON.stringify(json).includes("sensitive"));
+  assert.ok(!JSON.stringify(json).includes(tok));
+ }
+});
+test("Workflow listing 403 or 500 is never silently relabeled as a missing directory",async()=>{
+ const s=await session();
+ for(const status of [401,403,500]){
+  const fallback=(input,options={})=>String(input).includes("/repos/TheArtOfSound/lolm/contents/.github/workflows?")?
+   Promise.resolve(new Response("private details", {status})):mockFetch(input,options);
+  const result=await scoped(s,"/api/github/workflows",{
+   installation_id:123,repo:"TheArtOfSound/lolm"
+  },{fetcher:fallback});
+  assert.equal(result.status,502);
+  const body=await result.text();
+  assert.ok(!body.includes("private details"));
+ }
+});
+test("An existing directory without recognized YAML workflows is a valid empty selector",async()=>{
+ const s=await session();
+ const fallback=(input,options={})=>String(input).includes("/repos/TheArtOfSound/lolm/contents/.github/workflows?")?
+  Promise.resolve(new Response(JSON.stringify([{type:"file",path:".github/workflows/README.txt"}]),{
+   status:200,headers:{"content-type":"application/json"}})):mockFetch(input,options);
+ const result=await scoped(s,"/api/github/workflows",{
+  installation_id:123,repo:"TheArtOfSound/lolm"
+ },{fetcher:fallback});
+ assert.equal(result.status,200);
+ const body=await result.json();
+ assert.deepEqual(body.workflows,[]);
+ assert.equal(body.availability,"no_supported_workflows");
+});
+
 test("Selection endpoints forbid GET URLs and CSRF-less cross-site POSTs",async()=>{
  const s=await session();
  for(const path of ["/api/github/repos","/api/github/workflows","/api/github/assessment"]){
