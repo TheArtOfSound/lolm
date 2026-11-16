@@ -176,10 +176,18 @@ async function assess(token,installationId,repo,workflow,fetcher,clock=now){
  const text=new TextDecoder("utf-8",{fatal:true}).decode(Uint8Array.from(bytes,c=>c.charCodeAt(0)));
  const lines=text.split(/\r?\n/).filter(x=>!x.trimStart().startsWith("#"));
  const runtimeScan=lines.some(x=>/(^|[^A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)/.test(x));
+ // A narrow review-only reference check: do not read source outside
+ // the selected GitHub Actions workflow or claim a malicious dependency.
+ const actionRef=/^\s*(?:-\s*)?uses:\s*['"]?([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_./-]+)?)@([A-Za-z0-9_.-]{1,128})['"]?(?:\s*(?:#.*)?)?$/;
+ const unpinned=lines.some(line=>{
+  const m=actionRef.exec(line);
+  return !!m&&!/^[a-fA-F0-9]{40}$/.test(m[2]);
+ });
  const timestamp=new Date(clock()).toISOString();
  const url=sourceUrl(repo,selected.branch,workflow);
  const facts=[
   {provider:"github",asset:repo,signal:"runtime_ssh_keyscan",value:runtimeScan,source_url:url,observed_at:timestamp},
+  {provider:"github",asset:repo,signal:"workflow_unpinned_actions",value:unpinned,source_url:url,observed_at:timestamp},
   {provider:"github",asset:repo,signal:"repo_branch_protection_verifiable",value:"unknown",
    source_url:"https://github.com/"+repo+"/settings/branches",observed_at:timestamp}
  ];
