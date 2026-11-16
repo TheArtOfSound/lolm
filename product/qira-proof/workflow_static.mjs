@@ -6,6 +6,11 @@
 const ACTION=/^\s*(?:-\s*)?uses:\s*['"]?([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_./-]+)?)@([A-Za-z0-9_.-]{1,128})['"]?(?:\s*(?:#.*)?)?$/;
 const SSH=/(^|[^A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)/;
 const SCOPE=/^([a-z][a-z-]{1,40}):\s*(read|write|none)\s*(?:#.*)?$/;
+const VALID_PERMISSION_SCOPES=new Set([
+ "actions","artifact-metadata","attestations","checks","code-quality","contents",
+ "copilot-requests","deployments","discussions","id-token","issues","packages",
+ "pages","pull-requests","security-events","statuses","vulnerability-alerts"
+]);
 const ANY_PERM=/^permissions:\s*(.*?)\s*$/;
 const TOP_ON=/^(?:on|"on"|'on'):\s*(.*?)\s*$/;
 const TRIGGER=/(?:^|[,\[\s])pull_request_target(?=$|[,\]\s:#])/;
@@ -48,15 +53,16 @@ function permissionsLocation(rows,index){
 }
 function permissionDeclarations(rows){
  const found=rows.flatMap((r,i)=>r.text.match(ANY_PERM)?[i]:[]);
- if(!found.length)return {restricted:"unknown",write:"unknown",line:null};
+ if(!found.length)return {restricted:"unknown",write:"unknown",line:null,writeScopes:[]};
  const indices=found.filter(i=>permissionsLocation(rows,i));
  let sawUnknown=indices.length!==found.length;
- if(!indices.length)return {restricted:"unknown",write:"unknown",line:null};
- let sawWrite=false,first=rows[indices[0]].line;
+ if(!indices.length)return {restricted:"unknown",write:"unknown",line:null,writeScopes:[]};
+ let sawWrite=false,first=rows[indices[0]].line,writeScopes=[];
  for(const i of indices){
   const head=rows[i],value=head.text.match(ANY_PERM)?.[1]?.trim()??"";
   if(value==="read-all"||value==="{}")continue;
-  if(value==="write-all"){sawWrite=true;first=head.line;continue}
+  if(value==="write-all"){sawWrite=true;first=head.line;
+   writeScopes.push({scope:"write-all",line:head.line});continue}
   if(value!==""){sawUnknown=true;continue}
   let count=0;
   for(let j=i+1;j<rows.length;j++){
@@ -65,14 +71,17 @@ function permissionDeclarations(rows){
    if(row.pad<=head.pad)break;
    if(row.pad!==head.pad+2){sawUnknown=true;continue}
    const m=SCOPE.exec(row.text);
-   if(!m){sawUnknown=true;continue}
+   if(!m||!VALID_PERMISSION_SCOPES.has(m[1])||
+      (m[2]==="write"&&m[1]==="vulnerability-alerts")){sawUnknown=true;continue}
    count++;
-   if(m[2]==="write"){sawWrite=true;first=row.line}
+   if(m[2]==="write"){sawWrite=true;first=row.line;
+    writeScopes.push({scope:m[1],line:row.line});}
   }
   if(!count)sawUnknown=true;
  }
  return {restricted:sawWrite?false:sawUnknown?"unknown":true,
-  write:sawWrite?true:sawUnknown?"unknown":false,line:first};
+  write:sawWrite?true:sawUnknown?"unknown":false,line:first,
+  writeScopes:writeScopes.sort((a,b)=>a.line-b.line||a.scope.localeCompare(b.scope)).slice(0,36)};
 }
 function triggerDeclaration(rows){
  const headers=rows.filter(r=>r.pad===0&&TOP_ON.test(r.text));
@@ -122,6 +131,7 @@ export function scanWorkflowSyntax(text){
   workflow_unpinned_actions:{value:mutable.length>0,line:mutable[0]??null},
   workflow_explicit_read_only_permissions:{value:permissions.restricted,line:permissions.line},
   workflow_token_write_permission:{value:permissions.write,line:permissions.line},
-  workflow_pull_request_target_trigger:target
+  workflow_pull_request_target_trigger:target,
+  writeScopes:permissions.writeScopes
  };
 }
