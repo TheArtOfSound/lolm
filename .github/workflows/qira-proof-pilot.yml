@@ -1,0 +1,45 @@
+name: QIRA Proof privacy and functionality pilot
+on:
+  push:
+    branches: ['product/qira-proof-pilot-2026-11-15']
+    paths:
+      - 'product/qira-proof/**'
+      - '.github/workflows/qira-proof-pilot.yml'
+  pull_request:
+    paths:
+      - 'product/qira-proof/**'
+      - '.github/workflows/qira-proof-pilot.yml'
+permissions:
+  contents: read
+jobs:
+  qira-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Python collector unit tests
+        run: python -m unittest discover -s product/qira-proof/tests -p 'test_*.py' -v
+      - name: Browser engine and Worker privacy tests
+        run: node --test product/qira-proof/tests/*.test.mjs
+      - name: Reproducible self-contained Worker build
+        run: |
+          node product/qira-proof/build.mjs
+          node --check product/qira-proof/dist/worker.mjs
+      - name: Verify no embedded credentials or stateful endpoints
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('product/qira-proof/dist/worker.mjs').read_text()
+          assert "connect-src 'none'" in source
+          assert "uploads_enabled:false" in source
+          assert "request.method!=='GET'" in source
+          assert 'GITHUB_TOKEN' not in source
+          assert 'CLOUDFLARE_API_TOKEN' not in source
+          print("PASS: read-only browser and no embedded token labels")
+          PY
