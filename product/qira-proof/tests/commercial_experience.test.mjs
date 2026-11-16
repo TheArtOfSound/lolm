@@ -18,7 +18,7 @@ test("the full-width sample report has an accessible evidence navigation and str
  const {response,html}=await visit("/sample-report");
  assert.equal(response.status,200);
  assert.match(html,/<title>Explore sample report \| Qira Proof<\/title>/);
- assert.match(html,/OPEN THE/);
+ assert.match(html,/Example report\./);
  assert.match(html,/SYNTHETIC · NOT A LIVE SCAN/);
  assert.match(html,/No repository was scanned to generate these examples/);
  assert.match(html,/NOT A SECURITY CERTIFICATION|not a security certification/i);
