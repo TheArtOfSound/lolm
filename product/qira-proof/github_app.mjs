@@ -52,7 +52,7 @@ function publicOrigin(env){
  }catch{return null}
 }
 function configured(env){
- return !!(publicOrigin(env)&&typeof env.GITHUB_APP_CLIENT_ID==="string"&&/^[A-Za-z0-9_-]{8,180}$/.test(env.GITHUB_APP_CLIENT_ID)&&
+ return !!(publicOrigin(env)&&typeof env.GITHUB_APP_CLIENT_ID==="string"&&/^[A-Za-z0-9_.-]{8,180}$/.test(env.GITHUB_APP_CLIENT_ID)&&
  typeof env.GITHUB_APP_CLIENT_SECRET==="string"&&env.GITHUB_APP_CLIENT_SECRET.length>=12&&
  typeof env.QIRA_SESSION_KEY==="string"&&/^[A-Za-z0-9_-]{43}$/.test(env.QIRA_SESSION_KEY));
 }
