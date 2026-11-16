@@ -88,6 +88,23 @@ export async function submitVerifiedIntake(request,env){
  }catch{return response({error:"service_unavailable"},503);}
 }
 
+// Reversal events only affect an order whose Stripe PaymentIntent was previously
+// linked to the exact Qira Payment Link by a signed Checkout event. Never use
+// a customer email, amount alone or a shared Trend charge to identify an order.
+function reversalOf(event){
+ const d=event?.data?.object;
+ if(event.type==="charge.refunded"){
+  // Partial refunds require manual accounting review. Do not incorrectly
+  // describe a partially refunded charge as fully refunded.
+  if(d?.object!=="charge"||d.livemode!==true||d.amount!==EXPECTED_TOTAL||
+     d.currency!=="usd"||d.refunded!==true||d.amount_refunded!==EXPECTED_TOTAL)return null;
+ }else if(event.type==="charge.dispute.created"){
+  if(d?.object!=="dispute"||d.livemode!==true||
+     d.amount!==EXPECTED_TOTAL||d.currency!=="usd")return null;
+ }else return null;
+ if(!/^pi_[A-Za-z0-9]+$/.test(d.payment_intent||""))return null;
+ return {paymentIntent:d.payment_intent,status:event.type==="charge.refunded"?"refunded":"disputed"};
+}
 function sessionValid(s,event){
  return s?.object==="checkout.session"&&s.livemode===true&&s.mode==="payment"&&
  s.payment_link===EXPECTED_LINK&&s.amount_total===EXPECTED_TOTAL&&s.currency==="usd"&&
@@ -110,6 +127,24 @@ export async function handleStripeEvent(request,env){
  let event;
  try{event=JSON.parse(raw);}catch{return response({error:"invalid_event"},400);}
  if(event?.object!=="event"||!/^evt_[A-Za-z0-9]+$/.test(event.id||"")||event.livemode!==true)return response({error:"invalid_event"},400);
+ const reverse=["charge.refunded","charge.dispute.created"];
+ if(reverse.includes(event.type)){
+  const reversal=reversalOf(event);
+  if(!reversal)return response({received:true,ignored:true});
+  const now=Math.floor(Date.now()/1000);
+  try{
+   const statements=[
+    env.QIRA_PROOF_ORDERS.prepare("INSERT OR IGNORE INTO qira_events(event_id,event_type,event_created,received_at) VALUES(?,?,?,?)").bind(event.id,event.type,event.created,now),
+    // Unmatched shared-merchant charge/dispute events change no Qira orders.
+    // Reversals remain terminal until an operator independently reconciles
+    // Stripe and authorizes a new state; old paid events cannot reactivate.
+    env.QIRA_PROOF_ORDERS.prepare("UPDATE qira_orders SET status=?, event_created=MAX(event_created,?), updated_at=? WHERE payment_intent_id=? AND status NOT IN ('refunded','disputed')").bind(reversal.status,event.created,now,reversal.paymentIntent)
+   ];
+   const result=await env.QIRA_PROOF_ORDERS.batch(statements);
+   if(!Array.isArray(result)||result.some(x=>x.success===false))throw Error("reversal commit failed");
+  }catch{return response({error:"verification_unavailable"},503);}
+  return response({received:true});
+ }
  const supported=["checkout.session.completed","checkout.session.async_payment_succeeded","checkout.session.async_payment_failed"];
  if(!supported.includes(event.type))return response({received:true,ignored:true});
  const session=event.data?.object;
@@ -121,7 +156,8 @@ export async function handleStripeEvent(request,env){
  const orderUpsert=[
   "INSERT INTO qira_orders(session_id,payment_link,payment_intent_id,status,amount_total,currency,event_created,paid_at,updated_at,buyer_email_digest)",
   "VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET",
-  "status=CASE WHEN excluded.status='paid' THEN 'paid'",
+  "status=CASE WHEN qira_orders.status IN ('refunded','disputed') THEN qira_orders.status",
+  "WHEN excluded.status='paid' THEN 'paid'",
   "WHEN qira_orders.status='paid' THEN 'paid'",
   "WHEN excluded.event_created>=qira_orders.event_created THEN excluded.status",
   "ELSE qira_orders.status END,",
@@ -150,7 +186,7 @@ export async function checkoutStatus(db,sessionId){
  if(!db)return "unavailable";
  try{
   const result=await db.prepare("SELECT status FROM qira_orders WHERE session_id=?").bind(sessionId).first();
-  return result?.status==="paid"?"paid":result?.status==="failed"?"failed":"pending";
+  return ["paid","failed","refunded","disputed"].includes(result?.status)?result.status:"pending";
  }catch{return "unavailable";}
 }
 export async function readOrderIntakeStage(db,sessionId){
@@ -164,13 +200,15 @@ export async function readOrderIntakeStage(db,sessionId){
  }catch{return {ready:false,state:null};}
 }
 export function checkoutBanner(status){
- const paid=status==="paid";
- const heading=paid?"Stripe payment received.":"Payment verification pending.";
+ const paid=status==="paid",refunded=status==="refunded",disputed=status==="disputed";
+ const heading=paid?"Stripe payment received.":refunded?"Payment refunded.":disputed?"Payment under dispute.":"Payment verification pending.";
  const detail=paid?
   "A Stripe-signed paid event matches the Qira Proof $299 order. This confirms a payment event only; Qira will still confirm purchaser identity, repository permission, scope and delivery.":
+  refunded?"A signed Stripe refund event was recorded for this payment. The automated review request is unavailable. Contact Qira if you believe this is an error; do not make another payment solely to fix this status.":
+  disputed?"Stripe has reported a payment dispute. The review request is on hold while the transaction is reconciled. Contact Qira support; do not pay again solely because of this message.":
   status==="unavailable"?"Automatic status lookup is unavailable. Use your Stripe receipt to contact Qira; this page cannot confirm payment.":
   "No matching signed paid event has been recorded yet. Some payment methods settle later. Check your Stripe receipt, refresh this page or contact Qira. Do not buy twice solely because this status is pending.";
- const icon=paid?"✓":"◷";
+ const icon=paid?"✓":(refunded||disputed?"!":"◷");
  return '<div class="receipt-banner '+(paid?"confirmed":"pending")+'" role="status"><span aria-hidden="true" class="receipt-indicator">'+icon+'</span><div><strong>'+heading+'</strong><p>'+detail+'</p></div></div>';
 }
 
