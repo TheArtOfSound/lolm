@@ -48,6 +48,26 @@ function checkUrl(s){
  catch{return false}
 }
 function checkDate(s){return checkString(s,40)&&!Number.isNaN(Date.parse(s))&&/Z$|[+-]\d\d:\d\d$/.test(s)}
+// Coverage belongs inside the SHA-256 receipt, not only an ephemeral UI banner.
+// This is a scope record, not attestation that the scan was security-complete.
+function normalizeCoverage(v){
+ const keys=["mode","repository","discovered","selected","assessed","skipped","limit",
+             "complete","truncated","commit"];
+ if(!plain(v)||Object.keys(v).length!==keys.length||Object.keys(v).some(k=>!keys.includes(k))||
+    v.mode!=="bounded-repository-workflows"||!checkString(v.repository,180)||
+    !/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/.test(v.repository)||
+    !/^[a-fA-F0-9]{40}$/.test(v.commit)||v.limit!==20||
+    ![v.discovered,v.selected,v.assessed,v.skipped].every(Number.isSafeInteger)||
+    v.discovered<1||v.discovered>100||v.selected<1||v.selected>20||
+    v.selected>v.discovered||v.assessed<1||v.skipped<0||v.assessed+v.skipped!==v.selected||
+    typeof v.complete!=="boolean"||typeof v.truncated!=="boolean"||
+    v.complete!==(!v.truncated&&v.discovered===v.selected&&v.skipped===0)||
+    (!v.truncated&&v.discovered>v.selected))
+  throw Error("Invalid QIRA repository coverage summary");
+ return {mode:v.mode,repository:v.repository,discovered:v.discovered,selected:v.selected,
+  assessed:v.assessed,skipped:v.skipped,limit:v.limit,complete:v.complete,
+  truncated:v.truncated,commit:v.commit.toLowerCase()};
+}
 export function normalizeSnapshot(raw){
  if(!plain(raw)||raw.schema!==SCHEMA||!Array.isArray(raw.facts)||raw.facts.length>MAX_FACTS||
  !checkDate(raw.captured_at))throw Error("Invalid QIRA snapshot envelope");
@@ -68,8 +88,19 @@ export function normalizeSnapshot(raw){
               source_url:f.source_url,observed_at:f.observed_at});
  }
  if(facts.length===0)throw Error("Snapshot has no evidence facts");
- return {schema:SCHEMA,captured_at:raw.captured_at,facts:facts.sort((a,b)=>
+ const normalized={schema:SCHEMA,captured_at:raw.captured_at,facts:facts.sort((a,b)=>
   (a.provider+"|"+a.asset+"|"+a.signal).localeCompare(b.provider+"|"+b.asset+"|"+b.signal))};
+ if(raw.coverage!==undefined){
+  normalized.coverage=normalizeCoverage(raw.coverage);
+  if(!normalized.facts.some(f=>f.provider==="github"&&f.asset===normalized.coverage.repository&&
+     f.signal==="repo_branch_protection_verifiable"))
+   throw Error("Repository coverage missing its base evidence scope");
+  if(normalized.facts.filter(f=>f.provider==="github"&&
+     f.signal==="workflow_unpinned_actions"&&f.asset.startsWith(normalized.coverage.repository+":")).length
+     !==normalized.coverage.assessed)
+   throw Error("Repository coverage does not match observed workflow facts");
+ }
+ return normalized;
 }
 export function mergeSnapshots(...inputs){
  // Explicitly combine separately authorized browser-local evidence.
