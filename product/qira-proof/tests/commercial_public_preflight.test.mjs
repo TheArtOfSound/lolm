@@ -10,7 +10,7 @@ const request=(value,method="GET")=>new Request(base+encodeURIComponent(value),{
 const mock=(directory,count=2)=>async(url,init)=>{
  assert.ok(url.startsWith("https://api.github.com/repos/TheArtOfSound/lolm"));
  assert.equal(init.method,"GET");
- assert.equal(init.redirect,"error");
+ assert.equal(init.redirect,"manual");
  assert.equal(init.headers["User-Agent"],"Qira-Proof-Public-Inventory");
  assert.equal(init.headers.authorization,undefined);
  return url.includes("/contents/.github/workflows")?directory??json(workflows(count)):json(repo);
