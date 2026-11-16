@@ -153,6 +153,16 @@ export async function checkoutStatus(db,sessionId){
   return result?.status==="paid"?"paid":result?.status==="failed"?"failed":"pending";
  }catch{return "unavailable";}
 }
+export async function readOrderIntakeStage(db,sessionId){
+ if(!db||!/^cs_live_[A-Za-z0-9]{10,255}$/.test(sessionId||""))return {ready:false,state:null};
+ try{
+  const [order,intake]=await Promise.all([
+   db.prepare("SELECT buyer_email_digest FROM qira_orders WHERE session_id=?").bind(sessionId).first(),
+   db.prepare("SELECT state FROM qira_intakes WHERE session_id=?").bind(sessionId).first()
+  ]);
+  return {ready:typeof order?.buyer_email_digest==="string"&&/^[0-9a-f]{64}$/.test(order.buyer_email_digest),state:typeof intake?.state==="string"?intake.state:null};
+ }catch{return {ready:false,state:null};}
+}
 export function checkoutBanner(status){
  const paid=status==="paid";
  const heading=paid?"Stripe payment received.":"Payment verification pending.";
