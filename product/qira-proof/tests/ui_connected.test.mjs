@@ -36,8 +36,13 @@ test("connected visitor can select an installation, repo and workflow, and see r
   else if(url==="/api/github/assessment"&&JSON.parse(opts.body||"{}").workflow==="__all__")response={
    snapshot:{schema:"qira-proof/snapshot-v1",captured_at:"2026-11-15T19:00:00Z",facts:[
     {provider:"github",asset:"sample-owner/test-repo:.github/workflows/deploy.yml",signal:"workflow_unpinned_actions",value:true,source_url:"https://github.com/sample-owner/test-repo/blob/0123456789abcdef0123456789abcdef01234567/.github/workflows/deploy.yml",observed_at:"2026-11-15T19:00:00Z"},
+    {provider:"github",asset:"sample-owner/test-repo:.github/workflows/deploy.yml",signal:"workflow_token_write_permission",value:true,source_url:"https://github.com/sample-owner/test-repo/blob/0123456789abcdef0123456789abcdef01234567/.github/workflows/deploy.yml#L3",observed_at:"2026-11-15T19:00:00Z"},
     {provider:"github",asset:"sample-owner/test-repo",signal:"repo_branch_protection_verifiable",value:"unknown",source_url:"https://github.com/sample-owner/test-repo/settings/branches",observed_at:"2026-11-15T19:00:00Z"}
-   ]},coverage:{mode:"bounded-repository-workflows",repository:"sample-owner/test-repo",discovered:1,selected:1,assessed:1,skipped:0,limit:20,complete:true,truncated:false,commit:"0123456789abcdef0123456789abcdef01234567"}};
+   ]},coverage:{mode:"bounded-repository-workflows",repository:"sample-owner/test-repo",discovered:1,selected:1,assessed:1,skipped:0,limit:20,complete:true,truncated:false,commit:"0123456789abcdef0123456789abcdef01234567"},
+   permission_inventory:[{asset:"sample-owner/test-repo:.github/workflows/deploy.yml",scopes:[
+    {scope:"issues",source_url:"https://github.com/sample-owner/test-repo/blob/0123456789abcdef0123456789abcdef01234567/.github/workflows/deploy.yml#L3"},
+    {scope:"id-token",source_url:"https://github.com/sample-owner/test-repo/blob/0123456789abcdef0123456789abcdef01234567/.github/workflows/deploy.yml#L4"}
+   ]}]};
   else if(url==="/api/github/assessment")response={snapshot:{schema:"qira-proof/snapshot-v1",captured_at:"2026-11-15T19:00:00Z",facts:[
    {provider:"github",asset:"sample-owner/test-repo",signal:"runtime_ssh_keyscan",value:true,source_url:"https://github.com/sample-owner/test-repo/blob/main/.github/workflows/deploy.yml",observed_at:"2026-11-15T19:00:00Z"},
    {provider:"github",asset:"sample-owner/test-repo",signal:"ssh_host_key_pinned",value:"unknown",source_url:"https://github.com/sample-owner/test-repo/blob/main/.github/workflows/deploy.yml",observed_at:"2026-11-15T19:00:00Z"}
@@ -105,6 +110,11 @@ test("connected visitor can select an installation, repo and workflow, and see r
  assert.equal(el("reviewCount").textContent,1);
  assert.equal(el("observationsCount").textContent,1);
  assert.equal(el("unknownCount").textContent,1);
+ assert.equal(el("writeAccessSection").hidden,false);
+ const scopeLinks=el("writeAccessInventory").children[0].children[1].children[1].children;
+ assert.ok(scopeLinks.some(x=>x.textContent.includes("issues: write")));
+ assert.ok(scopeLinks.some(x=>x.textContent.includes("id-token: write")));
+ assert.ok(scopeLinks.some(x=>x.href.endsWith("#L4")));
  assert.equal(document.body.dataset.reportType,"customer");
  assert.equal(el("gitScanAll").disabled,false);
  await el("gitDisconnect").events.click();
