@@ -47,5 +47,11 @@ jobs:
                             'sessionStorage.setItem('):
               assert forbidden not in source, forbidden
           assert 'mergeSnapshots' in source
+          # Cloudflare Workers does not implement Fetch redirect='error'.
+          # This exact bug blocked real GitHub OAuth even though Node tests passed.
+          assert 'redirect:"error"' not in source
+          assert 'method:"POST",redirect:"manual"' in source
+          assert 'method:"GET",redirect:"manual"' in source
+          assert 'opaqueredirect' in source
           print("PASS: read-only providers, no client-side token storage, and multi-source composition")
           PY
