@@ -7,6 +7,7 @@ const MAX_FACTS=150;
 const SIGNALS=new Set(["runtime_ssh_keyscan","ssh_host_key_pinned",
  "worker_preview_enabled","worker_public_enabled","worker_privileged_bindings",
  "repo_branch_protection_verifiable","workflow_unpinned_actions","workflow_token_write_permission",
+ "workflow_explicit_read_only_permissions","workflow_pull_request_target_trigger",
  "workflow_untrusted_pull_request","vercel_recent_preview_observed",
  "vercel_deployment_protection_configured","vercel_latest_production_errored"]);
 export const MODES={ready:"observed",unknown:"not_verified"};
@@ -15,6 +16,10 @@ const checks=[
   category:"Build supply-chain integrity",level:"review",
   description:"One or more non-local GitHub Actions in the selected workflow use a tag or branch rather than a complete 40-character commit SHA. These references can change over time. This is a hardening opportunity, not proof of a malicious update.",
   next:"Inspect each external uses: reference in the selected workflow and pin its reviewed full commit SHA. Maintain a controlled update process for those pins."},
+ {key:"privileged_pr_trigger",title:"Write permissions and pull_request_target declared together",
+  category:"CI/CD authorization",level:"review",
+  description:"This workflow declares a write-level permission and a pull_request_target trigger. Their coexistence warrants examining what code the workflow checks out and executes; the trigger by itself is not a vulnerability.",
+  next:"Inspect checkout ref and commands executed by pull_request_target jobs; do not execute untrusted fork code in a secret-bearing context. Check current GitHub Actions event policies and job-level token overrides."},
  {key:"ssh_host_trust",title:"Deployment SSH trust requires verification",
   category:"Deployment integrity",level:"review",
   description:"A deployment workflow appears to populate SSH known_hosts at runtime using ssh-keyscan. Without an independently trusted fingerprint, the first connection may trust an attacker-controlled host.",
@@ -44,7 +49,13 @@ function plain(o){return o&&typeof o==="object"&&!Array.isArray(o)&&Object.getPr
 function checkString(x,max=200){return typeof x==="string"&&x.length>0&&x.length<=max&&!/[\u0000-\u001f]/.test(x)}
 function checkUrl(s){
  if(!checkString(s,1024))return false;
- try{const u=new URL(s);return u.protocol==="https:"&&!u.username&&!u.password&&!u.search&&!u.hash}
+ try{
+  const u=new URL(s);
+  const permittedAnchor=!u.hash||(
+   u.hostname==="github.com"&&/^#L[1-9][0-9]{0,5}$/.test(u.hash)&&
+   /^\/[^/?#]+\/[^/?#]+\/blob\/[a-fA-F0-9]{40}\/\.github\/workflows\/[^?#]+$/.test(u.pathname));
+  return u.protocol==="https:"&&!u.username&&!u.password&&!u.search&&permittedAnchor;
+ }
  catch{return false}
 }
 function checkDate(s){return checkString(s,40)&&!Number.isNaN(Date.parse(s))&&/Z$|[+-]\d\d:\d\d$/.test(s)}
@@ -136,7 +147,7 @@ function emit(findings,asset,check,refs,requiredSignals){
   required_signals:requiredSignals});
 }
 export function analyzeSnapshot(input){
- const snapshot=normalizeSnapshot(input), groups=factsMap(snapshot),findings=[];
+ const snapshot=normalizeSnapshot(input), groups=factsMap(snapshot),findings=[],controls=[];
  for(const [id,observations] of groups){
   const [provider,...rest]=id.split("|"), asset={provider,asset:rest.join("|")};
   const yes=x=>observations.get(x)?.value===true;
@@ -150,6 +161,19 @@ export function analyzeSnapshot(input){
    if(yes("runtime_ssh_keyscan")&&!yes("ssh_host_key_pinned")){
     emit(findings,asset,"ssh_host_trust",[f("runtime_ssh_keyscan"),...(f("ssh_host_key_pinned")?[f("ssh_host_key_pinned")]:[])],
       ["runtime_ssh_keyscan","ssh_host_key_pinned"]);
+   }
+   if(yes("workflow_explicit_read_only_permissions")){
+    const item=f("workflow_explicit_read_only_permissions");
+    controls.push({id:asset.provider+"|"+asset.asset+"|read_only_permissions",provider,
+     asset:asset.asset,key:"read_only_permissions",
+     title:"Explicit read-only token permissions declared",
+     interpretation:"All recognized permissions declarations in this workflow restrict token scopes to read or none. This is positive configuration evidence, not independent proof of effective token permissions or repository policy.",
+     evidence:[{signal:item.signal,observed_value:item.value,observed_at:item.observed_at,source_url:item.source_url}]});
+   }
+   if(yes("workflow_token_write_permission")&&yes("workflow_pull_request_target_trigger")){
+    emit(findings,asset,"privileged_pr_trigger",
+     [f("workflow_token_write_permission"),f("workflow_pull_request_target_trigger")],
+     ["workflow_token_write_permission","workflow_pull_request_target_trigger"]);
    }
    if(yes("workflow_token_write_permission")&&yes("workflow_untrusted_pull_request")){
     emit(findings,asset,"workflow_token_scope",[f("workflow_token_write_permission"),f("workflow_untrusted_pull_request")],
@@ -179,7 +203,7 @@ export function analyzeSnapshot(input){
  const severity={high:0,review:1,unknown:2};
  findings.sort((a,b)=>severity[a.level]-severity[b.level]||a.id.localeCompare(b.id));
  return {schema:"qira-proof/assessment-v1",snapshot_at:snapshot.captured_at,assets:groups.size,
-   facts:snapshot.facts.length,findings,
+   facts:snapshot.facts.length,findings,controls,
    counts:{high:findings.filter(x=>x.level==="high").length,
            review:findings.filter(x=>x.level==="review").length,
            unknown:findings.filter(x=>x.level==="unknown").length},
