@@ -1,3 +1,4 @@
+import {enhanceJourney,JOURNEY_CSS} from "./site_journey.mjs";
 // Shared interaction and document styling for every Qira Proof public route.
 // Uses the same small typography scale, neutral hierarchy, focused navigation
 // and consistent interaction states as the task-first homepage.
@@ -89,7 +90,7 @@ export function addUnifiedShell(html,path){
  const start=html.indexOf('<nav class="navi" aria-label="Primary">');
  const end=start>=0?html.indexOf("</nav>",start):-1;
  if(start>=0&&end>start)html=html.slice(0,start)+replacement+html.slice(end+6);
- return html.replace("</style></head>",SITE_CSS+"</style></head>");
+ return enhanceJourney(html,path).replace("</style></head>",SITE_CSS+JOURNEY_CSS+"</style></head>");
 }
 export function addLegalNavigation(html){
  const result=html.replace(new RegExp("<h2>([^<]+)</h2>","g"),(_whole,label)=>{
