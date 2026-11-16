@@ -7,7 +7,8 @@ const MAX_FACTS=150;
 const SIGNALS=new Set(["runtime_ssh_keyscan","ssh_host_key_pinned",
  "worker_preview_enabled","worker_public_enabled","worker_privileged_bindings",
  "repo_branch_protection_verifiable","workflow_token_write_permission",
- "workflow_untrusted_pull_request"]);
+ "workflow_untrusted_pull_request","vercel_recent_preview_observed",
+ "vercel_deployment_protection_configured","vercel_latest_production_errored"]);
 export const MODES={ready:"observed",unknown:"not_verified"};
 const checks=[
  {key:"ssh_host_trust",title:"Deployment SSH trust requires verification",
@@ -22,6 +23,14 @@ const checks=[
   category:"CI/CD authorization",level:"high",
   description:"The declared workflow combines write-level token permission with a pull-request context identified as untrusted. Validate executable steps, fork restrictions, and token availability before treating it as exploitable.",
   next:"Prefer read-only default tokens, isolate untrusted builds from credential-bearing jobs, and review trigger-specific permission boundaries."},
+ {key:"vercel_preview_visibility",title:"Recent preview deployment without verified project-level protection",
+  category:"Deployment access",level:"review",
+  description:"The supplied Vercel metadata shows a recent preview deployment, while the three reported project-level deployment protection methods are disabled. This does not establish that the preview is publicly reachable or sensitive.",
+  next:"Confirm intended preview visibility, inspect Vercel's Deployment Protection scope, and test access without a session only with the owner's authorization."},
+ {key:"vercel_production_release",title:"Latest production deployment reports an error",
+  category:"Release reliability",level:"review",
+  description:"The most recent observed production-target deployment has ERROR status. An older deployment may still be serving traffic; this is not evidence of an outage.",
+  next:"Inspect the failed deployment in Vercel, verify the currently promoted production version, and check release protections before attempting a retry."},
  {key:"branch_protection_visibility",title:"Branch protection could not be verified",
   category:"Evidence coverage",level:"unknown",
   description:"The configured integration did not provide evidence of branch-protection settings. This is a visibility gap, not proof that protections are disabled.",
@@ -42,11 +51,12 @@ export function normalizeSnapshot(raw){
  const seen=new Set();
  for(const f of raw.facts){
   if(!plain(f)||Object.keys(f).some(k=>!["provider","asset","signal","value","source_url","observed_at"].includes(k))||
-     !["github","cloudflare"].includes(f.provider)||!checkString(f.asset,180)||
+     !["github","cloudflare","vercel"].includes(f.provider)||!checkString(f.asset,180)||
      !SIGNALS.has(f.signal)||!(typeof f.value==="boolean"||f.value==="unknown")||
      !checkUrl(f.source_url)||!checkDate(f.observed_at))throw Error("Invalid or unsafe snapshot fact");
-  if((f.signal.startsWith("worker_")&&f.provider!=="cloudflare")||
-     (!f.signal.startsWith("worker_")&&f.provider!=="github"))throw Error("Signal/provider mismatch");
+  const prefix=f.signal.startsWith("worker_")?"cloudflare":
+   f.signal.startsWith("vercel_")?"vercel":"github";
+  if(f.provider!==prefix)throw Error("Signal/provider mismatch");
   const id=f.provider+"|"+f.asset+"|"+f.signal;
   if(seen.has(id))throw Error("Conflicting duplicate facts: "+f.signal);
   seen.add(id);
@@ -96,6 +106,17 @@ export function analyzeSnapshot(input){
    if(f("repo_branch_protection_verifiable")?.value==="unknown"){
     emit(findings,asset,"branch_protection_visibility",[f("repo_branch_protection_verifiable")],
       ["repo_branch_protection_verifiable"]);
+   }
+  }
+  if(provider==="vercel"){
+   if(yes("vercel_recent_preview_observed")&&no("vercel_deployment_protection_configured")){
+    emit(findings,asset,"vercel_preview_visibility",
+      [f("vercel_recent_preview_observed"),f("vercel_deployment_protection_configured")],
+      ["vercel_recent_preview_observed","vercel_deployment_protection_configured"]);
+   }
+   if(yes("vercel_latest_production_errored")){
+    emit(findings,asset,"vercel_production_release",[f("vercel_latest_production_errored")],
+      ["vercel_latest_production_errored"]);
    }
   }
   if(provider==="cloudflare"&&yes("worker_preview_enabled")&&yes("worker_privileged_bindings")){
