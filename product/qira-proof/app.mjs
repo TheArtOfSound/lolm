@@ -36,11 +36,27 @@ function status(message,isError=false){el("status").textContent=message;el("stat
 function buttonTab(tab){
  state.tab=tab;
  document.querySelectorAll("[data-tab]").forEach(b=>{
-  const on=b.dataset.tab===tab;b.classList.toggle("active",on);b.setAttribute("aria-selected",String(on));
+  const on=b.dataset.tab===tab;b.classList.toggle("active",on);
+  b.setAttribute("aria-selected",String(on));b.tabIndex=on?0:-1;
  });
  document.querySelectorAll(".tabcontent").forEach(p=>p.hidden=p.id!==tab);
  el("workTitle").textContent={assessment:"Assessment",recheck:"Configuration recheck",evidence:"Evidence export & verification"}[tab];
 }
+// WAI-ARIA tab pattern: arrow keys move and activate the next tab; Home/End
+// move to the first/last. Native Tab reaches the selected tab then panel.
+const tabOrder=["assessment","recheck","evidence"];
+document.querySelectorAll("[data-tab]").forEach(control=>{
+ control.addEventListener("keydown",event=>{
+  if(!["ArrowRight","ArrowLeft","Home","End"].includes(event.key))return;
+  event.preventDefault();
+  const current=tabOrder.indexOf(control.dataset.tab);
+  const next=event.key==="Home"?0:event.key==="End"?tabOrder.length-1:
+   (current+(event.key==="ArrowRight"?1:-1)+tabOrder.length)%tabOrder.length;
+  buttonTab(tabOrder[next]);
+  const nextControl=[...document.querySelectorAll("[data-tab]")].find(x=>x.dataset.tab===tabOrder[next]);
+  nextControl?.focus?.();
+ });
+});
 function render(){
  const report=analyzeSnapshot(state.before);
  const showing=state.mode!=="idle";
@@ -338,7 +354,7 @@ async function githubConnectionStatus(){
   git.csrf=current.csrf;
   el("gitConnect").hidden=!current.configured||current.connected;
   el("gitDisconnect").hidden=!current.connected;
-  el("gitInstall").hidden=!current.install_url;
+  el("gitInstall").hidden=!current.install_url||current.connected;
   if(current.install_url)el("gitInstall").href=current.install_url;
   el("gitPicker").hidden=!current.connected;
   el("startCard").hidden=current.connected;
