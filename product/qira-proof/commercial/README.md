@@ -9,7 +9,7 @@ The commercial worker is separate from the protected research preview and does n
 
 ## Checkout
 
-The landing page is intentionally **not directly purchasable** until an approved merchant account has a matching **live Stripe payment link**. Existing connected Stripe accounts were "Trend" and "SmallBusinessFix.com"; the owner must choose which account is legally appropriate for this Qira Proof product. Do not infer the merchant from other product names.
+The landing page is intentionally **not directly purchasable** until an approved merchant account has a matching **live Stripe payment link**. The owner selected **Trend** as the live Stripe merchant for Qira Proof. Do not route charges to SmallBusinessFix.com.
 
 1. On the chosen Stripe live account, create one one-time Qira Proof founding workflow review product, amount **29900 USD cents**. Avoid recurring billing or misleading automated security promises.
 2. Create a live, active payment link to that price. Collect customer email and optionally a non-secret repository identifier. Never solicit API tokens or private keys via Stripe custom fields.
@@ -26,3 +26,10 @@ Before Stripe setup the CTA is an actual \`mailto:\` request for secure checkout
 - Confirm Stripe merchant ownership, pricing, support, fulfillment/refund process and business disclosures.
 - Paid service is **not** a penetration test, vulnerability certification, code fix, continuous monitoring or attested GitHub security result.
 - Qira Proof scanner PR #71 remains in draft pending external security/accuracy review; commercial offer must stay bounded and human-reviewed.
+
+## Merchant verification and outstanding tax decision (Nov 16, 2026)
+
+- Confirmed Trend (`acct_1TdqpyGz3eX0vCtE`) supports live charges and payouts, lists `imagineqira.com` as its business site, and uses the Qira support email.
+- No Qira Proof product, price, or payment link existed when verified. Stripe Tax settings are active but there are **zero registered tax jurisdictions**. Existing payment links disable automatic tax.
+- **Product and payment link creation is intentionally blocked pending owner's explicit answer about sales tax / VAT / GST collection.** Do not infer tax requirements from existing products or registrations.
+- New `/start-review` handoff route is deployed and verified; it supplies human scope/access/delivery steps without treating a public URL as proof of payment. Actual payment must be verified in Trend's Stripe Dashboard before work.
