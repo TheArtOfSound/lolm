@@ -1,17 +1,54 @@
 # QIRA Proof — Local-First Pilot
 
-Preview: https://qira-proof-pilot-20261115.bryanleonard237.workers.dev/
+Authenticated, redesigned preview: https://qira-proof-auth-lab-20261115.bryanleonard237.workers.dev/
 
-Status: a read-only configuration assessment pilot, NOT a penetration test, breach finding, or commercial security certification. The sample shown by default is entirely fictional.
+Status: a read-only configuration assessment pilot, NOT a penetration test, breach finding, or commercial security certification. Fictional data is shown **only when a visitor explicitly opens the example**.
 
 ## Try the product in five minutes
 
-1. Open the preview and inspect the fictional assessment.
-2. Press "Sample recheck" to compare a later configuration snapshot.
+1. Open the preview and choose **Explore the example**.
+2. Expand **Example and assessment controls**, then press **Show example recheck** to compare later fictional configuration evidence.
 3. Open "Evidence" and press "Export evidence report."
 4. Use "Verify evidence file" to reproduce the analysis and detect alterations.
 
 The browser application does not accept API credentials or upload data to its Worker. It runs the deterministic checks locally, with no server-side retention.
+
+## Redesigned product experience (2026-11-15)
+
+QIRA Proof now opens with a guided **Connect → Understand → Recheck**
+experience, not a wall of alerts. Visitors get an explicit starting
+action; no fictional findings appear automatically. They can choose an
+authorized GitHub installation/repository/workflow or open a clearly
+labeled fictional example.
+
+- Source evidence, explanations and recommended reviews stay accessible
+  through expandable finding cards.
+- Advanced evidence tools and local-file imports are available without
+  dominating the initial screen.
+- The authorized GitHub App's installation link remains visible after
+  GitHub OAuth, even if the user has not installed the App.
+- The UI supports small-screen layout, keyboard navigation and reduced
+  motion; tests cover new and signed-in visitor states.
+- The auth preview retains the pre-existing Cloudflare client-secret and
+  session-key bindings; the design-only preview does not have auth keys.
+
+### Is this a real product?
+
+It is **working assessment software but not a validated commercial
+cybersecurity service yet**. Its detection rules cover a limited
+number of configuration scenarios and cannot establish actual compromise
+or the causal effectiveness of a fix.
+
+The first revenue test should be a **human-reviewed, specifically
+authorized infrastructure configuration assessment**, not a paid alert
+dashboard. A possible pricing experiment is $500–$1,500 per scoped
+review, only after defining deliverables and manually corroborating
+findings. This is an unvalidated price hypothesis.
+
+Before selling recurring SaaS: expand and validate coverage,
+demonstrate high finding precision, build reliable evidence provenance,
+customer support and security review, then secure at least two
+independently evaluated design partners willing to pay for the outcome.
 
 ## Collect an authorized snapshot of your infrastructure
 
