@@ -40,8 +40,8 @@ test("real UI treats inaccessible workflow directory as an empty choice with use
  await el("gitRepository").events.change({target:{value:"TheArtOfSound/ResumeAI"}});
  assert.equal(el("gitWorkflow").disabled,true);
  assert.equal(el("gitAssess").disabled,true);
- assert.match(el("gitMessage").textContent,/has no accessible \.github\/workflows directory/);
- assert.match(el("gitMessage").textContent,/Choose another repository/);
+ assert.match(el("gitMessage").textContent,/workflow directory is absent or inaccessible/);
+ assert.match(el("gitMessage").textContent,/Choose a different repository/);
  assert.equal(el("gitWorkflow").children[0].label,"No accessible workflows on this branch");
  assert.ok(calls.includes("/api/github/workflows"));
  assert.equal(document.body.dataset.reportType,"unstarted");
