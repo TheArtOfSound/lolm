@@ -9,7 +9,10 @@ if(!globalThis.crypto)globalThis.crypto=webcrypto;
 const origin="https://qira.example";
 const sessionKey=Buffer.alloc(32,12).toString("base64url");
 const providerToken="ghu_"+"X".repeat(64);
+const allow={limit:async()=>({success:true})};
 const env={
+ QIRA_AUTH_RATE_LIMITER:allow,
+ QIRA_READ_RATE_LIMITER:allow,
  QIRA_PUBLIC_ORIGIN:origin,
  GITHUB_APP_CLIENT_ID:"Iv1.test-client-only",
  GITHUB_APP_CLIENT_SECRET:"fake-key-only-for-unit-tests",
@@ -45,6 +48,11 @@ function mockProvider(url,options={}){
  assert.equal(options.redirect,"manual","Cloudflare Workers only permits manual/follow");
  new Request(text,{method:options.method||"GET",redirect:options.redirect});
  let payload;
+ if(text==="https://api.github.com/applications/Iv1.test-client-only/token"){
+  assert.equal(options.method,"DELETE");
+  assert.equal(JSON.parse(options.body).access_token,providerToken);
+  return Promise.resolve(new Response(null,{status:204}));
+ }
  if(text==="https://github.com/login/oauth/access_token"){
   assert.equal(options.method,"POST");
   assert.match(options.body,/code_verifier=/);
@@ -130,13 +138,13 @@ test("full compiled Worker journey: OAuth → installation → repo → workflow
   assert.equal(csrfDenied.status,403);
   const disconnected=await post("/api/github/disconnect",{});
   assert.equal(disconnected.status,200);
-  assert.equal((await disconnected.json()).server_side_token_revoked,false);
+  assert.equal((await disconnected.json()).server_side_token_revoked,true);
   assert.match(disconnected.headers.get("set-cookie"),/__Host-qira_git_session=;/);
   const oldCookieAfterDisconnect=await worker.fetch(request("/api/github/status",{
    headers:{cookie:disconnected.headers.get("set-cookie")}
   }),env);
   assert.equal((await oldCookieAfterDisconnect.json()).connected,false);
-  // Do not claim that a stolen former cookie cannot be replayed: there is
-  // no server-side token revocation in this stateless pilot.
+  // GitHub reports provider-token revocation; the cleared browser cookie is
+  // not a durable revocation list for copied encrypted cookies.
  }finally{globalThis.fetch=original;}
 });

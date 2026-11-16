@@ -113,6 +113,8 @@ test("compiled Worker preserves authorization routes and POST dispatch (no secre
   const compiled=(await import("../dist/worker.mjs")).default;
   const origin="https://qira.invalid";
   const env={
+    QIRA_AUTH_RATE_LIMITER:{limit:async()=>({success:true})},
+    QIRA_READ_RATE_LIMITER:{limit:async()=>({success:true})},
     QIRA_PUBLIC_ORIGIN:origin,
     GITHUB_APP_CLIENT_ID:"Iv1.compiled-test-only",
     GITHUB_APP_CLIENT_SECRET:"unit-test-secret-not-a-credential",

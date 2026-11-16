@@ -5,7 +5,10 @@ import {handleGitHubApp} from "../github_app.mjs";
 if(!globalThis.crypto)globalThis.crypto=webcrypto;
 const origin="https://qira.example";
 const t=1_800_000_000_000;
+const allow={limit:async()=>({success:true})};
 const env={
+ QIRA_AUTH_RATE_LIMITER:allow,
+ QIRA_READ_RATE_LIMITER:allow,
  QIRA_PUBLIC_ORIGIN:origin,
  GITHUB_APP_CLIENT_ID:"Iv1.123456789abcdef",
  GITHUB_APP_CLIENT_SECRET:"placeholder-not-a-real-secret",
