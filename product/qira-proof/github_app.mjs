@@ -212,6 +212,9 @@ async function exchangeToken(env,code,verifier,fetcher){
 function cspGet(request){return ["GET","HEAD"].includes(request.method)}
 export async function handleGitHubApp(request,env={}, {fetcher=fetch,clock=now}={}){
  const url=new URL(request.url),path=url.pathname;
+ if(path!=="/api/github/status"&&path!=="/connect/github"&&
+    path!=="/oauth/github/callback"&&path!=="/api/github/disconnect"&&
+    !path.startsWith("/api/github/"))return null;
  if(path==="/api/github/status"){
   const setup=configured(env);
   const sess=setup?await sessionFor(request,env,clock):null;
