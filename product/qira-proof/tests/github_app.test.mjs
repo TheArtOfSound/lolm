@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {webcrypto} from "node:crypto";
 import {handleGitHubApp} from "../github_app.mjs";
+import {verifyProof,proof} from "../core.mjs";
 if(!globalThis.crypto)globalThis.crypto=webcrypto;
 
 const origin="https://qira.example";
@@ -135,6 +136,39 @@ test("Selected workflow content is fetched only after the installation and repo 
  assert.ok(!JSON.stringify(out).includes("ssh-keyscan"));
  assert.ok(visited.every(v=>v.method==="GET"&&v.url.startsWith("https://api.github.com/")));
 });
+test("real GitHub App assessment provides integrity-verifiable, scope-specific source lines",async()=>{
+ const sessionInfo=await session();
+ const custom=async(input,options={})=>{
+  const url=String(input);
+  if(url.includes("/repos/TheArtOfSound/lolm/contents/")&&!url.includes("contents/.github/workflows?")){
+   const source=[
+    "name: Release","on: workflow_dispatch",
+    "permissions:","  contents: read","  issues: write",
+    "  id-token: write","jobs:","  release:","    steps:","      - uses: actions/checkout@v4"
+   ].join("\n");
+   return Response.json({encoding:"base64",content:Buffer.from(source).toString("base64")});
+  }
+  return mockFetch(input,options);
+ };
+ const response=await scoped(sessionInfo,"/api/github/assessment",{
+  installation_id:123,repo:"TheArtOfSound/lolm",workflow:"__all__"
+ },{fetcher:custom});
+ assert.equal(response.status,200);
+ const data=await response.json();
+ assert.equal(data.coverage.assessed,2);
+ assert.equal(data.snapshot.permission_inventory.length,2);
+ for(const entry of data.snapshot.permission_inventory){
+  assert.deepEqual(entry.scopes.map(x=>x.scope),["id-token","issues"]);
+  assert.ok(entry.scopes[0].source_url.endsWith("#L6"));
+  assert.ok(entry.scopes[1].source_url.endsWith("#L5"));
+ }
+ const receipt=await proof(data.snapshot);
+ assert.equal(await verifyProof(receipt),true);
+ assert.equal(receipt.schema,"qira-proof/evidence-v3");
+ assert.ok(!JSON.stringify(data).includes(tok));
+ assert.ok(!JSON.stringify(data).includes("issues: write"));
+});
+
 test("Malformed paths and unauthorized repositories are rejected",async()=>{
  const s=await session();
  for(const selection of [
