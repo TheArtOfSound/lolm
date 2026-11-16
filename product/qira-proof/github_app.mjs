@@ -26,6 +26,14 @@ const RESP_HEADERS={
 };
 const json=(value,status=200,extra={})=>new Response(JSON.stringify(value),{status,headers:{...RESP_HEADERS,"content-type":"application/json; charset=utf-8",...extra}});
 const fail=(reason,status)=>json({error:reason},status);
+const OAUTH_REASONS = new Set(["authorization_denied","state_missing","state_expired","state_mismatch","code_missing","client_credentials","callback_mismatch","token_expiration_disabled","token_invalid","provider_unavailable","session_unavailable"]);
+class OAuthFailure extends Error {
+ constructor(reason){super("OAuth failed");this.reason=OAUTH_REASONS.has(reason)?reason:"provider_unavailable";}
+}
+const oauthError=reason=>new OAuthFailure(reason);
+const oauthFailureRedirect=(env,reason)=>responseRedirect(publicOrigin(env)+"/?github=failed&reason="+
+ encodeURIComponent(OAUTH_REASONS.has(reason)?reason:"provider_unavailable"),[clearCookie(COOKIE_PENDING)]);
+
 const urlSafe=(s)=>typeof s==="string"&&/^[a-zA-Z0-9_-]+$/.test(s);
 const repoSafe=(s)=>typeof s==="string"&&/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/.test(s)&&!s.includes("..");
 const workflowSafe=(s)=>typeof s==="string"&&/^\.github\/workflows\/[A-Za-z0-9_.-]{1,125}\.ya?ml$/.test(s)&&!s.includes("..");
@@ -194,19 +202,29 @@ async function exchangeToken(env,code,verifier,fetcher){
   client_id:env.GITHUB_APP_CLIENT_ID,client_secret:env.GITHUB_APP_CLIENT_SECRET,
   code,redirect_uri:publicOrigin(env)+"/oauth/github/callback",code_verifier:verifier
  });
- const response=await fetcher("https://github.com/login/oauth/access_token",{
+ let response;
+ try {response=await fetcher("https://github.com/login/oauth/access_token",{
   method:"POST",redirect:"error",headers:{"accept":"application/json",
     "content-type":"application/x-www-form-urlencoded","user-agent":"qira-proof-readonly-pilot"},
   body:body.toString()
- });
- if(!response.ok)throw Error("GitHub OAuth exchange failed");
- const raw=await response.text();
- if(raw.length>5000)throw Error("OAuth response budget exceeded");
- const parsed=JSON.parse(raw);
- if(parsed.error||typeof parsed.access_token!=="string"||parsed.access_token.length<20||
- parsed.token_type?.toLowerCase()!=="bearer"||
+ });}catch{throw oauthError("provider_unavailable");}
+ if(!response.ok)throw oauthError("provider_unavailable");
+ let parsed;
+ try {
+  const raw=await response.text();
+  if(raw.length>5000)throw Error("Over budget");
+  parsed=JSON.parse(raw);
+ }catch{throw oauthError("token_invalid");}
+ if(parsed?.error) {
+  const reason=parsed.error==="incorrect_client_credentials"?"client_credentials":
+   parsed.error==="redirect_uri_mismatch"?"callback_mismatch":"provider_unavailable";
+  throw oauthError(reason);
+ }
+ if(parsed?.expires_in===undefined)throw oauthError("token_expiration_disabled");
+ if(typeof parsed.access_token!=="string"||parsed.access_token.length<20||
+ typeof parsed.token_type!=="string"||parsed.token_type.toLowerCase()!=="bearer"||
  !Number.isInteger(parsed.expires_in)||parsed.expires_in<120||parsed.expires_in>28800)
-  throw Error("GitHub did not return a valid, expiring access token");
+  throw oauthError("token_invalid");
  return {token:parsed.access_token,ttl:Math.min(SESSION_TTL_MS,parsed.expires_in*1000)};
 }
 function cspGet(request){return ["GET","HEAD"].includes(request.method)}
@@ -237,16 +255,21 @@ export async function handleGitHubApp(request,env={}, {fetcher=fetch,clock=now}=
  if(path==="/oauth/github/callback"&&cspGet(request)){
   const state=url.searchParams.get("state"),code=url.searchParams.get("code");
   const pending=await openSealed(env,"pending",cookies(request)[COOKIE_PENDING]);
-  if(url.searchParams.has("error")||!pending||pending.v!==1||pending.exp<=clock()||
-     pending.exp>clock()+STATE_TTL_MS||!same(state,pending.nonce)||!urlSafe(code)||code.length>256)
-    return responseRedirect(publicOrigin(env)+"/?github=failed",[clearCookie(COOKIE_PENDING)]);
+  if(url.searchParams.has("error"))return oauthFailureRedirect(env,"authorization_denied");
+  if(!pending||pending.v!==1)return oauthFailureRedirect(env,"state_missing");
+  if(pending.exp<=clock()||pending.exp>clock()+STATE_TTL_MS)
+   return oauthFailureRedirect(env,"state_expired");
+  if(!same(state,pending.nonce))return oauthFailureRedirect(env,"state_mismatch");
+  if(!urlSafe(code)||code.length>256)return oauthFailureRedirect(env,"code_missing");
+  let token;
+  try{token=await exchangeToken(env,code,pending.verifier,fetcher)}
+  catch(error){return oauthFailureRedirect(env,error instanceof OAuthFailure?error.reason:"provider_unavailable")}
   try{
-   const token=await exchangeToken(env,code,pending.verifier,fetcher);
    const session=await seal(env,"session",{v:1,token:token.token,exp:clock()+token.ttl,csrf:random(24)});
    if(session.length>3600)throw Error("session over cookie bound");
    return responseRedirect(publicOrigin(env)+"/?github=connected",
       [clearCookie(COOKIE_PENDING),cookie(COOKIE_SESSION,session,Math.floor(token.ttl/1000))]);
-  }catch{return responseRedirect(publicOrigin(env)+"/?github=failed",[clearCookie(COOKIE_PENDING)])}
+  }catch{return oauthFailureRedirect(env,"session_unavailable")}
  }
  if(path==="/api/github/disconnect"){
   if(request.method!=="POST")return fail("Method not allowed",405);
