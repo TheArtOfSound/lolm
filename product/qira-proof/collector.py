@@ -103,7 +103,12 @@ def github_facts(repo,workflow,token,reader=fetch_json,when=None):
     if not isinstance(default_branch,str) or not 1 <= len(default_branch) <= 128 or not re.fullmatch(r"[A-Za-z0-9_./-]+",default_branch) or ".." in default_branch:
         raise ProviderError("GitHub default branch could not be verified")
     branch_encoded=quote(default_branch,safe="")
-    snapshot=reader(base+"/contents/"+encoded+"?ref="+branch_encoded,token,"github")
+    revision=reader(base+"/commits/"+branch_encoded,token,"github")
+    sha=revision.get("sha") if isinstance(revision,dict) else None
+    if not isinstance(sha,str) or not re.fullmatch(r"[a-fA-F0-9]{40}",sha):
+        raise ProviderError("GitHub workflow commit could not be verified")
+    sha=sha.lower()
+    snapshot=reader(base+"/contents/"+encoded+"?ref="+sha,token,"github")
     if snapshot.get("encoding")!="base64" or not isinstance(snapshot.get("content"),str):
         raise ProviderError("workflow not available as bounded base64 content")
     text=base64.b64decode(snapshot["content"],validate=False)
@@ -118,7 +123,7 @@ def github_facts(repo,workflow,token,reader=fetch_json,when=None):
     unpinned=any((match:=action_ref.fullmatch(line)) is not None and
                  re.fullmatch(r"[a-fA-F0-9]{40}",match.group(2)) is None
                  for line in active_lines)
-    source=f"https://github.com/{repo}/blob/{branch_encoded}/{workflow}"
+    source=f"https://github.com/{repo}/blob/{sha}/{workflow}"
     facts=[fact("github",repo,"runtime_ssh_keyscan",has_scan,source,when),
            fact("github",repo,"workflow_unpinned_actions",unpinned,source,when)]
     if has_scan:
