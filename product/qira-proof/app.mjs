@@ -1,4 +1,4 @@
-import {SCHEMA,normalizeSnapshot,mergeSnapshots,analyzeSnapshot,compareSnapshots,proof,verifyProof,groupReviewFindings}
+import {SCHEMA,normalizeSnapshot,mergeSnapshots,analyzeSnapshot,compareSnapshots,proof,verifyProof,groupReviewFindings,workflowTriage}
 from "./core.mjs";
 import {renderHumanReport} from "./report.mjs";
 
@@ -87,6 +87,31 @@ function render(){
   (state.mode==="composed"?"Combined provider snapshot":state.mode==="connected"?"Connected GitHub workflow":"Private local snapshot")+" · "+report.facts+" facts · "+state.before.captured_at;
  el("followupState").textContent=state.after?"Loaded":"Empty";
  el("followupName").textContent=state.after?"Follow-up · "+state.after.captured_at:"No later snapshot selected";
+ const triageSection=el("workflowTriage");
+ const triageBox=el("workflowTriageGroups");clear(triageBox);
+ const triage=showing&&state.before.coverage?workflowTriage(state.before):[];
+ triageSection.hidden=!triage.length;
+ triage.forEach((group,index)=>{
+  const card=node("details","finding");
+  card.open=index===0;
+  const header=node("summary","finding-head"),label=node("div");
+  label.appendChild(node("div","finding-title",group.workflows.length+" workflows: "+group.label));
+  label.appendChild(node("div","finding-meta",
+   group.indicator_count+" overlapping observed indicator(s) · triage grouping, not a severity score"));
+  header.appendChild(label);
+  card.appendChild(header);
+  const body=node("div","finding-body");
+  body.appendChild(node("p","",
+   "Prioritize examining source context and effective permissions; these observations alone do not establish exploitability."));
+  const links=node("div","evidence");
+  group.workflows.forEach(item=>{
+   const a=node("a","",item.workflow+(item.unknown_count?" · incomplete evidence":""));
+   a.href=item.source_url;a.rel="noopener noreferrer";a.target="_blank";
+   a.title="Open workflow configuration evidence at the reviewed commit";
+   links.appendChild(a);
+  });
+  body.appendChild(links);card.appendChild(body);triageBox.appendChild(card);
+ });
  const findings=el("findings");clear(findings);
  if(!report.findings.length){findings.appendChild(node("div","empty","No configured rule matched these facts. This is not a clean bill of health."));}
  const visibleFindings=state.mode==="connected"&&state.before.coverage?
