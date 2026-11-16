@@ -268,6 +268,61 @@ export function analyzeSnapshot(input){
 }
 // Pure presentation-only grouping. Raw per-workflow findings remain in the
 // signed-by-hash receipt; no finding is silently merged away.
+// Workflow triage is a presentation of overlapping source observations, never
+// an exploitability score or a change to a signed evidence receipt.
+export function workflowTriage(input){
+ const snapshot=normalizeSnapshot(input);
+ if(!snapshot.coverage)return [];
+ const assets=new Map();
+ for(const fact of snapshot.facts){
+  if(fact.provider!=="github"||
+     !fact.asset.startsWith(snapshot.coverage.repository+":.github/workflows/"))
+   continue;
+  if(!["workflow_unpinned_actions","runtime_ssh_keyscan",
+       "workflow_token_write_permission"].includes(fact.signal))continue;
+  let entry=assets.get(fact.asset);
+  if(!entry){
+   entry={asset:fact.asset,name:fact.asset.slice(snapshot.coverage.repository.length+1+
+      ".github/workflows/".length),flags:{},source_url:fact.source_url};
+   assets.set(fact.asset,entry);
+  }
+  entry.flags[fact.signal]=fact.value;
+  if(fact.signal==="workflow_unpinned_actions")entry.source_url=fact.source_url;
+ }
+ const order=["write","mutable","ssh"];
+ const labels={write:"write-level permissions",mutable:"mutable action refs",ssh:"SSH host discovery"};
+ const output=[];
+ for(const value of assets.values()){
+  const state={
+   write:value.flags.workflow_token_write_permission,
+   mutable:value.flags.workflow_unpinned_actions,
+   ssh:value.flags.runtime_ssh_keyscan
+  };
+  const positive=order.filter(k=>state[k]===true);
+  const unverified=order.filter(k=>state[k]===undefined||state[k]==="unknown");
+  // Never label a workflow as having none of these conditions unless all
+  // three signals were actually observed and explicitly false.
+  const type=positive.length?positive.join("+"):
+    unverified.length?"incomplete":"none";
+  const name=positive.length?positive.map(k=>labels[k]).join(" + "):
+    unverified.length?"Insufficient evidence":"No matched triage conditions";
+  const item={asset:value.asset,workflow:value.name,source_url:value.source_url,
+   category:type,label:name,indicator_count:positive.length,
+   unknown_count:unverified.length};
+  let group=output.find(x=>x.category===type);
+  if(!group){
+   group={category:type,label:name,indicator_count:positive.length,
+    workflows:[]};
+   output.push(group);
+  }
+  group.workflows.push(item);
+ }
+ for(const group of output)group.workflows.sort((a,b)=>a.workflow.localeCompare(b.workflow));
+ output.sort((a,b)=>b.indicator_count-a.indicator_count||
+   (a.category==="incomplete"?-1:b.category==="incomplete"?1:0)||
+   a.category.localeCompare(b.category));
+ return output;
+}
 export function groupReviewFindings(findings){
  if(!Array.isArray(findings))throw Error("Invalid report findings");
  const groups=new Map();
