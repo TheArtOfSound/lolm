@@ -67,6 +67,19 @@ export function normalizeSnapshot(raw){
  return {schema:SCHEMA,captured_at:raw.captured_at,facts:facts.sort((a,b)=>
   (a.provider+"|"+a.asset+"|"+a.signal).localeCompare(b.provider+"|"+b.asset+"|"+b.signal))};
 }
+export function mergeSnapshots(...inputs){
+ // Explicitly combine separately authorized browser-local evidence.
+ // Reject stale joins; no implication that one provider corroborates another.
+ if(inputs.length<1||inputs.length>6)throw Error("Combine one to six snapshots at once");
+ const sources=inputs.map(normalizeSnapshot);
+ const stamps=sources.map(x=>Date.parse(x.captured_at));
+ const earliest=Math.min(...stamps),latest=Math.max(...stamps);
+ if(latest-earliest>24*60*60*1000)
+  throw Error("Source snapshots were captured more than 24 hours apart; recapture before combining");
+ const all=sources.flatMap(x=>x.facts);
+ if(all.length>MAX_FACTS)throw Error("Combined snapshot exceeds evidence fact limit");
+ return normalizeSnapshot({schema:SCHEMA,captured_at:new Date(latest).toISOString(),facts:all});
+}
 function factsMap(snapshot){
  const out=new Map();
  for(const f of snapshot.facts){
