@@ -50,6 +50,63 @@ demonstrate high finding precision, build reliable evidence provenance,
 customer support and security review, then secure at least two
 independently evaluated design partners willing to pay for the outcome.
 
+## Provider coverage and real connection status (November 15, 2026)
+
+| Provider | Live customer OAuth | Local metadata collection | Review capability |
+|---|---|---|---|
+| GitHub | Isolated pilot, requires real owner authorization test | Yes, read-only selected workflow | SSH trust / unknown branch protection |
+| Cloudflare | Not yet: application registration and scoped consent required | Yes, read-only selected Worker | Preview URL + privileged binding review |
+| Vercel | Not yet: application registration and scoped consent required | **New:** read-only selected project and deployments | Preview protection review / latest production deployment error |
+
+Do not market local token-based collection as one-click OAuth, claim live
+cross-provider account linking, or promise full account security coverage.
+Only the GitHub App pilot submits selected configuration *metadata*
+transiently through the Qira Worker. **All local collector tokens remain in
+the operator's own environment**; the resulting JSON is imported, combined,
+analyzed and exported in the browser.
+
+### Fast start for Vercel
+
+First clone this repository or download `product/qira-proof/collector.py`
+in a location where you can run Python 3.10+. Configure a Vercel access token
+with only the read privileges needed for the project in your local terminal
+environment. For team projects, specify the proper team ID:
+
+~~~powershell
+$env:VERCEL_TOKEN = "SET_LOCALLY_WITHOUT_SHARING"
+$env:VERCEL_TEAM_ID = "team_YOUR_TEAM_ID"
+python product/qira-proof/collector.py --vercel-project "YOUR_PROJECT" --out .\qira-vercel.json
+~~~
+
+The collector calls only Vercel's GET project/deployment metadata endpoints.
+It reads project-level Vercel Authentication, password and trusted-IP
+`enabled` flags, and bounded recent preview/production deployment states.
+It never requests environment variable values, source files, logs,
+deployments' sensitive metadata, or secret values. It emits only three
+boolean-or-unknown facts per project, with no token or team identifier in
+the local snapshot.
+
+The available checks **do not** establish that preview URLs are reachable,
+that all relevant protections are represented by those flags, or that a
+failed deployment caused downtime.
+
+### Combine provider evidence
+
+Generate all three providers in one read-only command by setting the
+appropriate local environment variables first:
+
+~~~powershell
+python product/qira-proof/collector.py --github-workflow "OWNER/REPO:.github/workflows/deploy.yml" --cloudflare-worker "YOUR_WORKER" --vercel-project "YOUR_PROJECT" --out .\qira-combined.json
+~~~
+
+Alternatively, start with one snapshot and choose
+**Add another provider's evidence to this review** inside the local-file
+section of the Qira app. This is browser-only and requires snapshots
+collected within 24 hours, with no duplicated provider/asset/signal facts.
+It does not link unrelated assets automatically: an asset's relationship
+across clouds requires additional trusted mapping evidence, not a name guess.
+The UI offers provider-specific commands and never accepts provider tokens.
+
 ## Collect an authorized snapshot of your infrastructure
 
 Requirements: Python 3.10+, a GitHub fine-grained token with metadata and contents READ for the selected repository, and a Cloudflare API token with Workers Scripts READ for the selected account.
@@ -89,7 +146,7 @@ The product cannot claim a fix succeeded because a flag disappeared. A follow-up
 - build.mjs: reproducible standalone Cloudflare Worker.
 - tests/: Node and Python regression checks.
 
-The Worker serves static HTML/JavaScript through GET/HEAD only, with connect-src 'none' in CSP. No OAuth, paid billing, accounts, or persistence is present.
+The Worker serves static HTML/JavaScript and a narrowly scoped GitHub App OAuth pilot. It permits authenticated, CSRF-protected GitHub metadata POST selectors, but no arbitrary uploads or provider-token intake. There is no customer SaaS billing, subscription, or application database. GitHub live owner-authorization success has not been established.
 
 ## Commercial readiness gates
 
