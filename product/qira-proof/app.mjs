@@ -1,4 +1,4 @@
-import {SCHEMA,normalizeSnapshot,analyzeSnapshot,compareSnapshots,proof,verifyProof}
+import {SCHEMA,normalizeSnapshot,mergeSnapshots,analyzeSnapshot,compareSnapshots,proof,verifyProof}
 from "./core.mjs";
 
 const DEMO_DATE="2026-11-15T19:00:00Z";
@@ -54,7 +54,7 @@ function render(){
  el("factsCount").textContent=report.facts;
  el("baselineState").textContent=state.mode==="demo"?"Sample":"Loaded";
  el("baselineName").textContent=state.mode==="demo"?"Fictional demo · "+report.facts+" facts":
-  "Private local snapshot · "+report.facts+" facts · "+state.before.captured_at;
+  (state.mode==="composed"?"Combined provider snapshot":"Private local snapshot")+" · "+report.facts+" facts · "+state.before.captured_at;
  el("followupState").textContent=state.after?"Loaded":"Empty";
  el("followupName").textContent=state.after?"Follow-up · "+state.after.captured_at:"No later snapshot selected";
  const findings=el("findings");clear(findings);
@@ -101,6 +101,7 @@ function render(){
  status(state.mode==="idle"?"No assessment yet. Connect GitHub or explore the example to begin.":
  state.mode==="demo"?"DEMONSTRATION: fictional source data. Import authorized evidence to run a real configuration review.":
  state.mode==="connected"?"GITHUB APP: selected read-only metadata was retrieved transiently through this Worker's server. Analysis occurs in your browser; source origin is not independently attested.":
+ state.mode==="composed"?"MULTI-SOURCE: separate read-only evidence was combined locally. The source links are declarations, not authenticated attestations.":
  "PRIVATE LOCAL ANALYSIS: imported files remain in this browser. Source identity and authorization are not cryptographically attested.");
 }
 async function readSnapshot(file){
@@ -108,6 +109,49 @@ async function readSnapshot(file){
  const input=JSON.parse(await file.text());
  return normalizeSnapshot(input);
 }
+const LOCAL_COLLECTOR="python product/qira-proof/collector.py";
+const PROVIDER_GUIDES={
+ github:["# Set GITHUB_TOKEN locally to a read-only token for your chosen repository.",
+  LOCAL_COLLECTOR+' --github-workflow "OWNER/REPO:.github/workflows/deploy.yml" --out qira-baseline.json'],
+ cloudflare:["# Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID locally; allow Workers Scripts read only.",
+  LOCAL_COLLECTOR+" --cloudflare-worker YOUR_WORKER --out qira-baseline.json"],
+ vercel:["# Set VERCEL_TOKEN locally; for team resources, also set VERCEL_TEAM_ID.",
+  LOCAL_COLLECTOR+" --vercel-project YOUR_PROJECT --out qira-baseline.json"],
+ combined:["# Set relevant provider tokens locally; this browser never receives them.",
+  LOCAL_COLLECTOR+' --github-workflow "OWNER/REPO:.github/workflows/deploy.yml" --cloudflare-worker YOUR_WORKER --vercel-project YOUR_PROJECT --out qira-baseline.json']
+};
+function renderProviderGuide(){
+ const choice=el("providerGuide").value;
+ const lines=PROVIDER_GUIDES[choice]||PROVIDER_GUIDES.github;
+ el("providerCommand").textContent=lines.join("\n");
+ el("providerCommandStatus").textContent="Replace example resource names with resources you control. Run locally, then import the JSON.";
+}
+el("providerGuide").addEventListener("change",renderProviderGuide);
+el("copyProviderCommand").addEventListener("click",async()=>{
+ try{
+  if(!navigator.clipboard?.writeText)throw Error("clipboard unsupported");
+  await navigator.clipboard.writeText(el("providerCommand").textContent);
+  el("providerCommandStatus").textContent="Copied. Confirm the resource scope and token permissions before running locally.";
+ }catch{
+  el("providerCommandStatus").textContent="Clipboard unavailable; select and copy the displayed command instead.";
+ }
+});
+renderProviderGuide();
+el("augmentInput").addEventListener("change",async e=>{
+ const file=e.target.files?.[0];
+ if(!file)return;
+ try{
+  if(state.mode==="idle"||state.mode==="demo")
+   throw Error("Start with real authorized evidence; fictional examples cannot be combined");
+  const additional=await readSnapshot(file);
+  state.before=mergeSnapshots(state.before,additional);
+  state.after=null;
+  state.mode="composed";
+  render();
+  buttonTab("assessment");
+ }catch(error){status("Additional evidence was rejected: "+error.message,true)}
+ e.target.value="";
+});
 el("baselineInput").addEventListener("change",async e=>{
  const file=e.target.files?.[0];
  if(!file)return;
