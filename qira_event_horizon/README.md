@@ -37,6 +37,29 @@ scoring an attack in isolation, it asks:
 modeled controls. No user should infer real detection accuracy or promised
 prevention from these illustrations.
 
+### Decision sensitivity certificate (research-only)
+
+The API also returns `robustness.decisionCertificate`. After selecting a
+minimax-regret policy across six fictional assumption worlds, the engine:
+
+1. Enumerates all 32 control portfolios with each of the six worlds omitted
+   in turn and **recomputes** the best per-world comparator; it does not reuse
+   the six-world regret values.
+2. Reports all tied minimax portfolios, not just a convenient winner chosen
+   by a deterministic tie-break.
+3. Tests whether the displayed full-world portfolio remains a minimax winner
+   for every single-world omission.
+4. Returns `abstain_from_unique_policy_claim` if multiple full-world
+   portfolios tie or any omission displaces the displayed candidate.
+
+A stable result means only that one candidate survives these six
+leave-one-assumption-world-out calculations. It is **not** statistical
+cross-validation, causal identification, an empirical risk estimate, or proof
+that a control works in production. No additional real data is processed.
+
+Independent re-enumeration tests:
+`qira_event_horizon/decision_sensitivity.test.mjs`.
+
 ### Local test commands
 
 Requires Node.js 22+; no npm packages.
