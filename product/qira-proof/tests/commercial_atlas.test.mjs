@@ -65,9 +65,9 @@ test("synthetic evidence demonstration remains available and explicitly marked i
 test("post-purchase intake remains manual and public lookup privacy is disclosed",async()=>{
  const intake=await (await page("/start-review")).text();
  assert.match(intake,/intake-head/);
- assert.match(intake,/VERIFY WITH QIRA/);
+ assert.match(intake,/MANUAL VERIFICATION/);
  assert.match(intake,/does not verify payment or grant an entitlement/);
- assert.match(intake,/Email your receipt reference/);
+ assert.match(intake,/Compose email to Qira/);
  const privacy=await (await page("/privacy")).text();
  assert.match(privacy,/stored only in this browser tab's session storage/);
  assert.match(privacy,/does not use analytics scripts or tracking cookies/);
