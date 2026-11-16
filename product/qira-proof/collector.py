@@ -112,8 +112,15 @@ def github_facts(repo,workflow,token,reader=fetch_json,when=None):
     text=text.decode("utf-8")
     active_lines=[x for x in text.splitlines() if not x.lstrip().startswith("#")]
     has_scan=any(re.search(r"(?<![A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)",line) for line in active_lines)
+    # Review-only syntactic test. Only GitHub owner/repo@ref forms; local
+    # composite actions and Docker images need separate checks.
+    action_ref=re.compile(r"^\s*(?:-\s*)?uses:\s*['\"]?([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_./-]+)?)@([A-Za-z0-9_.-]{1,128})['\"]?(?:\s*(?:#.*)?)?$")
+    unpinned=any((match:=action_ref.fullmatch(line)) is not None and
+                 re.fullmatch(r"[a-fA-F0-9]{40}",match.group(2)) is None
+                 for line in active_lines)
     source=f"https://github.com/{repo}/blob/{branch_encoded}/{workflow}"
-    facts=[fact("github",repo,"runtime_ssh_keyscan",has_scan,source,when)]
+    facts=[fact("github",repo,"runtime_ssh_keyscan",has_scan,source,when),
+           fact("github",repo,"workflow_unpinned_actions",unpinned,source,when)]
     if has_scan:
         # Proving SSH host-key pinning requires authoritative key material and
         # a trusted out-of-band comparison, NOT a string search.
