@@ -73,3 +73,16 @@ test("commercial worker has no auth cookies or client-side data transmission",as
  assert.doesNotMatch(html,/<form\b/);
  assert.doesNotMatch(html,/<script src=/);
 });
+
+test("post-payment handoff is available without claiming the URL proves a payment",async()=>{
+ const response=await worker.fetch(request("/start-review"));
+ assert.equal(response.status,200);
+ const html=await response.text();
+ assert.match(html,/Start your Qira Proof review/);
+ assert.match(html,/does not verify payment or grant an entitlement/);
+ assert.match(html,/Trend Stripe/);
+ assert.match(html,/Never email passwords/);
+ assert.match(html,/up to 20 GitHub Actions workflow files/);
+ assert.match(html,/mailto:bryanleonard@imagineqira.com/);
+ assert.doesNotMatch(html,/session_id=/);
+});
