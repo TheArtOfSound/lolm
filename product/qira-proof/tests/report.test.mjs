@@ -37,7 +37,7 @@ test("fictional samples are prominently labeled as fictional",async()=>{
 test("tampered or incomplete receipts cannot produce a printable report",async()=>{
  const p=await proof(snapshot());
  const modified=structuredClone(p);
- modified.baseline.facts[0].value=false;
+ modified.baseline.facts[0].value="unknown"; // Always changes the fixture's original boolean
  await assert.rejects(renderHumanReport(modified),/verification/);
  await assert.rejects(renderHumanReport({}),/verification/);
 });
