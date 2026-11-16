@@ -193,6 +193,7 @@ async function githubConnectionStatus(){
   if(current.install_url)el("gitInstall").href=current.install_url;
   el("gitPicker").hidden=!current.connected;
   el("gitBadge").textContent=!current.configured?"Pending setup":current.connected?"Connected":"Ready";
+  document.body.dataset.githubConnection=!current.configured?"pending-setup":current.connected?"connected":"ready";
   el("gitStatus").textContent=!current.configured?
    "GitHub App registration and secure credentials are not configured yet. Manual JSON analysis remains available.":
    current.connected?"Authorized GitHub connection. Temporary session; selected metadata is processed without server storage.":
@@ -200,6 +201,7 @@ async function githubConnectionStatus(){
   if(current.connected)await loadGithubInstallations();
  }catch(error){
   el("gitBadge").textContent="Unavailable";
+  document.body.dataset.githubConnection="error";
   el("gitStatus").textContent="Could not check GitHub connection availability.";
   gitMessage(error.message,true);
  }
