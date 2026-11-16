@@ -92,7 +92,8 @@ function render(){
   deltaBox.appendChild(node("div","note",comparison.conclusion));
  }
  status(state.mode==="demo"?"DEMONSTRATION: fictional source data. Import authorized evidence to run a real configuration review.":
- "PRIVATE LOCAL ANALYSIS: data remains in this browser. Source identity and authorization are not cryptographically attested.");
+ state.mode==="connected"?"GITHUB APP: selected read-only metadata was retrieved transiently through this Worker's server. Analysis occurs in your browser; source origin is not independently attested.":
+ "PRIVATE LOCAL ANALYSIS: imported files remain in this browser. Source identity and authorization are not cryptographically attested.");
 }
 async function readSnapshot(file){
  if(!file||file.size>512_000)throw Error("Choose a JSON snapshot smaller than 500 KB");
@@ -102,7 +103,115 @@ async function readSnapshot(file){
 el("baselineInput").addEventListener("change",async e=>{
  const file=e.target.files?.[0];
  if(!file)return;
- try{state.before=await readSnapshot(file);state.after=null;state.mode="private";render();buttonTab("assessment");}
+ try{state.before=await readSnapshot(file);state.after=null;state.mode="private";const git={connected:false,csrf:null};
+function gitMessage(value,isError=false){
+ const out=el("gitMessage");out.textContent=value;out.style.color=isError?"#f2b1aa":"";
+}
+async function githubApi(path,options={}){
+ const response=await fetch(path,{credentials:"same-origin",cache:"no-store",...options});
+ if(!response.ok)throw Error(response.status===401?"GitHub connection expired. Connect again.":
+  response.status===403?"Your GitHub App authorization does not permit this resource.":
+  "GitHub read-only metadata could not be retrieved (HTTP "+response.status+").");
+ return response.json();
+}
+function selectOptions(id,items,label,value,placeholder){
+ const control=el(id);
+ control.replaceChildren();
+ control.appendChild(new Option(placeholder,""));
+ for(const item of items)control.appendChild(new Option(label(item),value(item)));
+ control.disabled=items.length===0;
+ control.value="";
+}
+async function loadGithubInstallations(){
+ const payload=await githubApi("/api/github/installations");
+ selectOptions("gitInstallation",payload.items,x=>x.account+" · "+x.selection,x=>String(x.id),"Choose installation");
+ selectOptions("gitRepository",[],x=>x.name,x=>x.name,"Choose repository");
+ selectOptions("gitWorkflow",[],x=>x.path,x=>x.path,"Choose workflow");
+ el("gitAssess").disabled=true;
+ gitMessage(payload.items.length?"Choose an installation, then a repository and workflow.":
+ "No authorized installations found. Install the read-only GitHub App, then reconnect.");
+ if(payload.truncated)gitMessage("More than 50 installations found; this pilot lists the first 50.");
+}
+async function githubConnectionStatus(){
+ try{
+  const current=await githubApi("/api/github/status");
+  git.connected=current.connected;
+  git.csrf=current.csrf;
+  el("gitConnect").hidden=!current.configured||current.connected;
+  el("gitDisconnect").hidden=!current.connected;
+  el("gitInstall").hidden=!current.install_url;
+  if(current.install_url)el("gitInstall").href=current.install_url;
+  el("gitPicker").hidden=!current.connected;
+  el("gitBadge").textContent=!current.configured?"Pending setup":current.connected?"Connected":"Ready";
+  el("gitStatus").textContent=!current.configured?
+   "GitHub App registration and secure credentials are not configured yet. Manual JSON analysis remains available.":
+   current.connected?"Authorized GitHub connection. Temporary session; selected metadata is processed without server storage.":
+   "Authorize our read-only GitHub App to select a repository and its workflow.";
+  if(current.connected)await loadGithubInstallations();
+ }catch(error){
+  el("gitBadge").textContent="Unavailable";
+  el("gitStatus").textContent="Could not check GitHub connection availability.";
+  gitMessage(error.message,true);
+ }
+}
+el("gitInstallation").addEventListener("change",async event=>{
+ const id=event.target.value;
+ selectOptions("gitRepository",[],x=>x.name,x=>x.name,"Choose repository");
+ selectOptions("gitWorkflow",[],x=>x.path,x=>x.path,"Choose workflow");
+ el("gitAssess").disabled=true;
+ if(!id)return;
+ gitMessage("Loading authorized repositories…");
+ try{
+  const result=await githubApi("/api/github/repos?installation_id="+encodeURIComponent(id));
+  selectOptions("gitRepository",result.repos,x=>x.name,x=>x.name,"Choose repository");
+  gitMessage(result.truncated?"Only the first 100 repositories are listed in this pilot.":
+   "Select a repository to load authorized workflows.");
+ }catch(error){gitMessage(error.message,true)}
+});
+el("gitRepository").addEventListener("change",async event=>{
+ const id=el("gitInstallation").value,repo=event.target.value;
+ selectOptions("gitWorkflow",[],x=>x.path,x=>x.path,"Choose workflow");
+ el("gitAssess").disabled=true;
+ if(!id||!repo)return;
+ gitMessage("Loading authorized workflow names…");
+ try{
+  const result=await githubApi("/api/github/workflows?installation_id="+encodeURIComponent(id)+
+   "&repo="+encodeURIComponent(repo));
+  selectOptions("gitWorkflow",result.workflows,x=>x.path,x=>x.path,"Choose workflow");
+  gitMessage(result.workflows.length?"Choose a workflow and run the read-only assessment.":
+   "No supported workflow files were accessible.");
+ }catch(error){gitMessage(error.message,true)}
+});
+el("gitWorkflow").addEventListener("change",event=>{
+ el("gitAssess").disabled=!event.target.value;
+});
+el("gitAssess").addEventListener("click",async()=>{
+ const id=el("gitInstallation").value,repo=el("gitRepository").value,workflow=el("gitWorkflow").value;
+ if(!id||!repo||!workflow)return;
+ el("gitAssess").disabled=true;gitMessage("Retrieving authorized configuration evidence…");
+ try{
+  const data=await githubApi("/api/github/assessment?installation_id="+encodeURIComponent(id)+
+   "&repo="+encodeURIComponent(repo)+"&workflow="+encodeURIComponent(workflow));
+  state.before=normalizeSnapshot(data.snapshot);
+  state.after=null;state.mode="connected";
+  render();buttonTab("assessment");
+  gitMessage("Read-only GitHub assessment loaded. No provider credentials were returned to this page.");
+ }catch(error){gitMessage(error.message,true)}
+ finally{el("gitAssess").disabled=false}
+});
+el("gitDisconnect").addEventListener("click",async()=>{
+ if(!git.csrf)return;
+ try{
+  await githubApi("/api/github/disconnect",{method:"POST",headers:{"content-type":"application/json","x-qira-csrf":git.csrf},body:"{}"});
+  state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="demo";
+  render();buttonTab("assessment");gitMessage("Local session cleared. GitHub authorization must be revoked separately in GitHub if desired.");
+  await githubConnectionStatus();
+ }catch(error){gitMessage(error.message,true)}
+});
+const githubResult=new URL(location.href).searchParams.get("github");
+if(githubResult==="failed")gitMessage("GitHub authorization could not be completed. Check App permissions and try again.",true);
+if(githubResult){const cleaned=new URL(location.href);cleaned.searchParams.delete("github");history.replaceState(null,"",cleaned.pathname+cleaned.search+cleaned.hash);}
+render();buttonTab("assessment");githubConnectionStatus();}
  catch(error){status("Baseline was rejected: "+error.message,true)}
  e.target.value="";
 });
