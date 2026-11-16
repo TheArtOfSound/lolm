@@ -242,6 +242,11 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
        <p class="mini">These are positive declarations in the reviewed workflow files—not independently verified effective permissions, organization policy, or proof that the workflows are secure.</p>
        <div id="positiveControls" class="cards"></div>
       </section>
+      <section id="writeAccessSection" hidden aria-labelledby="writeAccessTitle" style="margin-top:27px">
+       <h3 id="writeAccessTitle" class="section-label">Write-level permission inventory</h3>
+       <p class="mini">These workflow files declare at least one write-level GitHub Actions permission. This is an authorization inventory, not an additional vulnerability finding. Some write permissions, including <code>id-token: write</code>, are intentionally used for OIDC publishing.</p>
+       <div id="writeAccessInventory" class="cards"></div>
+      </section>
       </div>
      </section>
      <section id="recheck" class="tabcontent" role="tabpanel" aria-labelledby="tabRecheck" tabindex="0" hidden>
