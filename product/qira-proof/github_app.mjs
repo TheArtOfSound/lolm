@@ -251,7 +251,7 @@ async function assessRepository(token,installationId,repo,fetcher,clock=now){
  let assessed=0,skipped=0;
  for(let offset=0;offset<selected.length;offset+=BULK_BATCH_SIZE){
   const slice=selected.slice(offset,offset+BULK_BATCH_SIZE);
-  const responses=await Promise.allSettled(slice.map(workflow=>{
+  const responses=await Promise.allSettled(slice.map(async workflow=>{
    const asset=repo+":"+workflow;
    // Strictly reject long assets rather than truncating names and conflating scopes.
    if(asset.length>180)throw Error("Workflow asset exceeds bound");
