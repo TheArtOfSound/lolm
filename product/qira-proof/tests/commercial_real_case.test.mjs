@@ -102,7 +102,7 @@ test("live case study route accurately separates scanner observations and manual
  assert.match(html,/<title>LOLM source review case study \| Qira Proof<\/title>/);
  assert.match(html,/Three observations corroborated against source/);
  assert.match(html,/Release-control defects found outside the scanner/);
- assert.match(html,/not an independent third-party audit/);
+ assert.match(html,/or an independent third-party audit/);
  assert.match(html,/No secrets, cloud credentials, branch protections/);
  assert.match(html,/QP-REAL-03/);
  assert.match(html,/QP-MANUAL-02/);
