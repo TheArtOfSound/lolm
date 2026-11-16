@@ -69,7 +69,7 @@ test("post-purchase intake remains manual and public lookup privacy is disclosed
  assert.match(intake,/does not verify payment or grant an entitlement/);
  assert.match(intake,/Email your receipt reference/);
  const privacy=await (await page("/privacy")).text();
- assert.match(privacy,/sends the repository owner\/name to GitHub's public REST API/);
+ assert.match(privacy,/stored only in this browser tab's session storage/);
  assert.match(privacy,/does not use analytics scripts or tracking cookies/);
  assert.match(privacy,/Never email access tokens/);
  const terms=await (await page("/terms")).text();
