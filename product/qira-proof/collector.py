@@ -144,13 +144,35 @@ def scan_workflow_syntax(text):
             re.fullmatch(r"steps:\s*(?:#.*)?",rows[steps]["text"]) is None or
             not is_job(parent_index(steps))):
             return False
-        return sequence or re.match(r"^-[ \t]+[A-Za-z_][A-Za-z0-9_-]*:",rows[parent]["text"]) is not None
+        return sequence or (row["pad"]==rows[parent]["pad"]+2 and
+                            re.match(r"^-[ \t]+[A-Za-z_][A-Za-z0-9_-]*:",rows[parent]["text"]) is not None)
+
+    def is_run(index):
+        row=rows[index]
+        parent=parent_index(index)
+        if parent is None or re.match(r"^(-[ \t]+)?run:\s*",row["text"]) is None:
+            return False
+        sequence=re.match(r"^-[ \t]+run:",row["text"]) is not None
+        steps=parent if sequence else parent_index(parent)
+        if (steps is None or
+            re.fullmatch(r"steps:\s*(?:#.*)?",rows[steps]["text"]) is None or
+            not is_job(parent_index(steps))):
+            return False
+        return sequence or (row["pad"]==rows[parent]["pad"]+2 and
+                            re.match(r"^-[ \t]+[A-Za-z_][A-Za-z0-9_-]*:",rows[parent]["text"]) is not None)
+
+    def shell_indicator(index):
+        row=rows[index]
+        if row["shell"]:
+            owner=parent_index(index)
+            return owner is not None and is_run(owner) and ssh.search(row["shell"]) is not None
+        return is_run(index) and ssh.search(row["text"]) is not None
     mutable=[];scan=[]
     for i,row in enumerate(rows):
         match=action.fullmatch(row["text"])
         if match and is_action(i) and re.fullmatch(r"[a-fA-F0-9]{40}",match.group(2)) is None:
             mutable.append(row["line"])
-        if ssh.search(row["shell"] or row["text"]):
+        if shell_indicator(i):
             scan.append(row["line"])
     starts=[i for i,row in enumerate(rows) if re.match(r"^permissions:\s*",row["text"])]
     def authorized_permission(index):

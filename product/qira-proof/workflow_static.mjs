@@ -52,7 +52,26 @@ function actionLocation(rows,index){
  const steps=sequence?parent:parentRow(rows,parent);
  if(steps<0||!/^steps:\s*(?:#.*)?$/.test(rows[steps].text))return false;
  if(!isJobRow(rows,parentRow(rows,steps)))return false;
- return sequence||/^-[ \t]+[A-Za-z_][A-Za-z0-9_-]*:/.test(rows[parent].text);
+ return sequence||(row.pad===rows[parent].pad+2&&/^-[ \t]+[A-Za-z_][A-Za-z0-9_-]*:/.test(rows[parent].text));
+}
+// Only real step-level run commands can supply executable shell content.
+// Names, workflow inputs, comments and environment strings are not commands.
+function runLocation(rows,index){
+ const row=rows[index],parent=parentRow(rows,index);
+ if(parent<0||!/^(-[ \t]+)?run:\s*/.test(row.text))return false;
+ const sequence=/^-[ \t]+run:/.test(row.text);
+ const steps=sequence?parent:parentRow(rows,parent);
+ if(steps<0||!/^steps:\s*(?:#.*)?$/.test(rows[steps].text))return false;
+ if(!isJobRow(rows,parentRow(rows,steps)))return false;
+ return sequence||(row.pad===rows[parent].pad+2&&/^-[ \t]+[A-Za-z_][A-Za-z0-9_-]*:/.test(rows[parent].text));
+}
+function shellIndicator(rows,index){
+ const row=rows[index];
+ if(row.shell){
+  const owner=parentRow(rows,index);
+  return owner>=0&&runLocation(rows,owner)&&SSH.test(row.shell);
+ }
+ return runLocation(rows,index)&&SSH.test(row.text);
 }
 // Only GitHub Actions root permissions and direct per-job permissions count.
 // An arbitrary nested key named "permissions" (env, with, a step, etc.) is
@@ -146,7 +165,7 @@ export function scanWorkflowSyntax(text){
   const action=r.text?ACTION.exec(r.text):null;
   if(action&&actionLocation(rows,i)&&!/^[a-fA-F0-9]{40}$/.test(action[2]))mutable.push(r.line);
   // Shell blocks are not YAML declarations, but can contain the SSH command.
-  if(SSH.test(r.shell||r.text))ssh.push(r.line);
+  if(shellIndicator(rows,i))ssh.push(r.line);
  }
  const permissions=permissionDeclarations(rows);
  const target=triggerDeclaration(rows);
