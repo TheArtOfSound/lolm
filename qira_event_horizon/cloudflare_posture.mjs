@@ -98,8 +98,16 @@ function auditSnapshot(data){
  }
  let exposureStatus="unknown",meaning="Insufficient evidence to classify purpose and exposure.";
  if(s.surface.purpose==="public-synthetic-demo"){
-   exposureStatus="intentional_public";
-   meaning="Public access can be appropriate for synthetic-only read-only demonstrations; customer evidence must not enter this environment.";
+   if(s.surface.worker_binding_count===null){
+     exposureStatus="unknown";
+     meaning="Binding count was not observed; do not certify public isolation without inspecting effective bindings and code.";
+   }else if(s.surface.worker_binding_count>0){
+     exposureStatus="review";
+     meaning="The public synthetic research Worker has bindings; inspect scope and ensure it cannot expose credentials or customer data.";
+   }else{
+     exposureStatus="intentional_public";
+     meaning="Public access can be appropriate for synthetic-only read-only demonstrations; customer evidence must not enter this environment.";
+   }
  }else if(s.surface.purpose==="private-customer-environment"){
    exposureStatus=s.surface.access_application_present===true?"review":"action_required";
    meaning="Presence of an Access app alone does not prove enforcement or tenant isolation. Independently test permissions and authentication.";
