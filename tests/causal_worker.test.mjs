@@ -82,3 +82,13 @@ test('HTML has real controls and no non-research data input',async()=>{
   assert.match(html,/id="download"/);
   assert.match(response.headers.get('content-security-policy'),/frame-ancestors 'none'/);
 });
+
+
+test('Python reference / Worker output cryptographic parity vector',async()=>{
+  const v=(await call('/api/replay',{controls:[]})).payload;
+  // Produced independently with lolm.security_research.causal.demo(()),
+  // using canonical sorted-key JSON and SHA-256. This catches drift between engines.
+  assert.equal(v.receipts[0].hash,'48f628d8e85553d2575ef6df86b475c3f280ec7c60f83304b84ef616c857ddd5');
+  assert.equal(v.receipts[1].hash,'dc9fc7c7eb92b04f1bc5f50911175733adc3ac97f2d9a97bd8dccd4f10a66f94');
+  assert.equal(v.frontier.length,2);
+});
