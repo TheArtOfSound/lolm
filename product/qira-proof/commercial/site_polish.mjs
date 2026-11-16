@@ -85,17 +85,18 @@ footer{background:#233a36;color:#e8f1eb;border-top:1px solid #1e352e}
 `;
 export function addUnifiedShell(html,path){
  const replacement='<nav class="navi" aria-label="Primary"><a href="/">Overview</a><a href="/case-study">Source review</a><a href="/sample-report">Example report</a><a href="/guides">Guides</a><a class="navbuy" href="/#start">Start review →</a></nav>';
- html=html.replace(/<nav class="navi" aria-label="Primary">[sS]*?</nav>/,replacement);
- html=html.replace("</style></head>",SITE_CSS+"</style></head>");
- return html;
+ const start=html.indexOf('<nav class="navi" aria-label="Primary">');
+ const end=start>=0?html.indexOf("</nav>",start):-1;
+ if(start>=0&&end>start)html=html.slice(0,start)+replacement+html.slice(end+6);
+ return html.replace("</style></head>",SITE_CSS+"</style></head>");
 }
 export function addLegalNavigation(html){
- const result=html.replace(/<h2>([^<]+)</h2>/g,(_whole,text)=>{
-  const id="section-"+text.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
-  return '<h2 id="'+id+'">'+text+'</h2>';
+ const result=html.replace(new RegExp("<h2>([^<]+)</h2>","g"),(_whole,label)=>{
+  const id="section-"+label.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+  return '<h2 id="'+id+'">'+label+'</h2>';
  });
- const headings=[...result.matchAll(/<h2 id="([^"]+)">([^<]+)</h2>/g)];
+ const headings=[...result.matchAll(new RegExp('<h2 id="([^"]+)">([^<]+)</h2>',"g"))];
  if(!headings.length)return result;
  const links=headings.slice(0,7).map(m=>'<a href="#'+m[1]+'">'+m[2]+'</a>').join("");
- return result.replace(/</h1>/,'</h1><nav class="site-toc" aria-label="On this page"><span>On this page</span>'+links+'</nav>');
+ return result.replace("</h1>",'</h1><nav class="site-toc" aria-label="On this page"><span>On this page</span>'+links+'</nav>');
 }
