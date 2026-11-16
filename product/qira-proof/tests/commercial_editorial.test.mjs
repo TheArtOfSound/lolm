@@ -9,8 +9,8 @@ test("homepage gives a single immediate action before proof, explanation and pay
  const input=html.indexOf('id="repoUrl"'),proof=html.indexOf('class="ux-proof"'),process=html.indexOf('id="process"'),pricing=html.indexOf('id="pricing"');
  assert.ok(input>=0&&proof>input&&process>proof&&pricing>process);
  assert.match(html,/Which repository should we review\?/);
- assert.match(html,/Check repository/);
- assert.match(html,/No login or upload/);
+ assert.match(html,/id="repoSubmit" type="submit"/);
+ assert.match(html,/no account, upload, or scan/i);
  assert.match(html,/Private repository\? Skip lookup/);
  assert.doesNotMatch(html,/Understand what your workflows trust/);
  assert.doesNotMatch(html,/KNOW MORE\.<br>/);
@@ -22,7 +22,7 @@ test("real workflow evidence is prominently labeled as source observation, not a
  assert.match(html,/Workflow-level write permissions/);
  assert.match(html,/Not established:/);
  assert.match(html,/Inspect the exact GitHub lines/);
- assert.match(html,/No security scan runs in this lookup/);
+ assert.match(html,/No repository is accessed/);
  assert.match(html,/href="\/case-study"/);
  assert.doesNotMatch(html,/class="proof-board"/);
 });
