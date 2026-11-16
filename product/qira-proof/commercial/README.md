@@ -89,3 +89,15 @@ Deployment: `qira-proof-commercial` Worker version `f5aa99f0-79fe-4dad-a469-133f
 - **Live browser QA:** `/sample-report` and `/start-review` verified with Cloudflare Browser Rendering. Actual desktop/390px/320px screenshots reviewed. The 320px design was changed after finding overly small report selectors; the follow-up screenshot confirmed stacked, readable controls.
 - **Payment safeguards retained:** Cloudflare confirmed `QIRA_PROOF_CHECKOUT_URL` bound and deployment receiving 100% of traffic. Trend Stripe API confirmed payment link `plink_1UcLsTGz3eX0vCtEVB7vSsQI` remains live/active with automatic tax enabled and redirect to `/start-review`; commercial `/health` returned `checkout_configured:true`.
 - **Still outstanding:** Independent real-user screen-reader testing, an actual authorized paid order-to-human-deliverable test (not performed), manual verification of receipts in Stripe, and applicable tax registrations. The marketing storefront has no webhook-triggered entitlement or automatic fulfillment. Security scanner PR #71 remains draft.
+
+## V5 — signed payment verification foundation (not yet activated)
+
+
+## Verified deployment and retention — November 16
+
+- **Latest Worker release:** version \`0cee7068-6808-401a-9a98-84db9b076e27\`, deployed at 100% traffic. Contains two JS modules (\`landing.mjs\` and \`payments.mjs\`) plus the isolated D1 binding.
+- **CI:** [251 passing JS tests and 19 passing Python tests](https://github.com/TheArtOfSound/lolm/actions/runs/43845960170), including 10 provider-signature/forgery/payment-state tests and four 180-day retention tests.
+- **Retention:** scheduled trigger \`17 3 * * *\` (03:17 UTC daily) deletes stored Stripe event IDs and Checkout Session handles older than **180 days**. The database is not the accounting system of record.
+- **Observed ledger state at release:** 0 events / 0 orders. No artificial Stripe event or real customer charge was injected.
+- **Safety read-back:** Stripe endpoint \`we_1UcMjVGz3eX0vCtENBLvl20a\` **disabled** because the protected signing-secret binding has not been installed. \`/api/orders/health\` reports \`unconfigured\`. Public \`/health\` continues to report checkout configured, and the active $299 Stripe link is unchanged.
+- **Deployment controls:** the missing secret MUST NOT be worked around by removing signature verification, accepting redirects as proof of payment, copying the secret into public source, or storing it in a plain-text binding.
