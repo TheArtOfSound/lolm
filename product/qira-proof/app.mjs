@@ -165,13 +165,24 @@ function render(){
   body.appendChild(node("p","",
    "Inspect the actual scopes and trigger context at each source. A write declaration may be intentional, including OIDC publishing; these are not automatically vulnerabilities. Unknown declarations need manual validation."));
   const links=node("div","evidence");
+  const inventory=new Map((state.before.permission_inventory||[]).map(x=>[x.asset,x.scopes]));
   for(const f of [...declaredWrite,...unresolvedPermission]){
    const name=f.asset.includes(":.github/workflows/")?
     f.asset.split(":.github/workflows/")[1]:f.asset;
-   const a=node("a","",name+" · "+(f.value===true?"write declared":"unverified"));
-   a.href=f.source_url;a.target="_blank";a.rel="noopener noreferrer";
-   a.title="Open declared workflow permissions at source";
-   links.appendChild(a);
+   const precise=inventory.get(f.asset)||[];
+   if(precise.length){
+    for(const item of precise){
+     const a=node("a","",name+" · "+item.scope+": write");
+     a.href=item.source_url;a.target="_blank";a.rel="noopener noreferrer";
+     a.title="Open exact declared write scope in GitHub Actions workflow";
+     links.appendChild(a);
+    }
+   }else{
+    const a=node("a","",name+" · "+(f.value===true?"write scopes not enumerated":"unverified"));
+    a.href=f.source_url;a.target="_blank";a.rel="noopener noreferrer";
+    a.title="Open declared workflow permissions at source";
+    links.appendChild(a);
+   }
   }
   body.appendChild(links);details.appendChild(body);writeBox.appendChild(details);
  }
