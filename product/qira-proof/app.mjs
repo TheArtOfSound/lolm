@@ -42,6 +42,8 @@ function buttonTab(tab){
 }
 function render(){
  const report=analyzeSnapshot(state.before);
+ el("sampleBanner").hidden=state.mode!=="demo";
+ document.body.dataset.reportType=state.mode==="demo"?"example":"customer";
  el("assetsCount").textContent=report.assets;
  el("reviewCount").textContent=report.counts.review+report.counts.high;
  el("unknownCount").textContent=report.counts.unknown;
@@ -54,8 +56,9 @@ function render(){
  const findings=el("findings");clear(findings);
  if(!report.findings.length){findings.appendChild(node("div","empty","No configured rule matched these facts. This is not a clean bill of health."));}
  report.findings.forEach((x,index)=>{
-  const card=node("article","finding");
-  const head=node("div","finding-head"),label=node("div"),title=node("div","finding-title",x.title);
+  const card=node("details","finding");
+  card.open=index===0;
+  const head=node("summary","finding-head"),label=node("div"),title=node("div","finding-title",x.title);
   label.appendChild(title);label.appendChild(node("div","finding-meta",
    x.provider.toUpperCase()+" / "+x.asset+" · "+x.category+" · "+x.confidence));
   head.appendChild(label);head.appendChild(node("span","severity "+x.level,x.level==="unknown"?"Unverified":x.level==="review"?"Review":"Elevated"));
@@ -116,6 +119,11 @@ el("followupInput").addEventListener("change",async e=>{
  e.target.value="";
 });
 el("demoButton").addEventListener("click",()=>{state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="demo";render();buttonTab("assessment")});
+el("jumpDemo").addEventListener("click",()=>{
+ state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="demo";
+ render();buttonTab("assessment");
+ document.getElementById("workspace")?.scrollIntoView?.({behavior:"smooth",block:"start"});
+});
 el("demoRecheck").addEventListener("click",()=>{
  if(state.mode!=="demo"){status("Reset to the fictional demo to load its sample follow-up",true);return}
  state.after=normalizeSnapshot(sampleAfter());render();buttonTab("recheck");
@@ -184,7 +192,7 @@ async function loadGithubInstallations(){
  selectOptions("gitRepository",[],x=>x.name,x=>x.name,"Choose repository");
  selectOptions("gitWorkflow",[],x=>x.path,x=>x.path,"Choose workflow");
  el("gitAssess").disabled=true;
- gitMessage(payload.items.length?"Choose an installation, then a repository and workflow.":
+ gitMessage(payload.items.length?"Your account is connected. Choose the GitHub account you want to review.":
  "No authorized installations found. Install the read-only GitHub App, then reconnect.");
  if(payload.truncated)gitMessage("More than 50 installations found; this pilot lists the first 50.");
 }
@@ -198,12 +206,13 @@ async function githubConnectionStatus(){
   el("gitInstall").hidden=!current.install_url;
   if(current.install_url)el("gitInstall").href=current.install_url;
   el("gitPicker").hidden=!current.connected;
+  el("startCard").hidden=current.connected;
   el("gitBadge").textContent=!current.configured?"Pending setup":current.connected?"Connected":"Ready";
   document.body.dataset.githubConnection=!current.configured?"pending-setup":current.connected?"connected":"ready";
   el("gitStatus").textContent=!current.configured?
    "GitHub App registration and secure credentials are not configured yet. Manual JSON analysis remains available.":
    current.connected?"Authorized GitHub connection. Temporary session; selected metadata is processed without server storage.":
-   "Authorize our read-only GitHub App to select a repository and its workflow.";
+   "GitHub is ready. Choose Connect GitHub to approve read-only access.";
   if(current.connected)await loadGithubInstallations();
  }catch(error){
   el("gitBadge").textContent="Unavailable";
@@ -222,8 +231,8 @@ el("gitInstallation").addEventListener("change",async event=>{
  try{
   const result=await githubInspect("/api/github/repos",{installation_id:Number(id)});
   selectOptions("gitRepository",result.repos,x=>x.name,x=>x.name,"Choose repository");
-  gitMessage(result.truncated?"Only the first 100 repositories are listed in this pilot.":
-   "Select a repository to load authorized workflows.");
+  gitMessage(result.truncated?"This pilot shows the first 100 repositories.":
+   "Choose a repository to see its available deployment workflows.");
  }catch(error){gitMessage(error.message,true)}
 });
 el("gitRepository").addEventListener("change",async event=>{
@@ -235,8 +244,8 @@ el("gitRepository").addEventListener("change",async event=>{
  try{
   const result=await githubInspect("/api/github/workflows",{installation_id:Number(id),repo});
   selectOptions("gitWorkflow",result.workflows,x=>x.path,x=>x.path,"Choose workflow");
-  gitMessage(result.workflows.length?"Choose a workflow and run the read-only assessment.":
-   "No supported workflow files were accessible.");
+  gitMessage(result.workflows.length?"Choose the workflow you want QIRA to review.":
+   "No accessible GitHub Actions workflows found here.");
  }catch(error){gitMessage(error.message,true)}
 });
 el("gitWorkflow").addEventListener("change",event=>{
@@ -251,7 +260,8 @@ el("gitAssess").addEventListener("click",async()=>{
   state.before=normalizeSnapshot(data.snapshot);
   state.after=null;state.mode="connected";
   render();buttonTab("assessment");
-  gitMessage("Read-only GitHub assessment loaded. No provider credentials were returned to this page.");
+  gitMessage("Assessment ready. Your GitHub credentials stayed on the server.");
+  document.getElementById("workspace")?.scrollIntoView?.({behavior:"smooth",block:"start"});
  }catch(error){gitMessage(error.message,true)}
  finally{el("gitAssess").disabled=false}
 });
