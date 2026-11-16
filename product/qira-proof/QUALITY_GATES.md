@@ -23,6 +23,32 @@ The owner supplied a successful live `TheArtOfSound/lolm` scan of 20/20 workflow
 
 Latest improvement: the write authorization inventory now enumerates specific recognized scopes (for example `contents: write`, `issues: write`, and `id-token: write`) with exact source lines in v3 evidence receipts. It separately identifies ambiguous declarations without treating them as vulnerabilities. Both local and hosted scanners now refuse to classify nested `env` / `with` permission-shaped keys as effective GitHub permissions, and treat unsupported inline event YAML as unknown. The owner has **not yet run the new v3 exact-scope collector through the browser**.
 
+### Exported owner report verification — November 16, 2026
+
+The owner supplied an actual human-readable `qira-proof-configuration-review.html`
+export (captured at `2026-11-16T07:12:48.579Z`) with 20/20 workflows at
+`f9700d2e661640da4a8d0cf2bb9c046d77f8a06b`. The report enumerates 109
+facts, 27 observations under two conditions, one branch-protection visibility
+gap, 13 files with read-only permission declarations, and seven files with
+12 declared write permission scopes.
+
+Evidence overlap was verified by parsing the uploaded report:
+- 3 workflow files: mutable action references + SSH host discovery + declared write scope
+- 4 workflow files: mutable action references + declared write scope
+- 5 workflow files: mutable action references + SSH host discovery
+- 7 workflow files: mutable action references without the other two indicators
+- 1 scanned workflow with none of those three conditions observed
+
+A new non-scoring **Workflow review order** section presents these groups
+with pinned source links in both the browser and printable export. This is a
+review-efficiency tool, **not** a validated exploitability ranking or a change
+to the SHA-256 receipt. The supplied HTML contains a digest but no companion
+JSON; the digest cannot be independently recomputed from the HTML alone.
+
+**Unmet gate:** owner must rerun the newest build and independently validate
+the new print layout and scope-specific links. Professional security and
+accessibility review and independent reviewer accuracy testing remain open.
+
 ## 2. Security and privacy
 - [x] GitHub OAuth state, PKCE, callback validation, encrypted short-lived browser session, CSRF protection, server-only token exchange.
 - [x] GitHub metadata GET and token POST explicitly reject redirects using Cloudflare-compatible manual mode.
