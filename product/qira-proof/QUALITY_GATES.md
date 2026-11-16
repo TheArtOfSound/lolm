@@ -118,3 +118,17 @@ and repeat source-linked human checks before treating report totals as current.
 - The Cloudflare preview has deployed the runtime scanner update at
   `a6b665e3`; this later branch commit adds only tests and documentation,
   not a new Worker runtime build.
+
+### GitHub token revocation and regional budgets (draft preview gate)
+
+- Disconnect now calls GitHub application token deletion with server-only Basic app credentials.
+  It clears browser cookies even if GitHub cannot confirm revocation; the UI and JSON
+  explicitly distinguish confirmed from unconfirmed. A stolen cookie is still decryptable
+  until the 15-minute TTL, but a successfully revoked provider token cannot read GitHub.
+- Auth/start and callback use QIRA_AUTH_RATE_LIMITER; authorized GET/selection/scan use
+  QIRA_READ_RATE_LIMITER. The latter charges 12 units for full assessments and 1 otherwise.
+  Keys are SHA-256 digests, never raw IP/CSRF values. Missing or failing limiter rejects
+  with 503; exceeded budgets return 429 with retry-after 60 seconds.
+- Cloudflare native limit counters are approximate and regional; this does NOT enforce a
+  strict global API quota or solve distributed replay/revocation race conditions.
+  External customer testing and additional abuse review remain required.

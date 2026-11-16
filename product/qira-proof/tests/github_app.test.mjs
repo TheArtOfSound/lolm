@@ -8,7 +8,10 @@ if(!globalThis.crypto)globalThis.crypto=webcrypto;
 const origin="https://qira.example";
 const clock=()=>1_800_000_000_000;
 const b64=(bytes)=>Buffer.from(bytes).toString("base64url");
+const alwaysAllow={limit:async()=>({success:true})};
 const env={
+  QIRA_AUTH_RATE_LIMITER:alwaysAllow,
+  QIRA_READ_RATE_LIMITER:alwaysAllow,
   QIRA_PUBLIC_ORIGIN:origin,
   GITHUB_APP_CLIENT_ID:"Iv1.123456789abcdef",
   GITHUB_APP_CLIENT_SECRET:"example-only-not-a-real-secret",
@@ -24,6 +27,12 @@ function mockFetch(input,options={}){
  if(url==="https://github.com/login/oauth/access_token"){
    if(!options.body.includes("code_verifier="))throw Error("PKCE not forwarded");
    value={access_token:tok,token_type:"bearer",expires_in:3600};
+ }else if(url==="https://api.github.com/applications/Iv1.123456789abcdef/token"){
+   assert.equal(options.method,"DELETE");
+   assert.equal(options.redirect,"manual");
+   assert.equal(JSON.parse(options.body).access_token,tok);
+   assert.match(options.headers.authorization,/^Basic /);
+   return Promise.resolve(new Response(null,{status:204}));
  }else if(url.includes("/user/installations/123/repositories")){
    value={total_count:1,repositories:[{full_name:"TheArtOfSound/lolm",default_branch:"main"}]};
  }else if(url.includes("/user/installations?")){
@@ -323,7 +332,7 @@ test("Selection endpoints forbid GET URLs and CSRF-less cross-site POSTs",async(
   assert.equal(noCSRF.status,403);
  }
 });
-test("Disconnect needs origin and session CSRF; it never claims remote token revocation",async()=>{
+test("Disconnect needs origin and session CSRF; confirms provider token revocation",async()=>{
   const s=await session();
   const check=await handleGitHubApp(req("/api/github/status",{headers:s.headers}),env,{fetcher:mockFetch,clock});
   const csrf=(await check.json()).csrf;
@@ -333,8 +342,12 @@ test("Disconnect needs origin and session CSRF; it never claims remote token rev
   assert.equal(forged.status,403);
   const valid=await handleGitHubApp(req("/api/github/disconnect",{method:"POST",headers:{...s.headers,origin,"x-qira-csrf":csrf}}),env,{fetcher:mockFetch,clock});
   assert.equal(valid.status,200);
-  assert.equal((await valid.json()).server_side_token_revoked,false);
+  const result=await valid.json();
+  assert.equal(result.server_side_token_revoked,true);
+  assert.equal(result.revocation_status,"confirmed");
   assert.match(valid.headers.get("set-cookie"),/__Host-qira_git_session=;/);
+  assert.ok(visited.some(x=>x.method==="DELETE"&&x.url.endsWith("/token")));
+  assert.ok(!JSON.stringify(result).includes(tok));
 });
 test("Session expires and cannot be reused after its TTL",async()=>{
   const s=await session();
@@ -372,4 +385,63 @@ test("Unrelated app and static routes bypass the OAuth subsystem",async()=>{
  assert.equal(await handleGitHubApp(req("/"),{}),null);
  assert.equal(await handleGitHubApp(req("/app.mjs"),{}),null);
  assert.equal(await handleGitHubApp(req("/health"),{}),null);
+});
+
+test("provider revocation failures are honestly reported, but local cookies are cleared",async()=>{
+ const s=await session();
+ const status=await handleGitHubApp(req("/api/github/status",{headers:s.headers}),env,{fetcher:mockFetch,clock});
+ const csrf=(await status.json()).csrf;
+ for(const responseCode of [403,422,500]){
+  const fake=async(input,opts={})=>String(input).includes("/applications/Iv1.")?
+    new Response("provider-private",{status:responseCode}):mockFetch(input,opts);
+  const res=await handleGitHubApp(req("/api/github/disconnect",{method:"POST",
+   headers:{...s.headers,origin,"x-qira-csrf":csrf}}),env,{fetcher:fake,clock});
+  assert.equal(res.status,200);
+  const result=await res.json();
+  assert.equal(result.server_side_token_revoked,false);
+  assert.equal(result.revocation_status,"unconfirmed");
+  assert.ok(!JSON.stringify(result).includes("provider-private"));
+  assert.match(res.headers.get("set-cookie"),/__Host-qira_git_session=;/);
+ }
+});
+test("anonymous OAuth starts and callbacks fail closed when rate binding is missing",async()=>{
+ const unset={...env,QIRA_AUTH_RATE_LIMITER:undefined};
+ const response=await handleGitHubApp(req("/connect/github"),unset,{fetcher:mockFetch,clock});
+ assert.equal(response.status,503);
+ const limited={...env,QIRA_AUTH_RATE_LIMITER:{limit:async()=>({success:false})}};
+ const throttled=await handleGitHubApp(req("/connect/github"),limited,{fetcher:mockFetch,clock});
+ assert.equal(throttled.status,429);
+ assert.equal(throttled.headers.get("retry-after"),"60");
+});
+test("authenticated reads use non-identifying weighted request limits",async()=>{
+ const s=await session();
+ const observed=[];
+ const limited={...env,QIRA_READ_RATE_LIMITER:{limit:async args=>{observed.push(args);return {success:false};}}};
+ visited=[];
+ const result=await handleGitHubApp(req("/api/github/installations",{headers:s.headers}),limited,{fetcher:mockFetch,clock});
+ assert.equal(result.status,429);
+ assert.deepEqual(observed.map(x=>x.delta),[1]);
+ assert.match(observed[0].key,/^[a-f0-9]{32}$/);
+ assert.ok(!observed[0].key.includes(tok));
+ assert.equal(visited.length,0,"A rate-denied call must not contact GitHub");
+ const status=await handleGitHubApp(req("/api/github/status",{headers:s.headers}),env,{fetcher:mockFetch,clock});
+ const csrf=(await status.json()).csrf;
+ const assess=await handleGitHubApp(req("/api/github/assessment",{method:"POST",headers:{
+  ...s.headers,origin,"content-type":"application/json","x-qira-csrf":csrf
+ },body:JSON.stringify({installation_id:123,repo:"TheArtOfSound/lolm",workflow:"__all__"})}),limited,{fetcher:mockFetch,clock});
+ assert.equal(assess.status,429);
+ assert.deepEqual(observed.map(x=>x.delta),[1,12]);
+ assert.equal(observed[0].key,observed[1].key,"Stable private session key per browser session");
+});
+test("rate limiter errors and missing protected-read bindings reject before provider reads",async()=>{
+ const s=await session();
+ const broken={...env,QIRA_READ_RATE_LIMITER:{limit:async()=>{throw Error("internal network key");}}};
+ visited=[];
+ const fail=await handleGitHubApp(req("/api/github/installations",{headers:s.headers}),broken,{fetcher:mockFetch,clock});
+ assert.equal(fail.status,503);
+ assert.ok(!(await fail.text()).includes("internal network key"));
+ const unset={...env,QIRA_READ_RATE_LIMITER:undefined};
+ const no=await handleGitHubApp(req("/api/github/installations",{headers:s.headers}),unset,{fetcher:mockFetch,clock});
+ assert.equal(no.status,503);
+ assert.equal(visited.length,0);
 });

@@ -517,9 +517,12 @@ el("gitScanAll").addEventListener("click",async()=>{
 el("gitDisconnect").addEventListener("click",async()=>{
  if(!git.csrf)return;
  try{
-  await githubApi("/api/github/disconnect",{method:"POST",headers:{"content-type":"application/json","x-qira-csrf":git.csrf},body:"{}"});
+  const disconnect=await githubApi("/api/github/disconnect",{method:"POST",headers:{"content-type":"application/json","x-qira-csrf":git.csrf},body:"{}"});
   state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="idle";state.coverage=null;
-  render();buttonTab("assessment");gitMessage("Local session cleared. GitHub authorization must be revoked separately in GitHub if desired.");
+  render();buttonTab("assessment");gitMessage(disconnect.server_side_token_revoked?
+   "Local session cleared and GitHub authorization token revoked.":
+   "Local session cleared, but GitHub token revocation was not confirmed. Remove the app authorization in GitHub settings to invalidate any copied token.",
+   !disconnect.server_side_token_revoked);
   await githubConnectionStatus();
  }catch(error){gitMessage(error.message,true)}
 });

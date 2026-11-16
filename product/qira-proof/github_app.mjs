@@ -340,6 +340,49 @@ async function exchangeToken(env,code,verifier,fetcher){
   throw oauthError("token_invalid");
  return {token:parsed.access_token,ttl:Math.min(SESSION_TTL_MS,parsed.expires_in*1000)};
 }
+// Cloudflare native regional rate limits: approximate abuse friction, not an
+// atomic, global security quota. Raw IP addresses and CSRF values are never
+// used as limiter keys; use their SHA-256 digest instead.
+async function requestBudget(env,request,kind,session=null){
+ const limiter=kind==="public"?env.QIRA_AUTH_RATE_LIMITER:env.QIRA_READ_RATE_LIMITER;
+ if(typeof limiter?.limit!=="function")return fail("Request budget is unavailable",503);
+ const peer=request.headers.get("cf-connecting-ip")||"unidentified";
+ const identity=kind==="public"?
+   (/^[0-9a-fA-F:.]{3,64}$/.test(peer)?peer:"unidentified"):session?.csrf;
+ if(!identity)return fail("Request budget is unavailable",503);
+ const bytes=new TextEncoder().encode(kind+"|"+identity);
+ const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",bytes));
+ const key=Array.from(digest.slice(0,16),x=>x.toString(16).padStart(2,"0")).join("");
+ const weight=kind==="read"&&new URL(request.url).pathname==="/api/github/assessment"?12:1;
+ try{
+  const decision=await limiter.limit({key,delta:weight});
+  if(decision?.success===true)return null;
+  if(decision?.success===false){
+   const denied=fail("Request limit exceeded; retry later",429);
+   denied.headers.set("retry-after","60");
+   return denied;
+  }
+  return fail("Request budget is unavailable",503);
+ }catch{return fail("Request budget is unavailable",503);}
+}
+
+// Provider-token revocation is stronger than only clearing an HttpOnly cookie.
+// GitHub explicitly supports revoking a GitHub App user authorization via
+// DELETE /applications/{client_id}/token with Basic client credentials.
+// Do not follow redirects, log tokens or expose provider response bodies.
+async function revokeGitHubToken(env,token,fetcher){
+ try{
+  const result=await fetcher("https://api.github.com/applications/"+
+     encodeURIComponent(env.GITHUB_APP_CLIENT_ID)+"/token",{
+   method:"DELETE",redirect:"manual",
+   headers:{"authorization":"Basic "+btoa(env.GITHUB_APP_CLIENT_ID+":"+env.GITHUB_APP_CLIENT_SECRET),
+    "accept":"application/vnd.github+json","content-type":"application/json",
+    "x-github-api-version":"2026-03-10","user-agent":"qira-proof-readonly-pilot"},
+   body:JSON.stringify({access_token:token})
+  });
+  return result.status===204&&result.type!=="opaqueredirect";
+ }catch{return false;}
+}
 function cspGet(request){return ["GET","HEAD"].includes(request.method)}
 export async function handleGitHubApp(request,env={}, {fetcher=fetch,clock=now}={}){
  const url=new URL(request.url),path=url.pathname;
@@ -355,6 +398,8 @@ export async function handleGitHubApp(request,env={}, {fetcher=fetch,clock=now}=
  }
  if(!configured(env)||!checkHost(request,env))return fail("GitHub App connection is not configured for this origin",503);
  if(path==="/connect/github"&&cspGet(request)){
+  const denied=await requestBudget(env,request,"public");
+  if(denied)return denied;
   const nonce=random(24),verifier=random(48),challenge=await pkceChallenge(verifier);
   const pending=await seal(env,"pending",{v:1,nonce,verifier,exp:clock()+STATE_TTL_MS});
   const target=new URL("https://github.com/login/oauth/authorize");
@@ -366,6 +411,8 @@ export async function handleGitHubApp(request,env={}, {fetcher=fetch,clock=now}=
   return responseRedirect(target.toString(),[cookie(COOKIE_PENDING,pending,600)]);
  }
  if(path==="/oauth/github/callback"&&cspGet(request)){
+  const denied=await requestBudget(env,request,"public");
+  if(denied)return denied;
   const state=url.searchParams.get("state"),code=url.searchParams.get("code");
   const pending=await openSealed(env,"pending",cookies(request)[COOKIE_PENDING]);
   if(url.searchParams.has("error"))return oauthFailureRedirect(env,"authorization_denied");
@@ -395,13 +442,17 @@ export async function handleGitHubApp(request,env={}, {fetcher=fetch,clock=now}=
   if(request.headers.get("origin")!==publicOrigin(env))return fail("Invalid request origin",403);
   const session=await sessionFor(request,env,clock);
   if(!session||!same(request.headers.get("x-qira-csrf"),session.csrf))return fail("Invalid session or CSRF token",403);
-  const res=json({disconnected:true,server_side_token_revoked:false});
+  const revoked=await revokeGitHubToken(env,session.token,fetcher);
+  const res=json({disconnected:true,server_side_token_revoked:revoked,
+   revocation_status:revoked?"confirmed":"unconfirmed"});
   res.headers.append("set-cookie",clearCookie(COOKIE_SESSION));
   return res;
  }
  if(path.startsWith("/api/github/")){
   const session=await sessionFor(request,env,clock);
   if(!session)return fail("Connect your GitHub App first",401);
+  const denied=await requestBudget(env,request,"read",session);
+  if(denied)return denied;
   if(path==="/api/github/installations"){
    if(request.method!=="GET")return fail("Method not allowed",405);
    try{return json(await installations(session.token,fetcher))}
