@@ -2,7 +2,7 @@
  * Client only, no network requests, no third-party fonts/scripts, no tracking.
  * Do not turn a SHA-256 integrity receipt into a claim of provider authentication.
  */
-import {verifyProof} from "./core.mjs";
+import {verifyProof,groupReviewFindings} from "./core.mjs";
 
 const escapeHTML=value=>String(value??"").replace(/[&<>"']/g,c=>({
  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
@@ -24,7 +24,9 @@ function findingView(item,index){
  const observations=item.evidence.map(f=>{
   const href=safeHref(f.source_url),value=nice(f.observed_value);
   const source=href?`<a href="${href}" rel="noreferrer noopener" target="_blank">Declared evidence location</a>`:"Unverifiable source link";
-  return `<li><b>${nice(f.signal)}</b>: ${value}<small>Observed ${timestamp(f.observed_at)} · ${source}</small></li>`;
+  const file=typeof f.asset==="string"&&f.asset.includes(":.github/workflows/")?
+   f.asset.split(":.github/workflows/")[1]+" · ":"";
+  return `<li><b>${nice(file+f.signal)}</b>: ${value}<small>Observed ${timestamp(f.observed_at)} · ${source}</small></li>`;
  }).join("");
  return `<article class="finding"><header><span class="num">${String(index+1).padStart(2,"0")}</span>
   <div><h3>${nice(item.title)}</h3><p class="meta">${nice(item.provider)} / ${nice(item.asset)} · ${nice(item.category)}</p></div>
@@ -68,7 +70,8 @@ export async function renderHumanReport(receipt,{sample=false}={}){
   throw Error("Evidence receipt failed deterministic verification");
  const {assessment,baseline,comparison,sha256}=receipt;
  const heading=sample?"FICTIONAL EXAMPLE — NOT A CUSTOMER ASSESSMENT":"Owner-supplied / connected configuration evidence";
- const findings=assessment.findings.length?assessment.findings.map(findingView).join(""):
+ const visibleFindings=baseline.coverage?groupReviewFindings(assessment.findings):assessment.findings;
+ const findings=visibleFindings.length?visibleFindings.map(findingView).join(""):
   '<div class="empty">No configured Qira rule matched these facts. This is not a clean bill of health.</div>';
  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; form-action 'none'; base-uri 'none'">
@@ -104,7 +107,7 @@ export async function renderHumanReport(receipt,{sample=false}={}){
  <div class="disclaimer"><b>Scope and assurance limits:</b> This document evaluates only supplied or temporarily retrieved configuration facts. It does not prove provider identity, full coverage, exploitability, or absence of vulnerabilities. It is not a penetration test or security certification. SHA-256 provides alteration detection, not a digital signature.</div>
  <div class="stats"><div class="stat"><b>Assets represented</b><strong>${assessment.assets}</strong></div>
  <div class="stat"><b>Evidence facts</b><strong>${assessment.facts}</strong></div>
- <div class="stat"><b>Review items</b><strong>${assessment.counts.high+assessment.counts.review}</strong></div>
+ <div class="stat"><b>Review observations</b><strong>${assessment.counts.high+assessment.counts.review}</strong></div>
  <div class="stat"><b>Visibility gaps</b><strong>${assessment.counts.unknown}</strong></div></div>
  <h2>Scope of evidence</h2><div>${coverageView(baseline.facts)}</div>
  ${repositoryCoverageView(baseline.coverage)}
