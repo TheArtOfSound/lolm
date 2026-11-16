@@ -282,7 +282,24 @@ el("gitDisconnect").addEventListener("click",async()=>{
   await githubConnectionStatus();
  }catch(error){gitMessage(error.message,true)}
 });
-const githubResult=new URL(location.href).searchParams.get("github");
-if(githubResult==="failed")gitMessage("GitHub authorization could not be completed. Check App permissions and try again.",true);
-if(githubResult){const cleaned=new URL(location.href);cleaned.searchParams.delete("github");history.replaceState(null,"",cleaned.pathname+cleaned.search+cleaned.hash);}
+const githubParams=new URL(location.href).searchParams;
+const githubResult=githubParams.get("github");
+if(githubResult==="failed"){
+ const reasons={
+  authorization_denied:"GitHub authorization was declined. Approve the request to connect.",
+  state_missing:"The secure sign-in cookie was missing. Start again in the same browser tab; ensure cookies are enabled.",
+  state_expired:"The sign-in window expired after ten minutes. Start a new connection.",
+  state_mismatch:"The sign-in session did not match. Start again from Qira and finish in the same browser.",
+  code_missing:"GitHub did not return a usable authorization code. Start a fresh connection.",
+  client_credentials:"Qira's GitHub App credentials were rejected. The site owner must check the App Client ID and secret.",
+  callback_mismatch:"GitHub rejected Qira's callback URL. The site owner must correct the exact callback address in GitHub App settings.",
+  token_expiration_disabled:"This GitHub App returned a non-expiring token, which Qira refuses. The site owner must enable user-to-server token expiration.",
+  token_invalid:"GitHub returned an unsupported token response. The site owner must check the App's authorization configuration.",
+  provider_unavailable:"Qira could not complete GitHub's secure token exchange. Retry once; if it repeats, contact Qira support.",
+  session_unavailable:"Qira could not protect the returned session. The site owner needs to repair the secure session configuration."
+ };
+ gitMessage(reasons[githubParams.get("reason")]||
+  "GitHub authorization failed. Start a new connection or contact Qira support.",true);
+}
+if(githubResult){const cleaned=new URL(location.href);cleaned.searchParams.delete("github");cleaned.searchParams.delete("reason");history.replaceState(null,"",cleaned.pathname+cleaned.search+cleaned.hash);}
 render();buttonTab("assessment");document.body.dataset.qiraBoot="ready";githubConnectionStatus();
