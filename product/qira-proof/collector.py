@@ -87,7 +87,12 @@ def github_facts(repo,workflow,token,reader=fetch_json,when=None):
     encoded=quote(workflow,safe="/")
     ref=repo.split("/")
     base=f"https://api.github.com/repos/{ref[0]}/{ref[1]}"
-    snapshot=reader(base+"/contents/"+encoded,token,"github")
+    repository=reader(base,token,"github")
+    default_branch=repository.get("default_branch") if isinstance(repository,dict) else None
+    if not isinstance(default_branch,str) or not 1 <= len(default_branch) <= 128 or not re.fullmatch(r"[A-Za-z0-9_./-]+",default_branch) or ".." in default_branch:
+        raise ProviderError("GitHub default branch could not be verified")
+    branch_encoded=quote(default_branch,safe="")
+    snapshot=reader(base+"/contents/"+encoded+"?ref="+branch_encoded,token,"github")
     if snapshot.get("encoding")!="base64" or not isinstance(snapshot.get("content"),str):
         raise ProviderError("workflow not available as bounded base64 content")
     text=base64.b64decode(snapshot["content"],validate=False)
@@ -96,14 +101,14 @@ def github_facts(repo,workflow,token,reader=fetch_json,when=None):
     text=text.decode("utf-8")
     active_lines=[x for x in text.splitlines() if not x.lstrip().startswith("#")]
     has_scan=any(re.search(r"(?<![A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)",line) for line in active_lines)
-    source=f"https://github.com/{repo}/blob/main/{workflow}"
+    source=f"https://github.com/{repo}/blob/{branch_encoded}/{workflow}"
     facts=[fact("github",repo,"runtime_ssh_keyscan",has_scan,source,when)]
     if has_scan:
         # Proving SSH host-key pinning requires authoritative key material and
         # a trusted out-of-band comparison, NOT a string search.
         facts.append(fact("github",repo,"ssh_host_key_pinned","unknown",source,when))
     try:
-        reader(base+"/branches/main/protection",token,"github")
+        reader(base+"/branches/"+branch_encoded+"/protection",token,"github")
         status=True
     except ProviderError:
         status="unknown"
@@ -136,19 +141,30 @@ def cloudflare_facts(account,worker,token,reader=fetch_json,when=None):
     ]
 
 def build_snapshot(github_repos=(),cloudflare_workers=(),github_token=None,cloudflare_token=None,
-                   account_id=None, reader=fetch_json,when=None):
+                   account_id=None, reader=fetch_json,when=None,github_workflows=()):
     when=when or utcnow()
-    if not github_repos and not cloudflare_workers:
+    if not github_repos and not github_workflows and not cloudflare_workers:
         raise ValueError("select at least one authorized resource")
-    if github_repos and not github_token:
+    if (github_repos or github_workflows) and not github_token:
         raise ProviderError("GITHUB_TOKEN must be set for GitHub read access")
     if cloudflare_workers and (not cloudflare_token or not account_id):
         raise ProviderError("CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID required")
-    if len(github_repos)>20 or len(cloudflare_workers)>50:
+    if len(github_repos)+len(github_workflows)>20 or len(cloudflare_workers)>50:
         raise ValueError("collector resource bounds exceeded")
     facts=[]
-    for repo in dict.fromkeys(github_repos):
-        facts.extend(github_facts(repo,".github/workflows/deploy-production.yml",github_token,reader,when))
+    selected=[(repo,".github/workflows/deploy-production.yml") for repo in github_repos]
+    for entry in github_workflows:
+        if not isinstance(entry,str) or ":" not in entry:
+            raise ValueError("use --github-workflow owner/repo:.github/workflows/name.yml")
+        name,workflow=entry.split(":",1)
+        selected.append((name,workflow))
+    selected=list(dict.fromkeys(selected))
+    seen_repos=set()
+    for repo,workflow in selected:
+        if repo in seen_repos:
+            raise ValueError("pilot accepts only one selected workflow per repository")
+        seen_repos.add(repo)
+        facts.extend(github_facts(repo,workflow,github_token,reader,when))
     for worker in dict.fromkeys(cloudflare_workers):
         facts.extend(cloudflare_facts(account_id,worker,cloudflare_token,reader,when))
     facts.sort(key=lambda f:(f["provider"],f["asset"],f["signal"]))
@@ -168,12 +184,14 @@ def main(argv=None):
     parser=argparse.ArgumentParser(description="Read-only QIRA Proof local collector; no uploads")
     parser.add_argument("--github-repo",action="append",default=[],help="Explicit repository owner/name")
     parser.add_argument("--cloudflare-worker",action="append",default=[],help="Explicit Worker name")
+    parser.add_argument("--github-workflow",action="append",default=[],
+      help="Select workflow explicitly as owner/repo:.github/workflows/name.yml")
     parser.add_argument("--out",required=True,help="Private output JSON file; existing files never overwritten")
     args=parser.parse_args(argv)
     try:
         report=build_snapshot(args.github_repo,args.cloudflare_worker,
           os.environ.get("GITHUB_TOKEN"),os.environ.get("CLOUDFLARE_API_TOKEN"),
-          os.environ.get("CLOUDFLARE_ACCOUNT_ID"))
+          os.environ.get("CLOUDFLARE_ACCOUNT_ID"),github_workflows=args.github_workflow)
         digest=write_private(args.out,report)
     except (ValueError,ProviderError,FileExistsError) as e:
         parser.error(str(e))
