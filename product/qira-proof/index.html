@@ -13,6 +13,9 @@ html{scroll-behavior:smooth}body{margin:0;min-height:100vh;background:var(--pape
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #7895fc;outline-offset:3px}
 button:disabled{opacity:.52;cursor:not-allowed}[hidden]{display:none!important}
 .page-width{width:min(1360px,calc(100% - 90px));margin-inline:auto}
+.skip-link{position:absolute;z-index:100;left:16px;top:-80px;background:#fff;border:2px solid #294bc2;border-radius:8px;padding:11px 16px;font-weight:750}
+.skip-link:focus-visible{top:12px}
+#workspace{scroll-margin-top:105px}
 .navbar{background:rgba(246,248,245,.95);position:sticky;top:0;z-index:20;border-bottom:1px solid #e1e8e4;backdrop-filter:blur(16px)}
 .nav-inside{display:flex;align-items:center;justify-content:space-between;min-height:80px;gap:28px}
 .brand{display:inline-flex;align-items:center;gap:12px;text-decoration:none;white-space:nowrap}.brand-symbol{display:grid;place-items:center;width:44px;height:44px;border-radius:13px;background:var(--night);color:var(--lime)}.brand-symbol svg{width:28px;height:28px}
@@ -52,7 +55,7 @@ h1 em{color:var(--accent);font-style:normal}
 .panel{background:white;border:1px solid var(--stroke);border-radius:20px;box-shadow:var(--shadow);overflow:hidden}
 .panel-title{border-bottom:1px solid var(--stroke);padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .panel-title strong{font-size:14px;font-weight:760;letter-spacing:-.015em}
-.panel-body{padding:24px}.mini{font-size:12px;line-height:1.65;color:var(--mute)}.section-label{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#53666b;margin:0 0 11px}
+.panel-body{padding:24px}.mini{font-size:12px;line-height:1.65;color:var(--mute)}.section-label{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#53666b;margin:0 0 11px}
 .source{background:#f6f8f8;border:1px solid #e0e9e5;border-radius:12px;padding:15px;margin-bottom:12px}.source-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:7px}
 .source-head strong{font-size:13px}.mark{font-size:10px;font-weight:800;background:#edf1f0;border:1px solid #d8e3dd;border-radius:100px;padding:5px 9px;color:#475e5d;white-space:nowrap}
 .field{display:flex;flex-direction:column;gap:7px;margin:13px 0}.field label{font-size:12px;font-weight:710;color:#405359}
@@ -80,15 +83,15 @@ details.advanced summary:after{content:"+";font-size:20px;color:var(--accent)}de
 .dashboard{padding:24px}.dashboard .lead{font-size:13px;color:var(--soft)}
 .metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:24px}
 .metric{padding:16px 13px;background:#f7f9f7;border:1px solid #e6ede8;border-radius:12px;min-width:0}
-.metric small{display:block;color:#6d7b7d;font-size:10px;font-weight:650;line-height:1.45}.metric strong{font-size:28px;letter-spacing:-.05em;font-weight:700;display:block;margin-top:6px}.metric .caution{color:#9c622f}.metric .calm{color:var(--green)}
+.metric small{display:block;color:#485c60;font-size:12px;font-weight:650;line-height:1.45}.metric strong{font-size:28px;letter-spacing:-.05em;font-weight:700;display:block;margin-top:6px}.metric .caution{color:#9c622f}.metric .calm{color:var(--green)}
 .cards{display:grid;gap:11px}.finding{background:white;border:1px solid #dce5e1;border-radius:13px;overflow:hidden;transition:box-shadow .18s}
 .finding[open]{box-shadow:0 15px 40px rgba(14,38,40,.05);border-color:#bacbc7}.finding-head{list-style:none;display:flex;justify-content:space-between;align-items:flex-start;gap:17px;padding:17px 18px;cursor:pointer}
 .finding-head::-webkit-details-marker{display:none}
 .finding-head:after{content:"⌄";font-size:18px;color:#677c7e;order:3}.finding[open] .finding-head:after{content:"⌃"}
-.finding-title{font-weight:745;font-size:14px;line-height:1.36;letter-spacing:-.012em}.finding-meta{font-size:11px;color:#6c7c7e;margin-top:7px;overflow-wrap:anywhere}
+.finding-title{font-weight:745;font-size:14px;line-height:1.36;letter-spacing:-.012em}.finding-meta{font-size:12px;color:#536669;margin-top:7px;overflow-wrap:anywhere}
 .severity{font-size:10px;text-transform:uppercase;letter-spacing:.035em;padding:5px 9px;border-radius:100px;background:#fff2e5;color:#8a5425;font-weight:800;white-space:nowrap;border:1px solid #f1d7b9}.severity.unknown{background:#edf2f5;color:#587180;border-color:#dce5eb}.severity.good{background:#edf7f2;color:#276343;border-color:#c9e1d4}.severity.high{background:#fce7e6;color:#ad3a3b;border-color:#f3ccca}
 .finding-body{border-top:1px solid var(--stroke);padding:18px;font-size:12px;line-height:1.72;color:#43565c}.finding-body p{margin:0 0 14px}
-.evidence{display:flex;gap:8px;flex-wrap:wrap;padding-top:5px}.evidence a,.evidence .chip{border:1px solid #dbe5e1;border-radius:7px;background:#f5f8f6;padding:6px 10px;color:#3a4b50;text-decoration:none;font-size:11px;overflow-wrap:anywhere}
+.evidence{display:flex;gap:8px;flex-wrap:wrap;padding-top:5px}.evidence a,.evidence .chip{border:1px solid #dbe5e1;border-radius:7px;background:#f5f8f6;padding:8px 11px;color:#304448;text-decoration:none;font-size:12px;overflow-wrap:anywhere}
 .evidence a:hover{border-color:#8a9faf}
 .empty{border:1px dashed #a7b8b1;background:#f7faf7;border-radius:12px;padding:26px;color:#5f7373;font-size:13px;line-height:1.67}.empty strong{display:block;color:var(--ink);font-size:15px;margin-bottom:5px}
 .statustext{font-size:12px;line-height:1.65;color:#51676c;min-height:20px;margin-top:18px}
@@ -107,6 +110,7 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
 <script type="module" src="/app.mjs"></script>
 </head>
 <body>
+<a class="skip-link" href="#workspace">Skip to assessment workspace</a>
 <header class="navbar">
  <div class="page-width nav-inside">
   <a class="brand" href="/" aria-label="QIRA Proof home">
@@ -155,7 +159,7 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
    <div class="process-card"><div class="process-number">03 / RECHECK <span>✓</span></div><h3>Keep a record</h3><p>Compare configuration evidence after a change and export a reproducible report. A cleared indicator is not proof of safety.</p></div>
   </div>
  </section>
- <section id="workspace" aria-labelledby="workspaceTitle">
+ <section id="workspace" tabindex="-1" aria-labelledby="workspaceTitle">
   <div class="workspace-head"><div class="work-title"><div class="eyebrow">Your workspace</div><h2 id="workspaceTitle">Let's see what your setup tells us.</h2><p>Start with GitHub, or explore a clearly labeled fictional example to understand the experience.</p></div><span class="beta-label">Early access · Read-only assessment</span></div>
   <div class="workspace">
    <aside class="panel">
@@ -218,10 +222,10 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
     </div>
    </aside>
    <section class="panel" aria-label="Assessment results">
-    <div class="panel-title"><strong id="workTitle">Assessment</strong><div class="tabnav" role="tablist" aria-label="Workspace views"><button class="tab active" data-tab="assessment" role="tab" aria-selected="true" type="button">Your findings</button><button class="tab" data-tab="recheck" role="tab" aria-selected="false" type="button">Recheck</button><button class="tab" data-tab="evidence" role="tab" aria-selected="false" type="button">Evidence</button></div></div>
+    <div class="panel-title"><strong id="workTitle">Assessment</strong><div class="tabnav" role="tablist" aria-label="Workspace views"><button class="tab active" id="tabAssessment" data-tab="assessment" role="tab" aria-controls="assessment" aria-selected="true" tabindex="0" type="button">Your findings</button><button class="tab" id="tabRecheck" data-tab="recheck" role="tab" aria-controls="recheck" aria-selected="false" tabindex="-1" type="button">Recheck</button><button class="tab" id="tabEvidence" data-tab="evidence" role="tab" aria-controls="evidence" aria-selected="false" tabindex="-1" type="button">Evidence</button></div></div>
     <div class="dashboard">
      <div id="sampleBanner" class="demo-note"><span aria-hidden="true">◎</span><span><strong>Example report.</strong> These results describe fictional infrastructure. Connect GitHub or import your own evidence to see a real configuration review.</span></div>
-     <section id="assessment" class="tabcontent" role="tabpanel">
+     <section id="assessment" class="tabcontent" role="tabpanel" aria-labelledby="tabAssessment" tabindex="0">
       <div class="empty" id="reportIntro" style="padding:37px 30px;background:#f5f8f7;border-color:#c9d9d1">
        <div class="section-label">Welcome to QIRA Proof</div>
        <strong style="font-size:22px;letter-spacing:-.04em">Your first clear review starts here.</strong>
@@ -240,11 +244,11 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
       </section>
       </div>
      </section>
-     <section id="recheck" class="tabcontent" role="tabpanel" hidden>
+     <section id="recheck" class="tabcontent" role="tabpanel" aria-labelledby="tabRecheck" tabindex="0" hidden>
       <div class="section-label">Compare evidence after a change</div><p class="lead">See which review indicators remain or disappear after an approved configuration change. This does not certify your systems as secure.</p>
       <div id="deltas" aria-live="polite"></div>
      </section>
-     <section id="evidence" class="tabcontent" role="tabpanel" hidden>
+     <section id="evidence" class="tabcontent" role="tabpanel" aria-labelledby="tabEvidence" tabindex="0" hidden>
       <div class="section-label">Keep a checkable record</div><p class="lead">Save your evidence locally and verify it hasn't been altered. The report hash is not a digital signature or proof that any vulnerability was prevented.</p>
       <div class="controls"><button class="btn primary" type="button" id="humanReportButton" disabled>Download printable report</button><button class="btn" type="button" id="exportButton" disabled>Download evidence JSON</button><button class="btn" type="button" id="verifyButton">Verify an existing report</button><input type="file" class="visually-hidden" id="verifyInput" accept=".json,application/json" tabindex="-1"></div>
       <p class="mini">The printable report is a self-contained HTML file with no scripts or external resources. Open it and select Print → Save as PDF. Download the evidence JSON separately if you need reproducible integrity verification.</p>
