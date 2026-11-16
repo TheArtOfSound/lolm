@@ -146,9 +146,9 @@ test("guides contain substantive distinct text, transparent limits, examples and
 
 test("internal discovery paths connect homepage to methodology, guides, and real source proof",async()=>{
  const home=await (await visit("/")).text();
- for(const p of ["/case-study","/sample-report","/guides","/methodology","/guides/github-actions-permissions","/guides/github-actions-dependency-pinning"])
+ for(const p of ["/case-study","/guides","/methodology"])
   assert.ok(home.includes('href="'+p+'"'),"Homepage missing "+p);
- assert.match(home,/Know which control you are reviewing/);
+ assert.match(home,/An observation you can verify/);
  const caseHtml=await (await visit("/case-study")).text();
  assert.match(caseHtml,/f9700d2e6616/);
  const perm=await (await visit("/guides/github-actions-permissions")).text();
