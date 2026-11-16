@@ -1,6 +1,9 @@
 import {GUIDES} from "./guides.mjs";
 export const ORIGIN="https://proof.imagineqira.com";
 export const PUBLISHED="2026-11-16";
+// IndexNow domain-ownership proof; intentionally public by protocol.
+export const INDEXNOW_KEY="e785fc5185dd625186e79d5e9a5b53d3";
+export const INDEXNOW_KEY_PATH="/"+INDEXNOW_KEY+".txt";
 export const INDEX_PATHS=[
  "/", "/case-study", "/sample-report", "/methodology", "/guides",
  "/guides/github-actions-permissions",
