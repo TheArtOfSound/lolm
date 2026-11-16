@@ -55,7 +55,7 @@ test("mobile navigation offers a single clear action while intake remains human-
  assert.match(home,/\.navi a:not\(\.navbuy\)\{display:none\}/);
  assert.match(home,/href="\/#start">Start review/);
  const intake=await view("/start-review");
- assert.match(intake,/From payment<br>to review\./);
- assert.match(intake,/Your review,<br>step by step\./);
+ assert.match(intake,/Finish your review request\./);
+ assert.match(intake,/Your details/);
  assert.doesNotMatch(intake,/LET'S<br>GET TO<br>/);
 });
