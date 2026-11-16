@@ -124,3 +124,18 @@ The previous oversized all-caps/neon dashboard landing was evaluated in actual d
 - Stripe read-back confirmed live Payment Link active, automatic tax enabled, redirect /start-review. D1 remains bound and 03:17 UTC daily 180-day retention schedule remains present. No real charge was performed.
 
 **Not proven:** The update improves presentation and task clarity but is not an independently audited usability study, independently assessed accessibility certification, completed paid fulfillment, or independent security-accuracy adjudication. The Stripe webhook remains disabled until the secret is securely installed. This is a human-reviewed service, not an automatically verified customer portal.
+
+## V7 — Real pinned source case study (November 16, 2026)
+
+A **real** first-party source review now supplements, but does not replace, the synthetic UI sample:
+
+- Public page: https://proof.imagineqira.com/case-study
+- Pinned source: \`TheArtOfSound/lolm@f9700d2e661640da4a8d0cf2bb9c046d77f8a06b\`
+- Scope: one public GitHub Actions workflow and one accompanying Python release-control script, **not** a full repository, runtime or externally adjudicated audit.
+- Three scanner-corroborated observations: declared write scopes, mutable version-tagged actions, conditional \`ssh-keyscan\` host-key bootstrap. Two separately labeled manual control-flow findings concern fail-open audit parsing and missing mandatory merge-success gate. Existing issue #72 links to remediation.
+- All five entries include source links and explicitly unproven claims. No arbitrary severity scores, customer testimonials or implied compromise.
+- Reproduction: \`commercial/CASE_STUDY_METHOD.md\` documents the exact Git blobs, fixture SHA-1 verification, source slices, and scanner/manual separation. CI [265 passing JS and 19 Python tests](https://github.com/TheArtOfSound/lolm/actions/runs/43855709443) includes 9 real-case tests.
+- Visual inspection: staged desktop, 390px mobile, individual YAML and Python finding sections and homepage feature; then promoted live to Cloudflare Worker version \`c41ae02f-64d7-469e-be86-f7ebd08362a6\`, 100% traffic. Staging workers.dev domain disabled after promotion.
+- Production readback: 5 finding rows and 6 source links, unchanged active $299 Stripe checkout and intake, D1 binding and 03:17 UTC retention, and deliberately unconfigured signed webhook verification.
+
+The pending independent real-world accuracy adjudication and operational paid fulfillment remain separate priorities. **Do not present this first-party validation as independently certified.**
