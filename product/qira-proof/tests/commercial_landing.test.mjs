@@ -21,7 +21,7 @@ test("checkout is withheld when the merchant has not been selected",async()=>{
  const html=await response.text();
  assert.match(html,/Request a secure checkout/);
  assert.match(html,/mailto:bryanleonard@imagineqira.com/);
- assert.match(html,/not a payment/);
+ assert.match(html,/does not charge you/);
  assert.doesNotMatch(html,/href="https:\/\/buy\.stripe\.com\//);
 });
 test("only Stripe-hosted HTTPS checkout links can activate purchase",async()=>{
@@ -86,3 +86,5 @@ test("post-payment handoff is available without claiming the URL proves a paymen
  assert.match(html,/mailto:bryanleonard@imagineqira.com/);
  assert.doesNotMatch(html,/session_id=/);
 });
+
+test("pending checkout identifies Trend merchant clearly",async()=>{const html=await (await worker.fetch(request())).text();assert.match(html,/Trend is selected as Qira Proof/);assert.doesNotMatch(html,/awaits confirmation of the Qira merchant/);});
