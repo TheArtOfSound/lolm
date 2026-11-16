@@ -52,16 +52,21 @@ function controlsView(controls){
   return `<article class="finding"><h3>${nice(item.title)}</h3><p>${nice(item.interpretation)}</p><ul>${links}</ul></article>`;
  }).join("");
 }
-function writeScopeInventory(facts){
+function writeScopeInventory(facts,inventory=[]){
  const write=facts.filter(f=>f.provider==="github"&&f.signal==="workflow_token_write_permission"&&f.value===true);
  const unknown=facts.filter(f=>f.provider==="github"&&f.signal==="workflow_token_write_permission"&&f.value==="unknown");
  if(!write.length&&!unknown.length)return '<p class="muted">No write-level or unknown permission declarations are present in the supplied evidence. This is not a claim that effective token permissions were independently validated.</p>';
- const rows=[...write,...unknown].map(f=>{
-  const url=safeHref(f.source_url);
+ const inventoryMap=new Map(inventory.map(x=>[x.asset,x.scopes]));
+ const rows=[...write,...unknown].flatMap(f=>{
   const file=f.asset.includes(":.github/workflows/")?f.asset.split(":.github/workflows/")[1]:f.asset;
-  const label=nice(file)+" — "+(f.value===true?"write declared":"unverified");
-  return url?`<li><a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a></li>`:
-   `<li>${label} (evidence link unavailable)</li>`;
+  const scopes=inventoryMap.get(f.asset);
+  const pointers=scopes?.length?scopes.map(x=>({url:x.source_url,label:file+" — "+x.scope+": write"})):
+   [{url:f.source_url,label:file+" — "+(f.value===true?"write scopes not enumerated":"unverified")}];
+  return pointers.map(x=>{
+   const url=safeHref(x.url),label=nice(x.label);
+   return url?`<li><a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a></li>`:
+    `<li>${label} (evidence link unavailable)</li>`;
+  });
  }).join("");
  return `<p>${write.length} workflow(s) declare write-level permissions; ${unknown.length} workflow(s) have unknown permission declarations.</p>
  <p class="muted">This is an authorization inventory, not a vulnerability count. An id-token: write scope may be intentional for OIDC publishing. Inspect source and event context before deciding what to change.</p><ul>${rows}</ul>`;
@@ -146,7 +151,7 @@ export async function renderHumanReport(receipt,{sample=false}={}){
  <p class="muted">Some providers may have been omitted. Facts from different cloud services are not automatically linked to a single application.</p>
  <h2>Observations and recommended verification</h2>${findings}
  <h2>Recognized safeguards</h2><p class="muted">These are source declarations, not independent confirmation of effective permissions, organization policy or overall security.</p>${controlsView(assessment.controls)}
- <h2>Declared write-level permission inventory</h2>${writeScopeInventory(baseline.facts)}
+ <h2>Declared write-level permission inventory</h2>${writeScopeInventory(baseline.facts,baseline.permission_inventory)}
  <h2>Follow-up comparison</h2>${comparisonView(comparison)}
  <h2>Evidence receipt</h2><p>Reproduce this review using the companion JSON evidence receipt. The hash is only meaningful when verified against that JSON.</p>
  <div class="hash"><code>SHA-256: ${escapeHTML(sha256)}</code></div>
