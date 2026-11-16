@@ -24,10 +24,14 @@ def reader(url,token,provider):
             raise collector.ProviderError("resource forbidden")
         if "/contents/" in url:
             text='''name: deploy-production
-steps:
-  - uses: actions/checkout@v4
-  - name: Set up SSH
-    run: ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+on: push
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up SSH
+        run: ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
 '''
             return {"encoding":"base64","content":base64.b64encode(text.encode()).decode()}
         raise AssertionError("unknown github request")
@@ -87,6 +91,26 @@ class CollectorTests(unittest.TestCase):
         self.assertTrue(any("?ref=0123456789abcdef0123456789abcdef01234567" in x for x in seen))
         self.assertTrue(any("/branches/development/protection" in x for x in seen))
         self.assertTrue(any("/blob/0123456789abcdef0123456789abcdef01234567/" in f["source_url"] for f in out["facts"] if f["signal"]=="runtime_ssh_keyscan"))
+
+    def test_non_action_uses_values_are_ignored(self):
+        sha="0123456789abcdef0123456789abcdef01234567"
+        source="\n".join([
+          "on: push","env:","  uses: adversary/imaginary@v1",
+          "jobs:","  verify:","    runs-on: ubuntu-latest",
+          "    env:","      uses: adversary/imaginary@v2",
+          "    steps:","      - name: A real pinned action",
+          "        uses: actions/checkout@"+sha,
+          "        with:","          uses: adversary/imaginary@v3",
+          "        env:","          uses: adversary/imaginary@v4"])
+        self.assertEqual(collector.scan_workflow_syntax(source)["workflow_unpinned_actions"],(False,None))
+
+    def test_step_field_and_job_reusable_action_are_detected(self):
+        step="\n".join(["on: push","jobs:","  check:","    steps:",
+                       "      - name: Action","        uses: example/runner@v3"])
+        self.assertEqual(collector.scan_workflow_syntax(step)["workflow_unpinned_actions"],(True,6))
+        reused="\n".join(["on: workflow_call","jobs:","  release:",
+                          "    uses: example/workflows/.github/workflows/release.yml@v2"])
+        self.assertEqual(collector.scan_workflow_syntax(reused)["workflow_unpinned_actions"],(True,4))
 
     def test_nested_permissions_never_claim_to_restrict_actual_workflow_token(self):
         sample="on: push\nenv:\n  permissions:\n    contents: read\njobs:\n  test:\n    steps:\n      - run: echo okay"

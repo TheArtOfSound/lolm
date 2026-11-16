@@ -88,3 +88,12 @@ accessibility review and independent reviewer accuracy testing remain open.
 **Gate:** Keep PR #71 draft and the preview labeled research until the outstanding
 security, accessibility and non-owner validation gates are met. A passing CI job
 does not satisfy them.
+
+### Action-location accuracy regression (draft branch; November 16)
+The hosted JavaScript analyzer and local Python collector now distinguish executable
+\`uses:\` declarations inside real GitHub Action steps or reusable workflow jobs
+from identically shaped, non-executable inputs nested under \`env\` or \`with\`.
+Adversarial fixtures verify both false-positive avoidance and genuine step/job
+detection. This is a bounded syntax check, **not** a complete YAML parser or
+independently adjudicated 100-workflow benchmark. Re-run the latest preview
+and repeat source-linked human checks before treating report totals as current.

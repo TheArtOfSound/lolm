@@ -122,3 +122,25 @@ test("non-pull-request-target workflow event maps are recognized as false only w
  const workflow=["on:","  schedule:","    - cron: '15 5 * * *'","  workflow_dispatch:","jobs:","  test:"].join("\n");
  assert.equal(scanWorkflowSyntax(workflow).workflow_pull_request_target_trigger.value,false);
 });
+
+test("nested environment and action input keys named uses do not create false-positive action findings",()=>{
+ const source=[
+  "name: Input values","on: push","env:","  uses: adversary/imaginary@v1",
+  "jobs:","  verify:","    runs-on: ubuntu-latest",
+  "    env:","      uses: adversary/imaginary@v2",
+  "    steps:","      - name: Real pinned action",
+  "        uses: actions/checkout@"+sha,
+  "        with:","          uses: adversary/imaginary@v3",
+  "        env:","          uses: adversary/imaginary@v4",
+  "      - run: echo finished"
+ ].join("\n");
+ assert.deepEqual(scanWorkflowSyntax(source).workflow_unpinned_actions,{value:false,line:null});
+});
+test("real step-field and job-level reusable workflow uses declarations are both identified",()=>{
+ const step=["on: push","jobs:","  verify:","    steps:","      - name: Real action",
+  "        uses: example/runner@v3"].join("\n");
+ assert.deepEqual(scanWorkflowSyntax(step).workflow_unpinned_actions,{value:true,line:6});
+ const reusable=["on: workflow_call","jobs:","  release:",
+  "    uses: example/workflows/.github/workflows/release.yml@v2"].join("\n");
+ assert.deepEqual(scanWorkflowSyntax(reusable).workflow_unpinned_actions,{value:true,line:4});
+});

@@ -115,10 +115,40 @@ def scan_workflow_syntax(text):
         rows.append(dict(text=raw[pad:],shell="",pad=pad,line=lineno))
     action=re.compile(r"^\s*(?:-\s*)?uses:\s*['\"]?([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_./-]+)?)@([A-Za-z0-9_.-]{1,128})['\"]?(?:\s*(?:#.*)?)?$")
     ssh=re.compile(r"(^|[^A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)")
+    # Only job-level reusable workflows and actual steps execute "uses".
+    # Identical keys under env/with/outputs are values, not actions.
+    def parent_index(index):
+        pad=rows[index]["pad"]
+        for j in range(index-1,-1,-1):
+            if rows[j]["text"] and rows[j]["pad"]<pad:
+                return j
+        return None
+
+    def is_job(index):
+        if index is None or re.fullmatch(r"[A-Za-z0-9_-]+:\s*(?:#.*)?",rows[index]["text"]) is None:
+            return False
+        parent=parent_index(index)
+        return (parent is not None and rows[parent]["pad"]==0 and
+                re.fullmatch(r"jobs:\s*(?:#.*)?",rows[parent]["text"]) is not None)
+
+    def is_action(index):
+        row=rows[index]
+        parent=parent_index(index)
+        if parent is None:
+            return False
+        sequence=re.match(r"^-\s+uses:",row["text"]) is not None
+        if not sequence and is_job(parent):
+            return True
+        steps=parent if sequence else parent_index(parent)
+        if (steps is None or
+            re.fullmatch(r"steps:\s*(?:#.*)?",rows[steps]["text"]) is None or
+            not is_job(parent_index(steps))):
+            return False
+        return sequence or re.match(r"^-[ \t]+[A-Za-z_][A-Za-z0-9_-]*:",rows[parent]["text"]) is not None
     mutable=[];scan=[]
-    for row in rows:
+    for i,row in enumerate(rows):
         match=action.fullmatch(row["text"])
-        if match and re.fullmatch(r"[a-fA-F0-9]{40}",match.group(2)) is None:
+        if match and is_action(i) and re.fullmatch(r"[a-fA-F0-9]{40}",match.group(2)) is None:
             mutable.append(row["line"])
         if ssh.search(row["shell"] or row["text"]):
             scan.append(row["line"])

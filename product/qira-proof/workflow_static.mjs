@@ -31,6 +31,29 @@ function activeLines(text){
   return {text:raw.slice(pad),pad,line:number};
  });
 }
+// A "uses" key only invokes an action as a job-level reusable workflow or
+// as a step of a recognized job. Keys nested under env/with/outputs are data.
+function parentRow(rows,index){
+ const pad=rows[index].pad;
+ for(let i=index-1;i>=0;i--)if(rows[i].text&&rows[i].pad<pad)return i;
+ return -1;
+}
+function isJobRow(rows,index){
+ if(index<0||!/^[A-Za-z0-9_-]+:\s*(?:#.*)?$/.test(rows[index].text))return false;
+ const parent=parentRow(rows,index);
+ return parent>=0&&rows[parent].pad===0&&/^jobs:\s*(?:#.*)?$/.test(rows[parent].text);
+}
+function actionLocation(rows,index){
+ const row=rows[index],parent=parentRow(rows,index);
+ if(parent<0)return false;
+ const sequence=/^-\s+uses:/.test(row.text);
+ // A job can invoke an external reusable workflow directly.
+ if(!sequence&&isJobRow(rows,parent))return true;
+ const steps=sequence?parent:parentRow(rows,parent);
+ if(steps<0||!/^steps:\s*(?:#.*)?$/.test(rows[steps].text))return false;
+ if(!isJobRow(rows,parentRow(rows,steps)))return false;
+ return sequence||/^-[ \t]+[A-Za-z_][A-Za-z0-9_-]*:/.test(rows[parent].text);
+}
 // Only GitHub Actions root permissions and direct per-job permissions count.
 // An arbitrary nested key named "permissions" (env, with, a step, etc.) is
 // not authoritative. Ambiguous nesting is reported unknown.
@@ -117,10 +140,11 @@ function triggerDeclaration(rows){
 export function scanWorkflowSyntax(text){
  const rows=activeLines(text);
  const mutable=[],ssh=[];
- for(const r of rows){
+ for(let i=0;i<rows.length;i++){
+  const r=rows[i];
   if(!r.text&&!r.shell)continue;
   const action=r.text?ACTION.exec(r.text):null;
-  if(action&&!/^[a-fA-F0-9]{40}$/.test(action[2]))mutable.push(r.line);
+  if(action&&actionLocation(rows,i)&&!/^[a-fA-F0-9]{40}$/.test(action[2]))mutable.push(r.line);
   // Shell blocks are not YAML declarations, but can contain the SSH command.
   if(SSH.test(r.shell||r.text))ssh.push(r.line);
  }
