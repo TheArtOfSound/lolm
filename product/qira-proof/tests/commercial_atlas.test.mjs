@@ -26,7 +26,7 @@ test("clicking every evidence category changes its explanation, source reference
   addEventListener(type,listener){this.listeners[type]=listener;},
   setAttribute(key,value){this.attrs[key]=value;}
  }));
- const ids=["signalTitle","signalText","sourceLine","signalType","graphLabelTiny","graphLabel","graphLabelSub"];
+ const ids=["signalTitle","signalText","sourceLine","signalType","graphLabelTiny","graphLabel","graphLabelSub","sourceCode"];
  const elements=Object.fromEntries(ids.map(id=>[id,{textContent:""}]));
  const document={
   querySelectorAll(selector){assert.equal(selector,"[data-signal]");return buttons;},
@@ -34,9 +34,9 @@ test("clicking every evidence category changes its explanation, source reference
  };
  vm.runInNewContext(script,{document});
  const expected=[
-  {signal:"action",title:"Mutable action reference",line:"27",node:"action@v4"},
-  {signal:"scope",title:"Declared write permission",line:"8",node:"contents"},
-  {signal:"ssh",title:"SSH host discovery",line:"44",node:"ssh-keyscan"}
+  {signal:"action",title:"Mutable action reference",line:"27",node:"action@v4",source:"uses: actions/checkout@v4"},
+  {signal:"scope",title:"Declared write permission",line:"8",node:"contents",source:"id-token: write"},
+  {signal:"ssh",title:"SSH host discovery",line:"44",node:"ssh-keyscan",source:"ssh-keyscan -H"}
  ];
  for(const item of expected){
   const button=buttons.find(x=>x.dataset.signal===item.signal);
@@ -45,6 +45,7 @@ test("clicking every evidence category changes its explanation, source reference
   assert.equal(elements.signalTitle.textContent,item.title);
   assert.ok(elements.sourceLine.textContent.endsWith(" : "+item.line));
   assert.equal(elements.graphLabel.textContent,item.node);
+  assert.ok(elements.sourceCode.textContent.includes(item.source),"The source excerpt must follow the selected observation");
   assert.match(elements.signalText.textContent,/\S{8}/);
   assert.equal(button.attrs["aria-pressed"],"true");
   assert.ok(buttons.filter(x=>x!==button).every(x=>x.attrs["aria-pressed"]==="false"));
@@ -58,4 +59,39 @@ test("mobile layout keeps primary actions and CSS-only workflow graphic without 
  assert.match(html,/href="\/start-review"/);
  assert.doesNotMatch(html,/src="https?:\/\//);
  assert.doesNotMatch(html,/\bfetch\(/);
+});
+
+test("report specimen is prominently marked synthetic and includes actionable evidence structure",async()=>{
+ const html=await (await worker.fetch(new Request("https://proof.imagineqira.com/"))).text();
+ assert.match(html,/LESS NOISE\./);
+ assert.match(html,/MORE PROOF\./);
+ assert.match(html,/ILLUSTRATIVE SAMPLE/);
+ assert.match(html,/THIS SAMPLE IS SYNTHETIC, NOT A REAL CUSTOMER RESULT/);
+ assert.match(html,/NOT PROVEN/);
+ assert.match(html,/RECOMMENDED REVIEW/);
+ assert.match(html,/id="sourceCode"/);
+ assert.match(html,/TRACE \/ WORKFLOW SOURCE EXCERPT/);
+});
+test("post-purchase intake is a guided dossier rather than an auto-verification promise",async()=>{
+ const res=await worker.fetch(new Request("https://proof.imagineqira.com/start-review"));
+ assert.equal(res.status,200);
+ const html=await res.text();
+ assert.match(html,/intake-head/);
+ assert.match(html,/intake-rail/);
+ assert.match(html,/intake-actions/);
+ assert.match(html,/PAYMENT NOT VERIFIED/);
+ assert.match(html,/does not verify payment or grant an entitlement/);
+ assert.match(html,/Email paid-review intake/);
+ assert.match(html,/Never email passwords/);
+ assert.match(html,/up to 20 GitHub Actions workflow files/);
+ assert.match(html,/mailto:bryanleonard@imagineqira.com/);
+});
+test("legal content describes $299 inclusive Stripe Tax without falsely claiming registration",async()=>{
+ const terms=await (await worker.fetch(new Request("https://proof.imagineqira.com/terms"))).text();
+ assert.match(terms,/\$299 USD, tax-inclusive one-time/);
+ assert.match(terms,/Stripe automatic tax uses your billing details/);
+ assert.match(terms,/tax collection is not implied where Trend is not registered/);
+ const privacy=await (await worker.fetch(new Request("https://proof.imagineqira.com/privacy"))).text();
+ assert.match(privacy,/does not use tracking cookies/);
+ assert.match(privacy,/Stripe handles checkout, invoices and billing information for Trend/);
 });
