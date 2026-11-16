@@ -101,3 +101,26 @@ Deployment: `qira-proof-commercial` Worker version `f5aa99f0-79fe-4dad-a469-133f
 - **Observed ledger state at release:** 0 events / 0 orders. No artificial Stripe event or real customer charge was injected.
 - **Safety read-back:** Stripe endpoint \`we_1UcMjVGz3eX0vCtENBLvl20a\` **disabled** because the protected signing-secret binding has not been installed. \`/api/orders/health\` reports \`unconfigured\`. Public \`/health\` continues to report checkout configured, and the active $299 Stripe link is unchanged.
 - **Deployment controls:** the missing secret MUST NOT be worked around by removing signature verification, accepting redirects as proof of payment, copying the secret into public source, or storing it in a plain-text binding.
+
+## V6 — Human-directed visual system and service-first product page (November 16, 2026)
+
+The previous oversized all-caps/neon dashboard landing was evaluated in actual desktop and phone screenshots and found to resemble generic AI-generated marketing collateral. It was replaced rather than embellished.
+
+**Changes deployed**
+- First screen now clearly states the human-reviewed GitHub Actions service, scope, limits, source of evidence, $299 one-time tax-inclusive price, read-only preview and sample deliverable.
+- Replaced giant slogan, fluorescent palette, pseudo-SOC panel and rotated labels with restrained editorial typography, warm neutral surfaces, graphite navigation, minimal oxide accent and simple line-based review details.
+- Moved the existing synthetic workflow demonstration **below the service description** instead of treating it like the real product; preserved its explicit illustrative disclaimers and stateful observation-to-source interaction.
+- Revised process, written-report specimen, offer and FAQ copy to be specific, descriptive and non-hyperbolic.
+- Reworked the sample-report screen to an editorial reference document; kept all three accessible case variants, source excerpts, limitations, state announcements, keyboard controls and print behavior.
+- Removed staged/fake ticket language from paid intake. Mobile top navigation now contains the brand plus a single purchase action; manual receipt intake remains available.
+- Explicitly did **not** insert fake testimonials, fake customer risk scores, fabricated case studies, or unverified scanner-accuracy claims.
+
+**Verification**
+- Source commit \`61f1715fb02098ad70e49f8c0f02d53fe354ff5b\`.
+- Passing CI: [256 JavaScript + 19 Python tests](https://github.com/TheArtOfSound/lolm/actions/runs/43849641955), including five service-first visual-structure regressions and all payment ledger/security tests.
+- Staged in a separate \`qira-proof-editorial-preview-20261116\` Worker, reviewed actual 1440px/390px page screenshots and pricing/report/intake panels, then promoted to production; staged public workers.dev access disabled afterward.
+- Production Worker version \`43396913-7eac-46c1-8a67-173e7a592718\`, 100% traffic; production desktop and 390px phone browser captures confirmed the new hierarchy.
+- Live browser checks confirmed homepage \`#buyLink\` still points to Trend Stripe \`https://buy.stripe.com/9B63cvexo0ts3OBfyv7kc07\`, /sample-report, /start-review, \`/health\` checkout_configured=true, and \`/api/orders/health\` unconfigured (the secret is still absent).
+- Stripe read-back confirmed live Payment Link active, automatic tax enabled, redirect /start-review. D1 remains bound and 03:17 UTC daily 180-day retention schedule remains present. No real charge was performed.
+
+**Not proven:** The update improves presentation and task clarity but is not an independently audited usability study, independently assessed accessibility certification, completed paid fulfillment, or independent security-accuracy adjudication. The Stripe webhook remains disabled until the secret is securely installed. This is a human-reviewed service, not an automatically verified customer portal.
