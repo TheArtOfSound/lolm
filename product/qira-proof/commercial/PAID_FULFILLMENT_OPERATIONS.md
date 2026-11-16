@@ -1,0 +1,79 @@
+# Qira Proof — live Trend checkout and human-review fulfillment operations
+
+**Production:** https://proof.imagineqira.com/  
+**Merchant:** Trend (existing live Stripe account)  
+**Founding service:** $299 USD, one-time, tax-inclusive, GitHub Actions configuration review  
+**Intake:** https://proof.imagineqira.com/start-review  
+**Stripe payment link:** https://buy.stripe.com/9B63cvexo0ts3OBfyv7kc07
+
+This is a paid, human-reviewed service. Stripe signature validation and intake storage have been implemented; no production test charge or customer report delivery was performed in this release.
+
+## Payment components already in production
+
+| Component | Configured state |
+| --- | --- |
+| Stripe product | \`prod_Vdd7FJ2Ob210UH\` — active; Consulting Services tax code \`txcd_20060048\` |
+| Stripe one-time price | \`price_1UcLrjGz3eX0vCtEC9Haqd02\` — USD 29,900 cents, inclusive tax behavior |
+| Payment Link | \`plink_1UcLsTGz3eX0vCtEVB7vSsQI\` — active; automatic tax enabled |
+| Redirect | \`https://proof.imagineqira.com/start-review?session_id={CHECKOUT_SESSION_ID}\` |
+| Webhook | \`we_1UcXCyGz3eX0vCtEsYm87VFp\` — enabled at \`/api/stripe/webhook\` |
+| Webhook event types | \`checkout.session.completed\`, \`checkout.session.async_payment_succeeded\`, \`checkout.session.async_payment_failed\` |
+| Cloudflare secrets | \`QIRA_STRIPE_WEBHOOK_SECRET\`, \`QIRA_ORDER_EMAIL_PEPPER\` configured, do not expose |
+| Ledger | D1 binding \`QIRA_PROOF_ORDERS\`, database \`8554f204-0b7b-4c15-8307-4786c8443cf3\` |
+| Retention | \`17 3 * * *\` UTC cleanup schedule; 180-day ephemeral ledger retention |
+
+A duplicate product, Price, Payment Link, or additional Stripe account is **not needed**. Never move Qira Proof payments into another shared account without explicitly reconciling existing links, taxes and refunds.
+
+## What the customer experiences
+
+1. Customer enters a GitHub \`owner/repository\` address on the homepage. This validates syntax only, without accessing GitHub or storing content on the server.
+2. Customer purchases the one-time assessment at hosted Stripe checkout. Stripe, not the Worker, collects payment data.
+3. Stripe redirects the browser with a Checkout Session ID. A redirect **alone does not establish payment**.
+4. The Worker checks its ledger of previously verified, HMAC-signed Stripe events for that session. A completed/paid session matching the exact Qira Proof Payment Link, total and currency receives a \`paid\` state.
+5. If a paid session has a hashed checkout email attached, the buyer can submit the checkout email and repository into the verified same-origin \`/api/orders/intake\` form. The checkout email is HMAC-matched to the digest stored from the signed webhook. The accepted intake has state \`awaiting_authorization\` and is idempotent on session ID.
+6. For pending events, Stripe delays, or unavailable verification, the site must not grant access and should instruct the customer to check their Stripe receipt or contact Qira. **Do not invite the buyer to pay twice solely because the status is pending**.
+7. Qira verifies identity and repository authorization before human assessment and delivery. The paid intake does not automatically scan the repository or release private findings.
+
+## Operations when a paid order arrives
+
+- In the Trend Stripe Dashboard, verify the payment, current amount, refund/dispute status, customer identity and applicable tax treatment for the **specific** Checkout Session.
+- Inspect the Cloudflare D1 \`qira_orders\` and \`qira_intakes\` tables for new, matched \`paid\` and \`awaiting_authorization\` records. These tables contain customer contact email and repository names; only authorized operators should access them.
+- Agree on repository scope, count of workflow files (up to 20), access method and delivery timing. Never request GitHub passwords or tokens by email.
+- Obtain repository authorization through the read-only GitHub App workflow where applicable; do not treat a public repository name as private access permission.
+- Use a pinned source snapshot to prepare the report. Each item needs a precise file/line citation, what was observed, what was not proven, a suggested review/remediation and a coverage statement.
+- Review the report with a human before sending it. Provide a secure final deliverable and confirm receipt through the checkout email/contact channel.
+- Update the intake state to \`authorized\`, \`in_review\`, \`delivered\` or \`cancelled\` after the corresponding real action, not in anticipation.
+
+Example **read-only** operator query in Cloudflare D1 (avoid logging or sharing raw emails in public PR comments):
+
+\`\`\`sql
+SELECT
+  i.session_id,
+  i.state,
+  i.submitted_at,
+  o.status AS stripe_event_status,
+  o.amount_total,
+  o.currency
+FROM qira_intakes AS i
+JOIN qira_orders AS o ON o.session_id=i.session_id
+ORDER BY i.submitted_at DESC
+LIMIT 50;
+\`\`\`
+
+The Stripe Dashboard is the authoritative accounting source. D1 status is a bounded **webhook receipt ledger**, not a complete refund/dispute accounting system. The current endpoint subscribes only to Checkout Session events: before service fulfillment, check Stripe directly for any later refund, dispute, or cancellation. Do **not** infer payment is still valid solely because D1 previously recorded \`paid\`.
+
+## Safety and failure behaviors
+
+- Signed webhook required: \`stripe-signature\`, fresh timestamp and protected secret. Never emulate a paid event in production or store raw event JSON, billing details, card data, tokens or secrets.
+- Accept only the configured live Payment Link, \`$299.00\` total and \`usd\` currency. Reject mismatches and asynchronous transactions that are not yet paid.
+- An email-address claim alone does not prove customer identity; checkout email must match the signed event's digest, and repository authorization is separate.
+- The public session-ID status is not customer authentication; it may return a limited pending/paid state without exposing buyer data or private reports.
+- The website's \`/start-review\` is \`noindex\`, \`no-store\` and \`no-referrer\`. Session IDs are not included in SEO canonical or social metadata.
+- DB errors should surface an unavailable state so Stripe retries rather than silently accepting an unrecorded payment.
+- Exact production charge/fulfillment remains unproven until a real buyer places an order. This runbook does not constitute that proof.
+
+## Unfinished operational automation (do not overclaim)
+
+The webhook and protected paid-intake route are active, but a **human** must still monitor the D1 intake queue, verify Stripe's latest refund/dispute state, obtain read-only authorization, produce the report and send the final deliverable. No automatic operations notification or customer report-generation system was activated here.
+
+The immediate next integration, if the team wants a zero-touch operational queue, is a protected owner-facing order dashboard or an authorized transactional notification provider; either requires deliberately scoped admin authentication and operational alerting, not a public D1 endpoint. A signed webhook does not eliminate that requirement.
