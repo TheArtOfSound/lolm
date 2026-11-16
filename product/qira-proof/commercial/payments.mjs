@@ -120,3 +120,18 @@ export function checkoutBanner(status){
  const icon=paid?"✓":"◷";
  return '<div class="receipt-banner '+(paid?"confirmed":"pending")+'" role="status"><span aria-hidden="true" class="receipt-indicator">'+icon+'</span><div><strong>'+heading+'</strong><p>'+detail+'</p></div></div>';
 }
+
+export async function purgeOldOrderRows(db,atSeconds=Math.floor(Date.now()/1000)){
+ // This database is a short-lived receipt-status ledger, not an accounting
+ // system. Stripe retains the authoritative payment/refund history. Remove
+ // ephemeral session handles and event IDs after 180 days.
+ if(!db||!Number.isSafeInteger(atSeconds)||atSeconds<180*86400)throw Error("retention_unavailable");
+ const cutoff=atSeconds-180*86400;
+ const actions=[
+  db.prepare("DELETE FROM qira_events WHERE received_at < ?").bind(cutoff),
+  db.prepare("DELETE FROM qira_orders WHERE updated_at < ?").bind(cutoff)
+ ];
+ const result=await db.batch(actions);
+ if(!Array.isArray(result)||result.some(x=>x.success===false))throw Error("retention_write_failed");
+ return true;
+}
