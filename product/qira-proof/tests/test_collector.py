@@ -16,7 +16,9 @@ WHEN="2026-11-15T19:00:00Z"
 
 def reader(url,token,provider):
     if provider=="github":
-        if "/branches/main/protection" in url:
+        if url.endswith("/repos/org/repository"):
+            return {"default_branch":"development"}
+        if "/branches/development/protection" in url:
             raise collector.ProviderError("resource forbidden")
         if "/contents/" in url:
             text='''name: deploy-production
@@ -48,6 +50,25 @@ class CollectorTests(unittest.TestCase):
         self.assertNotIn(TOKEN_SENTINEL,json.dumps(out))
         self.assertNotIn("PRIVATE_KEY",json.dumps(out))
         self.assertNotIn("private",json.dumps(out))
+
+    def test_non_main_branch_and_explicit_workflow_selection(self):
+        seen=[]
+        def tracking(url,token,provider):
+            seen.append(url)
+            return reader(url,token,provider)
+        out=collector.build_snapshot(
+          github_workflows=["org/repository:.github/workflows/deploy-production.yml"],
+          github_token="x",reader=tracking,when=WHEN)
+        self.assertTrue(out["facts"])
+        self.assertTrue(any("?ref=development" in x for x in seen))
+        self.assertTrue(any("/branches/development/protection" in x for x in seen))
+        self.assertTrue(any("/blob/development/" in f["source_url"] for f in out["facts"] if f["signal"]=="runtime_ssh_keyscan"))
+
+    def test_reject_duplicate_repository_selection(self):
+        with self.assertRaises(ValueError):
+            collector.build_snapshot(github_repos=["org/repository"],
+                github_workflows=["org/repository:.github/workflows/deploy-production.yml"],
+                github_token="x",reader=reader,when=WHEN)
 
     def test_no_credentials_no_collection(self):
         with self.assertRaises(collector.ProviderError):
