@@ -1,5 +1,6 @@
 import {SCHEMA,normalizeSnapshot,mergeSnapshots,analyzeSnapshot,compareSnapshots,proof,verifyProof}
 from "./core.mjs";
+import {renderHumanReport} from "./report.mjs";
 
 const DEMO_DATE="2026-11-15T19:00:00Z";
 const DEMO={
@@ -46,6 +47,7 @@ function render(){
  el("reportIntro").hidden=showing;
  el("assessmentData").hidden=!showing;
  el("exportButton").disabled=!showing;
+ el("humanReportButton").disabled=!showing;
  el("sampleBanner").hidden=state.mode!=="demo";
  document.body.dataset.reportType=state.mode==="idle"?"unstarted":state.mode==="demo"?"example":"customer";
  el("assetsCount").textContent=report.assets;
@@ -182,11 +184,14 @@ el("demoRecheck").addEventListener("click",()=>{
 });
 el("clearFollowup").addEventListener("click",()=>{state.after=null;render();buttonTab("assessment")});
 document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>buttonTab(b.dataset.tab)));
-function downloadJson(data,filename){
- const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+function downloadFile(content,filename,type){
+ const blob=new Blob([content],{type});
  const url=URL.createObjectURL(blob),a=document.createElement("a");
  a.href=url;a.download=filename;a.click();
  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function downloadJson(data,filename){
+ downloadFile(JSON.stringify(data,null,2),filename,"application/json");
 }
 el("exportButton").addEventListener("click",async()=>{
  try{
@@ -196,6 +201,19 @@ el("exportButton").addEventListener("click",async()=>{
   el("verificationState").textContent="Locally generated. Hash is not a digital signature or provider authentication.";
   downloadJson(artifact,"qira-proof-evidence.json");
  }catch(error){el("verificationState").textContent="Unable to generate evidence: "+error.message;}
+});
+el("humanReportButton").addEventListener("click",async()=>{
+ try{
+  if(state.mode==="idle")throw Error("Start an assessment before exporting a customer report.");
+  const artifact=await proof(state.before,state.after);
+  const html=await renderHumanReport(artifact,{sample:state.mode==="demo"});
+  state.last=artifact;
+  el("digestValue").textContent=artifact.sha256;
+  el("verificationState").textContent=state.mode==="demo"?
+   "Downloaded a clearly labeled fictional example. It is not a customer review.":
+   "Printable assessment downloaded. Open the HTML file locally and use Print → Save as PDF. Export the companion JSON evidence receipt separately for reproducible verification.";
+  downloadFile(html,"qira-proof-configuration-review.html","text/html;charset=utf-8");
+ }catch(error){el("verificationState").textContent="Unable to export human report: "+error.message;}
 });
 el("verifyButton").addEventListener("click",()=>el("verifyInput").click());
 el("verifyInput").addEventListener("change",async event=>{
