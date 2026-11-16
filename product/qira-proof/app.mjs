@@ -51,7 +51,8 @@ function render(){
  el("sampleBanner").hidden=state.mode!=="demo";
  document.body.dataset.reportType=state.mode==="idle"?"unstarted":state.mode==="demo"?"example":"customer";
  el("assetsCount").textContent=report.assets;
- el("reviewCount").textContent=report.counts.review+report.counts.high;
+ el("reviewCount").textContent=new Set(report.findings.filter(x=>x.level!=="unknown").map(x=>x.check)).size;
+ el("observationsCount").textContent=report.counts.review+report.counts.high;
  el("unknownCount").textContent=report.counts.unknown;
  el("factsCount").textContent=report.facts;
  const coverageBox=el("scanCoverage");
@@ -360,7 +361,7 @@ async function runConnectedReview(workflow){
   render();buttonTab("assessment");
   if(data.coverage){
    const c=data.coverage;
-   gitMessage(c.complete?"Reviewed all "+c.assessed+" discovered workflows. Findings are separated by workflow.":
+   gitMessage(c.complete?"Reviewed all "+c.assessed+" discovered workflows. Related observations are grouped, with source links for each workflow.":
     "Review partially completed: "+c.assessed+" workflow(s) assessed; "+c.skipped+" skipped or failed"+
     (c.truncated?"; more than 20 available.":"")+". See coverage details in results.",!c.complete);
   }else gitMessage("Assessment ready. Your GitHub credentials stayed on the server.");
