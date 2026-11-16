@@ -215,7 +215,7 @@ revocation, and overall policy compliance require separate analysis.
 
 ## Evidence versioning and limitations
 
-The current JSON receipt format is `qira-proof/evidence-v2` and includes an explicit analysis policy version. The verifier also supports previously exported deterministic `qira-proof/evidence-v1` receipts. Neither format is a signed provider attestation.
+The current JSON receipt format is `qira-proof/evidence-v3` with an explicit analysis policy version. It can include a bounded `permission_inventory` of recognized, declared GitHub write scopes with individually commit-pinned, line-linked source evidence. The verifier also supports earlier deterministic `qira-proof/evidence-v1` and `qira-proof/evidence-v2` receipts. All three formats are unsigned integrity checks, **not** provider attestations.
 
 Syntactic GitHub Actions checks now include mutable external action references, SSH host discovery indicators, explicitly declared permission scopes and `pull_request_target` triggers. Unsupported YAML syntax is treated as unknown rather than assumed safe. A declared read-only scope is useful evidence but is **not** proof of the effective runtime token permission. GitHub's job-level, repository, organization and event policies must be reviewed separately.
 
