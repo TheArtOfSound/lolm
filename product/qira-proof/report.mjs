@@ -42,6 +42,15 @@ function coverageView(facts){
     <span>${assets===1?"asset":"assets"} · ${subset.length} facts</span></div>`;
  }).join("");
 }
+function repositoryCoverageView(coverage){
+ if(!coverage)return '<p class="muted">No repository-wide workflow coverage record was supplied. This report may represent only one file or a limited set of evidence facts.</p>';
+ const n=coverage;
+ return `<div class="disclaimer"><b>Repository scan coverage — ${n.complete?"all discovered workflows inspected":"PARTIAL"}</b>
+  <p>${n.assessed} of ${n.discovered} workflows assessed; ${n.skipped} failed or skipped.
+  ${n.truncated?"At least some workflows were outside the 20-file scan limit.":"No additional workflows were excluded by the scan limit."}</p>
+  <p>Bounded review at source commit <code>${nice(n.commit)}</code> for <b>${nice(n.repository)}</b>. 
+  This summary is included in the verifiable evidence JSON, but does not prove complete repository security coverage.</p></div>`;
+}
 function comparisonView(comparison){
  if(!comparison)return '<p class="muted">No authorized follow-up snapshot supplied. Remediation was not assessed.</p>';
  return `<p class="muted">Recheck: ${timestamp(comparison.followup_at)}. This compares indicators only, not security effectiveness.</p>`+
@@ -98,6 +107,7 @@ export async function renderHumanReport(receipt,{sample=false}={}){
  <div class="stat"><b>Review items</b><strong>${assessment.counts.high+assessment.counts.review}</strong></div>
  <div class="stat"><b>Visibility gaps</b><strong>${assessment.counts.unknown}</strong></div></div>
  <h2>Scope of evidence</h2><div>${coverageView(baseline.facts)}</div>
+ ${repositoryCoverageView(baseline.coverage)}
  <p class="muted">Some providers may have been omitted. Facts from different cloud services are not automatically linked to a single application.</p>
  <h2>Observations and recommended verification</h2>${findings}
  <h2>Follow-up comparison</h2>${comparisonView(comparison)}
