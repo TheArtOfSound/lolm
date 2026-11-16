@@ -22,7 +22,7 @@ export function assemble(){
   authBundled,
   "const JSON_HEADERS={ 'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff' };",
   "const JS_HEADERS={ 'content-type':'text/javascript; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff' };",
-  "const PAGE_HEADERS={ 'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','x-robots-tag':'noindex, nofollow','permissions-policy':'camera=(),microphone=(),geolocation=()','content-security-policy':\"default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'none'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'\" };",
+  "const PAGE_HEADERS={ 'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','x-robots-tag':'noindex, nofollow','permissions-policy':'camera=(),microphone=(),geolocation=()','content-security-policy':\"default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'none'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'\" };",
   "export default {async fetch(request,env){",
   " if(request.method!=='GET'&&request.method!=='HEAD')return new Response('Method Not Allowed',{status:405,headers:{allow:'GET, HEAD'}});",
   " const github=await handleGitHubApp(request,env);",
