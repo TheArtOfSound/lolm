@@ -313,9 +313,12 @@ el("gitRepository").addEventListener("change",async event=>{
  gitMessage("Loading authorized workflow names…");
  try{
   const result=await githubInspect("/api/github/workflows",{installation_id:Number(id),repo});
-  selectOptions("gitWorkflow",result.workflows,x=>x.path,x=>x.path,"Choose workflow");
+  selectOptions("gitWorkflow",result.workflows,x=>x.path,x=>x.path,
+   result.workflows.length?"Choose workflow":"No accessible workflows on this branch");
   gitMessage(result.workflows.length?"Choose the workflow you want QIRA to review.":
-   "No accessible GitHub Actions workflows found here.");
+   result.availability==="directory_not_found_or_inaccessible"?
+   "The selected repository has no accessible .github/workflows directory on its default branch. It may be missing or permission-restricted. Choose another repository that uses GitHub Actions.":
+   "No supported GitHub Actions YAML workflows were found on the selected branch. Choose another repository that uses GitHub Actions.");
  }catch(error){gitMessage(error.message,true)}
 });
 el("gitWorkflow").addEventListener("change",event=>{
