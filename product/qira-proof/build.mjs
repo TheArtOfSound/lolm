@@ -6,6 +6,7 @@ const base=path.dirname(fileURLToPath(import.meta.url));
 export function assemble(){
  const html=fs.readFileSync(path.join(base,"index.html"),"utf8");
  const app=fs.readFileSync(path.join(base,"app.mjs"),"utf8");
+ const report=fs.readFileSync(path.join(base,"report.mjs"),"utf8");
  const core=fs.readFileSync(path.join(base,"core.mjs"),"utf8");
  const auth=fs.readFileSync(path.join(base,"github_app.mjs"),"utf8");
  const authBundled=auth.replace(/^import \{SCHEMA,normalizeSnapshot\} from "\.\/core\.mjs";\s*/m,"")
@@ -17,6 +18,7 @@ export function assemble(){
   "// QIRA Proof local-first pilot with opt-in server-side, read-only GitHub connection.",
   "const HTML="+JSON.stringify(html)+";",
   "const APP="+JSON.stringify(app)+";",
+  "const REPORT="+JSON.stringify(report)+";",
   "const CORE="+JSON.stringify(core)+";",
   coreBundled,
   authBundled,
@@ -30,6 +32,7 @@ export function assemble(){
   " const pathname=new URL(request.url).pathname;",
   " if(pathname==='/')return new Response(request.method==='HEAD'?null:HTML,{headers:PAGE_HEADERS});",
   " if(pathname==='/app.mjs')return new Response(request.method==='HEAD'?null:APP,{headers:JS_HEADERS});",
+  " if(pathname==='/report.mjs')return new Response(request.method==='HEAD'?null:REPORT,{headers:JS_HEADERS});",
   " if(pathname==='/core.mjs')return new Response(request.method==='HEAD'?null:CORE,{headers:JS_HEADERS});",
   " if(pathname==='/health')return new Response(request.method==='HEAD'?null:JSON.stringify({status:'ready',product:'qira-proof',mode:'local-first+opt-in-github-app',provider_credentials:false,collection_enabled:false,uploads_enabled:false}),{headers:JSON_HEADERS});",
   " return new Response('Not Found',{status:404,headers:{'cache-control':'no-store'}});",
