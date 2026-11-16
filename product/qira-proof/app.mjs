@@ -164,6 +164,12 @@ async function githubApi(path,options={}){
   "GitHub read-only metadata could not be retrieved (HTTP "+response.status+").");
  return response.json();
 }
+async function githubInspect(path,selection){
+ if(!git.csrf)throw Error("GitHub session is unavailable. Reconnect.");
+ return githubApi(path,{method:"POST",
+   headers:{"content-type":"application/json","x-qira-csrf":git.csrf},
+   body:JSON.stringify(selection)});
+}
 function selectOptions(id,items,label,value,placeholder){
  const control=el(id);
  control.replaceChildren();
@@ -214,7 +220,7 @@ el("gitInstallation").addEventListener("change",async event=>{
  if(!id)return;
  gitMessage("Loading authorized repositories…");
  try{
-  const result=await githubApi("/api/github/repos?installation_id="+encodeURIComponent(id));
+  const result=await githubInspect("/api/github/repos",{installation_id:Number(id)});
   selectOptions("gitRepository",result.repos,x=>x.name,x=>x.name,"Choose repository");
   gitMessage(result.truncated?"Only the first 100 repositories are listed in this pilot.":
    "Select a repository to load authorized workflows.");
@@ -227,8 +233,7 @@ el("gitRepository").addEventListener("change",async event=>{
  if(!id||!repo)return;
  gitMessage("Loading authorized workflow names…");
  try{
-  const result=await githubApi("/api/github/workflows?installation_id="+encodeURIComponent(id)+
-   "&repo="+encodeURIComponent(repo));
+  const result=await githubInspect("/api/github/workflows",{installation_id:Number(id),repo});
   selectOptions("gitWorkflow",result.workflows,x=>x.path,x=>x.path,"Choose workflow");
   gitMessage(result.workflows.length?"Choose a workflow and run the read-only assessment.":
    "No supported workflow files were accessible.");
@@ -242,8 +247,7 @@ el("gitAssess").addEventListener("click",async()=>{
  if(!id||!repo||!workflow)return;
  el("gitAssess").disabled=true;gitMessage("Retrieving authorized configuration evidence…");
  try{
-  const data=await githubApi("/api/github/assessment?installation_id="+encodeURIComponent(id)+
-   "&repo="+encodeURIComponent(repo)+"&workflow="+encodeURIComponent(workflow));
+  const data=await githubInspect("/api/github/assessment",{installation_id:Number(id),repo,workflow});
   state.before=normalizeSnapshot(data.snapshot);
   state.after=null;state.mode="connected";
   render();buttonTab("assessment");
