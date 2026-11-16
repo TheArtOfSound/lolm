@@ -140,7 +140,10 @@ def scan_workflow_syntax(text):
         return jobs and job
     valid=[i for i in starts if authorized_permission(i)]
     permission_line=rows[valid[0]]["line"] if valid else None
-    writes=False;unknown=len(valid)!=len(starts)
+    writes=False;unknown=len(valid)!=len(starts);write_scopes=[]
+    valid_scopes={"actions","artifact-metadata","attestations","checks","code-quality",
+      "contents","copilot-requests","deployments","discussions","id-token","issues",
+      "packages","pages","pull-requests","security-events","statuses","vulnerability-alerts"}
     for i in valid:
         row=rows[i]
         value=re.match(r"^permissions:\s*(.*?)\s*$",row["text"]).group(1).strip()
@@ -148,6 +151,7 @@ def scan_workflow_syntax(text):
             continue
         if value=="write-all":
             writes=True;permission_line=row["line"]
+            write_scopes.append(("write-all",row["line"]))
             continue
         if value:
             unknown=True
@@ -159,11 +163,12 @@ def scan_workflow_syntax(text):
             if sub["pad"]!=row["pad"]+2:
                 unknown=True;continue
             match=re.fullmatch(r"([a-z][a-z-]{1,40}):\s*(read|write|none)\s*(?:#.*)?",sub["text"])
-            if not match:
+            if not match or match.group(1) not in valid_scopes or (match.group(1)=="vulnerability-alerts" and match.group(2)=="write"):
                 unknown=True;continue
             count+=1
             if match.group(2)=="write":
                 writes=True;permission_line=sub["line"]
+                write_scopes.append((match.group(1),sub["line"]))
         if not count:unknown=True
     restricted=False if writes else ("unknown" if unknown or not valid else True)
     write=True if writes else ("unknown" if unknown or not valid else False)
@@ -205,9 +210,10 @@ def scan_workflow_syntax(text):
        "workflow_explicit_read_only_permissions":(restricted,permission_line),
        "workflow_token_write_permission":(write,permission_line),
        "workflow_pull_request_target_trigger":(trigger,trigger_line),
+       "writeScopes":sorted(write_scopes,key=lambda entry:(entry[1],entry[0]))[:36],
     }
 
-def github_facts(repo,workflow,token,reader=fetch_json,when=None):
+def github_facts(repo,workflow,token,reader=fetch_json,when=None,permission_inventory=None):
     if not GITHUB_RE.fullmatch(repo):
         raise ValueError("repository must be owner/name")
     if not workflow.startswith(".github/workflows/") or ".." in workflow or not workflow.endswith((".yaml",".yml")):
@@ -236,7 +242,12 @@ def github_facts(repo,workflow,token,reader=fetch_json,when=None):
     observations=scan_workflow_syntax(text)
     source=f"https://github.com/{repo}/blob/{sha}/{workflow}"
     facts=[]
-    for signal,(value,line) in observations.items():
+    if permission_inventory is not None and observations["writeScopes"]:
+        permission_inventory.append({"asset":repo,"scopes":[
+          {"scope":scope,"source_url":source+f"#L{line}"} for scope,line in observations["writeScopes"]]})
+    for signal,item in observations.items():
+        if signal=="writeScopes":continue
+        value,line=item
         url=source+(f"#L{line}" if isinstance(line,int) and 0<line<=100000 else "")
         facts.append(fact("github",repo,signal,value,url,when))
     if observations["runtime_ssh_keyscan"][0]:
@@ -346,7 +357,7 @@ def build_snapshot(github_repos=(),cloudflare_workers=(),github_token=None,cloud
         raise ProviderError("VERCEL_TOKEN required for local Vercel read access")
     if len(github_repos)+len(github_workflows)>20 or len(cloudflare_workers)>50 or len(vercel_projects)>20:
         raise ValueError("collector resource bounds exceeded")
-    facts=[]
+    facts=[];permission_inventory=[]
     selected=[(repo,".github/workflows/deploy-production.yml") for repo in github_repos]
     for entry in github_workflows:
         if not isinstance(entry,str) or ":" not in entry:
@@ -359,7 +370,7 @@ def build_snapshot(github_repos=(),cloudflare_workers=(),github_token=None,cloud
         if repo in seen_repos:
             raise ValueError("pilot accepts only one selected workflow per repository")
         seen_repos.add(repo)
-        facts.extend(github_facts(repo,workflow,github_token,reader,when))
+        facts.extend(github_facts(repo,workflow,github_token,reader,when,permission_inventory))
     for worker in dict.fromkeys(cloudflare_workers):
         facts.extend(cloudflare_facts(account_id,worker,cloudflare_token,reader,when))
     if len(set(vercel_projects))!=len(vercel_projects):
@@ -367,7 +378,9 @@ def build_snapshot(github_repos=(),cloudflare_workers=(),github_token=None,cloud
     for project in vercel_projects:
         facts.extend(vercel_facts(project,vercel_token,vercel_team,reader,when))
     facts.sort(key=lambda f:(f["provider"],f["asset"],f["signal"]))
-    return {"schema":SCHEMA,"captured_at":when,"facts":facts}
+    output={"schema":SCHEMA,"captured_at":when,"facts":facts}
+    if permission_inventory:output["permission_inventory"]=permission_inventory
+    return output
 
 def write_private(path,report):
     # Refuse overwrite and create with owner-only permissions from the outset.
