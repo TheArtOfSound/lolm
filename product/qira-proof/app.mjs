@@ -27,7 +27,7 @@ function sampleAfter(){
   return {...f,value:changed,observed_at:date};
  })};
 }
-const state={before:normalizeSnapshot(DEMO),after:null,mode:"demo",tab:"assessment",last:null};
+const state={before:normalizeSnapshot(DEMO),after:null,mode:"idle",tab:"assessment",last:null};
 const el=id=>document.getElementById(id);
 const clear=e=>e.replaceChildren();
 function node(tag,cls,value){const d=document.createElement(tag);if(cls)d.className=cls;if(value!==undefined)d.textContent=value;return d}
@@ -42,8 +42,12 @@ function buttonTab(tab){
 }
 function render(){
  const report=analyzeSnapshot(state.before);
+ const showing=state.mode!=="idle";
+ el("reportIntro").hidden=showing;
+ el("assessmentData").hidden=!showing;
+ el("exportButton").disabled=!showing;
  el("sampleBanner").hidden=state.mode!=="demo";
- document.body.dataset.reportType=state.mode==="demo"?"example":"customer";
+ document.body.dataset.reportType=state.mode==="idle"?"unstarted":state.mode==="demo"?"example":"customer";
  el("assetsCount").textContent=report.assets;
  el("reviewCount").textContent=report.counts.review+report.counts.high;
  el("unknownCount").textContent=report.counts.unknown;
@@ -94,7 +98,8 @@ function render(){
   if(!comparison.deltas.length)deltaBox.appendChild(node("div","empty","No previous review conditions to compare."));
   deltaBox.appendChild(node("div","note",comparison.conclusion));
  }
- status(state.mode==="demo"?"DEMONSTRATION: fictional source data. Import authorized evidence to run a real configuration review.":
+ status(state.mode==="idle"?"No assessment yet. Connect GitHub or explore the example to begin.":
+ state.mode==="demo"?"DEMONSTRATION: fictional source data. Import authorized evidence to run a real configuration review.":
  state.mode==="connected"?"GITHUB APP: selected read-only metadata was retrieved transiently through this Worker's server. Analysis occurs in your browser; source origin is not independently attested.":
  "PRIVATE LOCAL ANALYSIS: imported files remain in this browser. Source identity and authorization are not cryptographically attested.");
 }
@@ -119,6 +124,9 @@ el("followupInput").addEventListener("change",async e=>{
  e.target.value="";
 });
 el("demoButton").addEventListener("click",()=>{state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="demo";render();buttonTab("assessment")});
+el("startSample").addEventListener("click",()=>{
+ state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="demo";render();buttonTab("assessment");
+});
 el("jumpDemo").addEventListener("click",()=>{
  state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="demo";
  render();buttonTab("assessment");
