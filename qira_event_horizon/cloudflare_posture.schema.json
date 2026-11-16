@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://horizon.imagineqira.com/schemas/cloudflare-posture-v1.json",
+  "title": "Qira Event Horizon — sanitized read-only Cloudflare configuration inventory",
+  "description": "This export is operator-supplied. It is not a signed Cloudflare attestation. No account IDs, zone IDs, IP addresses or secrets.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "zone_alias",
+    "observed_at",
+    "origin",
+    "settings",
+    "entrypoints",
+    "surface"
+  ],
+  "properties": {
+    "schema": {
+      "const": "qira-edge-inventory/v1"
+    },
+    "zone_alias": {
+      "type": "string",
+      "pattern": "^[-a-z0-9]{3,48}$"
+    },
+    "observed_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d{1,3})?Z$"
+    },
+    "origin": {
+      "const": "operator-exported-cloudflare-readonly"
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min_tls_version",
+        "ssl",
+        "always_use_https",
+        "legacy_waf"
+      ],
+      "properties": {
+        "min_tls_version": {
+          "enum": [
+            "1.0",
+            "1.1",
+            "1.2",
+            "1.3",
+            null
+          ]
+        },
+        "ssl": {
+          "enum": [
+            "off",
+            "flexible",
+            "full",
+            "strict",
+            null
+          ]
+        },
+        "always_use_https": {
+          "enum": [
+            "on",
+            "off",
+            null
+          ]
+        },
+        "legacy_waf": {
+          "enum": [
+            "on",
+            "off",
+            null
+          ]
+        }
+      }
+    },
+    "entrypoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "account",
+        "zone"
+      ],
+      "properties": {
+        "account": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "http_request_firewall_managed": {
+              "type": "string",
+              "enum": [
+                "configured",
+                "no_entrypoint",
+                "unknown",
+                "permission_denied"
+              ]
+            },
+            "http_request_firewall_custom": {
+              "type": "string",
+              "enum": [
+                "configured",
+                "no_entrypoint",
+                "unknown",
+                "permission_denied"
+              ]
+            },
+            "http_ratelimit": {
+              "type": "string",
+              "enum": [
+                "configured",
+                "no_entrypoint",
+                "unknown",
+                "permission_denied"
+              ]
+            }
+          },
+          "required": [
+            "http_request_firewall_managed",
+            "http_request_firewall_custom",
+            "http_ratelimit"
+          ]
+        },
+        "zone": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "http_request_firewall_managed": {
+              "type": "string",
+              "enum": [
+                "configured",
+                "no_entrypoint",
+                "unknown",
+                "permission_denied"
+              ]
+            },
+            "http_request_firewall_custom": {
+              "type": "string",
+              "enum": [
+                "configured",
+                "no_entrypoint",
+                "unknown",
+                "permission_denied"
+              ]
+            },
+            "http_ratelimit": {
+              "type": "string",
+              "enum": [
+                "configured",
+                "no_entrypoint",
+                "unknown",
+                "permission_denied"
+              ]
+            }
+          },
+          "required": [
+            "http_request_firewall_managed",
+            "http_request_firewall_custom",
+            "http_ratelimit"
+          ]
+        }
+      }
+    },
+    "surface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "purpose",
+        "access_application_present",
+        "worker_binding_count"
+      ],
+      "properties": {
+        "purpose": {
+          "enum": [
+            "public-synthetic-demo",
+            "private-customer-environment",
+            "unknown"
+          ]
+        },
+        "access_application_present": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "worker_binding_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    }
+  }
+}

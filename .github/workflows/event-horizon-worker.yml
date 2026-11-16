@@ -1,0 +1,30 @@
+name: Event Horizon Worker contract
+on:
+  pull_request:
+    paths:
+      - 'qira_event_horizon/**'
+      - '.github/workflows/event-horizon-worker.yml'
+  push:
+    paths:
+      - 'qira_event_horizon/**'
+      - '.github/workflows/event-horizon-worker.yml'
+jobs:
+  edge-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate ECMAScript modules
+        run: |
+          node --check qira_event_horizon/engine.mjs
+          node --check qira_event_horizon/worker.mjs
+          node --check qira_event_horizon/robustness.mjs
+          node --check qira_event_horizon/mcp.mjs
+          node --check qira_event_horizon/openapi.mjs
+          node --check qira_event_horizon/verify_receipt.mjs
+          node --check qira_event_horizon/cloudflare_posture.mjs
+          node --check qira_event_horizon/cloudflare_posture_cli.mjs
+      - name: Run policy, integrity, security and UI tests
+        run: node --test qira_event_horizon/*.test.mjs
