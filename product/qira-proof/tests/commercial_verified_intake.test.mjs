@@ -97,6 +97,8 @@ test("paid server-rendered page offers direct intake and shows recorded status a
  const h=await first.text();
  assert.match(h,/data-verified-checkout="true"/);
  assert.match(h,/Send review request/);
+ assert.match(h,/No separate receipt email or second payment is needed/);
+ assert.doesNotMatch(h,/It prepares an email for you to review and send/);
  assert.match(h,/src-none-unreachable-nevermatch|fetch\("\/api\/orders\/intake"/);
  assert.match(first.headers.get("content-security-policy"),/connect-src 'self'/);
  assert.equal(first.headers.get("x-robots-tag"),"noindex, follow");
