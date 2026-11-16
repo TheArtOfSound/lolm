@@ -50,6 +50,44 @@ demonstrate high finding precision, build reliable evidence provenance,
 customer support and security review, then secure at least two
 independently evaluated design partners willing to pay for the outcome.
 
+## Customer-path verification (November 15, 2026)
+
+The isolated pilot now offers a complete client-side export path:
+
+1. Connect the read-only GitHub App, or import an authorized local evidence snapshot.
+2. Select the installed GitHub account, repository and workflow, if connected.
+3. Review conditional findings and source links.
+4. Under **Evidence**, select **Download printable report** to save a standalone HTML report.
+   Open the downloaded file and choose Print → Save as PDF in the browser.
+5. Separately download **evidence JSON** to preserve the deterministic SHA-256
+   integrity receipt; the hash is neither a provider signature nor proof of remediation.
+6. Disconnect the local browser session. If full GitHub authorization revocation is
+   needed, revoke the App separately in GitHub.
+
+### What is tested
+
+- Real hosted preview renders its UI and serves /report.mjs.
+- An integrated test executes the **compiled Worker** through an OAuth consent callback,
+  installation listing, repository selection, workflow inspection, report generation,
+  integrity verification and local disconnect, using simulated GitHub API responses.
+- The downloadable report is generated from the same verified evidence receipt as the JSON.
+- Report output escapes hostile source identifiers and uses restrictive static-document CSP.
+- CI includes Node privacy, product UI and provider tests and Python collectors.
+
+### What is not yet proven
+
+- No real user-to-server GitHub OAuth callback has been completed by an external
+  user during this validation. The real GitHub authorization interaction remains a
+  human-controlled gate.
+- No independent assessment has established accuracy at scale, exploitability or
+  a customer security certification.
+- GitHub local disconnect is not a provider-side token or App grant revocation.
+- Cloudflare and Vercel are local collection options, **not** hosted OAuth connectors.
+- No paid transaction, company billing integration or verified purchase was tested.
+
+Keep the PR in draft status until live authorization, session/revocation review and
+at least one independently reviewed, owner-authorized assessment succeed.
+
 ## Provider coverage and real connection status (November 15, 2026)
 
 | Provider | Live customer OAuth | Local metadata collection | Review capability |
