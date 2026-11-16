@@ -1,6 +1,6 @@
 # QIRA Proof — GitHub App activation (owner-controlled)
 
-**Status (November 15, 2026):** The GitHub App named **QIRA Proof Research** has been registered by its owner. The Client ID, App slug, Cloudflare public origin, and session key are configured. The GitHub **client secret binding has not been verified as installed** in Cloudflare, so live GitHub OAuth remains disabled. All authorization flow tests are mocked; no successful live GitHub App login has been claimed.
+**Status (November 15, 2026):** The **QIRA Proof Research** GitHub App is registered. The public client ID, App slug, HTTPS origin, and both required protected Cloudflare secret bindings have been confirmed installed (secret values were not read). A real customer callback exposed a Workers runtime incompatibility: `redirect: "error"` is unsupported in Cloudflare Workers. On November 15 the OAuth exchange and GitHub API GET requests were updated to `redirect: "manual"` with explicit redirect rejection, tested, and deployed to the isolated preview. **A successful owner-authorized GitHub login has not yet been confirmed after this fix.** Do not infer client secret correctness merely from the existence of a secret binding.
 
 **Auth preview origin:**
 https://qira-proof-auth-lab-20261115.bryanleonard237.workers.dev
@@ -25,17 +25,12 @@ Complete the remaining owner-only actions:
 2. Disable **Active webhooks**; the app does not process webhook deliveries.
 3. Confirm **Contents: Read-only**, **Metadata: Read-only**, and no unnecessary
    write-level permissions.
-4. In the [Cloudflare Dashboard](https://dash.cloudflare.com/), open Worker
-   `qira-proof-auth-lab-20261115`, then add a protected Secret binding named
-   `GITHUB_APP_CLIENT_SECRET`. Use the owner-generated GitHub App client
-   secret directly in Cloudflare's protected secret field. Never include its
-   value in GitHub commits, URLs, troubleshooting screenshots, or chat output.
+4. The Cloudflare Worker already has a protected `GITHUB_APP_CLIENT_SECRET` binding. Its **presence is verified; its correctness is not**. If GitHub subsequently returns `incorrect_client_credentials`, replace the protected value using the GitHub App owner-generated secret directly in the Cloudflare Dashboard. Never place it in GitHub commits, URLs, screenshots or chat.
 5. After the Worker reports **Ready**, open the preview, authorize your GitHub
    account and install the App on a selected test repository only.
 
 Do **not** put the client secret in ordinary text variables; use the Worker
-**Secret** type. OAuth activation is not complete until the binding exists and
-a real authorization callback succeeds.
+**Secret** type. OAuth activation is not complete until a real user successfully authorizes a selected installation and the callback completes. A secret binding alone does not prove valid credentials.
 
 ## 2. Original registration reference (completed)
 
@@ -132,6 +127,20 @@ database" as "no platform telemetry or provider logs."
     node --check product/qira-proof/dist/worker.mjs
 
 The tests mock GitHub to exercise legitimate and malicious authorization flows. Passing them is necessary but does NOT prove live GitHub OAuth interoperability.
+
+## Cloudflare Workers redirect compatibility
+
+Cloudflare Workers does **not** implement the Fetch standard's
+`redirect: "error"` mode; this throws before any request is transmitted.
+Both the GitHub token-exchange POST and subsequent GitHub metadata GETs must
+use `redirect: "manual"` and reject all HTTP 3xx and opaque-redirect
+responses explicitly. CI now asserts this on the assembled Worker. A
+temporary Worker verified that outbound POST requests from the runtime reach
+an HTTP response using manual mode with deliberately invalid test
+credentials. That check does not establish valid Qira App credentials or
+a successful real user authorization.
+
+Reference: https://developers.cloudflare.com/workers/runtime-apis/request/
 
 ## Support references
 
