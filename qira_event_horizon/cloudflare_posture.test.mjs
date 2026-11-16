@@ -57,6 +57,12 @@ test("strict TLS and HTTPS pass only relevant settings checks",()=>{
  assert.equal(pick(a,"ORIGIN_CERTIFICATE_VERIFICATION").status,"pass");
  assert.equal(pick(a,"MANAGED_WAF_EXECUTION").status,"review");
 });
+test("public Worker bindings must prevent false isolation assurance",()=>{
+ const s=snapshot();s.surface.worker_binding_count=1;
+ assert.equal(pick(auditSnapshot(s),"PUBLIC_DEMO_ACCESS_BOUNDARY").status,"review");
+ s.surface.worker_binding_count=null;
+ assert.equal(pick(auditSnapshot(s),"PUBLIC_DEMO_ACCESS_BOUNDARY").status,"unknown");
+});
 test("a private customer surface lacking Access is flagged; public demo is intentionally different",()=>{
  const base=snapshot();
  base.surface.purpose="private-customer-environment";
