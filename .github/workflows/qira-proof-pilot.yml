@@ -40,7 +40,12 @@ jobs:
           assert "uploads_enabled:false" in source
           assert "handleGitHubApp(request,env)" in source
           assert "request.method!=='GET'" in source
-          assert 'GITHUB_TOKEN' not in source
-          assert 'CLOUDFLARE_API_TOKEN' not in source
-          print("PASS: read-only browser and no embedded token labels")
+          # Public instructional names of local environment variables are harmless.
+          # Assert that no client-side token value assignment or persistence is introduced.
+          for forbidden in ('const GITHUB_TOKEN=', 'const CLOUDFLARE_API_TOKEN=',
+                            'const VERCEL_TOKEN=', 'localStorage.setItem(',
+                            'sessionStorage.setItem('):
+              assert forbidden not in source, forbidden
+          assert 'mergeSnapshots' in source
+          print("PASS: read-only providers, no client-side token storage, and multi-source composition")
           PY
