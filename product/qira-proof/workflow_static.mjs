@@ -26,11 +26,33 @@ function activeLines(text){
   return {text:raw.slice(pad),pad,line:number};
  });
 }
+// Only GitHub Actions root permissions and direct per-job permissions count.
+// An arbitrary nested key named "permissions" (env, with, a step, etc.) is
+// not authoritative. Ambiguous nesting is reported unknown.
+function permissionsLocation(rows,index){
+ const row=rows[index];
+ if(row.pad===0)return true;
+ if(row.pad!==4)return false;
+ let jobs=false,job=false;
+ for(let i=0;i<index;i++){
+  const x=rows[i];
+  if(!x.text)continue;
+  if(x.pad===0){
+   jobs=/^jobs:\s*(?:#.*)?$/.test(x.text);
+   job=false;
+  }else if(jobs&&x.pad===2){
+   job=/^[A-Za-z0-9_-]+:\s*(?:#.*)?$/.test(x.text);
+  }
+ }
+ return jobs&&job;
+}
 function permissionDeclarations(rows){
- const indices=rows.flatMap((r,i)=>r.text.match(ANY_PERM)?[i]:[]);
+ const found=rows.flatMap((r,i)=>r.text.match(ANY_PERM)?[i]:[]);
+ if(!found.length)return {restricted:"unknown",write:"unknown",line:null};
+ const indices=found.filter(i=>permissionsLocation(rows,i));
+ let sawUnknown=indices.length!==found.length;
  if(!indices.length)return {restricted:"unknown",write:"unknown",line:null};
- let sawWrite=false,sawUnknown=false;
- let first=rows[indices[0]].line;
+ let sawWrite=false,first=rows[indices[0]].line;
  for(const i of indices){
   const head=rows[i],value=head.text.match(ANY_PERM)?.[1]?.trim()??"";
   if(value==="read-all"||value==="{}")continue;
@@ -38,7 +60,8 @@ function permissionDeclarations(rows){
   if(value!==""){sawUnknown=true;continue}
   let count=0;
   for(let j=i+1;j<rows.length;j++){
-   const row=rows[j];if(!row.text)continue;
+   const row=rows[j];
+   if(!row.text)continue;
    if(row.pad<=head.pad)break;
    if(row.pad!==head.pad+2){sawUnknown=true;continue}
    const m=SCOPE.exec(row.text);
@@ -52,19 +75,35 @@ function permissionDeclarations(rows){
   write:sawWrite?true:sawUnknown?"unknown":false,line:first};
 }
 function triggerDeclaration(rows){
- const start=rows.findIndex(r=>r.pad===0&&TOP_ON.test(r.text));
- if(start<0)return {value:"unknown",line:null};
- const header=rows[start], inline=TOP_ON.exec(header.text)[1];
+ const headers=rows.filter(r=>r.pad===0&&TOP_ON.test(r.text));
+ if(headers.length!==1)return {value:"unknown",line:null};
+ const header=headers[0],inline=TOP_ON.exec(header.text)[1].trim();
  if(inline){
-  return {value:TRIGGER.test(inline),line:TRIGGER.test(inline)?header.line:null};
+  if(/^[A-Za-z][A-Za-z0-9_-]*$/.test(inline))
+   return {value:inline==="pull_request_target",line:inline==="pull_request_target"?header.line:null};
+  if(/^\[[^\]{}]*\]$/.test(inline)){
+   const items=inline.slice(1,-1).split(",").map(s=>s.trim());
+   if(!items.length||items.some(x=>!/^[A-Za-z][A-Za-z0-9_-]*$/.test(x)))
+    return {value:"unknown",line:null};
+   return {value:items.includes("pull_request_target"),line:items.includes("pull_request_target")?header.line:null};
+  }
+  // Inline YAML maps, aliases and expressions need real YAML parsing.
+  return {value:"unknown",line:null};
  }
- for(let i=start+1;i<rows.length;i++){
-  const r=rows[i];if(!r.text)continue;
+ let sawEvent=false,unclear=false,matchLine=null;
+ for(const r of rows){
+  if(r.line<=header.line||!r.text)continue;
   if(r.pad===0)break;
-  if(r.pad===2&&/^pull_request_target\s*:/.test(r.text))
-   return {value:true,line:r.line};
+  if(r.pad!==2)continue;
+  const mapping=/^([A-Za-z][A-Za-z0-9_-]*):(?:\s|$)/.exec(r.text);
+  const sequence=/^-\s+([A-Za-z][A-Za-z0-9_-]*)\s*(?:#.*)?$/.exec(r.text);
+  const event=mapping?.[1]||sequence?.[1];
+  if(!event){unclear=true;continue}
+  sawEvent=true;
+  if(event==="pull_request_target")matchLine=r.line;
  }
- return {value:false,line:null};
+ if(matchLine)return {value:true,line:matchLine};
+ return {value:sawEvent&&!unclear?false:"unknown",line:null};
 }
 export function scanWorkflowSyntax(text){
  const rows=activeLines(text);
