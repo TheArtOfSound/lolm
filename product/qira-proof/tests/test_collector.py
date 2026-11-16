@@ -23,6 +23,7 @@ def reader(url,token,provider):
         if "/contents/" in url:
             text='''name: deploy-production
 steps:
+  - uses: actions/checkout@v4
   - name: Set up SSH
     run: ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
 '''
@@ -44,6 +45,7 @@ class CollectorTests(unittest.TestCase):
             reader=reader,when=WHEN)
         names={(f["asset"],f["signal"]):f["value"] for f in out["facts"]}
         self.assertTrue(names[("org/repository","runtime_ssh_keyscan")])
+        self.assertTrue(names[("org/repository","workflow_unpinned_actions")])
         self.assertEqual(names[("org/repository","repo_branch_protection_verifiable")],"unknown")
         self.assertTrue(names[("edge-lab","worker_preview_enabled")])
         self.assertTrue(names[("edge-lab","worker_privileged_bindings")])
