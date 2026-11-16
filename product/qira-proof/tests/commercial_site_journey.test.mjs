@@ -25,7 +25,7 @@ test("current location is marked for desktop and mobile, with one contextual bre
  for(const path of routes.slice(1)){
   const html=await render(path);
   assert.match(html,/aria-label="Breadcrumb"/,path);
-  assert.match(html,/class="site-path-inner"/,path);
+  assert.match(html,/class="shell site-path-inner"/,path);
   assert.match(html,/aria-current="page"/,path);
   assert.ok(html.indexOf('aria-label="Breadcrumb"')<html.indexOf('<main id="main">'),path);
  }
