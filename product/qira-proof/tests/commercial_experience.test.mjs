@@ -42,7 +42,7 @@ test("the full sample report switches source, recommendation, limitation and sta
   setAttribute(key,value){this.attrs[key]=value;},
   focus(){this.focused=true;}
  }));
- const elements=Object.fromEntries(["reportTitle","reportSummary","reportSource","reportLimits","reportCode","reportNext","reportConfidence","reportCategory"].map(id=>[id,{textContent:""}]));
+ const elements=Object.fromEntries(["reportTitle","reportSummary","reportSource","reportLimits","reportCode","reportNext","reportConfidence","reportCategory","reportPosition","reportAnnounce"].map(id=>[id,{textContent:""}]));
  let printed=0;const printer={handlers:{},addEventListener(kind,handler){this.handlers[kind]=handler;}};
  const doc={
   querySelectorAll(selector){assert.equal(selector,"[data-case]");return buttons;},
@@ -58,6 +58,8 @@ test("the full sample report switches source, recommendation, limitation and sta
   const b=buttons.find(x=>x.dataset.case===item.key);
   b.handlers.click();
   assert.equal(elements.reportTitle.textContent,item.title);
+  assert.match(elements.reportPosition.textContent,/QIRA PROOF \/ EXAMPLE REPORT \/ 0[1-3] OF 03/);
+  assert.match(elements.reportAnnounce.textContent,/selected; [1-3] of 03/);
   assert.ok(elements.reportSource.textContent.endsWith(item.reference));
   assert.ok(elements.reportCode.textContent.includes(item.code));
   assert.match(elements.reportNext.textContent,new RegExp(item.next,"i"));
@@ -74,17 +76,20 @@ test("sample report keyboard controls rotate selection and move focus",async()=>
  const buttons=keys.map(key=>({dataset:{case:key},attrs:{},handlers:{},focused:0,
   addEventListener(kind,fn){this.handlers[kind]=fn;},setAttribute(k,v){this.attrs[k]=v;},focus(){this.focused++;}
  }));
- const ids=["reportTitle","reportSummary","reportSource","reportLimits","reportCode","reportNext","reportConfidence","reportCategory"];
+ const ids=["reportTitle","reportSummary","reportSource","reportLimits","reportCode","reportNext","reportConfidence","reportCategory","reportPosition","reportAnnounce"];
  const elements=Object.fromEntries(ids.map(id=>[id,{textContent:""}]));
  vm.runInNewContext(lastInlineScript(html),{document:{querySelectorAll:()=>buttons,getElementById:id=>elements[id]||null},window:{print(){}}});
  let prevented=0;
  buttons[0].handlers.keydown({key:"ArrowRight",preventDefault(){prevented++;}});
  assert.equal(buttons[1].focused,1);
  assert.equal(buttons[1].attrs["aria-pressed"],"true");
+ assert.match(elements.reportPosition.textContent,/02 OF 03/);
  buttons[1].handlers.keydown({key:"End",preventDefault(){prevented++;}});
  assert.equal(buttons[2].attrs["aria-pressed"],"true");
+ assert.match(elements.reportAnnounce.textContent,/03 of 03/);
  buttons[2].handlers.keydown({key:"Home",preventDefault(){prevented++;}});
  assert.equal(buttons[0].attrs["aria-pressed"],"true");
+ assert.match(elements.reportPosition.textContent,/01 OF 03/);
  assert.equal(prevented,3);
 });
 
@@ -151,4 +156,11 @@ test("sample and intake changes cannot override the live Stripe checkout binding
  const sample=await visit("/sample-report",{QIRA_PROOF_CHECKOUT_URL:link});
  assert.equal(sample.response.status,200);
  assert.doesNotMatch(sample.html,/Stripe receipt reference: rcpt_/);
+});
+
+test("selected report is announced without disturbing sighted content",async()=>{
+ const {html}=await visit("/sample-report");
+ assert.match(html,/id="reportPosition"/);
+ assert.match(html,/id="reportAnnounce" class="sr-only" aria-live="polite" aria-atomic="true"/);
+ assert.match(html,/\.sr-only\{position:absolute!important/);
 });
