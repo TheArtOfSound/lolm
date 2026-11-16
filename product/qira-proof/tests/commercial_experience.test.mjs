@@ -164,3 +164,13 @@ test("selected report is announced without disturbing sighted content",async()=>
  assert.match(html,/id="reportAnnounce" class="sr-only" aria-live="polite" aria-atomic="true"/);
  assert.match(html,/\.sr-only\{position:absolute!important/);
 });
+
+test("narrow-screen evidence controls remain legible and the checkout control remains accessible",async()=>{
+ const {html}=await visit("/sample-report");
+ assert.match(html,/@media\(max-width:420px\)/);
+ assert.match(html,/\.report-toggles\{grid-template-columns:1fr\}/);
+ assert.match(html,/\.report-toggles button\{min-height:52px/);
+ assert.match(html,/@media\(max-width:360px\)\{\.navi a:nth-child\(2\)\{display:none\}/);
+ const {html:home}=await visit("/",{QIRA_PROOF_CHECKOUT_URL:"https://buy.stripe.com/9B63cvexo0ts3OBfyv7kc07"});
+ assert.match(home,/id="buyLink"/);
+});
