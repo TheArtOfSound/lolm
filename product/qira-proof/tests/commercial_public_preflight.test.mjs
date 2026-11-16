@@ -99,7 +99,7 @@ test("public endpoint is not a paid entitlement or repository scanner",async()=>
  const text=(await (await worker.fetch(new Request("https://proof.imagineqira.com/"))).text());
  assert.match(text,/No repository is accessed/);
  assert.doesNotMatch(text,/fetch\s*\(/);
- assert.match(text,/Private repository\? Skip lookup/);
+ assert.match(text,/Private repository\? Continue directly/);
  const health=await worker.fetch(new Request("https://proof.imagineqira.com/health"));
  assert.equal((await health.json()).product,"qira-proof-commercial");
 });
