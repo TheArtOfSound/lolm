@@ -100,8 +100,8 @@ test("intake composer is local-only, labeled and does not claim payment confirma
  assert.match(html,/<label for="intakeEmail">/);
  assert.match(html,/<label for="intakeReceipt">/);
  assert.match(html,/<label for="intakeRepo">/);
- assert.match(html,/LOCAL ONLY \/ NO UPLOAD/);
- assert.match(html,/Email your receipt reference/);
+ assert.match(html,/No data has been sent by this website/);
+ assert.match(html,/Compose email to Qira/);
  assert.match(html,/does not verify payment or grant an entitlement/);
  assert.match(html,/No data has been sent by this website/);
  assert.match(response.headers.get("content-security-policy"),/form-action 'none'/);
