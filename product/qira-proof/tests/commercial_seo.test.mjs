@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../commercial/landing.mjs";
 import {GUIDES,renderGuide} from "../commercial/guides.mjs";
-import {ORIGIN,INDEX_PATHS,SEO_PAGES,canonicalFor,sitemapXml,robotsTxt,NON_INDEXABLE} from "../commercial/seo.mjs";
+import {ORIGIN,INDEX_PATHS,SEO_PAGES,canonicalFor,sitemapXml,robotsTxt,NON_INDEXABLE,INDEXNOW_KEY,INDEXNOW_KEY_PATH} from "../commercial/seo.mjs";
 const visit=(path,options={})=>worker.fetch(new Request(ORIGIN+path,options),{QIRA_PROOF_CHECKOUT_URL:"https://buy.stripe.com/9B63cvexo0ts3OBfyv7kc07"});
 const allPaths=[...INDEX_PATHS];
 
@@ -169,4 +169,18 @@ test("SEO integration preserves exact Stripe purchase link and verified but unco
  const intake=await visit("/start-review");
  assert.match(await intake.text(),/intakeComposer/);
  assert.equal(intake.headers.get("x-robots-tag"),"noindex, follow");
+});
+
+test("IndexNow ownership key is publicly accessible without indexing customer data",async()=>{
+ assert.match(INDEXNOW_KEY,/^[a-f0-9]{32}$/);
+ assert.equal(INDEXNOW_KEY_PATH,"/"+INDEXNOW_KEY+".txt");
+ const response=await visit(INDEXNOW_KEY_PATH);
+ assert.equal(response.status,200);
+ assert.match(response.headers.get("content-type"),/text\/plain/);
+ assert.equal(await response.text(),INDEXNOW_KEY);
+ assert.equal(response.headers.get("x-robots-tag"),"noindex");
+ const head=await visit(INDEXNOW_KEY_PATH,{method:"HEAD"});
+ assert.equal(head.status,200);
+ assert.equal(await head.text(),"");
+ assert.ok(!INDEX_PATHS.includes(INDEXNOW_KEY_PATH));
 });
