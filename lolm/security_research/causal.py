@@ -14,7 +14,7 @@ VERSION = "causal-observatory/scm-1.0"
 CONTROL_COSTS = {
     "step_up_auth": 2,
     "revoke_service_token": 3,
-    "least_privilege": 5,
+    "least_privilege": 6,
     "export_guard": 3,
     "egress_guard": 7,
 }
