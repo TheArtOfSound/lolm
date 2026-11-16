@@ -11,7 +11,11 @@ class Element{
 }
 const sleep=()=>new Promise(r=>setImmediate(r));
 test("connected visitor can select an installation, repo and workflow, and see real-labeled findings",async()=>{
- const elements=new Map(),calls=[];
+ const elements=new Map(),calls=[],downloads=[];
+ let connected=true;
+ const originalBlobUrl=URL.createObjectURL,originalRevoke=URL.revokeObjectURL;
+ URL.createObjectURL=blob=>{downloads.push(blob);return "blob:qira-test-report-"+downloads.length};
+ URL.revokeObjectURL=()=>{};
  const el=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id)};
  globalThis.document={
   body:new Element("body"),getElementById:el,
@@ -24,7 +28,8 @@ test("connected visitor can select an installation, repo and workflow, and see r
  globalThis.fetch=async(url,opts={})=>{
   calls.push({url:String(url),method:opts.method||"GET",body:opts.body||"",csrf:opts.headers?.["x-qira-csrf"]});
   let response;
-  if(url==="/api/github/status")response={configured:true,connected:true,csrf:"test-csrf",install_url:"https://github.com/apps/qira-proof-research/installations/new"};
+  if(url==="/api/github/status")response={configured:true,connected,csrf:connected?"test-csrf":null,install_url:"https://github.com/apps/qira-proof-research/installations/new"};
+  else if(url==="/api/github/disconnect"){connected=false;response={disconnected:true,server_side_token_revoked:false};}
   else if(url==="/api/github/installations")response={items:[{id:123,account:"Sample owner",selection:"selected"}],truncated:false};
   else if(url==="/api/github/repos")response={repos:[{name:"sample-owner/test-repo",branch:"main"}],truncated:false};
   else if(url==="/api/github/workflows")response={workflows:[{path:".github/workflows/deploy.yml"}],truncated:false};
@@ -61,6 +66,27 @@ test("connected visitor can select an installation, repo and workflow, and see r
  assert.match(el("gitMessage").textContent,/Assessment ready/);
  assert.equal(el("findings").children[0].tagName,"details");
  assert.equal(el("findings").children[0].open,true);
+ assert.equal(el("humanReportButton").disabled,false);
+ await el("humanReportButton").events.click();
+ assert.equal(downloads.length,1);
+ const printable=await downloads[0].text();
+ assert.match(printable,/Infrastructure configuration assessment/);
+ assert.match(printable,/Deployment SSH trust requires verification/);
+ assert.doesNotMatch(printable,/FICTIONAL EXAMPLE/);
+ assert.match(el("verificationState").textContent,/Printable assessment downloaded/);
+ await el("exportButton").events.click();
+ assert.equal(downloads.length,2);
+ const receipt=JSON.parse(await downloads[1].text());
+ assert.equal(receipt.schema,"qira-proof/evidence-v1");
+ assert.match(receipt.sha256,/^[a-f0-9]{64}$/);
+ await el("gitDisconnect").events.click();
+ assert.equal(document.body.dataset.githubConnection,"ready");
+ assert.equal(document.body.dataset.reportType,"unstarted");
+ assert.equal(el("gitPicker").hidden,true);
+ assert.equal(el("humanReportButton").disabled,true);
+ assert.match(el("gitMessage").textContent,/Local session cleared/);
+ URL.createObjectURL=originalBlobUrl;
+ URL.revokeObjectURL=originalRevoke;
  for(const call of calls.filter(x=>x.method==="POST")){
   assert.ok(call.url.startsWith("/api/github/"));
   assert.ok(!call.url.includes("sample-owner"),"source identifier must be in body not URL");
