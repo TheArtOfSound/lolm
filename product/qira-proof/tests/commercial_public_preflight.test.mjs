@@ -89,20 +89,16 @@ test("untrusted URL never triggers outbound API calls",async()=>{
  assert.equal(called,0);
 });
 
-test("Worker public API enforces method and input guards without publishing private data",async()=>{
- const wrong=await worker.fetch(new Request(base+"wrong",{method:"POST",body:"x"}));
- assert.equal(wrong.status,405);
- const invalid=await worker.fetch(request("https://github.com/owner/repo?credential=x"));
- assert.equal(invalid.status,400);
- assert.match(await invalid.text(),/invalid_repository/);
- const get=await worker.fetch(new Request(base));
- assert.equal(get.status,400);
+test("experimental public GitHub API is not routed in the production storefront",async()=>{
+ const response=await worker.fetch(request("TheArtOfSound/lolm"));
+ assert.equal(response.status,404);
+ assert.equal(response.headers.get("x-robots-tag"),"noindex");
 });
 
 test("public endpoint is not a paid entitlement or repository scanner",async()=>{
  const text=(await (await worker.fetch(new Request("https://proof.imagineqira.com/"))).text());
- assert.match(text,/No security scan runs in this lookup/);
- assert.match(text,/Public workflow filenames only/);
+ assert.match(text,/No repository is accessed/);
+ assert.doesNotMatch(text,/fetch\s*\(/);
  assert.match(text,/Private repository\? Skip lookup/);
  const health=await worker.fetch(new Request("https://proof.imagineqira.com/health"));
  assert.equal((await health.json()).product,"qira-proof-commercial");
