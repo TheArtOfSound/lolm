@@ -64,6 +64,19 @@ WARNING: any later redeployment must preserve these bindings. Confirm them in yo
 6. Review the downloaded evidence locally. Verify the report before treating any indicator as a factual configuration assertion.
 7. Select **Disconnect**; a local session cookie is cleared. This is NOT revocation of GitHub authorization. Revoke the App separately under your GitHub account settings if needed.
 
+## Data minimization on connected assessments
+
+The browser sends selected repository and workflow names in a **same-origin POST
+JSON body**, not an application URL query. The server requires the established
+OAuth session, the exact application Origin, and a CSRF token. It verifies
+installation and repository access again before reading a selected file.
+
+Provider API calls use GET for listing and reading metadata. OAuth authorization
+requires a separate code-exchange POST to GitHub. The Worker does not maintain
+a database of selected repositories, but Cloudflare and GitHub may retain
+infrastructure-level access logs. Do not interpret "no persistent application
+database" as "no platform telemetry or provider logs."
+
 ## Scope and trust boundaries
 
 - The GitHub App grants only the intersection of the installing user's access and the App permissions.
