@@ -1,0 +1,264 @@
+/*
+ * QIRA Proof / opt-in GitHub App user-to-server read-only connector.
+ *
+ * No provider credentials in HTML, cookies contain only AES-GCM ciphertext,
+ * and no provider token or source code is persisted in Worker storage.
+ *
+ * Important: this is a short-lived PILOT session, not multi-tenant SaaS identity.
+ * The GitHub App must be registered independently with Contents:read and
+ * Metadata:read, PKCE enabled, expiring user tokens, and exact callback URL.
+ */
+import {SCHEMA,normalizeSnapshot} from "./core.mjs";
+
+const COOKIE_PENDING="__Host-qira_git_state";
+const COOKIE_SESSION="__Host-qira_git_session";
+const STATE_TTL_MS=10*60*1000;
+const SESSION_TTL_MS=15*60*1000;
+const MAX_RESPONSE_BYTES=500_000;
+const MAX_WORKFLOW_BYTES=128_000;
+const RESP_HEADERS={
+ "cache-control":"private, no-store, max-age=0",
+ "x-content-type-options":"nosniff",
+ "referrer-policy":"no-referrer",
+ "x-frame-options":"DENY",
+ "content-security-policy":"default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+ "vary":"Cookie"
+};
+const json=(value,status=200,extra={})=>new Response(JSON.stringify(value),{status,headers:{...RESP_HEADERS,"content-type":"application/json; charset=utf-8",...extra}});
+const fail=(reason,status)=>json({error:reason},status);
+const urlSafe=(s)=>typeof s==="string"&&/^[a-zA-Z0-9_-]+$/.test(s);
+const repoSafe=(s)=>typeof s==="string"&&/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/.test(s)&&!s.includes("..");
+const workflowSafe=(s)=>typeof s==="string"&&/^\.github\/workflows\/[A-Za-z0-9_.-]{1,125}\.ya?ml$/.test(s)&&!s.includes("..");
+const b64url=(a)=>btoa(String.fromCharCode(...a)).replaceAll("+","-").replaceAll("/","_").replace(/=+$/,"");
+const unb64=(s)=>{
+ if(typeof s!=="string"||s.length>4096||!urlSafe(s))throw Error("invalid ciphertext encoding");
+ const raw=atob(s.replaceAll("-","+").replaceAll("_","/"));return Uint8Array.from(raw,c=>c.charCodeAt(0));
+};
+const random=(n)=>b64url(crypto.getRandomValues(new Uint8Array(n)));
+const now=()=>Date.now();
+function same(a,b){
+ if(typeof a!=="string"||typeof b!=="string")return false;
+ const len=Math.max(a.length,b.length);let different=a.length^b.length;
+ for(let i=0;i<len;i++)different|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);
+ return different===0;
+}
+function publicOrigin(env){
+ const raw=env.QIRA_PUBLIC_ORIGIN;
+ if(typeof raw!=="string")return null;
+ try{
+  const u=new URL(raw);
+  if(u.protocol!=="https:"||u.username||u.password||u.pathname!=="/"||u.search||u.hash)return null;
+  return u.origin;
+ }catch{return null}
+}
+function configured(env){
+ return !!(publicOrigin(env)&&typeof env.GITHUB_APP_CLIENT_ID==="string"&&/^[A-Za-z0-9_-]{8,180}$/.test(env.GITHUB_APP_CLIENT_ID)&&
+ typeof env.GITHUB_APP_CLIENT_SECRET==="string"&&env.GITHUB_APP_CLIENT_SECRET.length>=12&&
+ typeof env.QIRA_SESSION_KEY==="string"&&/^[A-Za-z0-9_-]{43}$/.test(env.QIRA_SESSION_KEY));
+}
+async function key(env){
+ if(!configured(env))throw Error("connector not configured");
+ const raw=unb64(env.QIRA_SESSION_KEY);
+ if(raw.length!==32)throw Error("invalid session encryption key");
+ return crypto.subtle.importKey("raw",raw,{name:"AES-GCM"},false,["encrypt","decrypt"]);
+}
+async function seal(env,purpose,document){
+ const iv=crypto.getRandomValues(new Uint8Array(12));
+ const aad=new TextEncoder().encode("QIRA|"+purpose+"|"+publicOrigin(env));
+ const text=new TextEncoder().encode(JSON.stringify(document));
+ const body=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv,additionalData:aad},await key(env),text));
+ return b64url(iv)+"."+b64url(body);
+}
+async function openSealed(env,purpose,token){
+ if(typeof token!=="string"||token.length>3500||!/^[-\w]+\.[-\w]+$/.test(token))return null;
+ try{
+  const [ivText,bodyText]=token.split(".");
+  const iv=unb64(ivText),body=unb64(bodyText);
+  if(iv.length!==12||body.length>2500)return null;
+  const aad=new TextEncoder().encode("QIRA|"+purpose+"|"+publicOrigin(env));
+  const plaintext=await crypto.subtle.decrypt({name:"AES-GCM",iv,additionalData:aad},await key(env),body);
+  const value=JSON.parse(new TextDecoder().decode(plaintext));
+  return value&&typeof value==="object"&&!Array.isArray(value)?value:null;
+ }catch{return null}
+}
+function cookies(request){
+ const raw=request.headers.get("cookie")||"";
+ const result={};
+ for(const segment of raw.split(";")){
+  const i=segment.indexOf("=");
+  if(i>0)result[segment.slice(0,i).trim()]=segment.slice(i+1).trim();
+ }
+ return result;
+}
+const cookie=(name,value,age)=>name+"="+value+"; Path=/; Max-Age="+age+"; HttpOnly; Secure; SameSite=Lax";
+const clearCookie=(name)=>cookie(name,"",0);
+async function sessionFor(request,env,clock=now){
+ const c=cookies(request);
+ const record=await openSealed(env,"session",c[COOKIE_SESSION]);
+ if(!record||record.v!==1||typeof record.token!=="string"||record.token.length<20||
+ typeof record.csrf!=="string"||!urlSafe(record.csrf)||!Number.isSafeInteger(record.exp)||
+ record.exp<=clock()||record.exp>clock()+SESSION_TTL_MS)return null;
+ return record;
+}
+function checkHost(request,env){
+ return publicOrigin(env)!==null&&new URL(request.url).origin===publicOrigin(env);
+}
+async function githubGet(path,token,fetcher=fetch){
+ if(!path.startsWith("/")||path.startsWith("//")||path.includes("..")||path.includes("\\"))
+  throw Error("GitHub request path rejected");
+ const u="https://api.github.com"+path;
+ const response=await fetcher(u,{method:"GET",redirect:"error",
+   headers:{"authorization":"Bearer "+token,"accept":"application/vnd.github+json",
+      "x-github-api-version":"2026-03-10","user-agent":"qira-proof-readonly-pilot"}});
+ if(!response.ok)throw Error("GitHub metadata unavailable");
+ const text=await response.text();
+ if(text.length>MAX_RESPONSE_BYTES)throw Error("GitHub metadata exceeded budget");
+ return JSON.parse(text);
+}
+async function installations(token,fetcher){
+ const payload=await githubGet("/user/installations?per_page=50",token,fetcher);
+ if(!payload||!Array.isArray(payload.installations))throw Error("malformed installations response");
+ const items=payload.installations.slice(0,50)
+ .filter(x=>Number.isSafeInteger(x.id)&&x.id>0&&typeof x.account?.login==="string")
+ .map(x=>({id:x.id,account:x.account.login,selection:x.repository_selection==="selected"?"selected":"all"}));
+ return {items,truncated:payload.total_count>payload.installations.length};
+}
+async function accessibleRepos(token,installationId,fetcher){
+ if(!Number.isSafeInteger(installationId)||installationId<=0)return null;
+ const known=await installations(token,fetcher);
+ if(!known.items.some(x=>x.id===installationId))return null;
+ const payload=await githubGet("/user/installations/"+installationId+"/repositories?per_page=100",token,fetcher);
+ if(!payload||!Array.isArray(payload.repositories))throw Error("malformed repositories response");
+ const repos=payload.repositories.filter(x=>repoSafe(x.full_name)&&typeof x.default_branch==="string"&&
+ x.default_branch.length<=128&&/^[A-Za-z0-9_.\/-]+$/.test(x.default_branch)&&!x.default_branch.includes(".."))
+ .map(x=>({name:x.full_name,branch:x.default_branch}));
+ return {repos,truncated:payload.total_count>payload.repositories.length};
+}
+function sourceUrl(repo,branch,workflow){
+ return "https://github.com/"+repo+"/blob/"+encodeURIComponent(branch)+"/"+workflow;
+}
+async function assess(token,installationId,repo,workflow,fetcher,clock=now){
+ if(!repoSafe(repo)||!workflowSafe(workflow))throw Error("repository or workflow selector invalid");
+ const allowed=await accessibleRepos(token,installationId,fetcher);
+ if(!allowed)throw Error("installation not authorized");
+ const selected=allowed.repos.find(r=>r.name===repo);
+ if(!selected)throw Error("repository not within verified authorized installation page");
+ const [owner,name]=repo.split("/");
+ const path="/repos/"+encodeURIComponent(owner)+"/"+encodeURIComponent(name)+
+   "/contents/"+workflow.split("/").map(encodeURIComponent).join("/")+"?ref="+encodeURIComponent(selected.branch);
+ const data=await githubGet(path,token,fetcher);
+ if(data?.encoding!=="base64"||typeof data.content!=="string"||data.content.length>MAX_WORKFLOW_BYTES*2)throw Error("workflow not returned as bounded base64");
+ const bytes=atob(data.content.replace(/\s/g,""));
+ if(bytes.length>MAX_WORKFLOW_BYTES)throw Error("workflow size budget exceeded");
+ const text=new TextDecoder("utf-8",{fatal:true}).decode(Uint8Array.from(bytes,c=>c.charCodeAt(0)));
+ const lines=text.split(/\r?\n/).filter(x=>!x.trimStart().startsWith("#"));
+ const runtimeScan=lines.some(x=>/(^|[^A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)/.test(x));
+ const timestamp=new Date(clock()).toISOString();
+ const url=sourceUrl(repo,selected.branch,workflow);
+ const facts=[
+  {provider:"github",asset:repo,signal:"runtime_ssh_keyscan",value:runtimeScan,source_url:url,observed_at:timestamp},
+  {provider:"github",asset:repo,signal:"repo_branch_protection_verifiable",value:"unknown",
+   source_url:"https://github.com/"+repo+"/settings/branches",observed_at:timestamp}
+ ];
+ if(runtimeScan)facts.push({provider:"github",asset:repo,signal:"ssh_host_key_pinned",value:"unknown",
+   source_url:url,observed_at:timestamp});
+ return normalizeSnapshot({schema:SCHEMA,captured_at:timestamp,facts});
+}
+function responseRedirect(to,setCookies=[]){
+ const h=new Headers(RESP_HEADERS);
+ h.set("location",to);
+ for(const v of setCookies)h.append("set-cookie",v);
+ return new Response(null,{status:303,headers:h});
+}
+async function pkceChallenge(verifier){
+ const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(verifier)));
+ return b64url(digest);
+}
+async function exchangeToken(env,code,verifier,fetcher){
+ const body=new URLSearchParams({
+  client_id:env.GITHUB_APP_CLIENT_ID,client_secret:env.GITHUB_APP_CLIENT_SECRET,
+  code,redirect_uri:publicOrigin(env)+"/oauth/github/callback",code_verifier:verifier
+ });
+ const response=await fetcher("https://github.com/login/oauth/access_token",{
+  method:"POST",redirect:"error",headers:{"accept":"application/json",
+    "content-type":"application/x-www-form-urlencoded","user-agent":"qira-proof-readonly-pilot"},
+  body:body.toString()
+ });
+ if(!response.ok)throw Error("GitHub OAuth exchange failed");
+ const raw=await response.text();
+ if(raw.length>5000)throw Error("OAuth response budget exceeded");
+ const parsed=JSON.parse(raw);
+ if(parsed.error||typeof parsed.access_token!=="string"||parsed.access_token.length<20||
+ parsed.token_type?.toLowerCase()!=="bearer"||
+ !Number.isInteger(parsed.expires_in)||parsed.expires_in<120||parsed.expires_in>28800)
+  throw Error("GitHub did not return a valid, expiring access token");
+ return {token:parsed.access_token,ttl:Math.min(SESSION_TTL_MS,parsed.expires_in*1000)};
+}
+function cspGet(request){return ["GET","HEAD"].includes(request.method)}
+export async function handleGitHubApp(request,env,{fetcher=fetch,clock=now}={}){
+ const url=new URL(request.url),path=url.pathname;
+ if(path==="/api/github/status"){
+  const setup=configured(env);
+  const sess=setup?await sessionFor(request,env,clock):null;
+  let slug=typeof env.GITHUB_APP_SLUG==="string"&&/^[A-Za-z0-9-]{1,100}$/.test(env.GITHUB_APP_SLUG)?env.GITHUB_APP_SLUG:null;
+  return json({configured:setup,connected:!!sess,expires_at:sess?new Date(sess.exp).toISOString():null,
+    csrf:sess?sess.csrf:null,install_url:setup&&slug?"https://github.com/apps/"+slug+"/installations/new":null});
+ }
+ if(!configured(env)||!checkHost(request,env))return fail("GitHub App connection is not configured for this origin",503);
+ if(path==="/connect/github"&&cspGet(request)){
+  const nonce=random(24),verifier=random(48),challenge=await pkceChallenge(verifier);
+  const pending=await seal(env,"pending",{v:1,nonce,verifier,exp:clock()+STATE_TTL_MS});
+  const target=new URL("https://github.com/login/oauth/authorize");
+  target.searchParams.set("client_id",env.GITHUB_APP_CLIENT_ID);
+  target.searchParams.set("redirect_uri",publicOrigin(env)+"/oauth/github/callback");
+  target.searchParams.set("state",nonce);
+  target.searchParams.set("code_challenge",challenge);
+  target.searchParams.set("code_challenge_method","S256");
+  return responseRedirect(target.toString(),[cookie(COOKIE_PENDING,pending,600)]);
+ }
+ if(path==="/oauth/github/callback"&&cspGet(request)){
+  const state=url.searchParams.get("state"),code=url.searchParams.get("code");
+  const pending=await openSealed(env,"pending",cookies(request)[COOKIE_PENDING]);
+  if(url.searchParams.has("error")||!pending||pending.v!==1||pending.exp<=clock()||
+     pending.exp>clock()+STATE_TTL_MS||!same(state,pending.nonce)||!urlSafe(code)||code.length>256)
+    return responseRedirect(publicOrigin(env)+"/?github=failed",[clearCookie(COOKIE_PENDING)]);
+  try{
+   const token=await exchangeToken(env,code,pending.verifier,fetcher);
+   const session=await seal(env,"session",{v:1,token:token.token,exp:clock()+token.ttl,csrf:random(24)});
+   if(session.length>3600)throw Error("session over cookie bound");
+   return responseRedirect(publicOrigin(env)+"/?github=connected",
+      [clearCookie(COOKIE_PENDING),cookie(COOKIE_SESSION,session,Math.floor(token.ttl/1000))]);
+  }catch{return responseRedirect(publicOrigin(env)+"/?github=failed",[clearCookie(COOKIE_PENDING)])}
+ }
+ if(path==="/api/github/disconnect"){
+  if(request.method!=="POST")return fail("Method not allowed",405);
+  if(request.headers.get("origin")!==publicOrigin(env))return fail("Invalid request origin",403);
+  const session=await sessionFor(request,env,clock);
+  if(!session||!same(request.headers.get("x-qira-csrf"),session.csrf))return fail("Invalid session or CSRF token",403);
+  const res=json({disconnected:true,server_side_token_revoked:false});
+  res.headers.append("set-cookie",clearCookie(COOKIE_SESSION));
+  return res;
+ }
+ if(path.startsWith("/api/github/")){
+  if(!cspGet(request))return fail("Method not allowed",405);
+  const session=await sessionFor(request,env,clock);
+  if(!session)return fail("Connect your GitHub App first",401);
+  try{
+   if(path==="/api/github/installations")return json(await installations(session.token,fetcher));
+   const installationId=url.searchParams.get("installation_id");
+   if(!/^[1-9][0-9]{0,15}$/.test(installationId||""))return fail("Invalid installation ID",400);
+   const id=Number(installationId);
+   if(!Number.isSafeInteger(id))return fail("Invalid installation ID",400);
+   if(path==="/api/github/repos"){
+    const data=await accessibleRepos(session.token,id,fetcher);
+    return data?json(data):fail("Installation not authorized",403);
+   }
+   if(path==="/api/github/assessment"){
+    const data=await assess(session.token,id,url.searchParams.get("repo"),url.searchParams.get("workflow"),fetcher,clock);
+    return json({snapshot:data,note:"Authorized read-only GitHub metadata; local analysis is still required"});
+   }
+   return fail("Not found",404);
+  }catch{return fail("GitHub read-only inspection unavailable or authorization is insufficient",502)}
+ }
+ return null;
+}
