@@ -15,7 +15,7 @@ test("task-first homepage presents one accessible repository entry instead of co
  assert.match(html,/Private repository\? Skip lookup/);
  assert.doesNotMatch(html,/role="img" aria-label="Example workflow graph/);
  assert.doesNotMatch(html,/ILLUSTRATIVE \/ NOT YOUR REPO/);
- assert.match(html,/No security scan runs in this lookup/);
+ assert.match(html,/No repository is accessed/);
 });
 
 test("real source evidence replaces synthetic atlas on homepage with immutable GitHub link",async()=>{
@@ -32,11 +32,11 @@ test("real source evidence replaces synthetic atlas on homepage with immutable G
 
 test("homepage client script only fetches its same-origin public inventory endpoint",async()=>{
  const r=await page(),html=await r.text();
- assert.match(r.headers.get("content-security-policy"),/connect-src 'self'/);
- assert.match(html,/fetch\("\/api\/public-repository\?repo="/);
+ assert.match(r.headers.get("content-security-policy"),/connect-src 'none'/);
+ assert.doesNotMatch(html,/\bfetch\s*\(/);
  assert.doesNotMatch(html,/fetch\("https?:\/\//);
  assert.doesNotMatch(html,/<script src=/);
- assert.match(html,/No login or upload/);
+ assert.match(html,/no account, upload, or scan/i);
  assert.match(html,/Founding review/);
 });
 
