@@ -258,28 +258,47 @@ export async function handleGitHubApp(request,env={}, {fetcher=fetch,clock=now}=
   return res;
  }
  if(path.startsWith("/api/github/")){
-  if(!cspGet(request))return fail("Method not allowed",405);
   const session=await sessionFor(request,env,clock);
   if(!session)return fail("Connect your GitHub App first",401);
+  if(path==="/api/github/installations"){
+   if(request.method!=="GET")return fail("Method not allowed",405);
+   try{return json(await installations(session.token,fetcher))}
+   catch{return fail("GitHub installation list unavailable",502)}
+  }
+  if(!["/api/github/repos","/api/github/workflows","/api/github/assessment"].includes(path))
+   return fail("Not found",404);
+  // Selection data is POSTed so private repository paths do not enter URL logs.
+  // These are READ-only operations to GitHub, despite the local HTTP method.
+  if(request.method!=="POST")return fail("Method not allowed",405);
+  if(request.headers.get("origin")!==publicOrigin(env)||
+    !same(request.headers.get("x-qira-csrf"),session.csrf))return fail("Invalid request origin or CSRF",403);
+  if(!(request.headers.get("content-type")||"").toLowerCase().startsWith("application/json"))
+   return fail("JSON required",415);
+  if(Number(request.headers.get("content-length")||"0")>2048)return fail("Request size exceeded",413);
+  let fields;
   try{
-   if(path==="/api/github/installations")return json(await installations(session.token,fetcher));
-   const installationId=url.searchParams.get("installation_id");
-   if(!/^[1-9][0-9]{0,15}$/.test(installationId||""))return fail("Invalid installation ID",400);
-   const id=Number(installationId);
-   if(!Number.isSafeInteger(id))return fail("Invalid installation ID",400);
+   const body=await request.text();
+   if(body.length>2048)throw Error("Too long");
+   fields=JSON.parse(body);
+  }catch{return fail("Invalid request JSON",400)}
+  const expected=path==="/api/github/repos"?["installation_id"]:
+    path==="/api/github/workflows"?["installation_id","repo"]:
+    ["installation_id","repo","workflow"];
+  if(!fields||Array.isArray(fields)||typeof fields!=="object"||
+    Object.keys(fields).length!==expected.length||
+    Object.keys(fields).some(k=>!expected.includes(k))||
+    !Number.isSafeInteger(fields.installation_id)||fields.installation_id<=0)
+   return fail("Unexpected request selection",400);
+  try{
    if(path==="/api/github/repos"){
-    const data=await accessibleRepos(session.token,id,fetcher);
+    const data=await accessibleRepos(session.token,fields.installation_id,fetcher);
     return data?json(data):fail("Installation not authorized",403);
    }
-   if(path==="/api/github/workflows"){
-    const data=await listWorkflows(session.token,id,url.searchParams.get("repo"),fetcher);
-    return json(data);
-   }
-   if(path==="/api/github/assessment"){
-    const data=await assess(session.token,id,url.searchParams.get("repo"),url.searchParams.get("workflow"),fetcher,clock);
-    return json({snapshot:data,note:"Authorized read-only GitHub metadata; local analysis is still required"});
-   }
-   return fail("Not found",404);
+   if(path==="/api/github/workflows")
+    return json(await listWorkflows(session.token,fields.installation_id,fields.repo,fetcher));
+   const data=await assess(session.token,fields.installation_id,
+      fields.repo,fields.workflow,fetcher,clock);
+   return json({snapshot:data,note:"Authorized read-only GitHub metadata; browser analysis required"});
   }catch{return fail("GitHub read-only inspection unavailable or authorization is insufficient",502)}
  }
  return null;
