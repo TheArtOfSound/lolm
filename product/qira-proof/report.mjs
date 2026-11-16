@@ -85,7 +85,7 @@ export async function renderHumanReport(receipt,{sample=false}={}){
  h3{font-size:17px;line-height:1.3;margin:0}h4{font-size:12px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
  p{margin:9px 0}.meta,.muted{color:#576e70;font-size:13px}
  .disclaimer{border-left:3px solid #8b9866;background:#f4f6ec;padding:15px 18px;margin:24px 0;font-size:13px}
- .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:26px 0}
+ .stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:26px 0}
  .stat,.coverage{border:1px solid #dbe4df;border-radius:10px;padding:13px}
  .stat b,.coverage b{display:block;font-size:11px;color:#4b6867;text-transform:uppercase}
  .stat strong,.coverage strong{display:block;font-size:26px;margin-top:4px;font-variant-numeric:tabular-nums}
@@ -107,6 +107,7 @@ export async function renderHumanReport(receipt,{sample=false}={}){
  <div class="disclaimer"><b>Scope and assurance limits:</b> This document evaluates only supplied or temporarily retrieved configuration facts. It does not prove provider identity, full coverage, exploitability, or absence of vulnerabilities. It is not a penetration test or security certification. SHA-256 provides alteration detection, not a digital signature.</div>
  <div class="stats"><div class="stat"><b>Assets represented</b><strong>${assessment.assets}</strong></div>
  <div class="stat"><b>Evidence facts</b><strong>${assessment.facts}</strong></div>
+ <div class="stat"><b>Review patterns</b><strong>${new Set(assessment.findings.filter(f=>f.level!=="unknown").map(f=>f.check)).size}</strong></div>
  <div class="stat"><b>Review observations</b><strong>${assessment.counts.high+assessment.counts.review}</strong></div>
  <div class="stat"><b>Visibility gaps</b><strong>${assessment.counts.unknown}</strong></div></div>
  <h2>Scope of evidence</h2><div>${coverageView(baseline.facts)}</div>
