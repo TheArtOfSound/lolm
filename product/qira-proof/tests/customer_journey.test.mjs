@@ -40,6 +40,10 @@ function cookieFrom(response,name){
 function request(path,options={}){return new Request(origin+path,options);}
 function mockProvider(url,options={}){
  const text=String(url);
+ // Mirror Cloudflare Workers: redirect:"error" throws even before a request
+ // is sent. We use "manual" and reject any 3xx response in the app.
+ assert.equal(options.redirect,"manual","Cloudflare Workers only permits manual/follow");
+ new Request(text,{method:options.method||"GET",redirect:options.redirect});
  let payload;
  if(text==="https://github.com/login/oauth/access_token"){
   assert.equal(options.method,"POST");
