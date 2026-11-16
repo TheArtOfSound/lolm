@@ -69,6 +69,29 @@ class CollectorTests(unittest.TestCase):
         self.assertTrue(any("/branches/development/protection" in x for x in seen))
         self.assertTrue(any("/blob/0123456789abcdef0123456789abcdef01234567/" in f["source_url"] for f in out["facts"] if f["signal"]=="runtime_ssh_keyscan"))
 
+    def test_nested_permissions_never_claim_to_restrict_actual_workflow_token(self):
+        sample="on: push\nenv:\n  permissions:\n    contents: read\njobs:\n  test:\n    steps:\n      - run: echo okay"
+        result=collector.scan_workflow_syntax(sample)
+        self.assertEqual(result["workflow_explicit_read_only_permissions"][0],"unknown")
+        self.assertEqual(result["workflow_token_write_permission"][0],"unknown")
+
+    def test_job_level_write_and_sequence_trigger(self):
+        sample="\n".join(["on:","  - push","  - pull_request_target",
+           "permissions:","  contents: read","jobs:","  deploy:",
+           "    permissions:","      contents: write"])
+        result=collector.scan_workflow_syntax(sample)
+        self.assertTrue(result["workflow_pull_request_target_trigger"][0])
+        self.assertEqual(result["workflow_pull_request_target_trigger"][1],3)
+        self.assertTrue(result["workflow_token_write_permission"][0])
+        self.assertFalse(result["workflow_explicit_read_only_permissions"][0])
+
+    def test_unsupported_inline_trigger_uses_unknown(self):
+        for line in ("on: { pull_request_target: {} }","on: 'pull_request_target'",
+                     "on: [push, *event_alias]"):
+            self.assertEqual(
+                collector.scan_workflow_syntax(line)["workflow_pull_request_target_trigger"][0],
+                "unknown")
+
     def test_reject_duplicate_repository_selection(self):
         with self.assertRaises(ValueError):
             collector.build_snapshot(github_repos=["org/repository"],
