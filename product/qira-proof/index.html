@@ -78,7 +78,7 @@ details.advanced summary:after{content:"+";font-size:20px;color:var(--accent)}de
 .tab{border:0;background:transparent;color:#5b696a;font-weight:750;font-size:12px;padding:9px 11px;border-radius:7px;min-height:38px}
 .tab.active{background:#fff;color:var(--ink);box-shadow:0 1px 8px #152a3014}
 .dashboard{padding:24px}.dashboard .lead{font-size:13px;color:var(--soft)}
-.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:24px}
+.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:24px}
 .metric{padding:16px 13px;background:#f7f9f7;border:1px solid #e6ede8;border-radius:12px;min-width:0}
 .metric small{display:block;color:#6d7b7d;font-size:10px;font-weight:650;line-height:1.45}.metric strong{font-size:28px;letter-spacing:-.05em;font-weight:700;display:block;margin-top:6px}.metric .caution{color:#9c622f}.metric .calm{color:var(--green)}
 .cards{display:grid;gap:11px}.finding{background:white;border:1px solid #dce5e1;border-radius:13px;overflow:hidden;transition:box-shadow .18s}
@@ -226,7 +226,7 @@ footer{padding:30px 0 45px;border-top:1px solid var(--stroke);display:flex;flex-
        <button type="button" class="btn primary" id="startSample">See a sample report <span>→</span></button>
       </div>
       <div id="assessmentData" hidden>
-      <div class="metrics"><div class="metric"><small>Evidence scopes represented</small><strong id="assetsCount">—</strong></div><div class="metric"><small>Things to review</small><strong id="reviewCount" class="caution">—</strong></div><div class="metric"><small>Can't yet verify</small><strong id="unknownCount">—</strong></div><div class="metric"><small>Evidence facts</small><strong id="factsCount" class="calm">—</strong></div></div>
+      <div class="metrics"><div class="metric"><small>Evidence scopes</small><strong id="assetsCount">—</strong></div><div class="metric"><small>Review patterns</small><strong id="reviewCount" class="caution">—</strong></div><div class="metric"><small>Review observations</small><strong id="observationsCount">—</strong></div><div class="metric"><small>Visibility gaps</small><strong id="unknownCount">—</strong></div><div class="metric"><small>Evidence facts</small><strong id="factsCount" class="calm">—</strong></div></div>
       <div class="note" id="scanCoverage" hidden role="status" aria-live="polite"></div>
       <div class="section-label">What deserves a closer look?</div>
       <div id="findings" class="cards" aria-live="polite"></div>
