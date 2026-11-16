@@ -38,6 +38,15 @@ test("actual page module initializes GitHub status on startup (not only after fi
   assert.equal(document.body.dataset.githubConnection,"pending-setup");
   assert.equal(el("gitBadge").textContent,"Pending setup");
   assert.equal(el("reviewCount").textContent,2);
+  assert.equal(document.body.dataset.reportType,"unstarted");
+  assert.equal(el("reportIntro").hidden,false);
+  assert.equal(el("assessmentData").hidden,true);
+  assert.equal(el("sampleBanner").hidden,true);
+  el("startSample").click();
+  assert.equal(document.body.dataset.reportType,"example");
+  assert.equal(el("reportIntro").hidden,true);
+  assert.equal(el("assessmentData").hidden,false);
+  assert.equal(el("sampleBanner").hidden,false);
   assert.equal(el("unknownCount").textContent,1);
   assert.deepEqual(fetched,["/api/github/status"]);
   assert.ok(el("baselineInput").events.change);
