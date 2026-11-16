@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {webcrypto} from "node:crypto";
-import {SCHEMA,normalizeSnapshot,proof,verifyProof,mergeSnapshots} from "../core.mjs";
+import {SCHEMA,normalizeSnapshot,proof,verifyProof,mergeSnapshots,analyzeSnapshot,groupReviewFindings} from "../core.mjs";
 import {renderHumanReport} from "../report.mjs";
 if(!globalThis.crypto)globalThis.crypto=webcrypto;
 const when="2026-11-16T05:00:00Z";
@@ -63,4 +63,28 @@ test("combining evidence does not falsely inherit repository-wide coverage",()=>
  const joined=mergeSnapshots(a,b);
  assert.equal(joined.coverage,undefined);
  assert.equal(joined.facts.length,4);
+});
+
+test("multiple workflow findings appear as concise groups without losing either source",async()=>{
+ const s=snap();
+ const workflow2=".github/workflows/release.yml";
+ s.coverage={...s.coverage,discovered:2,selected:2,assessed:2};
+ s.facts.push({provider:"github",asset:repo+":"+workflow2,signal:"workflow_unpinned_actions",
+  value:true,source_url:"https://github.com/example/repo/blob/"+commit+"/"+workflow2,observed_at:when});
+ const assessment=analyzeSnapshot(s);
+ assert.equal(assessment.findings.length,3);
+ const grouped=groupReviewFindings(assessment.findings);
+ assert.equal(grouped.length,2);
+ const repeated=grouped.find(x=>x.check==="workflow_action_integrity");
+ assert.equal(repeated.affected,2);
+ assert.equal(repeated.evidence.length,2);
+ assert.match(repeated.title,/2 workflows/);
+ const receipt=await proof(s);
+ assert.equal(receipt.assessment.findings.length,3,"Underlying evidence must not be discarded");
+ assert.equal(await verifyProof(receipt),true);
+ const html=await renderHumanReport(receipt);
+ assert.match(html,/2 workflows: Third-party CI actions/);
+ assert.match(html,/ci.yml/);
+ assert.match(html,/release.yml/);
+ assert.equal((html.match(/class="finding"/g)||[]).length,2);
 });
