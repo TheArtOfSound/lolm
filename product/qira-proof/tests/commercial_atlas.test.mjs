@@ -79,7 +79,8 @@ test("post-purchase intake is a guided dossier rather than an auto-verification 
  assert.match(html,/intake-head/);
  assert.match(html,/intake-rail/);
  assert.match(html,/intake-actions/);
- assert.match(html,/PAYMENT NOT VERIFIED/);
+ assert.match(html,/VERIFY WITH QIRA/);
+ assert.match(html,/Email your receipt reference/);
  assert.match(html,/does not verify payment or grant an entitlement/);
  assert.match(html,/Email paid-review intake/);
  assert.match(html,/Never email passwords/);
