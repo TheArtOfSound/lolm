@@ -56,7 +56,7 @@ function render(){
  el("factsCount").textContent=report.facts;
  el("baselineState").textContent=state.mode==="demo"?"Sample":"Loaded";
  el("baselineName").textContent=state.mode==="demo"?"Fictional demo · "+report.facts+" facts":
-  (state.mode==="composed"?"Combined provider snapshot":"Private local snapshot")+" · "+report.facts+" facts · "+state.before.captured_at;
+  (state.mode==="composed"?"Combined provider snapshot":state.mode==="connected"?"Connected GitHub workflow":"Private local snapshot")+" · "+report.facts+" facts · "+state.before.captured_at;
  el("followupState").textContent=state.after?"Loaded":"Empty";
  el("followupName").textContent=state.after?"Follow-up · "+state.after.captured_at:"No later snapshot selected";
  const findings=el("findings");clear(findings);
