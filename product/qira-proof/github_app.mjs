@@ -9,6 +9,7 @@
  * Metadata:read, PKCE enabled, expiring user tokens, and exact callback URL.
  */
 import {SCHEMA,normalizeSnapshot} from "./core.mjs";
+import {scanWorkflowSyntax} from "./workflow_static.mjs";
 
 const COOKIE_PENDING="__Host-qira_git_state";
 const COOKIE_SESSION="__Host-qira_git_session";
@@ -185,19 +186,24 @@ const BULK_BATCH_SIZE=4;
 // Boolean facts are limited to syntactic evidence visible in each selected file.
 // Policy outcomes, provider access, and the execution context are NOT inferred.
 function workflowFacts(text,repo,workflow,commit,timestamp,asset){
- const lines=text.split(/\r?\n/).filter(x=>!x.trimStart().startsWith("#"));
- const runtimeScan=lines.some(x=>/(^|[^A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)/.test(x));
- const actionRef=/^\s*(?:-\s*)?uses:\s*['"]?([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_./-]+)?)@([A-Za-z0-9_.-]{1,128})['"]?(?:\s*(?:#.*)?)?$/;
- const unpinned=lines.some(line=>{
-  const m=actionRef.exec(line);
-  return !!m&&!/^[a-fA-F0-9]{40}$/.test(m[2]);
- });
- const url=sourceUrl(repo,commit,workflow);
+ const inspected=scanWorkflowSyntax(text);
+ const source=sourceUrl(repo,commit,workflow);
+ const make=(signal)=>{
+  const item=inspected[signal];
+  // Exact commit plus optional GitHub line anchor; never expose workflow text.
+  const source_url=item.line&&item.line<=100000?source+"#L"+item.line:source;
+  return {provider:"github",asset,signal,value:item.value,source_url,observed_at:timestamp};
+ };
  const facts=[
-  {provider:"github",asset,signal:"runtime_ssh_keyscan",value:runtimeScan,source_url:url,observed_at:timestamp},
-  {provider:"github",asset,signal:"workflow_unpinned_actions",value:unpinned,source_url:url,observed_at:timestamp}
+  make("runtime_ssh_keyscan"),
+  make("workflow_unpinned_actions"),
+  make("workflow_explicit_read_only_permissions"),
+  make("workflow_token_write_permission"),
+  make("workflow_pull_request_target_trigger")
  ];
- if(runtimeScan)facts.push({provider:"github",asset,signal:"ssh_host_key_pinned",value:"unknown",source_url:url,observed_at:timestamp});
+ if(inspected.runtime_ssh_keyscan.value===true)
+  facts.push({provider:"github",asset,signal:"ssh_host_key_pinned",value:"unknown",
+   source_url:facts[0].source_url,observed_at:timestamp});
  return facts;
 }
 async function resolveWorkflowCommit(apiRepo,branch,token,fetcher){
