@@ -64,7 +64,7 @@ export async function publicRepositoryPreflight(request,env={},fetcher=fetch){
   const contents=await githubJSON(root+"/contents/.github/workflows?ref="+encodeURIComponent(details.default_branch||"HEAD"),fetcher,controller.signal);
   let count=null;
   if(contents.kind==="not_found")count=0;
-  else if(contents.kind==="ok"&&Array.isArray(contents.data))count=contents.data.filter(x=>x?.type==="file"&&/\.ya?ml$/i.test(x.name||"")).length;
+  else if(contents.kind==="ok"&&Array.isArray(contents.data)){const matchCount=contents.data.filter(x=>x?.type==="file"&&/\.ya?ml$/i.test(x.name||"")).length;count=contents.data.length>=MAX_ITEMS&&matchCount<=LIMIT?null:matchCount;}
   else if(contents.kind==="limited"||contents.kind==="unavailable")count=null;
   const status=count===null?"inventory_unavailable":count===0?"no_workflows":count>LIMIT?"outside_standard_scope":"within_scope";
   const responseBody={
