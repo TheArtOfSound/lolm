@@ -99,7 +99,7 @@ test("live case study route accurately separates scanner observations and manual
  const response=await worker.fetch(req);
  assert.equal(response.status,200);
  const html=await response.text();
- assert.match(html,/<title>LOLM source review case study \| Qira Proof<\/title>/);
+ assert.match(html,/<title>Real GitHub Actions Security Findings: LOLM Case Study \| Qira Proof<\/title>/);
  assert.match(html,/Three observations corroborated against source/);
  assert.match(html,/Release-control defects found outside the scanner/);
  assert.match(html,/or an independent third-party audit/);
