@@ -27,6 +27,8 @@ function mockFetch(input,options={}){
    value={total_count:1,repositories:[{full_name:"TheArtOfSound/lolm",default_branch:"main"}]};
  }else if(url.includes("/user/installations?")){
    value={total_count:1,installations:[{id:123,account:{login:"example-org"},repository_selection:"selected"}]};
+ }else if(url.includes("/repos/TheArtOfSound/lolm/commits/main")){
+   value={sha:"0123456789abcdef0123456789abcdef01234567"};
  }else if(url.includes("/repos/TheArtOfSound/lolm/contents/.github/workflows?")){
    value=[{path:".github/workflows/deploy-production.yml",type:"file"},
           {path:".github/workflows/publish.yml",type:"file"},
