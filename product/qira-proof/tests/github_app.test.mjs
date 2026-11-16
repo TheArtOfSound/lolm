@@ -54,6 +54,13 @@ async function session(){
   return {start,redirect,callback,state,pending,ciphertext,
      headers:{cookie:"__Host-qira_git_session="+ciphertext}};
 }
+async function scoped(s,path,selection,extra={}){
+ const status=await handleGitHubApp(req("/api/github/status",{headers:s.headers}),env,{fetcher:mockFetch,clock});
+ const csrf=(await status.json()).csrf;
+ return handleGitHubApp(req(path,{method:"POST",headers:{
+   ...s.headers,origin,"content-type":"application/json","x-qira-csrf":csrf,
+   ...(extra.headers||{})},body:JSON.stringify(selection)}),env,{fetcher:mockFetch,clock});
+}
 test("disabled connector never redirects visitors to fake GitHub login",async()=>{
   const disabled=await handleGitHubApp(req("/api/github/status"),{},{fetcher:mockFetch,clock});
   const out=await disabled.json();
@@ -103,41 +110,51 @@ test("User must be authenticated before listing installations",async()=>{
   assert.equal(response.status,401);
 });
 test("Verified user installation controls accessible repositories",async()=>{
-  const s=await session();
-  const list=await handleGitHubApp(req("/api/github/installations",{headers:s.headers}),env,{fetcher:mockFetch,clock});
-  assert.deepEqual((await list.json()).items,[{id:123,account:"example-org",selection:"selected"}]);
-  const allowed=await handleGitHubApp(req("/api/github/repos?installation_id=123",{headers:s.headers}),
-    env,{fetcher:mockFetch,clock});
-  assert.deepEqual((await allowed.json()).repos,[{name:"TheArtOfSound/lolm",branch:"main"}]);
-  const spoofed=await handleGitHubApp(req("/api/github/repos?installation_id=999",{headers:s.headers}),
-    env,{fetcher:mockFetch,clock});
-  assert.equal(spoofed.status,403);
+ const s=await session();
+ const list=await handleGitHubApp(req("/api/github/installations",{headers:s.headers}),env,{fetcher:mockFetch,clock});
+ assert.deepEqual((await list.json()).items,[{id:123,account:"example-org",selection:"selected"}]);
+ const allowed=await scoped(s,"/api/github/repos",{installation_id:123});
+ assert.deepEqual((await allowed.json()).repos,[{name:"TheArtOfSound/lolm",branch:"main"}]);
+ const spoofed=await scoped(s,"/api/github/repos",{installation_id:999});
+ assert.equal(spoofed.status,403);
 });
-test("Remote content is read only from a proven accessible repo and selected workflow",async()=>{
-  const s=await session();
-  visited=[];
-  const assessment=await handleGitHubApp(req("/api/github/assessment?installation_id=123&repo=TheArtOfSound%2Flolm&workflow=.github%2Fworkflows%2Fdeploy-production.yml",
-    {headers:s.headers}),env,{fetcher:mockFetch,clock});
-  assert.equal(assessment.status,200);
-  const out=await assessment.json();
-  assert.equal(out.snapshot.facts.find(x=>x.signal==="runtime_ssh_keyscan").value,true);
-  assert.equal(out.snapshot.facts.find(x=>x.signal==="ssh_host_key_pinned").value,"unknown");
-  assert.ok(out.snapshot.facts.every(f=>f.provider==="github"));
-  assert.ok(!JSON.stringify(out).includes(tok));
-  assert.ok(!JSON.stringify(out).includes("ssh-keyscan"));
-  assert.ok(visited.every(v=>v.method==="GET"&&v.url.startsWith("https://api.github.com/")));
+test("Selected workflow content is fetched only after the installation and repo are authorized",async()=>{
+ const s=await session();
+ visited=[];
+ const assessment=await scoped(s,"/api/github/assessment",{installation_id:123,
+  repo:"TheArtOfSound/lolm",workflow:".github/workflows/deploy-production.yml"});
+ assert.equal(assessment.status,200);
+ const out=await assessment.json();
+ assert.equal(out.snapshot.facts.find(x=>x.signal==="runtime_ssh_keyscan").value,true);
+ assert.equal(out.snapshot.facts.find(x=>x.signal==="ssh_host_key_pinned").value,"unknown");
+ assert.ok(out.snapshot.facts.every(f=>f.provider==="github"));
+ assert.ok(!JSON.stringify(out).includes(tok));
+ assert.ok(!JSON.stringify(out).includes("ssh-keyscan"));
+ assert.ok(visited.every(v=>v.method==="GET"&&v.url.startsWith("https://api.github.com/")));
 });
-test("Malformed repo and injection selectors are rejected",async()=>{
-  const s=await session();
-  for(const params of [
-   "installation_id=123&repo=other%2Frepo&workflow=.github%2Fworkflows%2Fdeploy.yml",
-   "installation_id=123&repo=TheArtOfSound%2Flolm&workflow=..%2F..%2Fsecrets.yml",
-   "installation_id=123&repo=TheArtOfSound%2Flolm&workflow=.github%2Fworkflows%2Fa.yml%3Fquery",
-   "installation_id=foo&repo=TheArtOfSound%2Flolm&workflow=.github%2Fworkflows%2Fdeploy.yml",
-  ]){
-    const resp=await handleGitHubApp(req("/api/github/assessment?"+params,{headers:s.headers}),env,{fetcher:mockFetch,clock});
-    assert.ok(resp.status===400||resp.status===502,resp.status);
-  }
+test("Malformed paths and unauthorized repositories are rejected",async()=>{
+ const s=await session();
+ for(const selection of [
+  {installation_id:123,repo:"other/repo",workflow:".github/workflows/deploy.yml"},
+  {installation_id:123,repo:"TheArtOfSound/lolm",workflow:"../../secrets.yml"},
+  {installation_id:123,repo:"TheArtOfSound/lolm",workflow:".github/workflows/a.yml?query"},
+  {installation_id:"foo",repo:"TheArtOfSound/lolm",workflow:".github/workflows/deploy.yml"},
+  {installation_id:123,repo:"TheArtOfSound/lolm",workflow:".github/workflows/deploy.yml",extra:"secret"}
+ ]){
+  const resp=await scoped(s,"/api/github/assessment",selection);
+  assert.ok([400,403,502].includes(resp.status),resp.status);
+ }
+});
+test("Selection endpoints forbid GET URLs and CSRF-less cross-site POSTs",async()=>{
+ const s=await session();
+ for(const path of ["/api/github/repos","/api/github/workflows","/api/github/assessment"]){
+  const get=await handleGitHubApp(req(path+"?repo=secret-org%2Frepo",{headers:s.headers}),env,{fetcher:mockFetch,clock});
+  assert.equal(get.status,405);
+  const noCSRF=await handleGitHubApp(req(path,{
+   method:"POST",headers:{...s.headers,origin,"content-type":"application/json"},
+   body:JSON.stringify({installation_id:123})}),env,{fetcher:mockFetch,clock});
+  assert.equal(noCSRF.status,403);
+ }
 });
 test("Disconnect needs origin and session CSRF; it never claims remote token revocation",async()=>{
   const s=await session();
@@ -165,11 +182,9 @@ test("Public origin and secret configuration must be complete",async()=>{
 });
 
 
-test("Workflow picker only lists authorized YAML files in the selected installation",async()=>{
+test("Workflow picker lists only authorized YAML files",async()=>{
  const s=await session();
- const response=await handleGitHubApp(req(
-  "/api/github/workflows?installation_id=123&repo=TheArtOfSound%2Flolm",
-  {headers:s.headers}),env,{fetcher:mockFetch,clock});
+ const response=await scoped(s,"/api/github/workflows",{installation_id:123,repo:"TheArtOfSound/lolm"});
  assert.equal(response.status,200);
  const data=await response.json();
  assert.equal(data.repo,"TheArtOfSound/lolm");
@@ -177,12 +192,9 @@ test("Workflow picker only lists authorized YAML files in the selected installat
   {path:".github/workflows/deploy-production.yml"},
   {path:".github/workflows/publish.yml"}
  ]);
- const denied=await handleGitHubApp(req(
-  "/api/github/workflows?installation_id=123&repo=another%2Frepo",
-  {headers:s.headers}),env,{fetcher:mockFetch,clock});
+ const denied=await scoped(s,"/api/github/workflows",{installation_id:123,repo:"another/repo"});
  assert.equal(denied.status,502);
 });
-
 test("Unknown API routes return not-found rather than granting metadata access",async()=>{
  const s=await session();
  const r=await handleGitHubApp(req("/api/github/debug?installation_id=123",{headers:s.headers}),env,{fetcher:mockFetch,clock});
