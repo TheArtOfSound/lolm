@@ -42,7 +42,8 @@ test("connected visitor can select an installation, repo and workflow, and see r
  assert.equal(el("gitPicker").hidden,false);
  assert.equal(el("startCard").hidden,true);
  assert.equal(el("gitConnect").hidden,true);
- assert.equal(el("sampleBanner").hidden,false);
+ assert.equal(el("sampleBanner").hidden,true);
+ assert.equal(el("reportIntro").hidden,false);
  el("gitInstallation").value="123";
  await el("gitInstallation").events.change({target:{value:"123"}});
  assert.equal(el("gitRepository").disabled,false);
