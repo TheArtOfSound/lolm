@@ -17,7 +17,7 @@ const lastInlineScript=html=>{
 test("the full-width sample report has an accessible evidence navigation and strict synthetic labels",async()=>{
  const {response,html}=await visit("/sample-report");
  assert.equal(response.status,200);
- assert.match(html,/<title>Explore sample report \| Qira Proof<\/title>/);
+ assert.match(html,/<title>Example GitHub Actions Review Report \| Qira Proof<\/title>/);
  assert.match(html,/Example report\./);
  assert.match(html,/SYNTHETIC · NOT A LIVE SCAN/);
  assert.match(html,/No repository was scanned to generate these examples/);
