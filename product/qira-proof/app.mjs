@@ -28,7 +28,7 @@ function sampleAfter(){
   return {...f,value:changed,observed_at:date};
  })};
 }
-const state={before:normalizeSnapshot(DEMO),after:null,mode:"idle",tab:"assessment",last:null};
+const state={before:normalizeSnapshot(DEMO),after:null,mode:"idle",tab:"assessment",last:null,coverage:null};
 const el=id=>document.getElementById(id);
 const clear=e=>e.replaceChildren();
 function node(tag,cls,value){const d=document.createElement(tag);if(cls)d.className=cls;if(value!==undefined)d.textContent=value;return d}
@@ -54,6 +54,17 @@ function render(){
  el("reviewCount").textContent=report.counts.review+report.counts.high;
  el("unknownCount").textContent=report.counts.unknown;
  el("factsCount").textContent=report.facts;
+ const coverageBox=el("scanCoverage");
+ coverageBox.hidden=!state.coverage||state.mode!=="connected";
+ if(!coverageBox.hidden){
+  const c=state.coverage;
+  coverageBox.textContent="Repository workflow review: "+c.assessed+" of "+c.discovered+
+   " discovered workflows assessed at commit "+c.commit.slice(0,12)+
+   ". "+(c.complete?"All discovered workflow files were inspected.":
+     "Partial coverage: "+c.skipped+" failed or skipped, "+
+     (c.truncated?"more workflows than this scan can cover.":"review the unscanned files separately."))+
+   " This is a bounded configuration check, not a full repository security audit.";
+ }
  el("baselineState").textContent=state.mode==="demo"?"Sample":"Loaded";
  el("baselineName").textContent=state.mode==="demo"?"Fictional demo · "+report.facts+" facts":
   (state.mode==="composed"?"Combined provider snapshot":state.mode==="connected"?"Connected GitHub workflow":"Private local snapshot")+" · "+report.facts+" facts · "+state.before.captured_at;
@@ -262,6 +273,7 @@ async function loadGithubInstallations(){
  selectOptions("gitRepository",[],x=>x.name,x=>x.name,"Choose repository");
  selectOptions("gitWorkflow",[],x=>x.path,x=>x.path,"Choose workflow");
  el("gitAssess").disabled=true;
+ el("gitScanAll").disabled=true;
  gitMessage(payload.items.length?"Your account is connected. Choose the GitHub account you want to review.":
  "No authorized installations found. Install the read-only GitHub App, then reconnect.");
  if(payload.truncated)gitMessage("More than 50 installations found; this pilot lists the first 50.");
@@ -296,6 +308,7 @@ el("gitInstallation").addEventListener("change",async event=>{
  selectOptions("gitRepository",[],x=>x.name,x=>x.name,"Choose repository");
  selectOptions("gitWorkflow",[],x=>x.path,x=>x.path,"Choose workflow");
  el("gitAssess").disabled=true;
+ el("gitScanAll").disabled=true;
  if(!id)return;
  gitMessage("Loading authorized repositories…");
  try{
@@ -309,12 +322,16 @@ el("gitRepository").addEventListener("change",async event=>{
  const id=el("gitInstallation").value,repo=event.target.value;
  selectOptions("gitWorkflow",[],x=>x.path,x=>x.path,"Choose workflow");
  el("gitAssess").disabled=true;
+ el("gitScanAll").disabled=true;
  if(!id||!repo)return;
  gitMessage("Loading authorized workflow names…");
  try{
   const result=await githubInspect("/api/github/workflows",{installation_id:Number(id),repo});
   selectOptions("gitWorkflow",result.workflows,x=>x.path,x=>x.path,
    result.workflows.length?"Choose workflow":"No accessible workflows on this branch");
+  el("gitScanAll").disabled=result.workflows.length===0;
+  el("gitScanAll").textContent=result.workflows.length?
+   "Review "+Math.min(result.workflows.length,20)+" repository workflows →":"Review repository workflows →";
   gitMessage(result.workflows.length?"Choose the workflow you want QIRA to review.":
    result.availability==="directory_not_found_or_inaccessible"?
    "The selected repository has no accessible .github/workflows directory on its default branch. It may be missing or permission-restricted. Choose another repository that uses GitHub Actions.":
@@ -324,25 +341,40 @@ el("gitRepository").addEventListener("change",async event=>{
 el("gitWorkflow").addEventListener("change",event=>{
  el("gitAssess").disabled=!event.target.value;
 });
-el("gitAssess").addEventListener("click",async()=>{
- const id=el("gitInstallation").value,repo=el("gitRepository").value,workflow=el("gitWorkflow").value;
+async function runConnectedReview(workflow){
+ const id=el("gitInstallation").value,repo=el("gitRepository").value;
  if(!id||!repo||!workflow)return;
- el("gitAssess").disabled=true;gitMessage("Retrieving authorized configuration evidence…");
+ const all=workflow==="__all__";
+ const button=el(all?"gitScanAll":"gitAssess");
+ button.disabled=true;
+ gitMessage(all?"Reviewing up to 20 authorized workflows at a fixed commit…":
+  "Retrieving authorized configuration evidence…");
  try{
   const data=await githubInspect("/api/github/assessment",{installation_id:Number(id),repo,workflow});
   state.before=normalizeSnapshot(data.snapshot);
-  state.after=null;state.mode="connected";
+  state.after=null;state.mode="connected";state.coverage=data.coverage||null;
   render();buttonTab("assessment");
-  gitMessage("Assessment ready. Your GitHub credentials stayed on the server.");
+  if(data.coverage){
+   const c=data.coverage;
+   gitMessage(c.complete?"Reviewed all "+c.assessed+" discovered workflows. Findings are separated by workflow.":
+    "Review partially completed: "+c.assessed+" workflow(s) assessed; "+c.skipped+" skipped or failed"+
+    (c.truncated?"; more than 20 available.":"")+". See coverage details in results.",!c.complete);
+  }else gitMessage("Assessment ready. Your GitHub credentials stayed on the server.");
   document.getElementById("workspace")?.scrollIntoView?.({behavior:"smooth",block:"start"});
  }catch(error){gitMessage(error.message,true)}
- finally{el("gitAssess").disabled=false}
+ finally{button.disabled=false}
+}
+el("gitAssess").addEventListener("click",async()=>{
+ await runConnectedReview(el("gitWorkflow").value);
+});
+el("gitScanAll").addEventListener("click",async()=>{
+ await runConnectedReview("__all__");
 });
 el("gitDisconnect").addEventListener("click",async()=>{
  if(!git.csrf)return;
  try{
   await githubApi("/api/github/disconnect",{method:"POST",headers:{"content-type":"application/json","x-qira-csrf":git.csrf},body:"{}"});
-  state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="idle";
+  state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="idle";state.coverage=null;
   render();buttonTab("assessment");gitMessage("Local session cleared. GitHub authorization must be revoked separately in GitHub if desired.");
   await githubConnectionStatus();
  }catch(error){gitMessage(error.message,true)}
