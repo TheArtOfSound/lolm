@@ -32,7 +32,7 @@ function mockFetch(input,options={}){
           {path:".github/workflows/publish.yml",type:"file"},
           {path:".github/workflows/subfolder/malicious.yml",type:"dir"}];
  }else if(url.includes("/repos/TheArtOfSound/lolm/contents/")){
-   const body="name: Deploy\njobs:\n  deploy:\n    steps:\n    - run: ssh-keyscan -H example.org >> ~/.ssh/known_hosts\n";
+   const body="name: Deploy\njobs:\n  deploy:\n    steps:\n    - uses: actions/checkout@v4\n    - run: ssh-keyscan -H example.org >> ~/.ssh/known_hosts\n";
    value={encoding:"base64",content:Buffer.from(body).toString("base64")};
  }else throw Error("unexpected provider URL: "+url);
  return Promise.resolve(new Response(JSON.stringify(value),{status:200,headers:{"content-type":"application/json"}}));
@@ -126,6 +126,7 @@ test("Selected workflow content is fetched only after the installation and repo 
  assert.equal(assessment.status,200);
  const out=await assessment.json();
  assert.equal(out.snapshot.facts.find(x=>x.signal==="runtime_ssh_keyscan").value,true);
+ assert.equal(out.snapshot.facts.find(x=>x.signal==="workflow_unpinned_actions").value,true);
  assert.equal(out.snapshot.facts.find(x=>x.signal==="ssh_host_key_pinned").value,"unknown");
  assert.ok(out.snapshot.facts.every(f=>f.provider==="github"));
  assert.ok(!JSON.stringify(out).includes(tok));
