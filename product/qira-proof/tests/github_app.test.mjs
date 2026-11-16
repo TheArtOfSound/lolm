@@ -27,6 +27,10 @@ function mockFetch(input,options={}){
    value={total_count:1,repositories:[{full_name:"TheArtOfSound/lolm",default_branch:"main"}]};
  }else if(url.includes("/user/installations?")){
    value={total_count:1,installations:[{id:123,account:{login:"example-org"},repository_selection:"selected"}]};
+ }else if(url.includes("/repos/TheArtOfSound/lolm/contents/.github/workflows?")){
+   value=[{path:".github/workflows/deploy-production.yml",type:"file"},
+          {path:".github/workflows/publish.yml",type:"file"},
+          {path:".github/workflows/subfolder/malicious.yml",type:"dir"}];
  }else if(url.includes("/repos/TheArtOfSound/lolm/contents/")){
    const body="name: Deploy\njobs:\n  deploy:\n    steps:\n    - run: ssh-keyscan -H example.org >> ~/.ssh/known_hosts\n";
    value={encoding:"base64",content:Buffer.from(body).toString("base64")};
@@ -158,4 +162,35 @@ test("Public origin and secret configuration must be complete",async()=>{
   assert.equal((await (await handleGitHubApp(req("/api/github/status"),alt,{fetcher:mockFetch,clock})).json()).configured,false);
   const cross=await handleGitHubApp(new Request("https://other.example/connect/github"),env,{fetcher:mockFetch,clock});
   assert.equal(cross.status,503);
+});
+
+
+test("Workflow picker only lists authorized YAML files in the selected installation",async()=>{
+ const s=await session();
+ const response=await handleGitHubApp(req(
+  "/api/github/workflows?installation_id=123&repo=TheArtOfSound%2Flolm",
+  {headers:s.headers}),env,{fetcher:mockFetch,clock});
+ assert.equal(response.status,200);
+ const data=await response.json();
+ assert.equal(data.repo,"TheArtOfSound/lolm");
+ assert.deepEqual(data.workflows,[
+  {path:".github/workflows/deploy-production.yml"},
+  {path:".github/workflows/publish.yml"}
+ ]);
+ const denied=await handleGitHubApp(req(
+  "/api/github/workflows?installation_id=123&repo=another%2Frepo",
+  {headers:s.headers}),env,{fetcher:mockFetch,clock});
+ assert.equal(denied.status,502);
+});
+
+test("Unknown API routes return not-found rather than granting metadata access",async()=>{
+ const s=await session();
+ const r=await handleGitHubApp(req("/api/github/debug?installation_id=123",{headers:s.headers}),env,{fetcher:mockFetch,clock});
+ assert.equal(r.status,404);
+});
+
+test("Unrelated app and static routes bypass the OAuth subsystem",async()=>{
+ assert.equal(await handleGitHubApp(req("/"),{}),null);
+ assert.equal(await handleGitHubApp(req("/app.mjs"),{}),null);
+ assert.equal(await handleGitHubApp(req("/health"),{}),null);
 });
