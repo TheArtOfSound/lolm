@@ -12,7 +12,7 @@ test("commercial page is branded and commercial health is explicit",async()=>{
  assert.match(html,/Founding review/i);
  assert.match(html,/\$299/);
  assert.match(html,/https:\/\/imagineqira.com/);
- assert.match(html,/Check repository/);
+ assert.match(html,/Which repository should we review/);
  const health=await worker.fetch(request("/health"));
  assert.deepEqual(await health.json(),{status:"ready",product:"qira-proof-commercial",checkout_configured:false});
 });
@@ -68,8 +68,8 @@ test("commercial worker uses no auth cookies and limits public lookup to same-or
  const r=await worker.fetch(request());
  const html=await r.text();
  assert.equal(r.headers.get("set-cookie"),null);
- assert.match(r.headers.get("content-security-policy"),/connect-src 'self'/);
- assert.match(html,/fetch\("\/api\/public-repository\?repo=/);
+ assert.match(r.headers.get("content-security-policy"),/connect-src 'none'/);
+ assert.doesNotMatch(html,/\bfetch\s*\(/);
  assert.match(html,/<form class="ux-entry" id="repoCheck"/);
  assert.doesNotMatch(html,/<script src=/);
 });
