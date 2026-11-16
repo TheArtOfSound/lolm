@@ -92,3 +92,25 @@ test('Python reference / Worker output cryptographic parity vector',async()=>{
   assert.equal(v.receipts[1].hash,'dc9fc7c7eb92b04f1bc5f50911175733adc3ac97f2d9a97bd8dccd4f10a66f94');
   assert.equal(v.frontier.length,2);
 });
+
+
+test('independent deterministic evidence replay verifies authentic export and rejects tampering',async()=>{
+  const original=(await call('/api/replay',{controls:['step_up_auth','revoke_service_token']})).payload;
+  const accepted=await call('/api/verify',original);
+  assert.equal(accepted.status,200);
+  assert.equal(accepted.payload.valid,true);
+  assert.equal(accepted.payload.signature_verified,false);
+  const changed=structuredClone(original);
+  changed.experiment.counterfactual.combined.adverse_outcome=true;
+  const rejected=await call('/api/verify',changed);
+  assert.equal(rejected.status,200);
+  assert.equal(rejected.payload.valid,false);
+});
+
+test('evidence verification refuses unknown controls and oversized or non-JSON input',async()=>{
+  const response=await call('/api/verify',{experiment:{interventions:['arbitrary_execution']}});
+  assert.equal(response.status,400);
+  const raw=await worker.fetch(new Request('https://example.invalid/api/verify',{
+    method:'POST',headers:{'content-type':'text/plain'},body:'{}'}));
+  assert.equal(raw.status,415);
+});
