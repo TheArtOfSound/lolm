@@ -7,6 +7,23 @@
 
 Last verified: November 16, 2026.
 
+
+## Current production state — V10 (supersedes older milestones below)
+
+**As of November 16, 2026:** the $299 founding review is live under Trend, the **signed Stripe webhook is active**, and the Checkout Session now returns to \`/start-review?session_id={CHECKOUT_SESSION_ID}\`. The Worker verifies signed paid events for the exact product/link/amount, keeps a minimal payment ledger, matches the checkout email using a protected digest, and accepts a repository review request **directly** into a restricted D1 intake table. It shows a received state on return. Older historical V1–V9 notes below that call webhooks “disabled/unconfigured” or the flow “email-only” describe their releases, **not the current implementation**.
+
+- Current live Worker version: \`c856aa28-266e-40fd-9317-ace1ac6ae2d4\` at 100% traffic.
+- Current source release: \`c5171c3a8e2a18875d885ed4e70dbbf203e31bbb\`.
+- Active Stripe webhook: \`we_1UcXCyGz3eX0vCtEsYm87VFp\`; deprecated, previously disabled \`we_1UcMjVGz3eX0vCtENBLvl20a\` remains disabled.
+- All **12 customer-facing routes** now share a restrained, navigable design system. Added section navigation for the case study, guides, privacy and terms, a clearer example report and a direct post-payment intake.
+- Production still has the exact original checkout URL and active Stripe automatic tax. A signing secret and buyer-email digest key are stored as Cloudflare **secret bindings**, never in code.
+- Passing [CI: 298 JavaScript and 19 Python tests](https://github.com/TheArtOfSound/lolm/actions/runs/43960853853), real-browser route coverage, negative production verification tests, and **positive isolated signed-event + order-intake end-to-end test** in a temporary D1 that was deleted afterward. **No actual charge was made.**
+- Last live ledger readback: 0 paid/pending ledger rows and 0 intake records. The Qira Stripe Payment Link had two open, unpaid sessions; no completed paid order available to backfill.
+- **Open operational requirements:** a verified real paid Stripe delivery, staff notification of new intakes (not configured), buyer's authorized read-only repository access, and manual final report fulfillment. An hourly monitoring task request was rejected due to the account's scheduled-task limit; existing tasks were not modified.
+
+**Complete operating and evidence record:** [V10_PAYMENT_AND_UX_RELEASE.md](./V10_PAYMENT_AND_UX_RELEASE.md). Retain the separate accuracy-adjudication gate for the draft research scanner and the release-control defects tracked in issue #72.
+
+
 ## Live configuration
 
 | Component | Verified configuration |
