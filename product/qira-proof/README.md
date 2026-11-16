@@ -4,14 +4,18 @@ Authenticated, redesigned preview: https://qira-proof-auth-lab-20261115.bryanleo
 
 Status: a read-only configuration assessment pilot, NOT a penetration test, breach finding, or commercial security certification. Fictional data is shown **only when a visitor explicitly opens the example**.
 
-## Try the product in five minutes
+## Try the product
 
-1. Open the preview and choose **Explore the example**.
-2. Expand **Example and assessment controls**, then press **Show example recheck** to compare later fictional configuration evidence.
-3. Open "Evidence" and press "Export evidence report."
-4. Use "Verify evidence file" to reproduce the analysis and detect alterations.
+1. Open the preview and choose **Connect GitHub**. Complete GitHub's consent flow.
+2. Choose an authorized account and search for a repository.
+3. Choose **Review repository workflows** for a bounded scan of up to 20 accessible YAML workflows at a fixed commit, or choose a single workflow.
+4. Review grouped risk-conditional observations, unknowns, and any positive permission declarations. Each GitHub finding can cite the exact workflow line.
+5. Open the **Evidence** tab. Download the printable HTML report (open it and Print → Save as PDF) and the separate JSON receipt, which records scope and scan limits. The SHA-256 digest detects changes but does not authenticate a provider.
+6. After an authorized configuration change, collect a new snapshot and use **Recheck**. A cleared indicator is not proof of remediation.
 
-The browser application does not accept API credentials or upload data to its Worker. It runs the deterministic checks locally, with no server-side retention.
+For a no-credentials demonstration, choose **Explore the example** and load the clearly fictional recheck.
+
+The browser does not accept GitHub API tokens or Cloudflare/Vercel credentials. GitHub App authorization is transiently processed by the Worker, and local JSON inputs stay in the browser. No infrastructure changes are issued.
 
 ## Redesigned product experience (2026-11-15)
 
@@ -208,6 +212,14 @@ The scan **does not** certify a repository as secure. It reads a bounded
 subset of workflow configuration files, not all code, policies, Actions
 history or secrets. Existing controls, permission boundaries, GitHub token
 revocation, and overall policy compliance require separate analysis.
+
+## Evidence versioning and limitations
+
+The current JSON receipt format is `qira-proof/evidence-v2` and includes an explicit analysis policy version. The verifier also supports previously exported deterministic `qira-proof/evidence-v1` receipts. Neither format is a signed provider attestation.
+
+Syntactic GitHub Actions checks now include mutable external action references, SSH host discovery indicators, explicitly declared permission scopes and `pull_request_target` triggers. Unsupported YAML syntax is treated as unknown rather than assumed safe. A declared read-only scope is useful evidence but is **not** proof of the effective runtime token permission. GitHub's job-level, repository, organization and event policies must be reviewed separately.
+
+The project has a tracked, non-negotiable release checklist in [QUALITY_GATES.md](./QUALITY_GATES.md). Passing CI or a successful owner scan is not grounds for public paid launch.
 
 ## Commercial readiness gates
 
