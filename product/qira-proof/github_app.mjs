@@ -187,8 +187,14 @@ async function assess(token,installationId,repo,workflow,fetcher,clock=now){
  const selected=allowed.repos.find(r=>r.name===repo);
  if(!selected)throw Error("repository not within verified authorized installation page");
  const [owner,name]=repo.split("/");
- const path="/repos/"+encodeURIComponent(owner)+"/"+encodeURIComponent(name)+
-   "/contents/"+workflow.split("/").map(encodeURIComponent).join("/")+"?ref="+encodeURIComponent(selected.branch);
+ const apiRepo="/repos/"+encodeURIComponent(owner)+"/"+encodeURIComponent(name);
+ // Resolve the branch once, then read the exact revision. A live branch link
+ // is not immutable evidence, and can point to changed code after assessment.
+ const revision=await githubGet(apiRepo+"/commits/"+encodeURIComponent(selected.branch),token,fetcher);
+ if(!revision||typeof revision.sha!=="string"||!/^[a-fA-F0-9]{40}$/.test(revision.sha))
+  throw Error("GitHub workflow revision could not be verified");
+ const commit=revision.sha.toLowerCase();
+ const path=apiRepo+"/contents/"+workflow.split("/").map(encodeURIComponent).join("/")+"?ref="+commit;
  const data=await githubGet(path,token,fetcher);
  if(data?.encoding!=="base64"||typeof data.content!=="string"||data.content.length>MAX_WORKFLOW_BYTES*2)throw Error("workflow not returned as bounded base64");
  const bytes=atob(data.content.replace(/\s/g,""));
@@ -204,7 +210,7 @@ async function assess(token,installationId,repo,workflow,fetcher,clock=now){
   return !!m&&!/^[a-fA-F0-9]{40}$/.test(m[2]);
  });
  const timestamp=new Date(clock()).toISOString();
- const url=sourceUrl(repo,selected.branch,workflow);
+ const url=sourceUrl(repo,commit,workflow);
  const facts=[
   {provider:"github",asset:repo,signal:"runtime_ssh_keyscan",value:runtimeScan,source_url:url,observed_at:timestamp},
   {provider:"github",asset:repo,signal:"workflow_unpinned_actions",value:unpinned,source_url:url,observed_at:timestamp},
