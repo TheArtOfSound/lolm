@@ -13,7 +13,7 @@ or attested statement from GitHub/Cloudflare/Vercel. Never imply these.
 - [x] New v2 receipts record analysis policy version; archived deterministic v1 receipts remain verifiable.
 - [x] Report and JSON receipts clearly distinguish observed conditions from verified vulnerabilities.
 - [x] Declared read-only permissions and privileged trigger context can be observed conservatively, with unsupported syntax producing unknown rather than safe.
-- [ ] Build a reviewed 100-workflow fixture corpus spanning anchors, multiline scripts, reusable workflows, unusual permissions, GitHub policy variants, and adversarial YAML. Initial nested-permission and event-sequence adversarial fixtures are covered; the larger corpus and manual adjudication remain outstanding.
+- [ ] Build an independently adjudicated 100-workflow fixture corpus spanning anchors, multiline scripts, reusable workflows, unusual permissions, GitHub policy variants, and adversarial YAML. **64 curated synthetic cases** now cover executable action locations, nested false positives, permission declarations, trigger shapes, and SSH text indicators in a shared JS/Python fixture corpus. External reviewer adjudication, representative sampling, and at least 36 additional cases remain outstanding.
 - [ ] Publish precision/recall and false-positive rates with explicit denominators and human adjudication.
 - [ ] Independently corroborate every new rule against a pinned provider fixture and a second implementation.
 
@@ -97,3 +97,24 @@ Adversarial fixtures verify both false-positive avoidance and genuine step/job
 detection. This is a bounded syntax check, **not** a complete YAML parser or
 independently adjudicated 100-workflow benchmark. Re-run the latest preview
 and repeat source-linked human checks before treating report totals as current.
+
+
+### Shared accuracy fixture corpus — November 16, 2026
+
+- Added `tests/fixtures/workflow_accuracy.json`: 64 curated synthetic workflows
+  with explicit gold-label expectations and concise rationale for each case.
+- Domains: 22 action-location cases, 21 permission cases, 13 event-trigger
+  cases, 8 SSH text-indicator cases.
+- Hosted JavaScript scanner and local Python collector both run **the same**
+  fixture corpus. CI at `d5621801e4589be048487c0727978c5e8920d920`
+  passed **173 JavaScript and 19 Python tests**:
+  https://github.com/TheArtOfSound/lolm/actions/runs/43826181160
+- The earlier 20/20 real-repository source comparison at commit
+  `f9700d2e661640da4a8d0cf2bb9c046d77f8a06b` produced zero changes
+  in mutable-action findings between the pre-fix and fixed scanners.
+- **Accuracy claim boundary:** the 64 labels are curated by the implementer,
+  not independently security-reviewed; corpus agreement is regression/parity
+  evidence, *not* a measured production precision/recall estimate.
+- The Cloudflare preview has deployed the runtime scanner update at
+  `a6b665e3`; this later branch commit adds only tests and documentation,
+  not a new Worker runtime build.
