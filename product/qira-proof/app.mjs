@@ -276,7 +276,7 @@ el("verifyInput").addEventListener("change",async event=>{
  event.target.value="";
 });
 
-const git={connected:false,csrf:null};
+const git={connected:false,csrf:null,repos:[],selectionVersion:0};
 function gitMessage(value,isError=false){
  const out=el("gitMessage");out.textContent=value;out.style.color=isError?"#f2b1aa":"";
 }
@@ -301,13 +301,32 @@ function selectOptions(id,items,label,value,placeholder){
  control.disabled=items.length===0;
  control.value="";
 }
-async function loadGithubInstallations(){
- const payload=await githubApi("/api/github/installations");
- selectOptions("gitInstallation",payload.items,x=>x.account+" · "+x.selection,x=>String(x.id),"Choose installation");
- selectOptions("gitRepository",[],x=>x.name,x=>x.name,"Choose repository");
+function resetWorkflowSelection(){
  selectOptions("gitWorkflow",[],x=>x.path,x=>x.path,"Choose workflow");
  el("gitAssess").disabled=true;
  el("gitScanAll").disabled=true;
+}
+function renderRepositoryMatches(){
+ const query=el("gitRepoSearch").value.trim().toLowerCase();
+ const matches=git.repos.filter(x=>x.name.toLowerCase().includes(query));
+ selectOptions("gitRepository",matches,x=>x.name,x=>x.name,
+  matches.length?"Choose repository":"No repositories match");
+ el("gitRepoCount").textContent=matches.length+" of "+git.repos.length+" available repositories shown"+
+  (query?" for this filter.":".");
+ resetWorkflowSelection();
+}
+el("gitRepoSearch").addEventListener("input",()=>{
+ git.selectionVersion++;
+ renderRepositoryMatches();
+});
+async function loadGithubInstallations(){
+ const payload=await githubApi("/api/github/installations");
+ selectOptions("gitInstallation",payload.items,x=>x.account+" · "+x.selection,x=>String(x.id),"Choose installation");
+ git.repos=[];git.selectionVersion++;
+ el("gitRepoSearch").value="";el("gitRepoSearch").disabled=true;
+ el("gitRepoCount").textContent="Choose an account to see its repositories.";
+ selectOptions("gitRepository",[],x=>x.name,x=>x.name,"Choose repository");
+ resetWorkflowSelection();
  gitMessage(payload.items.length?"Your account is connected. Choose the GitHub account you want to review.":
  "No authorized installations found. Install the read-only GitHub App, then reconnect.");
  if(payload.truncated)gitMessage("More than 50 installations found; this pilot lists the first 50.");
@@ -338,39 +357,48 @@ async function githubConnectionStatus(){
  }
 }
 el("gitInstallation").addEventListener("change",async event=>{
- const id=event.target.value;
+ const id=event.target.value,version=++git.selectionVersion;
+ git.repos=[];el("gitRepoSearch").value="";el("gitRepoSearch").disabled=true;
+ el("gitRepoCount").textContent="Loading authorized repositories…";
  selectOptions("gitRepository",[],x=>x.name,x=>x.name,"Choose repository");
- selectOptions("gitWorkflow",[],x=>x.path,x=>x.path,"Choose workflow");
- el("gitAssess").disabled=true;
- el("gitScanAll").disabled=true;
+ resetWorkflowSelection();
  if(!id)return;
  gitMessage("Loading authorized repositories…");
  try{
   const result=await githubInspect("/api/github/repos",{installation_id:Number(id)});
-  selectOptions("gitRepository",result.repos,x=>x.name,x=>x.name,"Choose repository");
-  gitMessage(result.truncated?"This pilot shows the first 100 repositories.":
-   "Choose a repository to see its available deployment workflows.");
- }catch(error){gitMessage(error.message,true)}
+  if(version!==git.selectionVersion||el("gitInstallation").value!==id)return;
+  git.repos=result.repos;
+  el("gitRepoSearch").disabled=result.repos.length===0;
+  renderRepositoryMatches();
+  gitMessage(result.truncated?"Showing the first 100 authorized repositories. Search only filters this loaded set.":
+   "Filter or select a repository to see its available workflows.");
+ }catch(error){
+  if(version!==git.selectionVersion)return;
+  gitMessage(error.message,true);el("gitRepoCount").textContent="Unable to load repositories.";
+ }
 });
 el("gitRepository").addEventListener("change",async event=>{
  const id=el("gitInstallation").value,repo=event.target.value;
- selectOptions("gitWorkflow",[],x=>x.path,x=>x.path,"Choose workflow");
- el("gitAssess").disabled=true;
- el("gitScanAll").disabled=true;
+ const version=++git.selectionVersion;
+ resetWorkflowSelection();
  if(!id||!repo)return;
  gitMessage("Loading authorized workflow names…");
  try{
   const result=await githubInspect("/api/github/workflows",{installation_id:Number(id),repo});
+  if(version!==git.selectionVersion||el("gitRepository").value!==repo)return;
   selectOptions("gitWorkflow",result.workflows,x=>x.path,x=>x.path,
    result.workflows.length?"Choose workflow":"No accessible workflows on this branch");
   el("gitScanAll").disabled=result.workflows.length===0;
   el("gitScanAll").textContent=result.workflows.length?
    "Review "+Math.min(result.workflows.length,20)+" repository workflows →":"Review repository workflows →";
-  gitMessage(result.workflows.length?"Choose the workflow you want QIRA to review.":
+  gitMessage(result.workflows.length?"Review the repository or select one workflow for a focused scan.":
    result.availability==="directory_not_found_or_inaccessible"?
-   "The selected repository has no accessible .github/workflows directory on its default branch. It may be missing or permission-restricted. Choose another repository that uses GitHub Actions.":
-   "No supported GitHub Actions YAML workflows were found on the selected branch. Choose another repository that uses GitHub Actions.");
- }catch(error){gitMessage(error.message,true)}
+   "This repository's workflow directory is absent or inaccessible. Choose a different repository, or inspect its GitHub App permissions.":
+   "No supported GitHub Actions YAML workflows were found. Choose another repository.");
+ }catch(error){
+  if(version!==git.selectionVersion)return;
+  gitMessage(error.message,true);
+ }
 });
 el("gitWorkflow").addEventListener("change",event=>{
  el("gitAssess").disabled=!event.target.value;
