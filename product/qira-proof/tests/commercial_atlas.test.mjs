@@ -63,8 +63,8 @@ test("mobile layout keeps primary actions and CSS-only workflow graphic without 
 
 test("report specimen is prominently marked synthetic and includes actionable evidence structure",async()=>{
  const html=await (await worker.fetch(new Request("https://proof.imagineqira.com/"))).text();
- assert.match(html,/LESS NOISE\./);
- assert.match(html,/MORE PROOF\./);
+ assert.match(html,/An example of the final report\./);
+ assert.match(html,/See what is in the report before buying/);
  assert.match(html,/ILLUSTRATIVE SAMPLE/);
  assert.match(html,/THIS SAMPLE IS SYNTHETIC, NOT A REAL CUSTOMER RESULT/);
  assert.match(html,/NOT PROVEN/);
