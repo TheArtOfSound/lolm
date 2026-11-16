@@ -8,27 +8,27 @@ test("commercial page is branded and commercial health is explicit",async()=>{
  assert.equal(page.status,200);
  const html=await page.text();
  assert.match(html,/GitHub Actions Security Configuration Review \| Qira Proof/);
- assert.match(html,/A tool in the ImagineQira ecosystem/i);
- assert.match(html,/Founding workflow review/i);
+ assert.match(html,/ImagineQira/i);
+ assert.match(html,/Founding review/i);
  assert.match(html,/\$299/);
  assert.match(html,/https:\/\/imagineqira.com/);
- assert.match(html,/Try the read-only preview/);
+ assert.match(html,/Check repository/);
  const health=await worker.fetch(request("/health"));
  assert.deepEqual(await health.json(),{status:"ready",product:"qira-proof-commercial",checkout_configured:false});
 });
 test("checkout is withheld when the merchant has not been selected",async()=>{
  const response=await worker.fetch(request());
  const html=await response.text();
- assert.match(html,/Request a secure checkout/);
+ assert.match(html,/Request checkout details/);
  assert.match(html,/mailto:bryanleonard@imagineqira.com/);
- assert.match(html,/does not charge you/);
+ assert.match(html,/contact us for the current secure checkout/);
  assert.doesNotMatch(html,/href="https:\/\/buy\.stripe\.com\//);
 });
 test("only Stripe-hosted HTTPS checkout links can activate purchase",async()=>{
  const target="https://buy.stripe.com/example123";
  const r=await worker.fetch(request(),{QIRA_PROOF_CHECKOUT_URL:target});
  const text=await r.text();
- assert.match(text,/Buy founding review/);
+ assert.match(text,/Purchase founding review/);
  assert.match(text,/href="https:\/\/buy\.stripe\.com\/example123"/);
  const h=await worker.fetch(request("/health"),{QIRA_PROOF_CHECKOUT_URL:target});
  assert.equal((await h.json()).checkout_configured,true);
@@ -40,8 +40,8 @@ test("untrusted checkout URLs never become purchase links",async()=>{
   "https://buy.stripe.com/link#evil"]){
   const resp=await worker.fetch(request(),{QIRA_PROOF_CHECKOUT_URL:url});
   const html=await resp.text();
-  assert.match(html,/Request a secure checkout/);
-  assert.doesNotMatch(html,/Buy founding review →/);
+  assert.match(html,/Request checkout details/);
+  assert.doesNotMatch(html,/Purchase founding review — \$299/);
  }
 });
 test("privacy and terms pages include clear scope limitations",async()=>{
@@ -50,7 +50,7 @@ test("privacy and terms pages include clear scope limitations",async()=>{
  const p=await privacy.text(),t=await terms.text();
  assert.equal(privacy.status,200);
  assert.equal(terms.status,200);
- assert.match(p,/does not use tracking cookies/);
+ assert.match(p,/does not use analytics scripts or tracking cookies/);
  assert.match(t,/not an incident-response service/);
  assert.match(t,/up to 20 GitHub Actions workflow files/);
  assert.match(t,/bryanleonard@imagineqira.com/);
@@ -64,13 +64,13 @@ test("routing protects unsupported methods and unknown pages",async()=>{
  assert.equal(head.status,200);
  assert.equal(await head.text(),"");
 });
-test("commercial worker has no auth cookies or client-side data transmission",async()=>{
+test("commercial worker uses no auth cookies and limits public lookup to same-origin transport",async()=>{
  const r=await worker.fetch(request());
  const html=await r.text();
  assert.equal(r.headers.get("set-cookie"),null);
- assert.match(r.headers.get("content-security-policy"),/connect-src 'none'/);
- assert.doesNotMatch(html,/fetch\s*\(/);
- assert.doesNotMatch(html,/<form\b/);
+ assert.match(r.headers.get("content-security-policy"),/connect-src 'self'/);
+ assert.match(html,/fetch\("\/api\/public-repository\?repo=/);
+ assert.match(html,/<form class="ux-entry" id="repoCheck"/);
  assert.doesNotMatch(html,/<script src=/);
 });
 
@@ -87,4 +87,4 @@ test("post-payment handoff is available without claiming the URL proves a paymen
  assert.doesNotMatch(html,/session_id=/);
 });
 
-test("pending checkout identifies Trend merchant clearly",async()=>{const html=await (await worker.fetch(request())).text();assert.match(html,/Trend is selected as Qira Proof/);assert.doesNotMatch(html,/awaits confirmation of the Qira merchant/);});
+test("pending checkout identifies Trend merchant clearly",async()=>{const html=await (await worker.fetch(request())).text();assert.match(html,/This service is handled by Trend/);assert.doesNotMatch(html,/awaits confirmation of the Qira merchant/);});
