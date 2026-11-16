@@ -11,7 +11,7 @@ test("homepage gives a single immediate action before proof, explanation and pay
  assert.match(html,/Which repository should we review\?/);
  assert.match(html,/id="repoSubmit" type="submit"/);
  assert.match(html,/no account, upload, or scan/i);
- assert.match(html,/Private repository\? Skip lookup/);
+ assert.match(html,/Private repository\? Continue directly/);
  assert.doesNotMatch(html,/Understand what your workflows trust/);
  assert.doesNotMatch(html,/KNOW MORE\.<br>/);
 });
