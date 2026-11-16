@@ -21,7 +21,11 @@ const section=(heading,body,id)=>'<section class="field-section" id="'+e(id||hea
 const code=(s)=>'<pre class="field-code"><code>'+e(s)+'</code></pre>';
 const bullet=(items)=>'<ul class="field-list">'+items.map(x=>'<li>'+x+'</li>').join("")+'</ul>';
 const resources=()=>'<div class="field-back"><a href="/guides">Browse all field notes</a> <a href="/case-study">Verified public source case</a> <a href="/#pricing">Request a founding review</a></div>';
-function wrapper(label,title,dek,body){return '<div class="field-page"><header class="field-hero"><div class="shell"><p class="field-kicker">'+e(label)+'</p><h1>'+e(title)+'</h1><p class="field-intro">'+e(dek)+'</p></div></header><div class="shell field-container">'+body+resources()+'</div></div>';}
+function wrapper(label,title,dek,body){
+ const sections=[...body.matchAll(/<section class="field-section" id="([^"]+)"><h2>([^<]+)<\/h2>/g)];
+ const toc=sections.length>1?'<nav class="field-toc" aria-label="On this page"><strong>On this page</strong>'+sections.map(m=>'<a href="#'+e(m[1])+'">'+m[2]+'</a>').join("")+'</nav>':"";
+ return '<div class="field-page"><header class="field-hero"><div class="shell"><p class="field-kicker">'+e(label)+'</p><h1>'+e(title)+'</h1><p class="field-intro">'+e(dek)+'</p></div></header><div class="shell field-container">'+toc+body+resources()+'</div></div>';
+}
 function related(items){return '<aside class="field-related" aria-label="Read next"><h2>Related reading</h2><div>'+items.map(x=>link(x[0],x[1])).join("")+'</div></aside>';}
 function methodology(){
  return wrapper("Qira Proof / review protocol","What we check—and what we do not","The boundaries, method and evidence of the founding GitHub Actions configuration review.",
