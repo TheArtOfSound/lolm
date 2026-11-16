@@ -204,7 +204,10 @@ function workflowFacts(text,repo,workflow,commit,timestamp,asset){
  if(inspected.runtime_ssh_keyscan.value===true)
   facts.push({provider:"github",asset,signal:"ssh_host_key_pinned",value:"unknown",
    source_url:facts[0].source_url,observed_at:timestamp});
- return facts;
+ const scopeDetails=inspected.writeScopes.map(x=>({
+  scope:x.scope,source_url:source+"#L"+x.line
+ }));
+ return {facts,permissionEntry:scopeDetails.length?{asset,scopes:scopeDetails}:null};
 }
 async function resolveWorkflowCommit(apiRepo,branch,token,fetcher){
  const revision=await githubGet(apiRepo+"/commits/"+encodeURIComponent(branch),token,fetcher);
@@ -238,9 +241,10 @@ async function assess(token,installationId,repo,workflow,fetcher,clock=now){
  const apiRepo="/repos/"+encodeURIComponent(owner)+"/"+encodeURIComponent(name);
  const commit=await resolveWorkflowCommit(apiRepo,selected.branch,token,fetcher);
  const timestamp=new Date(clock()).toISOString();
- const facts=await readWorkflowFacts(token,repo,workflow,commit,repo,timestamp,fetcher);
- facts.push(visibilityFact(repo,timestamp));
- return normalizeSnapshot({schema:SCHEMA,captured_at:timestamp,facts});
+ const inspected=await readWorkflowFacts(token,repo,workflow,commit,repo,timestamp,fetcher);
+ const facts=[...inspected.facts,visibilityFact(repo,timestamp)];
+ const permission_inventory=inspected.permissionEntry?[inspected.permissionEntry]:undefined;
+ return normalizeSnapshot({schema:SCHEMA,captured_at:timestamp,facts,permission_inventory});
 }
 async function assessRepository(token,installationId,repo,fetcher,clock=now){
  if(!repoSafe(repo))throw Error("repository selector invalid");
@@ -253,7 +257,7 @@ async function assessRepository(token,installationId,repo,fetcher,clock=now){
  const apiRepo="/repos/"+encodeURIComponent(owner)+"/"+encodeURIComponent(name);
  const commit=await resolveWorkflowCommit(apiRepo,listed.branch,token,fetcher);
  const timestamp=new Date(clock()).toISOString();
- const facts=[visibilityFact(repo,timestamp)];
+ const facts=[visibilityFact(repo,timestamp)],permission_inventory=[];
  let assessed=0,skipped=0;
  for(let offset=0;offset<selected.length;offset+=BULK_BATCH_SIZE){
   const slice=selected.slice(offset,offset+BULK_BATCH_SIZE);
@@ -264,7 +268,11 @@ async function assessRepository(token,installationId,repo,fetcher,clock=now){
    return readWorkflowFacts(token,repo,workflow,commit,asset,timestamp,fetcher);
   }));
   responses.forEach(result=>{
-   if(result.status==="fulfilled"){facts.push(...result.value);assessed++}
+   if(result.status==="fulfilled"){
+    facts.push(...result.value.facts);
+    if(result.value.permissionEntry)permission_inventory.push(result.value.permissionEntry);
+    assessed++;
+   }
    else skipped++;
   });
  }
@@ -273,7 +281,8 @@ async function assessRepository(token,installationId,repo,fetcher,clock=now){
   discovered:all.length,selected:selected.length,assessed,skipped,
   limit:BULK_WORKFLOW_LIMIT,complete:!listed.truncated&&selected.length===all.length&&skipped===0,
   truncated:listed.truncated||all.length>BULK_WORKFLOW_LIMIT,commit};
- const snapshot=normalizeSnapshot({schema:SCHEMA,captured_at:timestamp,facts,coverage});
+ const snapshot=normalizeSnapshot({schema:SCHEMA,captured_at:timestamp,facts,coverage,
+  permission_inventory:permission_inventory.length?permission_inventory:undefined});
  return {snapshot,coverage};
 }
 function responseRedirect(to,setCookies=[]){
