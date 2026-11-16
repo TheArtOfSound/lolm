@@ -339,7 +339,7 @@ async function historicalV2Proof(snapshot,followup=null){
  if(baseline.permission_inventory||after?.permission_inventory)
   throw Error("v2 receipts cannot contain new permission inventories");
  const assessment=analyzeSnapshot(baseline),comparison=after?compareSnapshots(baseline,after):null;
- const payload={schema:"qira-proof/evidence-v3",policy_version:"2026-11-16-source-scopes-v3",
+ const payload={schema:"qira-proof/evidence-v2",policy_version:"2026-11-16-static-workflow-v2",
   baseline,after,assessment,comparison,
   attestation:"self-contained deterministic calculation, NOT source authentication, a signature, or proof of prevention"};
  return {...payload,sha256:await sha256(canonical(payload))};
@@ -347,7 +347,7 @@ async function historicalV2Proof(snapshot,followup=null){
 export async function proof(snapshot,followup=null){
  const baseline=normalizeSnapshot(snapshot),after=followup?normalizeSnapshot(followup):null;
  const assessment=analyzeSnapshot(baseline),comparison=after?compareSnapshots(baseline,after):null;
- const payload={schema:"qira-proof/evidence-v2",policy_version:"2026-11-16-static-workflow-v2",
+ const payload={schema:"qira-proof/evidence-v3",policy_version:"2026-11-16-source-scopes-v3",
   baseline,after,assessment,comparison,
   attestation:"self-contained deterministic calculation, NOT source authentication, a signature, or proof of prevention"};
  return {...payload,sha256:await sha256(canonical(payload))};
