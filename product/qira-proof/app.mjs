@@ -118,7 +118,7 @@ el("baselineInput").addEventListener("change",async e=>{
 el("followupInput").addEventListener("change",async e=>{
  const file=e.target.files?.[0];if(!file)return;
  try{
-  if(state.mode==="demo")throw Error("Load a real baseline before comparing a real follow-up");
+  if(state.mode==="demo"||state.mode==="idle")throw Error("Load a real baseline before comparing a real follow-up");
   state.after=await readSnapshot(file);render();buttonTab("recheck");
  }catch(error){status("Follow-up rejected: "+error.message,true)}
  e.target.value="";
@@ -277,7 +277,7 @@ el("gitDisconnect").addEventListener("click",async()=>{
  if(!git.csrf)return;
  try{
   await githubApi("/api/github/disconnect",{method:"POST",headers:{"content-type":"application/json","x-qira-csrf":git.csrf},body:"{}"});
-  state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="demo";
+  state.before=normalizeSnapshot(DEMO);state.after=null;state.mode="idle";
   render();buttonTab("assessment");gitMessage("Local session cleared. GitHub authorization must be revoked separately in GitHub if desired.");
   await githubConnectionStatus();
  }catch(error){gitMessage(error.message,true)}
