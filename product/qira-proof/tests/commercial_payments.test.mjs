@@ -152,7 +152,7 @@ test("post-checkout page reports verified payment without treating it as custome
  assert.match(html,/Stripe payment received/);
  assert.match(html,/Qira will still confirm purchaser identity/);
  assert.match(html,/value="cs_live_1234567890abcdefghijklmnop"/);
- assert.match(html,/does not verify payment or grant an entitlement/);
+ assert.match(html,/This page confirms only that a signed payment event was recorded/);
  assert.equal(page.headers.get("cache-control"),"no-store");
  assert.equal(page.headers.get("referrer-policy"),"no-referrer");
  assert.doesNotMatch(html,/customer_details/);
