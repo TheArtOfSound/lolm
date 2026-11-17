@@ -1,3 +1,4 @@
+import {paymentIntentDigest,rememberEarlyReversal,reconcileEarlyReversals} from "./early_reversals.mjs";
 // Signed, bounded Stripe webhook ingestion for Qira Proof.
 // No raw event bodies, emails, billing details or credentials are persisted.
 // A verified checkout event does not authorize access to private reports.
@@ -143,8 +144,11 @@ export async function handleStripeEvent(request,env){
   const reversal=reversalOf(event);
   if(!reversal)return response({received:true,ignored:true});
   const now=Math.floor(Date.now()/1000);
+  const intentHash=await paymentIntentDigest(env.QIRA_ORDER_EMAIL_PEPPER,reversal.paymentIntent);
+  if(!intentHash)return response({error:"verification_unavailable"},503);
   try{
    const statements=[
+    rememberEarlyReversal(env.QIRA_PROOF_ORDERS,event,reversal,intentHash,now),
     env.QIRA_PROOF_ORDERS.prepare("INSERT OR IGNORE INTO qira_events(event_id,event_type,event_created,received_at) SELECT ?,?,?,? WHERE EXISTS (SELECT 1 FROM qira_orders WHERE payment_intent_id=?)").bind(event.id,event.type,event.created,now,reversal.paymentIntent)
    ];
    if(reversal.status==="partial_refund"){
@@ -171,6 +175,8 @@ export async function handleStripeEvent(request,env){
  const now=Math.floor(Date.now()/1000);
  const status=statusOf(event.type,session);
  const emailDigest=await buyerDigest(env.QIRA_ORDER_EMAIL_PEPPER,session.customer_details?.email||session.customer_email);
+ const intentHash=session.payment_intent?await paymentIntentDigest(env.QIRA_ORDER_EMAIL_PEPPER,session.payment_intent):null;
+ if(session.payment_intent&&!intentHash)return response({error:"verification_unavailable"},503);
  const insertEvent="INSERT OR IGNORE INTO qira_events(event_id,event_type,event_created,received_at) VALUES(?,?,?,?)";
  const orderUpsert=[
   "INSERT INTO qira_orders(session_id,payment_link,payment_intent_id,status,amount_total,currency,event_created,paid_at,updated_at,buyer_email_digest)",
@@ -193,6 +199,7 @@ export async function handleStripeEvent(request,env){
     session.id,EXPECTED_LINK,session.payment_intent||null,status,EXPECTED_TOTAL,"usd",event.created,
     status==="paid"?now:null,now,emailDigest)
   ];
+  if(intentHash)queries.push(...reconcileEarlyReversals(env.QIRA_PROOF_ORDERS,session.id,session.payment_intent,intentHash,now));
   const result=await env.QIRA_PROOF_ORDERS.batch(queries);
   if(!Array.isArray(result)||result.some(x=>x.success===false))throw Error("ledger commit failed");
  }catch{return response({error:"verification_unavailable"},503);}
