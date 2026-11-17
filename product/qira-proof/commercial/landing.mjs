@@ -1,6 +1,6 @@
 import {handleStripeEvent,checkoutStatus,checkoutBanner,purgeOldOrderRows,submitVerifiedIntake,readOrderIntakeStage} from "./payments.mjs";
 import {PAID_INTAKE_SCRIPT} from "./paid_intake.mjs";
-import {runNotificationCycle,purgeNotifications} from "./notifications.mjs";
+import {runNotificationCycle,purgeNotifications,purgeAdjustments} from "./notifications.mjs";
 import {addUnifiedShell,addLegalNavigation} from "./site_polish.mjs";
 import {renderRealCaseStudy} from "./real_case.mjs";
 import {renderHome,HOME_CSS} from "./experience.mjs";
@@ -23,7 +23,7 @@ export default {async scheduled(controller,env={},ctx){
  if(!env.QIRA_PROOF_ORDERS)return;
  let task;
  if(controller?.cron==="17 3 * * *"){
-  task=(async()=>{await purgeOldOrderRows(env.QIRA_PROOF_ORDERS);await purgeNotifications(env.QIRA_PROOF_ORDERS);await runNotificationCycle(env);})();
+  task=(async()=>{await purgeOldOrderRows(env.QIRA_PROOF_ORDERS);await purgeNotifications(env.QIRA_PROOF_ORDERS);await purgeAdjustments(env.QIRA_PROOF_ORDERS);await runNotificationCycle(env);})();
  }else if(controller?.cron){
   task=runNotificationCycle(env);
  }else task=purgeOldOrderRows(env.QIRA_PROOF_ORDERS);
