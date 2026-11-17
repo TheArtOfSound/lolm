@@ -1,0 +1,642 @@
+{
+  "schema": "qira-proof/accuracy-fixtures-v1",
+  "authorship": "Curated synthetic expectations; requires independent security reviewer adjudication",
+  "limitations": "Not sampled from a representative repository distribution; out-of-scope syntax is not proof of safety",
+  "fixtures": [
+    {
+      "id": "action-01-step-tag",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4",
+      "expected": {
+        "mutable": true
+      },
+      "rationale": "Executable external step with mutable tag"
+    },
+    {
+      "id": "action-02-step-commit",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Full 40-digit commit is pinned"
+    },
+    {
+      "id": "action-03-single-quoted-ref",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: 'actions/cache@v4'",
+      "expected": {
+        "mutable": true
+      },
+      "rationale": "Quoted version tag is mutable"
+    },
+    {
+      "id": "action-04-double-quoted-ref",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: \"actions/cache@v4\"",
+      "expected": {
+        "mutable": true
+      },
+      "rationale": "Double quoted action tag"
+    },
+    {
+      "id": "action-05-inline-comment",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4 # comment",
+      "expected": {
+        "mutable": true
+      },
+      "rationale": "Terminal comment does not change reference"
+    },
+    {
+      "id": "action-06-job-reusable-tag",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  call:\n    uses: owner/repo/.github/workflows/build.yml@v2",
+      "expected": {
+        "mutable": true
+      },
+      "rationale": "Job-level reusable workflow is executable"
+    },
+    {
+      "id": "action-07-job-reusable-pin",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  call:\n    uses: owner/repo/.github/workflows/build.yml@0123456789abcdef0123456789abcdef01234567",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Reusable workflow pinned to SHA"
+    },
+    {
+      "id": "action-08-step-field",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Action\n        uses: owner/repo@v3",
+      "expected": {
+        "mutable": true
+      },
+      "rationale": "Step field after a name invokes action"
+    },
+    {
+      "id": "action-09-subdirectory",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: org/repo/action/subpath@v2",
+      "expected": {
+        "mutable": true
+      },
+      "rationale": "External action reference with subdirectory"
+    },
+    {
+      "id": "action-10-local",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ./.github/actions/local",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Relative local action is not external mutable ref"
+    },
+    {
+      "id": "action-11-docker",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: docker://alpine:3.19",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Docker image reference is outside this narrowly scoped rule"
+    },
+    {
+      "id": "action-12-root-false",
+      "domain": "action",
+      "workflow": "name: Test\non: push\nuses: owner/repo@v1\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Root-level arbitrary uses key does not invoke an action"
+    },
+    {
+      "id": "action-13-root-env-false",
+      "domain": "action",
+      "workflow": "name: Test\non: push\nenv:\n  uses: owner/repo@v1\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Environment variable does not invoke action"
+    },
+    {
+      "id": "action-14-job-env-false",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    env:\n      uses: owner/repo@v1\n    steps:\n      - run: echo done",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Job environment mapping does not invoke action"
+    },
+    {
+      "id": "action-15-input-false",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\n        with:\n          uses: owner/repo@v1",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "A step input named uses is data"
+    },
+    {
+      "id": "action-16-step-env-false",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n        env:\n          uses: owner/repo@v2",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Step environment mapping does not invoke action"
+    },
+    {
+      "id": "action-17-output-false",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    outputs:\n      uses: owner/repo@v2\n    steps:\n      - run: echo done",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Job output named uses is data"
+    },
+    {
+      "id": "action-18-comment-false",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      # - uses: owner/repo@v3\n      - run: echo hi",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Commented action has no effect"
+    },
+    {
+      "id": "action-19-shell-literal-false",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          echo uses: owner/repo@v4",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Shell script text is not a YAML action declaration"
+    },
+    {
+      "id": "action-20-mixed-positive",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@0123456789abcdef0123456789abcdef01234567\n        with:\n          uses: owner/repo@v3\n      - uses: owner/tool@v4",
+      "expected": {
+        "mutable": true
+      },
+      "rationale": "Actual mutable step must still be found when input-shaped false positives coexist"
+    },
+    {
+      "id": "action-21-short-sha",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: owner/repo@abc1234",
+      "expected": {
+        "mutable": true
+      },
+      "rationale": "Short hashes are not commit-pinned under the 40-digit policy"
+    },
+    {
+      "id": "action-22-unrelated-shell",
+      "domain": "action",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo owner/repo@v4",
+      "expected": {
+        "mutable": false
+      },
+      "rationale": "Action reference mentioned in shell is not a uses declaration"
+    },
+    {
+      "id": "permission-01-root-read",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions:\n  contents: read\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": false,
+        "restricted": true,
+        "scopes": []
+      },
+      "rationale": "Root read-only declaration"
+    },
+    {
+      "id": "permission-02-root-none",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions:\n  issues: none\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": false,
+        "restricted": true,
+        "scopes": []
+      },
+      "rationale": "None is not a write grant"
+    },
+    {
+      "id": "permission-03-root-write",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions:\n  contents: write\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": true,
+        "restricted": false,
+        "scopes": [
+          "contents"
+        ]
+      },
+      "rationale": "Root write declaration"
+    },
+    {
+      "id": "permission-04-mixed-scopes",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions:\n  contents: read\n  issues: write\n  id-token: write\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": true,
+        "restricted": false,
+        "scopes": [
+          "issues",
+          "id-token"
+        ]
+      },
+      "rationale": "Read and two distinct write scopes"
+    },
+    {
+      "id": "permission-05-read-all",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions: read-all\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": false,
+        "restricted": true,
+        "scopes": []
+      },
+      "rationale": "Supported read-all form"
+    },
+    {
+      "id": "permission-06-empty-map",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions: {}\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": false,
+        "restricted": true,
+        "scopes": []
+      },
+      "rationale": "Empty permission mapping"
+    },
+    {
+      "id": "permission-07-write-all",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions: write-all\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": true,
+        "restricted": false,
+        "scopes": [
+          "write-all"
+        ]
+      },
+      "rationale": "Explicit write-all declaration"
+    },
+    {
+      "id": "permission-08-missing",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": "unknown",
+        "restricted": "unknown",
+        "scopes": []
+      },
+      "rationale": "Absent declaration is not proof of read-only policy"
+    },
+    {
+      "id": "permission-09-env-fake",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\nenv:\n  permissions:\n    contents: read\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": "unknown",
+        "restricted": "unknown",
+        "scopes": []
+      },
+      "rationale": "Nested environment permissions key is not authoritative"
+    },
+    {
+      "id": "permission-10-step-input-fake",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          permissions:\n            contents: read",
+      "expected": {
+        "write": "unknown",
+        "restricted": "unknown",
+        "scopes": []
+      },
+      "rationale": "Step input permissions key is not authoritative"
+    },
+    {
+      "id": "permission-11-job-write",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\njobs:\n  build:\n    permissions:\n      contents: write\n    steps:\n      - run: echo hi",
+      "expected": {
+        "write": true,
+        "restricted": false,
+        "scopes": [
+          "contents"
+        ]
+      },
+      "rationale": "Job-level permission declaration is authoritative"
+    },
+    {
+      "id": "permission-12-root-plus-job",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions:\n  contents: read\njobs:\n  release:\n    permissions:\n      contents: write\n    steps:\n      - run: echo done",
+      "expected": {
+        "write": true,
+        "restricted": false,
+        "scopes": [
+          "contents"
+        ]
+      },
+      "rationale": "Job permission can expand root permission"
+    },
+    {
+      "id": "permission-13-two-jobs",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\njobs:\n  read:\n    permissions:\n      contents: read\n  publish:\n    permissions:\n      packages: write",
+      "expected": {
+        "write": true,
+        "restricted": false,
+        "scopes": [
+          "packages"
+        ]
+      },
+      "rationale": "Distinct job-level declarations aggregated without claiming effective runtime scope"
+    },
+    {
+      "id": "permission-14-inline-map",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions: { contents: read }\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": "unknown",
+        "restricted": "unknown",
+        "scopes": []
+      },
+      "rationale": "Unsupported inline mapping must remain unknown"
+    },
+    {
+      "id": "permission-15-expression",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions: ${{ vars.MY_POLICY }}\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": "unknown",
+        "restricted": "unknown",
+        "scopes": []
+      },
+      "rationale": "Dynamic or unsupported permission value is ambiguous"
+    },
+    {
+      "id": "permission-16-unknown-scope",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions:\n  secrets: write\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": "unknown",
+        "restricted": "unknown",
+        "scopes": []
+      },
+      "rationale": "Unrecognized token scope cannot be promoted to write or read-only evidence"
+    },
+    {
+      "id": "permission-17-invalid-write-scope",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions:\n  vulnerability-alerts: write\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": "unknown",
+        "restricted": "unknown",
+        "scopes": []
+      },
+      "rationale": "Unsupported write level for vulnerability-alerts"
+    },
+    {
+      "id": "permission-18-oidc-write",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions:\n  id-token: write\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": true,
+        "restricted": false,
+        "scopes": [
+          "id-token"
+        ]
+      },
+      "rationale": "OIDC scope is a write declaration, not automatically a vulnerability"
+    },
+    {
+      "id": "permission-19-artifact-write",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions:\n  artifact-metadata: write\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n",
+      "expected": {
+        "write": true,
+        "restricted": false,
+        "scopes": [
+          "artifact-metadata"
+        ]
+      },
+      "rationale": "Recognized modern permission scope"
+    },
+    {
+      "id": "permission-20-shell-literal-fake",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          permissions:\n            contents: write",
+      "expected": {
+        "write": "unknown",
+        "restricted": "unknown",
+        "scopes": []
+      },
+      "rationale": "Shell literal permissions are not GitHub token grants"
+    },
+    {
+      "id": "permission-21-root-read-with-shell",
+      "domain": "permission",
+      "workflow": "name: Test\non: push\npermissions:\n  contents: read\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          permissions:\n            contents: write",
+      "expected": {
+        "write": false,
+        "restricted": true,
+        "scopes": []
+      },
+      "rationale": "Shell literal does not override real root declaration"
+    },
+    {
+      "id": "trigger-01-mapping-positive",
+      "domain": "trigger",
+      "workflow": "on:\n  pull_request_target:\njobs:\n  test:\n    runs-on: ubuntu-latest",
+      "expected": {
+        "target": true
+      },
+      "rationale": "Recognized map trigger"
+    },
+    {
+      "id": "trigger-02-scalar-positive",
+      "domain": "trigger",
+      "workflow": "on: pull_request_target\njobs:\n  test:\n    runs-on: ubuntu-latest",
+      "expected": {
+        "target": true
+      },
+      "rationale": "Recognized scalar trigger"
+    },
+    {
+      "id": "trigger-03-sequence-positive",
+      "domain": "trigger",
+      "workflow": "on:\n  - push\n  - pull_request_target\njobs:\n  test:\n    runs-on: ubuntu-latest",
+      "expected": {
+        "target": true
+      },
+      "rationale": "Recognized sequence trigger"
+    },
+    {
+      "id": "trigger-04-inline-positive",
+      "domain": "trigger",
+      "workflow": "on: [push, pull_request_target]\njobs:\n  test:\n    runs-on: ubuntu-latest",
+      "expected": {
+        "target": true
+      },
+      "rationale": "Recognized inline sequence"
+    },
+    {
+      "id": "trigger-05-map-negative",
+      "domain": "trigger",
+      "workflow": "on:\n  push:\n  workflow_dispatch:\njobs:\n  test:",
+      "expected": {
+        "target": false
+      },
+      "rationale": "Unprivileged triggers only"
+    },
+    {
+      "id": "trigger-06-inline-negative",
+      "domain": "trigger",
+      "workflow": "on: [push, workflow_dispatch]\njobs:\n  test:",
+      "expected": {
+        "target": false
+      },
+      "rationale": "Recognized inline sequence without target"
+    },
+    {
+      "id": "trigger-07-quoted-value-unknown",
+      "domain": "trigger",
+      "workflow": "on: 'pull_request_target'\njobs:\n  test:",
+      "expected": {
+        "target": "unknown"
+      },
+      "rationale": "Quoted scalar not supported by bounded parser"
+    },
+    {
+      "id": "trigger-08-inline-map-unknown",
+      "domain": "trigger",
+      "workflow": "on: { pull_request_target: {} }\njobs:\n  test:",
+      "expected": {
+        "target": "unknown"
+      },
+      "rationale": "Inline event map cannot be safely interpreted without YAML parser"
+    },
+    {
+      "id": "trigger-09-alias-unknown",
+      "domain": "trigger",
+      "workflow": "on: *event_alias\njobs:\n  test:",
+      "expected": {
+        "target": "unknown"
+      },
+      "rationale": "YAML alias is unresolved"
+    },
+    {
+      "id": "trigger-10-missing-unknown",
+      "domain": "trigger",
+      "workflow": "name: Test\njobs:\n  test:",
+      "expected": {
+        "target": "unknown"
+      },
+      "rationale": "No on declaration is unknown, not false"
+    },
+    {
+      "id": "trigger-11-quoted-key-positive",
+      "domain": "trigger",
+      "workflow": "\"on\":\n  pull_request_target:\njobs:\n  test:",
+      "expected": {
+        "target": true
+      },
+      "rationale": "Quoted mapping key is recognized"
+    },
+    {
+      "id": "trigger-12-schedule-negative",
+      "domain": "trigger",
+      "workflow": "on:\n  schedule:\n    - cron: '15 5 * * *'\n  workflow_dispatch:\njobs:\n  test:",
+      "expected": {
+        "target": false
+      },
+      "rationale": "Nested cron structure does not introduce target"
+    },
+    {
+      "id": "trigger-13-inline-alias-unknown",
+      "domain": "trigger",
+      "workflow": "on: [push, *special]\njobs:\n  test:",
+      "expected": {
+        "target": "unknown"
+      },
+      "rationale": "Alias in inline list prevents confident negative"
+    },
+    {
+      "id": "ssh-01-block-command",
+      "domain": "ssh",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          ssh-keyscan -H example.org >> ~/.ssh/known_hosts",
+      "expected": {
+        "ssh": true
+      },
+      "rationale": "SSH command found within a shell literal"
+    },
+    {
+      "id": "ssh-02-inline-command",
+      "domain": "ssh",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ssh-keyscan -H example.org",
+      "expected": {
+        "ssh": true
+      },
+      "rationale": "SSH command found in inline run"
+    },
+    {
+      "id": "ssh-03-comment-negative",
+      "domain": "ssh",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      # ssh-keyscan -H example.org\n      - run: echo hi",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Comments are not executable shell"
+    },
+    {
+      "id": "ssh-04-shell-comment-negative",
+      "domain": "ssh",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          # ssh-keyscan -H example.org\n          echo hi",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Comment inside shell block is ignored"
+    },
+    {
+      "id": "ssh-05-echo-positive",
+      "domain": "ssh",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ssh-keyscan",
+      "expected": {
+        "ssh": true
+      },
+      "rationale": "Text indicator includes shell echoes; never interpreted as proof of execution"
+    },
+    {
+      "id": "ssh-06-other-command-negative",
+      "domain": "ssh",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ssh-keygen",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Unrelated SSH command"
+    },
+    {
+      "id": "ssh-07-substring-negative",
+      "domain": "ssh",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo xssh-keyscan",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "No token boundary at start"
+    },
+    {
+      "id": "ssh-08-shell-no-command",
+      "domain": "ssh",
+      "workflow": "name: Test\non: push\njobs:\n  verify:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          echo hello\n          echo goodbye",
+      "expected": {
+        "ssh": false
+      },
+      "rationale": "Shell block without SSH discovery"
+    }
+  ]
+}

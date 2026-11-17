@@ -4,8 +4,10 @@
 Never sends provider tokens or raw content to QIRA services. Uses GET only.
 The resulting local snapshot may disclose infrastructure names; store privately.
 
-Requires: GITHUB_TOKEN for --github-repo,
-          CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID for --cloudflare-worker.
+Requires: GITHUB_TOKEN for GitHub workflow reads,
+          CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID for --cloudflare-worker,
+          VERCEL_TOKEN for --vercel-project (optional VERCEL_TEAM_ID).
+All credentials remain in the local environment and are never exported.
 Providers should grant only the required read-only privileges.
 """
 from __future__ import annotations
@@ -25,6 +27,8 @@ SCHEMA="qira-proof/snapshot-v1"
 GITHUB_RE=re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 WORKER_RE=re.compile(r"^[a-z0-9_][a-z0-9_-]{0,62}$")
 ACCOUNT_RE=re.compile(r"^[a-f0-9]{32}$")
+VERCEL_PROJECT_RE=re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
+VERCEL_TEAM_RE=re.compile(r"^team_[A-Za-z0-9_-]{4,100}$")
 PRIVILEGED_BINDINGS=frozenset({"secret_text","d1","kv_namespace","r2_bucket","vectorize",
                                 "service","hyperdrive","ai_gateway","queue","durable_object_namespace"})
 
@@ -49,6 +53,13 @@ def fetch_json(url, token, provider):
             raise ProviderError("refusing non-Cloudflare API endpoint")
         headers={"Authorization":"Bearer "+token,"Accept":"application/json",
                  "User-Agent":"qira-proof-local-readonly"}
+    elif provider == "vercel":
+        from urllib.parse import urlsplit
+        u=urlsplit(url)
+        if u.scheme!="https" or u.netloc!="api.vercel.com" or not u.path.startswith(("/v9/projects/","/v6/deployments")):
+            raise ProviderError("refusing non-Vercel API endpoint")
+        headers={"Authorization":"Bearer "+token,"Accept":"application/json",
+                 "User-Agent":"qira-proof-local-readonly"}
     else:
         raise ProviderError("unknown provider")
     try:
@@ -69,7 +80,7 @@ def fetch_json(url, token, provider):
             raise ProviderError("Cloudflare API did not confirm success")
         return data["result"]
     if not isinstance(data,dict):
-        raise ProviderError("GitHub API returned unexpected content")
+        raise ProviderError(f"{provider} API returned unexpected content")
     return data
 
 def fact(provider,asset,signal,value,url,when):
@@ -78,7 +89,183 @@ def fact(provider,asset,signal,value,url,when):
     return dict(provider=provider,asset=asset,signal=signal,value=value,
                 source_url=url,observed_at=when)
 
-def github_facts(repo,workflow,token,reader=fetch_json,when=None):
+def scan_workflow_syntax(text):
+    """Conservative static YAML observations, never execution or full policy validation."""
+    if not isinstance(text,str) or len(text.encode("utf-8"))>128000:
+        raise ProviderError("invalid bounded workflow text")
+    rows=[]
+    literal_indent=None
+    for lineno,raw in enumerate(text.lstrip("\ufeff").splitlines(),start=1):
+        whitespace=re.match(r"^[ \t]*",raw).group(0)
+        pad=-1 if "\t" in whitespace else len(whitespace)
+        content=raw.strip()
+        if pad<0:
+            rows.append(dict(text="",shell="",pad=-1,line=lineno))
+            continue
+        if literal_indent is not None:
+            if not content or pad>literal_indent:
+                rows.append(dict(text="",shell="" if content.startswith("#") else content,pad=pad,line=lineno))
+                continue
+            literal_indent=None
+        if not content or content.startswith("#"):
+            rows.append(dict(text="",shell="",pad=pad,line=lineno))
+            continue
+        if re.search(r":\s*[|>][+-]?[1-9]?\s*(?:#.*)?$",raw):
+            literal_indent=pad
+        rows.append(dict(text=raw[pad:],shell="",pad=pad,line=lineno))
+    action=re.compile(r"^\s*(?:-\s*)?uses:\s*['\"]?([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_./-]+)?)@([A-Za-z0-9_.-]{1,128})['\"]?(?:\s*(?:#.*)?)?$")
+    ssh=re.compile(r"(^|[^A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)")
+    # Only job-level reusable workflows and actual steps execute "uses".
+    # Identical keys under env/with/outputs are values, not actions.
+    def parent_index(index):
+        pad=rows[index]["pad"]
+        for j in range(index-1,-1,-1):
+            if rows[j]["text"] and rows[j]["pad"]<pad:
+                return j
+        return None
+
+    def is_job(index):
+        if index is None or re.fullmatch(r"[A-Za-z0-9_-]+:\s*(?:#.*)?",rows[index]["text"]) is None:
+            return False
+        parent=parent_index(index)
+        return (parent is not None and rows[parent]["pad"]==0 and
+                re.fullmatch(r"jobs:\s*(?:#.*)?",rows[parent]["text"]) is not None)
+
+    def is_action(index):
+        row=rows[index]
+        parent=parent_index(index)
+        if parent is None:
+            return False
+        sequence=re.match(r"^-\s+uses:",row["text"]) is not None
+        if not sequence and is_job(parent):
+            return True
+        steps=parent if sequence else parent_index(parent)
+        if (steps is None or
+            re.fullmatch(r"steps:\s*(?:#.*)?",rows[steps]["text"]) is None or
+            not is_job(parent_index(steps))):
+            return False
+        return sequence or (row["pad"]==rows[parent]["pad"]+2 and
+                            re.match(r"^-[ \t]+[A-Za-z_][A-Za-z0-9_-]*:",rows[parent]["text"]) is not None)
+
+    def is_run(index):
+        row=rows[index]
+        parent=parent_index(index)
+        if parent is None or re.match(r"^(-[ \t]+)?run:\s*",row["text"]) is None:
+            return False
+        sequence=re.match(r"^-[ \t]+run:",row["text"]) is not None
+        steps=parent if sequence else parent_index(parent)
+        if (steps is None or
+            re.fullmatch(r"steps:\s*(?:#.*)?",rows[steps]["text"]) is None or
+            not is_job(parent_index(steps))):
+            return False
+        return sequence or (row["pad"]==rows[parent]["pad"]+2 and
+                            re.match(r"^-[ \t]+[A-Za-z_][A-Za-z0-9_-]*:",rows[parent]["text"]) is not None)
+
+    def shell_indicator(index):
+        row=rows[index]
+        if row["shell"]:
+            owner=parent_index(index)
+            return owner is not None and is_run(owner) and ssh.search(row["shell"]) is not None
+        return is_run(index) and ssh.search(row["text"]) is not None
+    mutable=[];scan=[]
+    for i,row in enumerate(rows):
+        match=action.fullmatch(row["text"])
+        if match and is_action(i) and re.fullmatch(r"[a-fA-F0-9]{40}",match.group(2)) is None:
+            mutable.append(row["line"])
+        if shell_indicator(i):
+            scan.append(row["line"])
+    starts=[i for i,row in enumerate(rows) if re.match(r"^permissions:\s*",row["text"])]
+    def authorized_permission(index):
+        row=rows[index]
+        if row["pad"]==0:
+            return True
+        if row["pad"]!=4:
+            return False
+        jobs=False;job=False
+        for prior in rows[:index]:
+            if not prior["text"]:continue
+            if prior["pad"]==0:
+                jobs=bool(re.fullmatch(r"jobs:\s*(?:#.*)?",prior["text"]))
+                job=False
+            elif jobs and prior["pad"]==2:
+                job=bool(re.fullmatch(r"[A-Za-z0-9_-]+:\s*(?:#.*)?",prior["text"]))
+        return jobs and job
+    valid=[i for i in starts if authorized_permission(i)]
+    permission_line=rows[valid[0]]["line"] if valid else None
+    writes=False;unknown=len(valid)!=len(starts);write_scopes=[]
+    valid_scopes={"actions","artifact-metadata","attestations","checks","code-quality",
+      "contents","copilot-requests","deployments","discussions","id-token","issues",
+      "packages","pages","pull-requests","security-events","statuses","vulnerability-alerts"}
+    for i in valid:
+        row=rows[i]
+        value=re.match(r"^permissions:\s*(.*?)\s*$",row["text"]).group(1).strip()
+        if value in ("read-all","{}"):
+            continue
+        if value=="write-all":
+            writes=True;permission_line=row["line"]
+            write_scopes.append(("write-all",row["line"]))
+            continue
+        if value:
+            unknown=True
+            continue
+        count=0
+        for sub in rows[i+1:]:
+            if not sub["text"]:continue
+            if sub["pad"]<=row["pad"]:break
+            if sub["pad"]!=row["pad"]+2:
+                unknown=True;continue
+            match=re.fullmatch(r"([a-z][a-z-]{1,40}):\s*(read|write|none)\s*(?:#.*)?",sub["text"])
+            if not match or match.group(1) not in valid_scopes or (match.group(1)=="vulnerability-alerts" and match.group(2)=="write"):
+                unknown=True;continue
+            count+=1
+            if match.group(2)=="write":
+                writes=True;permission_line=sub["line"]
+                write_scopes.append((match.group(1),sub["line"]))
+        if not count:unknown=True
+    restricted=False if writes else ("unknown" if unknown or not valid else True)
+    write=True if writes else ("unknown" if unknown or not valid else False)
+    trigger="unknown";trigger_line=None
+    event_header=re.compile(r"^(?:on|\"on\"|'on'):\s*(.*?)\s*$")
+    headers=[row for row in rows if row["pad"]==0 and event_header.match(row["text"])]
+    if len(headers)==1:
+        header=headers[0]
+        inline=event_header.match(header["text"]).group(1).strip()
+        if inline:
+            if re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*",inline):
+                trigger=inline=="pull_request_target"
+                trigger_line=header["line"] if trigger else None
+            elif re.fullmatch(r"\[[^\]{}]*\]",inline):
+                items=[x.strip() for x in inline[1:-1].split(",")]
+                if items and all(re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*",x) for x in items):
+                    trigger="pull_request_target" in items
+                    trigger_line=header["line"] if trigger else None
+        else:
+            observed=False;unclear=False;matched=None
+            for row in rows:
+                if row["line"]<=header["line"] or not row["text"]:continue
+                if row["pad"]==0:break
+                if row["pad"]!=2:continue
+                mapping=re.match(r"^([A-Za-z][A-Za-z0-9_-]*):(?:\s|$)",row["text"])
+                sequence=re.fullmatch(r"-\s+([A-Za-z][A-Za-z0-9_-]*)\s*(?:#.*)?",row["text"])
+                event=mapping.group(1) if mapping else sequence.group(1) if sequence else None
+                if not event:
+                    unclear=True;continue
+                observed=True
+                if event=="pull_request_target":matched=row["line"]
+            if matched is not None:
+                trigger=True;trigger_line=matched
+            elif observed and not unclear:
+                trigger=False
+    return {
+       "runtime_ssh_keyscan":(bool(scan),scan[0] if scan else None),
+       "workflow_unpinned_actions":(bool(mutable),mutable[0] if mutable else None),
+       "workflow_explicit_read_only_permissions":(restricted,permission_line),
+       "workflow_token_write_permission":(write,permission_line),
+       "workflow_pull_request_target_trigger":(trigger,trigger_line),
+       "writeScopes":sorted(write_scopes,key=lambda entry:(entry[1],entry[0]))[:36],
+    }
+
+def github_facts(repo,workflow,token,reader=fetch_json,when=None,permission_inventory=None):
     if not GITHUB_RE.fullmatch(repo):
         raise ValueError("repository must be owner/name")
     if not workflow.startswith(".github/workflows/") or ".." in workflow or not workflow.endswith((".yaml",".yml")):
@@ -92,21 +279,33 @@ def github_facts(repo,workflow,token,reader=fetch_json,when=None):
     if not isinstance(default_branch,str) or not 1 <= len(default_branch) <= 128 or not re.fullmatch(r"[A-Za-z0-9_./-]+",default_branch) or ".." in default_branch:
         raise ProviderError("GitHub default branch could not be verified")
     branch_encoded=quote(default_branch,safe="")
-    snapshot=reader(base+"/contents/"+encoded+"?ref="+branch_encoded,token,"github")
+    revision=reader(base+"/commits/"+branch_encoded,token,"github")
+    sha=revision.get("sha") if isinstance(revision,dict) else None
+    if not isinstance(sha,str) or not re.fullmatch(r"[a-fA-F0-9]{40}",sha):
+        raise ProviderError("GitHub workflow commit could not be verified")
+    sha=sha.lower()
+    snapshot=reader(base+"/contents/"+encoded+"?ref="+sha,token,"github")
     if snapshot.get("encoding")!="base64" or not isinstance(snapshot.get("content"),str):
         raise ProviderError("workflow not available as bounded base64 content")
     text=base64.b64decode(snapshot["content"],validate=False)
     if len(text)>128_000:
         raise ProviderError("workflow file exceeds 128 KB")
     text=text.decode("utf-8")
-    active_lines=[x for x in text.splitlines() if not x.lstrip().startswith("#")]
-    has_scan=any(re.search(r"(?<![A-Za-z0-9_-])ssh-keyscan(?:[ \t]|$)",line) for line in active_lines)
-    source=f"https://github.com/{repo}/blob/{branch_encoded}/{workflow}"
-    facts=[fact("github",repo,"runtime_ssh_keyscan",has_scan,source,when)]
-    if has_scan:
-        # Proving SSH host-key pinning requires authoritative key material and
-        # a trusted out-of-band comparison, NOT a string search.
-        facts.append(fact("github",repo,"ssh_host_key_pinned","unknown",source,when))
+    observations=scan_workflow_syntax(text)
+    source=f"https://github.com/{repo}/blob/{sha}/{workflow}"
+    facts=[]
+    if permission_inventory is not None and observations["writeScopes"]:
+        permission_inventory.append({"asset":repo,"scopes":[
+          {"scope":scope,"source_url":source+f"#L{line}"} for scope,line in observations["writeScopes"]]})
+    for signal,item in observations.items():
+        if signal=="writeScopes":continue
+        value,line=item
+        url=source+(f"#L{line}" if isinstance(line,int) and 0<line<=100000 else "")
+        facts.append(fact("github",repo,signal,value,url,when))
+    if observations["runtime_ssh_keyscan"][0]:
+        # Text presence does NOT establish trusted host-key pinning.
+        facts.append(fact("github",repo,"ssh_host_key_pinned","unknown",
+                          next(x["source_url"] for x in facts if x["signal"]=="runtime_ssh_keyscan"),when))
     try:
         reader(base+"/branches/"+branch_encoded+"/protection",token,"github")
         status=True
@@ -140,18 +339,77 @@ def cloudflare_facts(account,worker,token,reader=fetch_json,when=None):
              any(x["type"] in PRIVILEGED_BINDINGS for x in bindings),url,when),
     ]
 
-def build_snapshot(github_repos=(),cloudflare_workers=(),github_token=None,cloudflare_token=None,
-                   account_id=None, reader=fetch_json,when=None,github_workflows=()):
+def vercel_facts(project,token,team=None,reader=fetch_json,when=None):
+    """Collect three bounded evidence facts from Vercel; never request env vars.
+
+    A negative protection finding is only possible if all three reported
+    project-level protection enabled flags are explicitly false AND a recent
+    preview-target deployment exists. Unknown states are not treated as off.
+    """
+    if not isinstance(project,str) or not VERCEL_PROJECT_RE.fullmatch(project):
+        raise ValueError("invalid Vercel project name or ID")
+    if team is not None and (not isinstance(team,str) or not VERCEL_TEAM_RE.fullmatch(team)):
+        raise ValueError("invalid Vercel team ID")
     when=when or utcnow()
-    if not github_repos and not github_workflows and not cloudflare_workers:
+    scope="?teamId="+quote(team,safe="") if team else ""
+    suffix=("&teamId="+quote(team,safe="")) if team else ""
+    base="https://api.vercel.com"
+    project_url=base+"/v9/projects/"+quote(project,safe="")
+    metadata=reader(project_url+scope,token,"vercel")
+    if not isinstance(metadata,dict):
+        raise ProviderError("Vercel project metadata was unavailable")
+    verified_id=metadata.get("id")
+    if not isinstance(verified_id,str) or not re.fullmatch(r"prj_[A-Za-z0-9]{4,100}",verified_id):
+        raise ProviderError("Vercel project identifier was invalid")
+    project_name=metadata.get("name")
+    if not isinstance(project_name,str) or not VERCEL_PROJECT_RE.fullmatch(project_name):
+        raise ProviderError("Vercel project name was invalid")
+    checks=[metadata.get(k) for k in ("ssoProtection","passwordProtection","trustedIps")]
+    protection_flags=[p.get("enabled") if isinstance(p,dict) else None for p in checks]
+    if any(value is True for value in protection_flags):
+        protected=True
+    elif all(value is False for value in protection_flags):
+        protected=False
+    else:
+        protected="unknown"
+    preview_url=base+"/v6/deployments?projectId="+quote(verified_id,safe="")+"&target=preview&limit=20"+suffix
+    prod_url=base+"/v6/deployments?projectId="+quote(verified_id,safe="")+"&target=production&limit=1"+suffix
+    preview=reader(preview_url,token,"vercel")
+    production=reader(prod_url,token,"vercel")
+    if not isinstance(preview,dict) or not isinstance(preview.get("deployments"),list) or not isinstance(production,dict) or not isinstance(production.get("deployments"),list):
+        raise ProviderError("Vercel deployments response was invalid")
+    if len(preview["deployments"])>20 or len(production["deployments"])>1:
+        raise ProviderError("Vercel returned more deployment records than requested")
+    preview_present=True if any(isinstance(item,dict) and item.get("target")=="preview" for item in preview["deployments"]) else "unknown"
+    latest=production["deployments"][0] if production["deployments"] else None
+    if latest is not None and (not isinstance(latest,dict) or latest.get("target") not in (None,"production")):
+        raise ProviderError("Vercel production deployment metadata was unexpected")
+    deploy_state=latest.get("readyState",latest.get("state")) if latest else None
+    production_error=True if deploy_state=="ERROR" else False if deploy_state=="READY" else "unknown"
+    # Restrict snapshots to synthetic boolean / unknown facts and source API
+    # URIs without query parameters, token material, source files, or logs.
+    return [
+        fact("vercel",project_name,"vercel_deployment_protection_configured",protected,project_url,when),
+        fact("vercel",project_name,"vercel_recent_preview_observed",preview_present,base+"/v6/deployments",when),
+        fact("vercel",project_name,"vercel_latest_production_errored",production_error,base+"/v6/deployments",when),
+    ]
+
+
+def build_snapshot(github_repos=(),cloudflare_workers=(),github_token=None,cloudflare_token=None,
+                   account_id=None, reader=fetch_json,when=None,github_workflows=(),
+                   vercel_projects=(),vercel_token=None,vercel_team=None):
+    when=when or utcnow()
+    if not github_repos and not github_workflows and not cloudflare_workers and not vercel_projects:
         raise ValueError("select at least one authorized resource")
     if (github_repos or github_workflows) and not github_token:
         raise ProviderError("GITHUB_TOKEN must be set for GitHub read access")
     if cloudflare_workers and (not cloudflare_token or not account_id):
         raise ProviderError("CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID required")
-    if len(github_repos)+len(github_workflows)>20 or len(cloudflare_workers)>50:
+    if vercel_projects and not vercel_token:
+        raise ProviderError("VERCEL_TOKEN required for local Vercel read access")
+    if len(github_repos)+len(github_workflows)>20 or len(cloudflare_workers)>50 or len(vercel_projects)>20:
         raise ValueError("collector resource bounds exceeded")
-    facts=[]
+    facts=[];permission_inventory=[]
     selected=[(repo,".github/workflows/deploy-production.yml") for repo in github_repos]
     for entry in github_workflows:
         if not isinstance(entry,str) or ":" not in entry:
@@ -164,11 +422,17 @@ def build_snapshot(github_repos=(),cloudflare_workers=(),github_token=None,cloud
         if repo in seen_repos:
             raise ValueError("pilot accepts only one selected workflow per repository")
         seen_repos.add(repo)
-        facts.extend(github_facts(repo,workflow,github_token,reader,when))
+        facts.extend(github_facts(repo,workflow,github_token,reader,when,permission_inventory))
     for worker in dict.fromkeys(cloudflare_workers):
         facts.extend(cloudflare_facts(account_id,worker,cloudflare_token,reader,when))
+    if len(set(vercel_projects))!=len(vercel_projects):
+        raise ValueError("duplicate Vercel project selection")
+    for project in vercel_projects:
+        facts.extend(vercel_facts(project,vercel_token,vercel_team,reader,when))
     facts.sort(key=lambda f:(f["provider"],f["asset"],f["signal"]))
-    return {"schema":SCHEMA,"captured_at":when,"facts":facts}
+    output={"schema":SCHEMA,"captured_at":when,"facts":facts}
+    if permission_inventory:output["permission_inventory"]=permission_inventory
+    return output
 
 def write_private(path,report):
     # Refuse overwrite and create with owner-only permissions from the outset.
@@ -183,6 +447,7 @@ def write_private(path,report):
 def main(argv=None):
     parser=argparse.ArgumentParser(description="Read-only QIRA Proof local collector; no uploads")
     parser.add_argument("--github-repo",action="append",default=[],help="Explicit repository owner/name")
+    parser.add_argument("--vercel-project",action="append",default=[],help="Explicit Vercel project ID or name")
     parser.add_argument("--cloudflare-worker",action="append",default=[],help="Explicit Worker name")
     parser.add_argument("--github-workflow",action="append",default=[],
       help="Select workflow explicitly as owner/repo:.github/workflows/name.yml")
@@ -191,7 +456,9 @@ def main(argv=None):
     try:
         report=build_snapshot(args.github_repo,args.cloudflare_worker,
           os.environ.get("GITHUB_TOKEN"),os.environ.get("CLOUDFLARE_API_TOKEN"),
-          os.environ.get("CLOUDFLARE_ACCOUNT_ID"),github_workflows=args.github_workflow)
+          os.environ.get("CLOUDFLARE_ACCOUNT_ID"),github_workflows=args.github_workflow,
+          vercel_projects=args.vercel_project,vercel_token=os.environ.get("VERCEL_TOKEN"),
+          vercel_team=os.environ.get("VERCEL_TEAM_ID"))
         digest=write_private(args.out,report)
     except (ValueError,ProviderError,FileExistsError) as e:
         parser.error(str(e))

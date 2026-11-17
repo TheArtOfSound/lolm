@@ -18,13 +18,20 @@ def reader(url,token,provider):
     if provider=="github":
         if url.endswith("/repos/org/repository"):
             return {"default_branch":"development"}
+        if "/commits/development" in url:
+            return {"sha":"0123456789abcdef0123456789abcdef01234567"}
         if "/branches/development/protection" in url:
             raise collector.ProviderError("resource forbidden")
         if "/contents/" in url:
             text='''name: deploy-production
-steps:
-  - name: Set up SSH
-    run: ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+on: push
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up SSH
+        run: ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
 '''
             return {"encoding":"base64","content":base64.b64encode(text.encode()).decode()}
         raise AssertionError("unknown github request")
@@ -44,12 +51,32 @@ class CollectorTests(unittest.TestCase):
             reader=reader,when=WHEN)
         names={(f["asset"],f["signal"]):f["value"] for f in out["facts"]}
         self.assertTrue(names[("org/repository","runtime_ssh_keyscan")])
+        self.assertTrue(names[("org/repository","workflow_unpinned_actions")])
         self.assertEqual(names[("org/repository","repo_branch_protection_verifiable")],"unknown")
         self.assertTrue(names[("edge-lab","worker_preview_enabled")])
         self.assertTrue(names[("edge-lab","worker_privileged_bindings")])
         self.assertNotIn(TOKEN_SENTINEL,json.dumps(out))
         self.assertNotIn("PRIVATE_KEY",json.dumps(out))
         self.assertNotIn("private",json.dumps(out))
+
+    def test_python_collector_retains_exact_write_scopes_with_commit_links(self):
+        def scoped_reader(url,token,provider):
+            if provider=="github" and "/contents/" in url:
+                source="\n".join(["name: Release","on: workflow_dispatch",
+                  "permissions:","  contents: read","  issues: write",
+                  "  id-token: write","jobs:","  build:","    steps:","      - run: echo okay"])
+                return {"encoding":"base64","content":base64.b64encode(source.encode()).decode()}
+            return reader(url,token,provider)
+        result=collector.build_snapshot(
+          github_workflows=["org/repository:.github/workflows/release.yml"],
+          github_token="x",reader=scoped_reader,when=WHEN)
+        self.assertEqual(len(result["permission_inventory"]),1)
+        inventory=result["permission_inventory"][0]
+        self.assertEqual(inventory["asset"],"org/repository")
+        self.assertEqual([x["scope"] for x in inventory["scopes"]],["issues","id-token"])
+        self.assertTrue(inventory["scopes"][0]["source_url"].endswith("#L5"))
+        self.assertTrue(inventory["scopes"][1]["source_url"].endswith("#L6"))
+        self.assertNotIn("on: workflow_dispatch",json.dumps(result))
 
     def test_non_main_branch_and_explicit_workflow_selection(self):
         seen=[]
@@ -60,9 +87,53 @@ class CollectorTests(unittest.TestCase):
           github_workflows=["org/repository:.github/workflows/deploy-production.yml"],
           github_token="x",reader=tracking,when=WHEN)
         self.assertTrue(out["facts"])
-        self.assertTrue(any("?ref=development" in x for x in seen))
+        self.assertTrue(any("/commits/development" in x for x in seen))
+        self.assertTrue(any("?ref=0123456789abcdef0123456789abcdef01234567" in x for x in seen))
         self.assertTrue(any("/branches/development/protection" in x for x in seen))
-        self.assertTrue(any("/blob/development/" in f["source_url"] for f in out["facts"] if f["signal"]=="runtime_ssh_keyscan"))
+        self.assertTrue(any("/blob/0123456789abcdef0123456789abcdef01234567/" in f["source_url"] for f in out["facts"] if f["signal"]=="runtime_ssh_keyscan"))
+
+    def test_non_action_uses_values_are_ignored(self):
+        sha="0123456789abcdef0123456789abcdef01234567"
+        source="\n".join([
+          "on: push","env:","  uses: adversary/imaginary@v1",
+          "jobs:","  verify:","    runs-on: ubuntu-latest",
+          "    env:","      uses: adversary/imaginary@v2",
+          "    steps:","      - name: A real pinned action",
+          "        uses: actions/checkout@"+sha,
+          "        with:","          uses: adversary/imaginary@v3",
+          "        env:","          uses: adversary/imaginary@v4"])
+        self.assertEqual(collector.scan_workflow_syntax(source)["workflow_unpinned_actions"],(False,None))
+
+    def test_step_field_and_job_reusable_action_are_detected(self):
+        step="\n".join(["on: push","jobs:","  check:","    steps:",
+                       "      - name: Action","        uses: example/runner@v3"])
+        self.assertEqual(collector.scan_workflow_syntax(step)["workflow_unpinned_actions"],(True,6))
+        reused="\n".join(["on: workflow_call","jobs:","  release:",
+                          "    uses: example/workflows/.github/workflows/release.yml@v2"])
+        self.assertEqual(collector.scan_workflow_syntax(reused)["workflow_unpinned_actions"],(True,4))
+
+    def test_nested_permissions_never_claim_to_restrict_actual_workflow_token(self):
+        sample="on: push\nenv:\n  permissions:\n    contents: read\njobs:\n  test:\n    steps:\n      - run: echo okay"
+        result=collector.scan_workflow_syntax(sample)
+        self.assertEqual(result["workflow_explicit_read_only_permissions"][0],"unknown")
+        self.assertEqual(result["workflow_token_write_permission"][0],"unknown")
+
+    def test_job_level_write_and_sequence_trigger(self):
+        sample="\n".join(["on:","  - push","  - pull_request_target",
+           "permissions:","  contents: read","jobs:","  deploy:",
+           "    permissions:","      contents: write"])
+        result=collector.scan_workflow_syntax(sample)
+        self.assertTrue(result["workflow_pull_request_target_trigger"][0])
+        self.assertEqual(result["workflow_pull_request_target_trigger"][1],3)
+        self.assertTrue(result["workflow_token_write_permission"][0])
+        self.assertFalse(result["workflow_explicit_read_only_permissions"][0])
+
+    def test_unsupported_inline_trigger_uses_unknown(self):
+        for line in ("on: { pull_request_target: {} }","on: 'pull_request_target'",
+                     "on: [push, *event_alias]"):
+            self.assertEqual(
+                collector.scan_workflow_syntax(line)["workflow_pull_request_target_trigger"][0],
+                "unknown")
 
     def test_reject_duplicate_repository_selection(self):
         with self.assertRaises(ValueError):

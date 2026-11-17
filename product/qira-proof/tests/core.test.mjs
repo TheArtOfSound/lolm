@@ -92,13 +92,50 @@ test("Worker deploy artifact serves local JS but accepts no POST/upload",async()
  const response=await worker.fetch(new Request("https://qira.invalid/"));
  assert.equal(response.status,200);
  assert.match(await response.text(),/QIRA Proof/);
- assert.match(response.headers.get("content-security-policy"),/connect-src 'none'/);
+ assert.match(response.headers.get("content-security-policy"),/connect-src 'self'/);
  const core=await worker.fetch(new Request("https://qira.invalid/core.mjs"));
  assert.equal(core.status,200);
  const app=await worker.fetch(new Request("https://qira.invalid/app.mjs"));
  assert.match(await app.text(),/verifyProof/);
  const post=await worker.fetch(new Request("https://qira.invalid/api/upload",{method:"POST",body:"secret"}));
  assert.equal(post.status,405);
+ const auth=await worker.fetch(new Request("https://qira.invalid/api/github/status"));
+ assert.equal(auth.status,200);
+ assert.equal((await auth.json()).configured,false);
+ const connect=await worker.fetch(new Request("https://qira.invalid/connect/github"));
+ assert.equal(connect.status,503);
  const health=await worker.fetch(new Request("https://qira.invalid/health"));
  assert.equal((await health.json()).uploads_enabled,false);
+});
+
+
+test("compiled Worker preserves authorization routes and POST dispatch (no secrets needed)",async()=>{
+  const compiled=(await import("../dist/worker.mjs")).default;
+  const origin="https://qira.invalid";
+  const env={
+    QIRA_AUTH_RATE_LIMITER:{limit:async()=>({success:true})},
+    QIRA_READ_RATE_LIMITER:{limit:async()=>({success:true})},
+    QIRA_PUBLIC_ORIGIN:origin,
+    GITHUB_APP_CLIENT_ID:"Iv1.compiled-test-only",
+    GITHUB_APP_CLIENT_SECRET:"unit-test-secret-not-a-credential",
+    GITHUB_APP_SLUG:"qira-proof-test",
+    QIRA_SESSION_KEY:Buffer.alloc(32,8).toString("base64url")
+  };
+  const status=await compiled.fetch(new Request(origin+"/api/github/status"),env);
+  assert.equal(status.status,200);
+  assert.equal((await status.json()).configured,true);
+  const start=await compiled.fetch(new Request(origin+"/connect/github"),env);
+  assert.equal(start.status,303);
+  const authorization=new URL(start.headers.get("location"));
+  assert.equal(authorization.origin,"https://github.com");
+  assert.equal(authorization.searchParams.get("code_challenge_method"),"S256");
+  const denied=await compiled.fetch(new Request(origin+"/api/github/repos",{
+    method:"POST",headers:{"origin":origin,"content-type":"application/json"},
+    body:JSON.stringify({installation_id:123})
+  }),env);
+  assert.equal(denied.status,401,"Auth route must execute, not fall through to static 405");
+  const invalid=await compiled.fetch(new Request(origin+"/api/upload",{
+    method:"POST",body:"this must never be accepted"
+  }),env);
+  assert.equal(invalid.status,405);
 });
