@@ -82,12 +82,7 @@ async function order(db,sid){
  return db.prepare("SELECT o.session_id,o.status,o.refund_amount,i.state,i.repository,i.contact_email FROM qira_orders o JOIN qira_intakes i ON i.session_id=o.session_id WHERE o.session_id=?").bind(sid).first();
 }
 const paid=o=>o?.status==="paid"&&Number(o.refund_amount||0)===0;
-async function audit(db,sid,actor,action,detail){
- const actorId=actor?.sub;
- if(typeof actorId!=="string"||actorId.length<10)throw Error("actor_missing");
- const entry=await db.prepare("INSERT INTO qira_operator_audit(id,session_id,actor_sub,action,detail,created_at) VALUES(?,?,?,?,?,?)").bind(crypto.randomUUID(),sid,actorId,action,detail,now()).run();
- if(entry?.success===false)throw Error("audit_failed");
-}
+
 function badge(value){
  const map={paid:"Paid",refunded:"Refunded",disputed:"Disputed",pending:"Pending",failed:"Failed",authorized:"Authorized",in_review:"In review",delivered:"Delivered",cancelled:"Cancelled",awaiting_authorization:"Needs authorization"};
  return escape(map[value]||value);
@@ -137,12 +132,19 @@ async function changeState(request,env,actor){
  try{
   const current=await order(env.QIRA_PROOF_ORDERS,sid);
   if(!paid(current)||current.state!==old)return redirect("Payment or review state is not eligible. Check Stripe and scope.");
-  const r=await env.QIRA_PROOF_ORDERS.prepare(`UPDATE qira_intakes SET state=?
-   WHERE session_id=? AND state=? AND EXISTS(
-   SELECT 1 FROM qira_orders o WHERE o.session_id=qira_intakes.session_id AND o.status='paid' AND COALESCE(o.refund_amount,0)=0)
-   RETURNING session_id`).bind(next,sid,old).first();
-  if(!r)return redirect("Review state changed; reload before trying again.");
-  await audit(env.QIRA_PROOF_ORDERS,sid,actor,action,"Human authorization/scope attestation");
+  const id=crypto.randomUUID(),stamp=now();
+  const recorded=await env.QIRA_PROOF_ORDERS.batch([
+   env.QIRA_PROOF_ORDERS.prepare(`INSERT INTO qira_operator_audit(id,session_id,actor_sub,action,detail,created_at)
+    SELECT ?,i.session_id,?,?,?,? FROM qira_intakes i JOIN qira_orders o ON o.session_id=i.session_id
+    WHERE i.session_id=? AND i.state=? AND o.status='paid' AND COALESCE(o.refund_amount,0)=0`)
+    .bind(id,actor.sub,action,"Human authorization/scope attestation",stamp,sid,old),
+   env.QIRA_PROOF_ORDERS.prepare(`UPDATE qira_intakes SET state=?
+    WHERE session_id=? AND state=? AND EXISTS(SELECT 1 FROM qira_operator_audit a WHERE a.id=? AND a.session_id=qira_intakes.session_id)
+    AND EXISTS(SELECT 1 FROM qira_orders o WHERE o.session_id=qira_intakes.session_id AND o.status='paid' AND COALESCE(o.refund_amount,0)=0)`)
+    .bind(next,sid,old,id)
+  ]);
+  if(!Array.isArray(recorded)||recorded.some(x=>x?.success===false))throw Error("audited_change_failed");
+  if(recorded.some(x=>Number(x?.meta?.changes)!==1))return redirect("Review state changed; reload before trying again.");
   return redirect(action==="authorize"?"Repository authority recorded.":"Review marked in progress.");
  }catch{return respond({error:"state_change_unavailable"},503);}
 }
@@ -206,9 +208,18 @@ async function revoke(request,env,actor){
  const sid=safeSession(b.get("session_id")),reason=ref(b.get("reason"));
  if(!sid||reason.length<12||reason.length>240||b.get("attest")!=="yes")return respond({error:"invalid_request"},400);
  try{
-  const n=await env.QIRA_PROOF_ORDERS.prepare("UPDATE qira_deliverables SET revoked_at=? WHERE session_id=? AND revoked_at IS NULL RETURNING session_id").bind(now(),sid).first();
-  if(!n)return redirect("No currently released report was found.");
-  await audit(env.QIRA_PROOF_ORDERS,sid,actor,"revoke",reason);
+  const stamp=now(),id=crypto.randomUUID();
+  const updated=await env.QIRA_PROOF_ORDERS.batch([
+   env.QIRA_PROOF_ORDERS.prepare(`INSERT INTO qira_operator_audit(id,session_id,actor_sub,action,detail,created_at)
+    SELECT ?,d.session_id,?,'revoke',?,? FROM qira_deliverables d
+    WHERE d.session_id=? AND d.revoked_at IS NULL`)
+    .bind(id,actor.sub,reason,stamp,sid),
+   env.QIRA_PROOF_ORDERS.prepare(`UPDATE qira_deliverables SET revoked_at=? WHERE session_id=? AND revoked_at IS NULL
+    AND EXISTS(SELECT 1 FROM qira_operator_audit a WHERE a.id=? AND a.session_id=qira_deliverables.session_id)`)
+    .bind(stamp,sid,id)
+  ]);
+  if(!Array.isArray(updated)||updated.some(x=>x?.success===false))throw Error("audited_revoke_failed");
+  if(updated.some(x=>Number(x?.meta?.changes)!==1))return redirect("No currently released report was found.");
   return redirect("Report access revoked. Existing downloaded copies cannot be retracted.");
  }catch{return respond({error:"revoke_unavailable"},503);}
 }
