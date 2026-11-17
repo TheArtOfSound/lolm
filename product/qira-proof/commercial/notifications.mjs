@@ -78,3 +78,11 @@ export async function purgeNotifications(db,at=nowSeconds()){
  const result=await db.prepare("DELETE FROM qira_notifications WHERE created_at<?").bind(cutoff).run();
  if(result?.success===false)throw Error("notification cleanup failed");
 }
+
+export async function purgeAdjustments(db,at=nowSeconds()){
+ // Payment status history stays with Stripe; ephemeral local adjustment
+ // references are removed on the same 180-day schedule as order handles.
+ const cutoff=at-180*DAY;
+ const result=await db.prepare("DELETE FROM qira_adjustments WHERE received_at<?").bind(cutoff).run();
+ if(result?.success===false)throw Error("adjustment cleanup failed");
+}
