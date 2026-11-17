@@ -35,8 +35,8 @@ export async function verifyOperator(request,env,fetcher=fetch){
   let keys;
   if(fetcher===fetch&&certsCache.keys&&certsCache.until>t)keys=certsCache.keys;
   else{
-   const resp=await fetcher(ACCESS_ISSUER+"/cdn-cgi/access/certs",{method:"GET",headers:{"Accept":"application/json"},redirect:"error"});
-   if(!resp.ok)return null;
+   const resp=await fetcher(ACCESS_ISSUER+"/cdn-cgi/access/certs",{method:"GET",headers:{"Accept":"application/json"},redirect:"manual"});
+   if(!resp.ok||resp.status>=300)return null;
    const c=await resp.json();
    if(!Array.isArray(c.keys)||c.keys.length>32)return null;
    keys=c.keys.filter(k=>k.kty==="RSA"&&k.kid&&k.n&&k.e);
@@ -183,7 +183,12 @@ async function publish(request,env,actor){
    // D1 batch is transactional on statements with SQL errors, but a logically
    // rejected conditional INSERT can change zero rows without failing. If the
    // release is not fully committed, revoke the partial record before cleanup.
-   await db.prepare("UPDATE qira_deliverables SET revoked_at=? WHERE session_id=? AND object_key=?").bind(now(),sid,objectKey).run().catch(()=>{});
+   // Best-effort compensation when a conditional SQL statement changed zero
+   // rows: restore the in-review stage before allowing another publication.
+   await db.batch([
+    db.prepare("UPDATE qira_intakes SET state='in_review' WHERE session_id=? AND state='delivered'").bind(sid),
+    db.prepare("DELETE FROM qira_deliverables WHERE session_id=? AND object_key=?").bind(sid,objectKey)
+   ]).catch(()=>{});
    await store.delete(objectKey).catch(()=>{});
    throw e;
   }
