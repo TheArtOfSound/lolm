@@ -24,11 +24,14 @@ class MockD1{
  };}};}
  async batch(steps){
   for(const step of steps){
-   if(step.sql.startsWith("INSERT OR IGNORE INTO qira_events"))this.events.set(step.args[0],step.args);
+   if(step.sql.startsWith("INSERT OR IGNORE INTO qira_events")&&step.sql.includes("FROM qira_early_reversals")){} // no early events in this test
+   else if(step.sql.startsWith("INSERT OR IGNORE INTO qira_events"))this.events.set(step.args[0],step.args);
    else if(step.sql.startsWith("INSERT INTO qira_orders")){
     const [id,link,intent,status,amount,currency,created,paidAt,updated,digest]=step.args;
     this.orders.set(id,{status,buyer_email_digest:digest,payment_link:link,amount_total:amount,currency});
-   }else throw Error("unsupported batch");
+   }else if(step.sql.startsWith("UPDATE qira_orders SET")&&step.sql.includes("qira_early_reversals")){} // no early holds
+   else if(step.sql.startsWith("INSERT OR IGNORE INTO qira_adjustments")&&step.sql.includes("FROM qira_early_reversals")){} // no early adjustments
+   else throw Error("unsupported batch");
   }
   return steps.map(()=>({success:true}));
  }
