@@ -8,7 +8,7 @@ if(!globalThis.File)globalThis.File=File;
 const host="https://ops.proof.imagineqira.com",sid="cs_live_operator123456789012345",identity={sub:"cloudflare_user_0123456789",email:"operator@example.invalid"};
 class DB{
  constructor(){this.order={session_id:sid,status:"paid",refund_amount:0,state:"awaiting_authorization",repository:"Test/repo",contact_email:"buyer@example.invalid"};this.report=null;this.actions=[];}
- prepare(sql){const db=this;return {bind(...args){return {
+ prepare(sql){const db=this;return {bind(...args){return {sql,args,
   async first(){
    if(sql.startsWith("SELECT o.session_id"))return db.order.session_id===args[0]?{...db.order}:null;
    if(sql.startsWith("SELECT session_id FROM qira_deliverables"))return db.report?{session_id:sid}:null;
@@ -27,7 +27,7 @@ class DB{
    if(sql.startsWith("DELETE FROM qira_deliverables")){db.report=null;return {success:true};}
    throw Error("unexpected run "+sql.slice(0,80));
   }
- };}};}
+ };},async all(){return this.bind().all();}};}
  async batch(statements){
   let results=[];
   for(const {sql,args} of statements){
