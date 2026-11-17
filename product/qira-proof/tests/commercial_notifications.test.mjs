@@ -53,7 +53,7 @@ test("without a protected email key, enqueue operations but never falsely mark d
 });
 test("scheduled queue emits one notification for paid order and one for intake, with no customer PII",async()=>{
  const db=new FakeDB(),out=[];
- const stub=async(u,init)=>{out.push({u,...init});return {ok:true,json:async()=>({id:"email_test_0123456789abcdef"})};};
+ const stub=async(u,init)=>{out.push({u,...init});return {ok:true,json:async()=>({id:"a0e12345-1234-1234-1234-123456789abc"})};};
  const r=await runNotificationCycle(env(db),t,stub);
  assert.deepEqual(r,{configured:true,delivered:2});assert.equal(out.length,2);
  for(const item of out){
@@ -74,15 +74,15 @@ test("provider failure leaves durable retry and backoff without exposing key",as
  const first=[...db.notifications.values()][0];assert.equal(first.status,"pending");assert.ok(first.next_attempt_at>t);
  assert.equal((await runNotificationCycle(env(db),t+10,fail)).delivered,0);
  assert.equal(calls.length,2);
- const recovered=await runNotificationCycle(env(db),t+500,async()=>({ok:true,json:async()=>({id:"email_test_0123456789abcdef"})}));
+ const recovered=await runNotificationCycle(env(db),t+500,async()=>({ok:true,json:async()=>({id:"a0e12345-1234-1234-1234-123456789abc"})}));
  assert.equal(recovered.delivered,2);
 });
 test("adjustment notices are deduplicated by event ID and pruned after retention",async()=>{
  const db=new FakeDB();db.orders=[];db.intakes=[];
  db.adjustments=[{event_id:"evt_first",session_id:"cs_live_example",kind:"partial_refund",received_at:t},{event_id:"evt_second",session_id:"cs_live_example",kind:"dispute_closed",received_at:t}];
- await runNotificationCycle(env(db),t,async()=>({ok:true,json:async()=>({id:"email_test_0123456789abcdef"})}));
+ await runNotificationCycle(env(db),t,async()=>({ok:true,json:async()=>({id:"a0e12345-1234-1234-1234-123456789abc"})}));
  assert.equal(db.notifications.size,2);
- await runNotificationCycle(env(db),t+300,async()=>({ok:true,json:async()=>({id:"email_test_0123456789abcdef"})}));
+ await runNotificationCycle(env(db),t+300,async()=>({ok:true,json:async()=>({id:"a0e12345-1234-1234-1234-123456789abc"})}));
  assert.equal(db.notifications.size,2);
  await purgeNotifications(db,t+181*86400);
  await purgeAdjustments(db,t+181*86400);
