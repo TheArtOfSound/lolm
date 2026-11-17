@@ -40,7 +40,7 @@ class Ledger{
       if(markers.some(x=>x.kind==="disputed"||x.kind==="dispute_closed"))order.status="disputed";
       else if(markers.some(x=>x.kind==="refunded"))order.status="refunded";
      }
-     for(const r of markers)if(["partial_refund","refund_failed"].includes(r.kind))order.refund_amount=Math.max(order.refund_amount,r.amount);
+     for(const r of markers)if(r.kind==="partial_refund")order.refund_amount=Math.max(order.refund_amount,r.amount);
      order.updated=updated;
     }
    }else if(o.sql.startsWith("UPDATE qira_orders")){
