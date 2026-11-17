@@ -9,7 +9,6 @@ function nextLinks(path){
  if(path==="/methodology")return [["/case-study","See the method applied"],["/#start","Start my review"]];
  if(path==="/guides"||path.startsWith("/guides/"))return [["/guides","All field notes"],["/case-study","Real evidence"],["/#start","Apply to my repository"]];
  if(path==="/report-access")return [["/start-review","Review request"],["/terms","Service terms"]];
- if(path==="/start-review")return [["/report-access","Retrieve a completed report"],["/#start","Start a new review"]];
  if(path==="/terms"||path==="/privacy")return [["/terms","Service terms"],["/privacy","Privacy"],["/#start","Start review"]];
  return [];
 }
