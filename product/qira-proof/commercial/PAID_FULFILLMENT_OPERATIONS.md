@@ -6,7 +6,7 @@
 **Intake:** https://proof.imagineqira.com/start-review  
 **Stripe payment link:** https://buy.stripe.com/9B63cvexo0ts3OBfyv7kc07
 
-This is a paid, human-reviewed service. Stripe signature validation and intake storage have been implemented; no production test charge or customer report delivery was performed in this release.
+This is a paid, human-reviewed service. Stripe signature validation, paid intake, refund/dispute tracking and a durable notification queue are live. **Outbound operator email remains disabled until the protected Resend key is installed.** No production test charge or completed customer report delivery occurred. Current implementation: [V13 operations release](./V13_OPERATIONS_RELEASE.md).
 
 ## Payment components already in production
 
@@ -17,7 +17,7 @@ This is a paid, human-reviewed service. Stripe signature validation and intake s
 | Payment Link | \`plink_1UcLsTGz3eX0vCtEVB7vSsQI\` — active; automatic tax enabled |
 | Redirect | \`https://proof.imagineqira.com/start-review?session_id={CHECKOUT_SESSION_ID}\` |
 | Webhook | \`we_1UcXCyGz3eX0vCtEsYm87VFp\` — enabled at \`/api/stripe/webhook\` |
-| Webhook event types | \`checkout.session.completed\`, \`checkout.session.async_payment_succeeded\`, \`checkout.session.async_payment_failed\` |
+| Webhook event types | Checkout success/failure, charge refunds, dispute creation/closure and refund failure — seven enabled types |
 | Cloudflare secrets | \`QIRA_STRIPE_WEBHOOK_SECRET\`, \`QIRA_ORDER_EMAIL_PEPPER\` configured, do not expose |
 | Ledger | D1 binding \`QIRA_PROOF_ORDERS\`, database \`8554f204-0b7b-4c15-8307-4786c8443cf3\` |
 | Retention | \`17 3 * * *\` UTC cleanup schedule; 180-day ephemeral ledger retention |
@@ -73,7 +73,7 @@ ORDER BY i.submitted_at DESC
 LIMIT 50;
 \`\`\`
 
-The Stripe Dashboard is the authoritative accounting source. D1 status is a bounded **webhook receipt ledger**, not a complete refund/dispute accounting system. The current endpoint subscribes only to Checkout Session events: before service fulfillment, check Stripe directly for any later refund, dispute, or cancellation. Do **not** infer payment is still valid solely because D1 previously recorded \`paid\`.
+The Stripe Dashboard is the authoritative accounting source. D1 status is a bounded **webhook receipt ledger**, not a complete refund/dispute accounting system. The endpoint also subscribes to refund and dispute events, but late/out-of-order events and final outcomes still require an independent current Stripe Dashboard check. Do **not** infer payment is still valid solely because D1 previously recorded \`paid\`.
 
 ## Safety and failure behaviors
 
@@ -87,6 +87,6 @@ The Stripe Dashboard is the authoritative accounting source. D1 status is a boun
 
 ## Unfinished operational automation (do not overclaim)
 
-The webhook and protected paid-intake route are active, but a **human** must still monitor the D1 intake queue, verify Stripe's latest refund/dispute state, obtain read-only authorization, produce the report and send the final deliverable. No automatic operations notification or customer report-generation system was activated here.
+The signed webhook, protected intake, D1 notification queue, five-minute retry cron and cleanup are active. **Actual operator email awaits the protected Resend secret.** Human verification of Stripe state, repository authorization, review and report delivery remains necessary.
 
-The immediate next integration, if the team wants a zero-touch operational queue, is a protected owner-facing order dashboard or an authorized transactional notification provider; either requires deliberately scoped admin authentication and operational alerting, not a public D1 endpoint. A signed webhook does not eliminate that requirement.
+Use the restricted Cloudflare D1 query interface for the operator queue until a properly authenticated dashboard has been independently reviewed. See V13 operations release for activation and evidence.
