@@ -38,7 +38,9 @@ class MemoryD1 {
  async batch(steps){
   if(this.failBatch)throw Error("injected sqlite failure");
   for(const step of steps){
-   if(step.sql.includes("INSERT OR IGNORE INTO qira_events")){
+   if(step.sql.includes("INSERT OR IGNORE INTO qira_events")&&step.sql.includes("SELECT r.event_id")){
+    // No buffered reversals exist in these isolated checkout-only tests.
+   }else if(step.sql.includes("INSERT OR IGNORE INTO qira_events")){
     const [id,type,created,received]=step.args;
     if(!this.events.has(id))this.events.set(id,{type,created,received});
    }else if(step.sql.includes("INSERT INTO qira_orders")){
@@ -49,12 +51,16 @@ class MemoryD1 {
      created:Math.max(old.created,created),paidAt:old.paidAt||paidAt,updated,
     }:{link,intent,status:state,amount,currency,created,paidAt,updated};
     this.orders.set(id,next);
+   }else if(step.sql.startsWith("UPDATE qira_orders SET")&&step.sql.includes("qira_early_reversals")){
+    // The synthetic merchant has no pre-checkout reversals in this fixture.
+   }else if(step.sql.includes("INSERT OR IGNORE INTO qira_adjustments")&&step.sql.includes("FROM qira_early_reversals")){
+    // No matched early adjustment event.
    }else throw Error("unexpected SQL "+step.sql.slice(0,70));
   }
   return steps.map(()=>({success:true}));
  }
 }
-const env=db=>({QIRA_PROOF_ORDERS:db,QIRA_STRIPE_WEBHOOK_SECRET:secret});
+const env=db=>({QIRA_PROOF_ORDERS:db,QIRA_STRIPE_WEBHOOK_SECRET:secret,QIRA_ORDER_EMAIL_PEPPER:"test_checkout_email_key_0123456789abcdef0123456789abcdef"});
 test("HMAC verifier accepts genuine fresh payload and rejects altered/timed out signatures",async()=>{
  const data=JSON.stringify(event());const signed=makeRequest(data);
  assert.equal(await verifyStripeSignature(secret,signed.headers.get("stripe-signature"),data),true);
