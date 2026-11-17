@@ -22,7 +22,7 @@ export function reconcileEarlyReversals(db,sessionId,intent,digest,at){
  WHEN EXISTS(SELECT 1 FROM qira_early_reversals r WHERE r.intent_digest=? AND r.kind IN ('disputed','dispute_closed')) THEN 'disputed'
  WHEN EXISTS(SELECT 1 FROM qira_early_reversals r WHERE r.intent_digest=? AND r.kind='refunded') THEN 'refunded'
  ELSE status END,
- refund_amount=MAX(refund_amount,COALESCE((SELECT MAX(r.amount_refunded) FROM qira_early_reversals r WHERE r.intent_digest=? AND r.kind IN ('partial_refund','refund_failed')),0)),
+ refund_amount=MAX(refund_amount,COALESCE((SELECT MAX(r.amount_refunded) FROM qira_early_reversals r WHERE r.intent_digest=? AND r.kind='partial_refund'),0)),
  updated_at=?
  WHERE session_id=? AND payment_intent_id=?`;
  const adjustments=`INSERT OR IGNORE INTO qira_adjustments(event_id,session_id,kind,amount_refunded,outcome,received_at)
