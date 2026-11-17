@@ -40,6 +40,8 @@ export async function sendPendingNotifications(env,at=nowSeconds(),httpFetch=fet
   const claimed=await db.prepare("UPDATE qira_notifications SET status='sending', attempts=attempts+1, lease_until=? WHERE notification_id=? AND (status='pending' OR (status='sending' AND lease_until<?)) RETURNING notification_id,kind,session_id,attempts").bind(at+120,note.notification_id,at).first();
   if(!claimed)continue; // another invocation already reserved this notification
   try{
+   const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(claimed.notification_id));
+   const dedupeKey="qira-proof-"+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
    const payload={
     from:FROM,to:[DESTINATION],subject:labels[claimed.kind],
     text:"Qira Proof operator action required.\nType: "+claimed.kind+"\nStripe Checkout Session: "+claimed.session_id+
@@ -49,11 +51,13 @@ export async function sendPendingNotifications(env,at=nowSeconds(),httpFetch=fet
    };
    const response=await httpFetch("https://api.resend.com/emails",{
     method:"POST",
-    headers:{"Authorization":"Bearer "+env.QIRA_RESEND_API_KEY,"Content-Type":"application/json","Idempotency-Key":"qira-proof-"+claimed.notification_id},
+    headers:{"Authorization":"Bearer "+env.QIRA_RESEND_API_KEY,"Content-Type":"application/json","Idempotency-Key":dedupeKey},
     body:JSON.stringify(payload)
    });
    if(!response.ok)throw Error("email provider rejected notification");
-   // A successful 2xx response is evidence of provider acceptance, not email inbox delivery.
+   const receipt=await response.json();
+   if(typeof receipt?.id!=="string"||!/^[-a-zA-Z0-9]{10,100}$/.test(receipt.id))throw Error("missing provider receipt");
+   // Valid provider acceptance is NOT proof of recipient inbox delivery.
    const sent=await db.prepare("UPDATE qira_notifications SET status='sent',sent_at=?,lease_until=NULL WHERE notification_id=? AND status='sending'").bind(at,claimed.notification_id).run();
    if(sent?.success===false)throw Error("notification update failed");
    delivered++;
