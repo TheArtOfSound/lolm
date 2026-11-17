@@ -56,8 +56,14 @@ function postOrigin(request){return request.headers.get("origin")==="https://"+H
 async function formSmall(request){
  if(!postOrigin(request))throw Error("origin");
  if(!/^application\/x-www-form-urlencoded(?:;|$)/i.test(request.headers.get("content-type")||""))throw Error("media");
- const body=await request.text();if(body.length>4096)throw Error("body");
- return new URLSearchParams(body);
+ const declared=Number(request.headers.get("content-length"));
+ if(Number.isFinite(declared)&&declared>4096)throw Error("body");
+ const reader=request.body?.getReader();if(!reader)throw Error("body");
+ const pieces=[];let size=0;
+ try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;
+  if(size>4096){await reader.cancel();throw Error("body");}pieces.push(value);}}finally{reader.releaseLock();}
+ const bytes=new Uint8Array(size);let offset=0;for(const part of pieces){bytes.set(part,offset);offset+=part.byteLength;}
+ return new URLSearchParams(new TextDecoder("utf-8",{fatal:true}).decode(bytes));
 }
 async function formFile(request){
  if(!postOrigin(request))throw Error("origin");
@@ -206,8 +212,7 @@ async function revoke(request,env,actor){
   return redirect("Report access revoked. Existing downloaded copies cannot be retracted.");
  }catch{return respond({error:"revoke_unavailable"},503);}
 }
-export default {async fetch(request,env){
- const identity=await verifyOperator(request,env);
+export async function handleOperatorRequest(request,env,identity){
  if(!identity)return respond({error:"operator_access_denied"},401);
  if(!env?.QIRA_PROOF_ORDERS||!env?.QIRA_PROOF_REPORTS)return respond({error:"operator_bindings_unavailable"},503);
  const path=new URL(request.url).pathname;
@@ -221,4 +226,8 @@ export default {async fetch(request,env){
  if(request.method==="POST"&&path==="/release")return publish(request,env,identity);
  if(request.method==="POST"&&path==="/revoke")return revoke(request,env,identity);
  return respond({error:"not_found"},404);
+}
+export default {async fetch(request,env){
+ const identity=await verifyOperator(request,env);
+ return handleOperatorRequest(request,env,identity);
 }};
