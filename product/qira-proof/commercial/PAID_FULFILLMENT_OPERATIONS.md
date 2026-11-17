@@ -34,6 +34,19 @@ A duplicate product, Price, Payment Link, or additional Stripe account is **not 
 6. For pending events, Stripe delays, or unavailable verification, the site must not grant access and should instruct the customer to check their Stripe receipt or contact Qira. **Do not invite the buyer to pay twice solely because the status is pending**.
 7. Qira verifies identity and repository authorization before human assessment and delivery. The paid intake does not automatically scan the repository or release private findings.
 
+## V12 production — refund and dispute reconciliation (November 16, 2026)
+
+- Cloudflare Worker `qira-proof-commercial` deployed at **100%** on Worker version `6a5875f8-d702-497b-b684-7e91e2ff0124`, after an isolated 12-route browser preview. All four original bindings remain: live checkout URL, two protected secret bindings and the original restricted D1 database.
+- The **existing** Trend Stripe event destination `we_1UcXCyGz3eX0vCtEsYm87VFp` is enabled for five events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `charge.refunded` and `charge.dispute.created`. The previously disabled destination and all unrelated Trend apps were left unchanged.
+- Every event must pass Stripe HMAC verification. A full-refund or dispute event must match **the saved PaymentIntent ID** from a verified Qira Proof checkout, with live mode, USD currency and $299 amount; unrelated Trend products cannot change Qira order status. Replayed checkout-success events cannot reactivate an already `refunded` or `disputed` order.
+- A buyer opening the return route with the affected Checkout Session sees a refund or dispute status instead of a verified paid-order intake. The intake API accepts only `paid` orders, so reversal states cannot submit new intakes.
+- Latest feature-branch CI: [310 passing JS tests, 0 failed](https://github.com/TheArtOfSound/lolm/actions/runs/43983254765), plus a successful Python test job. Post-deploy production browser rendering checked all 12 public routes at **390px and 1280px**: no page-wide horizontal overflow, missing same-page hash anchors or extra/missing primary headings in these 24 checks.
+- Live D1 had **0 orders, 0 signed payment events, 0 intakes** at latest read. No real paid checkout, refund or dispute has validated Stripe-to-Worker delivery. **Synthetic signed events belong in staging only.**
+
+**Manual reconciliation is still required:** partial refunds; refunds/disputes delivered before their original Checkout event; resolved/closed disputes; failed refunds; cross-account/bank reconciliation; changing existing intake state; notifying the operator and refund evidence submissions. Stripe is authoritative, not this short-lived D1 status ledger. Do not infer a refund's settlement or a dispute's final result from the status label alone.
+
+For a buyer with a reported reversal, review the *exact* PaymentIntent in the Trend Stripe Dashboard, confirm the current refund/dispute disposition and any already started/delivered service, then follow the applicable support and cancellation policy. Do not automatically resume work or issue a second charge to recover from a reversal notification.
+
 ## Operations when a paid order arrives
 
 - In the Trend Stripe Dashboard, verify the payment, current amount, refund/dispute status, customer identity and applicable tax treatment for the **specific** Checkout Session.
