@@ -10,7 +10,9 @@ const labels={
   refunded:"Qira Proof full refund",
   disputed:"Qira Proof payment dispute",
   intake:"New Qira Proof review intake",
-  partial_refund:"Qira Proof partial refund — manual reconciliation"
+  partial_refund:"Qira Proof partial refund — manual reconciliation",
+  dispute_closed:"Qira Proof dispute closed — verify outcome",
+  refund_failed:"Qira Proof refund failed — investigate"
 };
 const nowSeconds=()=>Math.floor(Date.now()/1000);
 function assertBatch(results){if(!Array.isArray(results)||results.some(r=>r?.success===false))throw Error("notification storage unavailable");}
@@ -20,7 +22,7 @@ export async function populateNotifications(db,at=nowSeconds()){
  const q=[
   db.prepare("INSERT OR IGNORE INTO qira_notifications(notification_id,kind,session_id,status,created_at,next_attempt_at) SELECT 'order:' || session_id || ':' || status, status,session_id,'pending',?,? FROM qira_orders WHERE status IN ('paid','failed','refunded','disputed') AND updated_at>=?").bind(at,at,earliest),
   db.prepare("INSERT OR IGNORE INTO qira_notifications(notification_id,kind,session_id,status,created_at,next_attempt_at) SELECT 'intake:' || i.session_id,'intake',i.session_id,'pending',?,? FROM qira_intakes i JOIN qira_orders o ON i.session_id=o.session_id WHERE i.submitted_at>=? AND o.status='paid'").bind(at,at,earliest),
-  db.prepare("INSERT OR IGNORE INTO qira_notifications(notification_id,kind,session_id,status,created_at,next_attempt_at) SELECT 'partial_refund:' || session_id,'partial_refund',session_id,'pending',?,? FROM qira_order_holds WHERE hold_reason='partial_refund' AND updated_at>=?").bind(at,at,earliest)
+  db.prepare("INSERT OR IGNORE INTO qira_notifications(notification_id,kind,session_id,status,created_at,next_attempt_at) SELECT 'adjustment:' || event_id,kind,session_id,'pending',?,? FROM qira_adjustments WHERE kind IN ('partial_refund','dispute_closed','refund_failed') AND received_at>=?").bind(at,at,earliest)
  ];
  assertBatch(await db.batch(q));
 }
