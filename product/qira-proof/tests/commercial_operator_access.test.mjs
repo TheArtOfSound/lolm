@@ -6,7 +6,7 @@ if(!globalThis.crypto)globalThis.crypto=webcrypto;
 const owner="operator@example.invalid",aud="c".repeat(64),issuer="https://autohustle.cloudflareaccess.com";
 const url="https://ops.proof.imagineqira.com/";
 const env={QIRA_PROOF_OPS_AUD:aud,QIRA_PROOF_OPS_EMAIL:owner};
-const enc=value=>Buffer.from(typeof value==="string"?value:JSON.stringify(value)).toString("base64url");
+const enc=value=>Buffer.from(typeof value==="string"||value instanceof Uint8Array?value:JSON.stringify(value)).toString("base64url");
 const req=(url,token)=>new Request(url,{headers:token?{"Cf-Access-Jwt-Assertion":token}:{}});
 async function mint(override={}){
  const keys=await crypto.subtle.generateKey({name:"RSASSA-PKCS1-v1_5",modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:"SHA-256"},true,["sign","verify"]);
