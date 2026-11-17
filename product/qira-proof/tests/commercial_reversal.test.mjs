@@ -7,11 +7,11 @@ const secret="whsec_qira_test_only_not_live",pepper="test_local_key_0123456789ab
 const sid="cs_live_qira0123456789abcdef",pi="pi_qira0123456789abcdef";
 const now=()=>Math.floor(Date.now()/1000);
 class Ledger{
- constructor(){this.orders=new Map();this.events=new Map();}
+ constructor(){this.orders=new Map();this.events=new Map();this.adjustments=new Map();}
  prepare(sql){return {bind:(...args)=>({sql,args,first:async()=>{
   const r=this.orders.get(args[0]);
   if(sql.includes("SELECT status,buyer_email_digest"))return r||null;
-  if(sql.includes("SELECT status"))return r?{status:r.status}:null;
+  if(sql.includes("SELECT status"))return r?{status:r.status,refund_amount:r.refund_amount}:null;
   throw Error("unsupported SELECT");
  }})};}
  async batch(ops){
@@ -24,12 +24,17 @@ class Ledger{
     if(before){
      before.status=["refunded","disputed"].includes(before.status)?before.status:
       status==="paid"?"paid":before.status==="paid"?"paid":created>=before.created?status:before.status;
-    }else this.orders.set(id,{link,intent,status,amount,currency,created,paidAt,updated,buyer_email_digest:digest});
+    }else this.orders.set(id,{link,intent,status,amount,currency,created,paidAt,updated,buyer_email_digest:digest,refund_amount:0});
    }else if(o.sql.startsWith("UPDATE qira_orders")){
-    const [status,created,updated,intent]=o.args;
+    const [value,created,updated,intent]=o.args;
     for(const order of this.orders.values())if(order.intent===intent&&!["refunded","disputed"].includes(order.status)){
-     order.status=status;order.created=Math.max(order.created,created);order.updated=updated;
+     if(o.sql.includes("refund_amount=MAX"))order.refund_amount=Math.max(order.refund_amount,Number(value));
+     else order.status=value;
+     order.created=Math.max(order.created,created);order.updated=updated;
     }
+   }else if(o.sql.startsWith("INSERT OR IGNORE INTO qira_adjustments")){
+    const [eventId,kind,amount,outcome,received,intent]=o.args;
+    for(const [sessionId,order] of this.orders)if(order.intent===intent)this.adjustments.set(eventId,{sessionId,kind,amount,outcome,received});
    }else throw Error("unrecognized SQL "+o.sql.slice(0,60));
   }
   return ops.map(()=>({success:true}));
@@ -63,13 +68,12 @@ test("signed payment dispute puts matched Qira order on hold",async()=>{
  assert.equal(await checkoutStatus(db,sid),"disputed");
  assert.match(checkoutBanner("disputed"),/Payment under dispute/);
 });
-test("unrelated Trend transactions and partial refunds cannot reverse a Qira order",async()=>{
+test("unrelated Trend transactions cannot reverse a Qira order",async()=>{
  const db=new Ledger(),env=environment(db);
  await handleStripeEvent(sign("checkout.session.completed",paid()),env);
  for(const e of [
   sign("charge.refunded",refund("pi_unrelated0123456")),
   sign("charge.dispute.created",dispute("pi_unrelated0123456")),
-  sign("charge.refunded",refund(pi,12000)),
   sign("charge.dispute.created",{...dispute(),amount:25000}),
   sign("charge.refunded",{...refund(),currency:"eur"}),
   sign("charge.refunded",{...refund(),livemode:false})
@@ -86,4 +90,29 @@ test("unsigned reversal fails closed",async()=>{
  req.headers.set("stripe-signature","t=1,v1="+"a".repeat(64));
  assert.equal((await handleStripeEvent(req,env)).status,400);
  assert.equal(await checkoutStatus(db,sid),"paid");
+});
+
+test("partial refund freezes paid intake without presenting a full refund",async()=>{
+ const db=new Ledger(),env=environment(db);
+ await handleStripeEvent(sign("checkout.session.completed",paid()),env);
+ assert.equal((await handleStripeEvent(sign("charge.refunded",refund(pi,12000)),env)).status,200);
+ assert.equal(await checkoutStatus(db,sid),"partially_refunded");
+ assert.equal(db.orders.get(sid).refund_amount,12000);
+ assert.equal(db.adjustments.size,1);
+ assert.match(checkoutBanner("partially_refunded"),/Partial refund recorded/);
+ assert.equal((await handleStripeEvent(sign("checkout.session.completed",paid()),env)).status,200);
+ assert.equal(await checkoutStatus(db,sid),"partially_refunded");
+ const request=new Request("https://proof.imagineqira.com/api/orders/intake",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({session_id:sid,email:"buyer@example.org",repository:"owner/repo"})});
+ assert.equal((await submitVerifiedIntake(request,env)).status,403);
+});
+test("dispute closing and refund failure require operator review without re-enabling intake",async()=>{
+ const db=new Ledger(),env=environment(db);
+ await handleStripeEvent(sign("checkout.session.completed",paid()),env);
+ await handleStripeEvent(sign("charge.dispute.created",dispute()),env);
+ assert.equal((await handleStripeEvent(sign("charge.dispute.closed",{...dispute(),status:"won"}),env)).status,200);
+ assert.equal(await checkoutStatus(db,sid),"disputed");
+ assert.equal(db.adjustments.size,1);
+ assert.equal((await handleStripeEvent(sign("refund.failed",{object:"refund",status:"failed",livemode:true,amount:29900,currency:"usd",payment_intent:pi}),env)).status,200);
+ assert.equal(db.adjustments.size,2);
+ assert.equal(await checkoutStatus(db,sid),"disputed");
 });
