@@ -7,7 +7,7 @@ const secret="whsec_qira_test_only_not_live",pepper="test_local_key_0123456789ab
 const sid="cs_live_qira0123456789abcdef",pi="pi_qira0123456789abcdef";
 const now=()=>Math.floor(Date.now()/1000);
 class Ledger{
- constructor(){this.orders=new Map();this.events=new Map();this.adjustments=new Map();}
+ constructor(){this.orders=new Map();this.events=new Map();this.adjustments=new Map();this.early=new Map();}
  prepare(sql){return {bind:(...args)=>({sql,args,first:async()=>{
   const r=this.orders.get(args[0]);
   if(sql.includes("SELECT status,buyer_email_digest"))return r||null;
@@ -16,7 +16,14 @@ class Ledger{
  }})};}
  async batch(ops){
   for(const o of ops){
-   if(o.sql.startsWith("INSERT OR IGNORE INTO qira_events")){
+   if(o.sql.startsWith("INSERT OR IGNORE INTO qira_early_reversals")){
+    const [id,digest,kind,amount,outcome,created,received]=o.args;
+    if(!this.early.has(id))this.early.set(id,{digest,kind,amount,outcome,created,received});
+   }else if(o.sql.startsWith("INSERT OR IGNORE INTO qira_events")&&o.sql.includes("FROM qira_early_reversals")){
+    const [intent,digest]=o.args;
+    if([...this.orders.values()].some(v=>v.intent===intent))
+     for(const [id,r]of this.early)if(r.digest===digest)this.events.set(id,r.kind);
+   }else if(o.sql.startsWith("INSERT OR IGNORE INTO qira_events")){
     if(!this.events.has(o.args[0]))this.events.set(o.args[0],o.args[1]);
    }else if(o.sql.startsWith("INSERT INTO qira_orders")){
     const [id,link,intent,status,amount,currency,created,paidAt,updated,digest]=o.args;
@@ -25,6 +32,17 @@ class Ledger{
      before.status=["refunded","disputed"].includes(before.status)?before.status:
       status==="paid"?"paid":before.status==="paid"?"paid":created>=before.created?status:before.status;
     }else this.orders.set(id,{link,intent,status,amount,currency,created,paidAt,updated,buyer_email_digest:digest,refund_amount:0});
+   }else if(o.sql.startsWith("UPDATE qira_orders")&&o.sql.includes("qira_early_reversals")){
+    const [digest,,,updated,sessionId,intent]=o.args,order=this.orders.get(sessionId);
+    if(order&&order.intent===intent){
+     const markers=[...this.early.values()].filter(x=>x.digest===digest);
+     if(!["refunded","disputed"].includes(order.status)){
+      if(markers.some(x=>x.kind==="disputed"||x.kind==="dispute_closed"))order.status="disputed";
+      else if(markers.some(x=>x.kind==="refunded"))order.status="refunded";
+     }
+     for(const r of markers)if(["partial_refund","refund_failed"].includes(r.kind))order.refund_amount=Math.max(order.refund_amount,r.amount);
+     order.updated=updated;
+    }
    }else if(o.sql.startsWith("UPDATE qira_orders")){
     const [value,created,updated,intent]=o.args;
     for(const order of this.orders.values())if(order.intent===intent&&!["refunded","disputed"].includes(order.status)){
@@ -32,6 +50,11 @@ class Ledger{
      else order.status=value;
      order.created=Math.max(order.created,created);order.updated=updated;
     }
+   }else if(o.sql.startsWith("INSERT OR IGNORE INTO qira_adjustments")&&o.sql.includes("FROM qira_early_reversals")){
+    const [intent,digest]=o.args;
+    for(const [sessionId,order] of this.orders)if(order.intent===intent)
+     for(const [eventId,r]of this.early)if(r.digest===digest&&["partial_refund","dispute_closed","refund_failed"].includes(r.kind))
+      this.adjustments.set(eventId,{sessionId,kind:r.kind,amount:r.amount,outcome:r.outcome,received:r.received});
    }else if(o.sql.startsWith("INSERT OR IGNORE INTO qira_adjustments")){
     const [eventId,kind,amount,outcome,received,intent]=o.args;
     for(const [sessionId,order] of this.orders)if(order.intent===intent)this.adjustments.set(eventId,{sessionId,kind,amount,outcome,received});
@@ -115,4 +138,35 @@ test("dispute closing and refund failure require operator review without re-enab
  assert.equal((await handleStripeEvent(sign("refund.failed",{object:"refund",status:"failed",livemode:true,amount:29900,currency:"usd",payment_intent:pi}),env)).status,200);
  assert.equal(db.adjustments.size,2);
  assert.equal(await checkoutStatus(db,sid),"disputed");
+});
+
+test("a signed full refund arriving before Checkout prevents later paid entitlements",async()=>{
+ const db=new Ledger(),env=environment(db);
+ assert.equal((await handleStripeEvent(sign("charge.refunded",refund()),env)).status,200);
+ assert.equal(db.orders.size,0);
+ assert.equal(db.early.size,1);
+ assert.equal((await handleStripeEvent(sign("checkout.session.completed",paid()),env)).status,200);
+ assert.equal(await checkoutStatus(db,sid),"refunded");
+ const intake=new Request("https://proof.imagineqira.com/api/orders/intake",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({session_id:sid,email:"buyer@example.org",repository:"owner/repo"})});
+ assert.equal((await submitVerifiedIntake(intake,env)).status,403);
+});
+test("pre-checkout partial refunds and disputed payments remain on hold",async()=>{
+ for(const [type,body,expected]of [
+  ["charge.refunded",refund(pi,10000),"partially_refunded"],
+  ["charge.dispute.created",dispute(),"disputed"],
+  ["charge.dispute.closed",{...dispute(),status:"won"},"disputed"]
+ ]){
+  const db=new Ledger(),env=environment(db);
+  assert.equal((await handleStripeEvent(sign(type,body),env)).status,200);
+  assert.equal((await handleStripeEvent(sign("checkout.session.completed",paid()),env)).status,200);
+  assert.equal(await checkoutStatus(db,sid),expected);
+ }
+});
+test("an unrelated Trend payment intent cannot attach its earlier reversal to Qira checkout",async()=>{
+ const db=new Ledger(),env=environment(db);
+ await handleStripeEvent(sign("charge.refunded",refund("pi_unrelated0192837465")),env);
+ await handleStripeEvent(sign("checkout.session.completed",paid()),env);
+ assert.equal(await checkoutStatus(db,sid),"paid");
+ assert.equal(db.orders.size,1);
+ assert.equal(db.early.size,1);
 });
