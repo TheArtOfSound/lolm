@@ -234,15 +234,21 @@ export function checkoutBanner(status){
 }
 
 export async function purgeOldOrderRows(db,atSeconds=Math.floor(Date.now()/1000)){
- // This database is a short-lived receipt-status ledger, not an accounting
- // system. Stripe retains the authoritative payment/refund history. Remove
- // ephemeral session handles and event IDs after 180 days.
+ // A paid customer's active intake or approved report cannot be removed simply
+ // because the original payment happened over 180 days ago. Such deletion can
+ // break a delivery promise or violate D1 foreign-key constraints.
+ // Only event receipts, cancelled/stale intake and truly unreferenced orders
+ // are eligible for this 180-day housekeeping. Stripe owns the financial record.
  if(!db||!Number.isSafeInteger(atSeconds)||atSeconds<180*86400)throw Error("retention_unavailable");
  const cutoff=atSeconds-180*86400;
  const actions=[
   db.prepare("DELETE FROM qira_events WHERE received_at < ?").bind(cutoff),
-  db.prepare("DELETE FROM qira_orders WHERE updated_at < ?").bind(cutoff),
-  db.prepare("DELETE FROM qira_intakes WHERE submitted_at < ?").bind(cutoff)
+  // Do not remove a review still awaiting authorization, in progress or
+  // delivered. Cancelled, unfulfilled requests alone are disposable.
+  db.prepare("DELETE FROM qira_intakes WHERE submitted_at < ? AND state='cancelled' AND NOT EXISTS (SELECT 1 FROM qira_deliverables d WHERE d.session_id=qira_intakes.session_id)").bind(cutoff),
+  // Report and notice tables reference the order. Guard every dependent
+  // record, even if foreign keys are disabled in another D1 environment.
+  db.prepare("DELETE FROM qira_orders WHERE updated_at < ? AND NOT EXISTS (SELECT 1 FROM qira_intakes i WHERE i.session_id=qira_orders.session_id) AND NOT EXISTS (SELECT 1 FROM qira_deliverables d WHERE d.session_id=qira_orders.session_id) AND NOT EXISTS (SELECT 1 FROM qira_report_challenges c WHERE c.session_id=qira_orders.session_id) AND NOT EXISTS (SELECT 1 FROM qira_customer_notices n WHERE n.session_id=qira_orders.session_id)").bind(cutoff)
  ];
  const result=await db.batch(actions);
  if(!Array.isArray(result)||result.some(x=>x.success===false))throw Error("retention_write_failed");
