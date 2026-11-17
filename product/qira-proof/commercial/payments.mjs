@@ -78,8 +78,8 @@ export async function submitVerifiedIntake(request,env){
  const sessionId=input?.session_id,email=normalizeEmail(input?.email),repo=repositoryName(input?.repository);
  if(!/^cs_live_[A-Za-z0-9]{10,255}$/.test(sessionId||"")||!email||!repo)return response({error:"invalid_request"},400);
  try{
-  const record=await env.QIRA_PROOF_ORDERS.prepare("SELECT status,buyer_email_digest FROM qira_orders WHERE session_id=?").bind(sessionId).first();
-  if(record?.status!=="paid"||!record?.buyer_email_digest)return response({error:"payment_not_verified"},403);
+  const record=await env.QIRA_PROOF_ORDERS.prepare("SELECT status,buyer_email_digest,refund_amount FROM qira_orders WHERE session_id=?").bind(sessionId).first();
+  if(record?.status!=="paid"||Number(record?.refund_amount||0)>0||!record?.buyer_email_digest)return response({error:"payment_not_verified"},403);
   const digest=await buyerDigest(env.QIRA_ORDER_EMAIL_PEPPER,email);
   if(!digest||!sameHex(digest,record.buyer_email_digest))return response({error:"payment_not_verified"},403);
   const r=await env.QIRA_PROOF_ORDERS.prepare("INSERT OR IGNORE INTO qira_intakes(session_id,contact_email,repository,submitted_at,state) VALUES(?,?,?,?,'awaiting_authorization')").bind(sessionId,email,repo,Math.floor(Date.now()/1000)).run();
@@ -94,16 +94,27 @@ export async function submitVerifiedIntake(request,env){
 function reversalOf(event){
  const d=event?.data?.object;
  if(event.type==="charge.refunded"){
-  // Partial refunds require manual accounting review. Do not incorrectly
-  // describe a partially refunded charge as fully refunded.
   if(d?.object!=="charge"||d.livemode!==true||d.amount!==EXPECTED_TOTAL||
-     d.currency!=="usd"||d.refunded!==true||d.amount_refunded!==EXPECTED_TOTAL)return null;
- }else if(event.type==="charge.dispute.created"){
-  if(d?.object!=="dispute"||d.livemode!==true||
-     d.amount!==EXPECTED_TOTAL||d.currency!=="usd")return null;
- }else return null;
- if(!/^pi_[A-Za-z0-9]+$/.test(d.payment_intent||""))return null;
- return {paymentIntent:d.payment_intent,status:event.type==="charge.refunded"?"refunded":"disputed"};
+     d.currency!=="usd"||!Number.isInteger(d.amount_refunded)||
+     d.amount_refunded<1||d.amount_refunded>EXPECTED_TOTAL)return null;
+  if(!/^pi_[A-Za-z0-9]+$/.test(d.payment_intent||""))return null;
+  return {paymentIntent:d.payment_intent,status:d.amount_refunded===EXPECTED_TOTAL?"refunded":"partial_refund",
+          amountRefunded:d.amount_refunded};
+ }
+ if(event.type==="charge.dispute.created"||event.type==="charge.dispute.closed"){
+  if(d?.object!=="dispute"||d.livemode!==true||d.amount!==EXPECTED_TOTAL||d.currency!=="usd"||
+     !/^pi_[A-Za-z0-9]+$/.test(d.payment_intent||""))return null;
+  if(event.type==="charge.dispute.closed"&&!["won","lost"].includes(d.status))return null;
+  return {paymentIntent:d.payment_intent,status:event.type==="charge.dispute.created"?"disputed":"dispute_closed",
+          outcome:event.type==="charge.dispute.closed"?d.status:null};
+ }
+ if(event.type==="refund.failed"){
+  if(d?.object!=="refund"||d.livemode!==true||d.status!=="failed"||
+     !Number.isInteger(d.amount)||d.amount<1||d.amount>EXPECTED_TOTAL||
+     d.currency!=="usd"||!/^pi_[A-Za-z0-9]+$/.test(d.payment_intent||""))return null;
+  return {paymentIntent:d.payment_intent,status:"refund_failed",amountRefunded:d.amount};
+ }
+ return null;
 }
 function sessionValid(s,event){
  return s?.object==="checkout.session"&&s.livemode===true&&s.mode==="payment"&&
@@ -127,19 +138,27 @@ export async function handleStripeEvent(request,env){
  let event;
  try{event=JSON.parse(raw);}catch{return response({error:"invalid_event"},400);}
  if(event?.object!=="event"||!/^evt_[A-Za-z0-9]+$/.test(event.id||"")||event.livemode!==true)return response({error:"invalid_event"},400);
- const reverse=["charge.refunded","charge.dispute.created"];
+ const reverse=["charge.refunded","charge.dispute.created","charge.dispute.closed","refund.failed"];
  if(reverse.includes(event.type)){
   const reversal=reversalOf(event);
   if(!reversal)return response({received:true,ignored:true});
   const now=Math.floor(Date.now()/1000);
   try{
    const statements=[
-    env.QIRA_PROOF_ORDERS.prepare("INSERT OR IGNORE INTO qira_events(event_id,event_type,event_created,received_at) VALUES(?,?,?,?)").bind(event.id,event.type,event.created,now),
-    // Unmatched shared-merchant charge/dispute events change no Qira orders.
-    // Reversals remain terminal until an operator independently reconciles
-    // Stripe and authorizes a new state; old paid events cannot reactivate.
-    env.QIRA_PROOF_ORDERS.prepare("UPDATE qira_orders SET status=?, event_created=MAX(event_created,?), updated_at=? WHERE payment_intent_id=? AND status NOT IN ('refunded','disputed')").bind(reversal.status,event.created,now,reversal.paymentIntent)
+    env.QIRA_PROOF_ORDERS.prepare("INSERT OR IGNORE INTO qira_events(event_id,event_type,event_created,received_at) SELECT ?,?,?,? WHERE EXISTS (SELECT 1 FROM qira_orders WHERE payment_intent_id=?)").bind(event.id,event.type,event.created,now,reversal.paymentIntent)
    ];
+   if(reversal.status==="partial_refund"){
+    // Do not misrepresent a partial refund as fully refunded. Never reactivate
+    // intake after a partial refund, even if a paid Checkout event is replayed.
+    statements.push(env.QIRA_PROOF_ORDERS.prepare("UPDATE qira_orders SET refund_amount=MAX(refund_amount,?),event_created=MAX(event_created,?),updated_at=? WHERE payment_intent_id=? AND status='paid'").bind(reversal.amountRefunded,event.created,now,reversal.paymentIntent));
+   }else if(["refunded","disputed"].includes(reversal.status)){
+    statements.push(env.QIRA_PROOF_ORDERS.prepare("UPDATE qira_orders SET status=?,event_created=MAX(event_created,?),updated_at=? WHERE payment_intent_id=? AND status NOT IN ('refunded','disputed')").bind(reversal.status,event.created,now,reversal.paymentIntent));
+   }
+   if(["partial_refund","dispute_closed","refund_failed"].includes(reversal.status)){
+    // A closed dispute or a failed refund is a manual-reconciliation signal,
+    // NOT proof that paid access should resume.
+    statements.push(env.QIRA_PROOF_ORDERS.prepare("INSERT OR IGNORE INTO qira_adjustments(event_id,session_id,kind,amount_refunded,outcome,received_at) SELECT ?,session_id,?,?,?,? FROM qira_orders WHERE payment_intent_id=?").bind(event.id,reversal.status,reversal.amountRefunded||0,reversal.outcome||null,now,reversal.paymentIntent));
+   }
    const result=await env.QIRA_PROOF_ORDERS.batch(statements);
    if(!Array.isArray(result)||result.some(x=>x.success===false))throw Error("reversal commit failed");
   }catch{return response({error:"verification_unavailable"},503);}
@@ -185,8 +204,9 @@ export async function checkoutStatus(db,sessionId){
  if(!/^cs_live_[A-Za-z0-9]{10,255}$/.test(sessionId||""))return "unknown";
  if(!db)return "unavailable";
  try{
-  const result=await db.prepare("SELECT status FROM qira_orders WHERE session_id=?").bind(sessionId).first();
-  return ["paid","failed","refunded","disputed"].includes(result?.status)?result.status:"pending";
+  const result=await db.prepare("SELECT status,refund_amount FROM qira_orders WHERE session_id=?").bind(sessionId).first();
+  return result?.status==="paid"&&Number(result?.refund_amount||0)>0?"partially_refunded":
+   ["paid","failed","refunded","disputed"].includes(result?.status)?result.status:"pending";
  }catch{return "unavailable";}
 }
 export async function readOrderIntakeStage(db,sessionId){
@@ -200,15 +220,16 @@ export async function readOrderIntakeStage(db,sessionId){
  }catch{return {ready:false,state:null};}
 }
 export function checkoutBanner(status){
- const paid=status==="paid",refunded=status==="refunded",disputed=status==="disputed";
- const heading=paid?"Stripe payment received.":refunded?"Payment refunded.":disputed?"Payment under dispute.":"Payment verification pending.";
+ const paid=status==="paid",refunded=status==="refunded",disputed=status==="disputed",partial=status==="partially_refunded";
+ const heading=paid?"Stripe payment received.":refunded?"Payment refunded.":disputed?"Payment under dispute.":partial?"Partial refund recorded.":"Payment verification pending.";
  const detail=paid?
   "A Stripe-signed paid event matches the Qira Proof $299 order. This confirms a payment event only; Qira will still confirm purchaser identity, repository permission, scope and delivery.":
   refunded?"A signed Stripe refund event was recorded for this payment. The automated review request is unavailable. Contact Qira if you believe this is an error; do not make another payment solely to fix this status.":
   disputed?"Stripe has reported a payment dispute. The review request is on hold while the transaction is reconciled. Contact Qira support; do not pay again solely because of this message.":
+  partial?"A partial refund was recorded for this order. Review intake is temporarily on hold while the transaction and service scope are reconciled. Contact Qira; do not purchase again to resolve this.":
   status==="unavailable"?"Automatic status lookup is unavailable. Use your Stripe receipt to contact Qira; this page cannot confirm payment.":
   "No matching signed paid event has been recorded yet. Some payment methods settle later. Check your Stripe receipt, refresh this page or contact Qira. Do not buy twice solely because this status is pending.";
- const icon=paid?"✓":(refunded||disputed?"!":"◷");
+ const icon=paid?"✓":(refunded||disputed||partial?"!":"◷");
  return '<div class="receipt-banner '+(paid?"confirmed":"pending")+'" role="status"><span aria-hidden="true" class="receipt-indicator">'+icon+'</span><div><strong>'+heading+'</strong><p>'+detail+'</p></div></div>';
 }
 
