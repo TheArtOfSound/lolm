@@ -38,9 +38,31 @@ class DB{
      this.report={session_id:s,object_key,sha256,byte_length,approved_at,released_at,revoked_at:null};changes=1;}
    }else if(sql.startsWith("UPDATE qira_intakes SET state='delivered'")){
     if(this.report&&this.order.state==="in_review"){this.order.state="delivered";changes=1;}
+   }else if(sql.startsWith("INSERT INTO qira_operator_audit")&&sql.includes("FROM qira_intakes i JOIN qira_orders o")){
+    const [id,sub,action,detail,created_at,sessionId,oldState]=args;
+    if(sessionId===sid&&this.order.state===oldState&&this.order.status==="paid"&&this.order.refund_amount===0){
+     this.actions.push({id,session_id:sessionId,actor_sub:sub,action,detail,created_at});changes=1;
+    }
+   }else if(sql.startsWith("UPDATE qira_intakes SET state=?")){
+    const [next,sessionId,oldState,auditId]=args;
+    if(sessionId===sid&&this.order.state===oldState&&this.order.status==="paid"&&this.order.refund_amount===0&&this.actions.some(a=>a.id===auditId)){
+     this.order.state=next;changes=1;
+    }
+   }else if(sql.startsWith("INSERT INTO qira_operator_audit")&&sql.includes("FROM qira_deliverables d")){
+    const [id,sub,detail,created_at,sessionId]=args;
+    if(sessionId===sid&&this.report&&this.report.revoked_at==null){
+     this.actions.push({id,session_id:sessionId,actor_sub:sub,action:"revoke",detail,created_at});changes=1;
+    }
+   }else if(sql.startsWith("UPDATE qira_deliverables SET revoked_at=?")){
+    const [stamp,sessionId,auditId]=args;
+    if(sessionId===sid&&this.report&&this.report.revoked_at==null&&this.actions.some(a=>a.id===auditId)){
+     this.report.revoked_at=stamp;changes=1;
+    }
    }else if(sql.startsWith("INSERT INTO qira_operator_audit")){
-    const [id,s,sub,actionDetail,created_at]=args;
-    if(this.report&&this.order.state==="delivered"){this.actions.push({id,session_id:s,actor_sub:sub,action:"publish",detail:actionDetail,created_at});changes=1;}
+    const [id,sessionId,sub,actionDetail,created_at]=args;
+    if(this.report&&this.order.state==="delivered"){
+     this.actions.push({id,session_id:sessionId,actor_sub:sub,action:"publish",detail:actionDetail,created_at});changes=1;
+    }
    }else throw Error("unexpected batch "+sql.slice(0,80));
    results.push({success:true,meta:{changes}});
   }
