@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {webcrypto} from "node:crypto";
 if(!globalThis.crypto)globalThis.crypto=webcrypto;
-import {runNotificationCycle,purgeNotifications} from "../commercial/notifications.mjs";
+import {runNotificationCycle,purgeNotifications,purgeAdjustments} from "../commercial/notifications.mjs";
 class FakeDB{
  constructor(){this.orders=[{session_id:"cs_live_qira000001",status:"paid",updated_at:1794821000}];this.intakes=[{session_id:"cs_live_qira000001",submitted_at:1794821000}];this.adjustments=[];this.notifications=new Map();this.failSend=false;}
  prepare(sql){const db=this;return {bind(...args){return {sql,args,
@@ -25,6 +25,9 @@ class FakeDB{
   }
   if(sql.startsWith("DELETE FROM qira_notifications")){
    for(const [id,n]of db.notifications)if(n.created_at<args[0])db.notifications.delete(id);return {success:true};
+  }
+  if(sql.startsWith("DELETE FROM qira_adjustments")){
+   db.adjustments=db.adjustments.filter(x=>x.received_at>=args[0]);return {success:true};
   }
   throw Error("unexpected run "+sql.slice(0,70));
  }
@@ -82,5 +85,6 @@ test("adjustment notices are deduplicated by event ID and pruned after retention
  await runNotificationCycle(env(db),t+300,async()=>({ok:true,json:async()=>({id:"email_test_0123456789abcdef"})}));
  assert.equal(db.notifications.size,2);
  await purgeNotifications(db,t+181*86400);
- assert.equal(db.notifications.size,0);
+ await purgeAdjustments(db,t+181*86400);
+ assert.equal(db.notifications.size,0);assert.equal(db.adjustments.length,0);
 });
