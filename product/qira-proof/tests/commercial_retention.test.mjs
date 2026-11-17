@@ -3,14 +3,29 @@ import assert from "node:assert/strict";
 import worker from "../commercial/landing.mjs";
 import {purgeOldOrderRows} from "../commercial/payments.mjs";
 class ExpiringD1 {
- constructor(now){this.events=new Map([["evt_old",{received:now-181*86400}],["evt_new",{received:now-5*86400}]]);this.orders=new Map([["cs_live_old",{updated:now-181*86400}],["cs_live_new",{updated:now-3*86400}]]);this.intakes=new Map([["cs_live_old",{submitted:now-181*86400}],["cs_live_new",{submitted:now-3*86400}]]);this.failing=false;}
+ constructor(now){
+  this.events=new Map([["evt_old",{received:now-181*86400}],["evt_new",{received:now-5*86400}]]);
+  this.orders=new Map([["cs_live_old",{updated:now-181*86400}],["cs_live_new",{updated:now-3*86400}]]);
+  this.intakes=new Map([["cs_live_old",{submitted:now-181*86400,state:"cancelled"}],["cs_live_new",{submitted:now-3*86400,state:"awaiting_authorization"}]]);
+  this.reports=new Set();this.codes=new Set();this.notices=new Set();
+  this.failing=false;
+ }
  prepare(sql){return {bind:(cutoff)=>({sql,cutoff})};}
  async batch(statements){
   if(this.failing)throw Error("db failure");
   assert.equal(statements.length,3);
   for(const s of statements){
-   const target=s.sql.includes("qira_events")?this.events:s.sql.includes("qira_intakes")?this.intakes:this.orders;
-   for(const [k,v]of target.entries())if((v.received??v.updated??v.submitted)<s.cutoff)target.delete(k);
+   if(s.sql.startsWith("DELETE FROM qira_events")){
+    for(const [id,v]of this.events)if(v.received<s.cutoff)this.events.delete(id);
+   }else if(s.sql.startsWith("DELETE FROM qira_intakes")){
+    assert.match(s.sql,/state='cancelled'/);
+    for(const [sid,v]of this.intakes)if(v.submitted<s.cutoff&&v.state==="cancelled"&&!this.reports.has(sid))this.intakes.delete(sid);
+   }else if(s.sql.startsWith("DELETE FROM qira_orders")){
+    assert.match(s.sql,/NOT EXISTS \(SELECT 1 FROM qira_intakes/);
+    assert.match(s.sql,/NOT EXISTS \(SELECT 1 FROM qira_deliverables/);
+    for(const [sid,v]of this.orders)
+     if(v.updated<s.cutoff&&!this.intakes.has(sid)&&!this.reports.has(sid)&&!this.codes.has(sid)&&!this.notices.has(sid))this.orders.delete(sid);
+   }else throw Error("Unexpected cleanup query");
   }
   return [{success:true},{success:true},{success:true}];
  }
