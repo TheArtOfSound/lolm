@@ -1,5 +1,5 @@
 // Qira Proof V11: progressive navigation, local context and next steps.
-const ROUTES=[["/","Overview"],["/case-study","Real source review"],["/sample-report","Example report"],["/methodology","Methodology"],["/guides","Security guides"],["/start-review","Paid intake"],["/privacy","Privacy"],["/terms","Service terms"]];
+const ROUTES=[["/","Overview"],["/case-study","Real source review"],["/sample-report","Example report"],["/methodology","Methodology"],["/guides","Security guides"],["/start-review","Paid intake"],["/report-access","Retrieve report"],["/privacy","Privacy"],["/terms","Service terms"]];
 const GUIDES={"/guides/github-actions-permissions":"Token permissions","/guides/github-actions-dependency-pinning":"Action pinning","/guides/ssh-host-key-verification":"SSH trust","/guides/release-gate-failure-modes":"Release gates"};
 const safe=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const active=(p,h)=>p===h||(h==="/guides"&&p.startsWith("/guides/"));
@@ -8,6 +8,8 @@ function nextLinks(path){
  if(path==="/sample-report")return [["/case-study","Real source review"],["/#start","Review my repository"]];
  if(path==="/methodology")return [["/case-study","See the method applied"],["/#start","Start my review"]];
  if(path==="/guides"||path.startsWith("/guides/"))return [["/guides","All field notes"],["/case-study","Real evidence"],["/#start","Apply to my repository"]];
+ if(path==="/report-access")return [["/start-review","Review request"],["/terms","Service terms"]];
+ if(path==="/start-review")return [["/report-access","Retrieve a completed report"],["/#start","Start a new review"]];
  if(path==="/terms"||path==="/privacy")return [["/terms","Service terms"],["/privacy","Privacy"],["/#start","Start review"]];
  return [];
 }
