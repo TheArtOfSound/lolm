@@ -48,7 +48,7 @@ class DB{
     if(sessionId===sid&&this.order.state===oldState&&this.order.status==="paid"&&this.order.refund_amount===0&&this.actions.some(a=>a.id===auditId)){
      this.order.state=next;changes=1;
     }
-   }else if(sql.startsWith("INSERT INTO qira_operator_audit")&&sql.includes("FROM qira_deliverables d")){
+   }else if(sql.startsWith("INSERT INTO qira_operator_audit")&&sql.includes("FROM qira_deliverables d")&&!sql.includes("JOIN qira_intakes i")){
     const [id,sub,detail,created_at,sessionId]=args;
     if(sessionId===sid&&this.report&&this.report.revoked_at==null){
      this.actions.push({id,session_id:sessionId,actor_sub:sub,action:"revoke",detail,created_at});changes=1;
