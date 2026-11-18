@@ -10,7 +10,7 @@
   "use strict";
 
   var KEY = "lolm-theme";          // "dark" | "light" | absent = follow the OS
-  var LAUNCHER_SRC = "https://imagineqira.com/assets/qira-apps/qira-product-launcher.js?v=20260807portal";
+  var LAUNCHER_SRC = "https://imagineqira.com/assets/qira-apps/qira-product-launcher.js?v=20261118nav";
   var root = document.documentElement;
 
   function stored() {
