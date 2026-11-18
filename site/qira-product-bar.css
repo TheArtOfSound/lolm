@@ -12,7 +12,7 @@
     height: 44px;
   }
   .qira-product-bar__inner {
-    padding: 6px 12px;
+    padding: 0 12px;
     flex-wrap: nowrap;
     gap: 8px;
     overflow: hidden;
@@ -21,7 +21,11 @@
     flex: 0 0 auto;
     gap: 6px;
     white-space: nowrap;
-    min-height: 32px;
+    min-height: 44px;
+  }
+  .qira-product-bar__brand a {
+    min-height: 44px !important;
+    padding: 0 !important;
   }
   .qira-product-bar__links {
     display: flex;
@@ -36,8 +40,8 @@
     display: none !important;
   }
   .qira-product-bar__links > a:first-child {
-    min-height: 36px;
-    padding: 8px 6px !important;
+    min-height: 44px;
+    padding: 0 6px !important;
     font-size: 12px !important;
   }
 }
