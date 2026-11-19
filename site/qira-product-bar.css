@@ -12,7 +12,8 @@
     height: 44px;
   }
   .qira-product-bar__inner {
-    padding: 0 12px;
+    /* Keep All products clear of the 44px Apps trigger at the right edge. */
+    padding: 0 58px 0 12px;
     flex-wrap: nowrap;
     gap: 8px;
     overflow: hidden;
